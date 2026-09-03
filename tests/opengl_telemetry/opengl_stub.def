@@ -1,0 +1,7 @@
+EXPORTS
+    glMatrixMode=_glMatrixMode@4
+    glLoadMatrixf=_glLoadMatrixf@4
+    glOrtho=_glOrtho@48
+    OpenGlStub_MatrixModeCalls
+    OpenGlStub_LoadMatrixCalls
+    OpenGlStub_OrthoCalls

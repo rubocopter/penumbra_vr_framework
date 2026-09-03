@@ -14,7 +14,7 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod, an installer, or a VR runtime. It does contain the first verified Black Plague research probe: it validates one exact executable build, loads without modifying the installation, observes `SDL_GL_SwapBuffers`, restores the import and unloads cleanly. It does not render VR or alter the game yet.
+This repository does not currently contain a playable mod, an installer, or a VR runtime. It does contain the first verified Black Plague research probe: it validates one exact executable build, loads without modifying the installation, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, restores every import and unloads cleanly. It does not render VR or alter the game yet.
 
 The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project; it has not yet been copied into this repository.
 

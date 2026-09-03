@@ -1,5 +1,6 @@
 #include "log.hpp"
 #include "penumbra_vr/build_catalog.hpp"
+#include "opengl_matrix_telemetry.hpp"
 #include "sdl_frame_hook.hpp"
 
 #define WIN32_LEAN_AND_MEAN
@@ -27,8 +28,28 @@ std::string WideToUtf8(const std::wstring& value) {
 }
 
 void OnFrame(std::uint64_t frame_number) noexcept {
-    if (frame_number == 1 || frame_number % 300 == 0) {
-        penumbra_vr::probe::WriteLog("SDL_GL_SwapBuffers frame=%llu", frame_number);
+    const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
+        penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
+    if (frame_number <= 10 || frame_number % 300 == 0) {
+        penumbra_vr::probe::WriteLog(
+            "frame=%llu matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
+            "texture_loads=%lu ortho_calls=%lu",
+            frame_number,
+            static_cast<unsigned long>(telemetry.matrix_mode_calls),
+            static_cast<unsigned long>(telemetry.projection_loads),
+            static_cast<unsigned long>(telemetry.model_view_loads),
+            static_cast<unsigned long>(telemetry.texture_loads),
+            static_cast<unsigned long>(telemetry.ortho_calls));
+        if (telemetry.has_projection) {
+            const auto& m = telemetry.last_projection;
+            penumbra_vr::probe::WriteLog(
+                "projection=[%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] "
+                "[%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f]",
+                m[0], m[1], m[2], m[3],
+                m[4], m[5], m[6], m[7],
+                m[8], m[9], m[10], m[11],
+                m[12], m[13], m[14], m[15]);
+        }
     }
 }
 
@@ -77,8 +98,16 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     }
 
     std::string hook_error;
+    if (!penumbra_vr::hooks::InstallOpenGlMatrixTelemetry(hook_error)) {
+        penumbra_vr::probe::WriteLog("OpenGL matrix telemetry failed: %s", hook_error.c_str());
+        penumbra_vr::probe::CloseLog();
+        InterlockedExchange(&g_state, 0);
+        return 0;
+    }
     if (!penumbra_vr::hooks::InstallSdlSwapHook(&OnFrame, hook_error)) {
         penumbra_vr::probe::WriteLog("SDL frame hook failed: %s", hook_error.c_str());
+        std::string ignored;
+        static_cast<void>(penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(ignored));
         penumbra_vr::probe::CloseLog();
         InterlockedExchange(&g_state, 0);
         return 0;
@@ -101,6 +130,11 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
     std::string error;
     if (!penumbra_vr::hooks::RemoveSdlSwapHook(error)) {
         penumbra_vr::probe::WriteLog("SDL frame hook removal failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    if (!penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(error)) {
+        penumbra_vr::probe::WriteLog("OpenGL telemetry removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }

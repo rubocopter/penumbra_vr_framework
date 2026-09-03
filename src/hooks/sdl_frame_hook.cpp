@@ -1,10 +1,8 @@
 #include "sdl_frame_hook.hpp"
 
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
+#include "iat_hook.hpp"
 
 #include <atomic>
-#include <cstring>
 
 namespace penumbra_vr::hooks {
 namespace {
@@ -13,147 +11,42 @@ using SdlSwapBuffers = void(__cdecl*)();
 
 std::atomic<std::uint64_t> g_frame_count{0};
 FrameCallback g_callback = nullptr;
-SdlSwapBuffers g_original_swap = nullptr;
-void** g_iat_slot = nullptr;
+IatHook g_swap_hook;
 
 void __cdecl HookedSdlSwapBuffers() noexcept {
     const std::uint64_t frame = g_frame_count.fetch_add(1, std::memory_order_relaxed) + 1;
     if (g_callback != nullptr) {
         g_callback(frame);
     }
-    g_original_swap();
-}
-
-bool ReplacePointer(void** slot, void* expected, void* replacement, std::string& error) noexcept {
-    DWORD old_protection = 0;
-    if (!VirtualProtect(slot, sizeof(*slot), PAGE_READWRITE, &old_protection)) {
-        error = "VirtualProtect failed with Win32 error " + std::to_string(GetLastError());
-        return false;
-    }
-
-    void* previous = InterlockedCompareExchangePointer(
-        reinterpret_cast<void* volatile*>(slot), replacement, expected);
-
-    DWORD ignored = 0;
-    VirtualProtect(slot, sizeof(*slot), old_protection, &ignored);
-    FlushInstructionCache(GetCurrentProcess(), slot, sizeof(*slot));
-
-    if (previous != expected) {
-        error = "The SDL import slot changed while installing or removing the hook";
-        return false;
-    }
-    return true;
-}
-
-void** FindSdlSwapImport(std::string& error) noexcept {
-    auto* image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
-    if (image == nullptr) {
-        error = "GetModuleHandleW(NULL) failed";
-        return nullptr;
-    }
-
-    const auto* dos = reinterpret_cast<const IMAGE_DOS_HEADER*>(image);
-    if (dos->e_magic != IMAGE_DOS_SIGNATURE) {
-        error = "The host image has no valid DOS header";
-        return nullptr;
-    }
-
-    const auto* nt = reinterpret_cast<const IMAGE_NT_HEADERS32*>(image + dos->e_lfanew);
-    if (nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
-        error = "The host image is not a valid PE32 image";
-        return nullptr;
-    }
-
-    const IMAGE_DATA_DIRECTORY& directory =
-        nt->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
-    if (directory.VirtualAddress == 0 || directory.Size < sizeof(IMAGE_IMPORT_DESCRIPTOR)) {
-        error = "The host image has no import directory";
-        return nullptr;
-    }
-
-    auto* descriptor = reinterpret_cast<IMAGE_IMPORT_DESCRIPTOR*>(image + directory.VirtualAddress);
-    for (; descriptor->Name != 0; ++descriptor) {
-        const char* module_name = reinterpret_cast<const char*>(image + descriptor->Name);
-        if (_stricmp(module_name, "SDL.dll") != 0) {
-            continue;
-        }
-
-        if (descriptor->OriginalFirstThunk == 0 || descriptor->FirstThunk == 0) {
-            error = "SDL.dll has no named import table suitable for the probe";
-            return nullptr;
-        }
-
-        auto* names = reinterpret_cast<IMAGE_THUNK_DATA32*>(image + descriptor->OriginalFirstThunk);
-        auto* addresses = reinterpret_cast<IMAGE_THUNK_DATA32*>(image + descriptor->FirstThunk);
-        for (; names->u1.AddressOfData != 0; ++names, ++addresses) {
-            if (IMAGE_SNAP_BY_ORDINAL32(names->u1.Ordinal)) {
-                continue;
-            }
-
-            const auto* import = reinterpret_cast<const IMAGE_IMPORT_BY_NAME*>(
-                image + names->u1.AddressOfData);
-            if (std::strcmp(reinterpret_cast<const char*>(import->Name), "SDL_GL_SwapBuffers") == 0) {
-                return reinterpret_cast<void**>(&addresses->u1.Function);
-            }
-        }
-
-        error = "SDL.dll is imported, but SDL_GL_SwapBuffers is not";
-        return nullptr;
-    }
-
-    error = "The host executable does not import SDL.dll";
-    return nullptr;
+    reinterpret_cast<SdlSwapBuffers>(g_swap_hook.original)();
 }
 
 } // namespace
 
 bool InstallSdlSwapHook(FrameCallback callback, std::string& error) noexcept {
-    error.clear();
-    if (g_iat_slot != nullptr) {
+    if (g_swap_hook.installed()) {
         error = "The SDL swap hook is already installed";
         return false;
     }
 
-    void** slot = FindSdlSwapImport(error);
-    if (slot == nullptr) {
-        return false;
-    }
-
-    auto original = reinterpret_cast<SdlSwapBuffers>(*slot);
-    if (original == nullptr) {
-        error = "SDL_GL_SwapBuffers resolved to a null address";
-        return false;
-    }
-
     g_callback = callback;
-    g_original_swap = original;
     g_frame_count.store(0, std::memory_order_relaxed);
-    if (!ReplacePointer(slot, reinterpret_cast<void*>(original), reinterpret_cast<void*>(&HookedSdlSwapBuffers), error)) {
+    if (!InstallIatHook(
+            "SDL.dll",
+            "SDL_GL_SwapBuffers",
+            reinterpret_cast<void*>(&HookedSdlSwapBuffers),
+            g_swap_hook,
+            error)) {
         g_callback = nullptr;
-        g_original_swap = nullptr;
         return false;
     }
-
-    g_iat_slot = slot;
     return true;
 }
 
 bool RemoveSdlSwapHook(std::string& error) noexcept {
-    error.clear();
-    if (g_iat_slot == nullptr) {
-        return true;
-    }
-
-    if (!ReplacePointer(
-            g_iat_slot,
-            reinterpret_cast<void*>(&HookedSdlSwapBuffers),
-            reinterpret_cast<void*>(g_original_swap),
-            error)) {
+    if (!RemoveIatHook(g_swap_hook, error)) {
         return false;
     }
-
-    g_iat_slot = nullptr;
-    g_original_swap = nullptr;
     g_callback = nullptr;
     return true;
 }

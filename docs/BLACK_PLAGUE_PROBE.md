@@ -40,7 +40,9 @@ The hook implementation does not assume the preferred image base and does not sc
 
 ## Teardown
 
-`PenumbraVR_Shutdown` first restores the original IAT entry, then closes the log. The launcher waits for that call to finish and only then invokes `FreeLibrary` in the target process. If restoring the expected pointer fails, the DLL is not unloaded.
+The current research build also observes the imported `glMatrixMode`, `glLoadMatrixf` and `glOrtho` calls. These hooks only collect per-frame counters and the most recent loaded projection matrix; they forward their arguments unchanged.
+
+`PenumbraVR_Shutdown` first restores the SDL and OpenGL IAT entries, then closes the log. The launcher waits for that call to finish and only then invokes `FreeLibrary` in the target process. If restoring an expected pointer fails, the DLL is not unloaded.
 
 ## Verification performed
 
@@ -53,6 +55,8 @@ On 2026-09-03, a Release build was attached and detached three times in the same
 - left the game process alive for the next cycle
 
 The cycles observed 1, 31 and 73 swaps respectively. Separate Debug and Release tests use a small fake `SDL.dll` to verify interception, forwarding and restoration of the import.
+
+A later 122-frame capture in the main menu observed repeated matrix-mode changes and two `glOrtho` calls per steady-state frame, but no `glLoadMatrixf` call. This is consistent with a 2D menu and does not yet identify the gameplay projection. A user-driven in-game capture is still required.
 
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
@@ -70,4 +74,4 @@ Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path
 
 ## Next question
 
-The next probe should observe, without changing, the OpenGL projection/model-view setup leading to each swap. This evidence will determine whether an API-level matrix hook is sufficient or whether the backend must hook a higher HPL1 camera/render entry point.
+The next capture must enter actual 3D gameplay and classify its projection/model-view setup. This evidence will determine whether an API-level matrix hook is sufficient or whether the backend must hook a higher HPL1 camera/render entry point.

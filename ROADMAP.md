@@ -26,6 +26,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 
 ## Phase 2 — Black Plague visual MVP
 
+- [x] Add non-mutating OpenGL matrix telemetry with tested teardown
+- [ ] Observe and classify a projection matrix during actual 3D gameplay
 - [ ] Locate the active camera and projection path
 - [ ] Locate a safe scene-render entry point
 - [ ] Create and resize per-eye render targets
