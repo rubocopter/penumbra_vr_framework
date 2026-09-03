@@ -40,7 +40,7 @@ The hook implementation does not assume the preferred image base and does not sc
 
 ## Teardown
 
-The current research build also observes the imported `glMatrixMode`, `glLoadMatrixf` and `glOrtho` calls. These hooks only collect per-frame counters and the most recent loaded projection matrix; they forward their arguments unchanged.
+The current research build also observes the imported `glMatrixMode`, `glLoadMatrixf` and `glOrtho` calls. These hooks collect per-frame counters, the most recent projection matrix, and a bounded frequency table of model-view matrices. The table identifies the most frequently loaded model-view matrix without assuming a game address. All OpenGL arguments are forwarded unchanged.
 
 `PenumbraVR_Shutdown` first restores the SDL and OpenGL IAT entries, then closes the log. The launcher waits for that call to finish and only then invokes `FreeLibrary` in the target process. If restoring an expected pointer fails, the DLL is not unloaded.
 
@@ -56,7 +56,36 @@ On 2026-09-03, a Release build was attached and detached three times in the same
 
 The cycles observed 1, 31 and 73 swaps respectively. Separate Debug and Release tests use a small fake `SDL.dll` to verify interception, forwarding and restoration of the import.
 
-A later 122-frame capture in the main menu observed repeated matrix-mode changes and two `glOrtho` calls per steady-state frame, but no `glLoadMatrixf` call. This is consistent with a 2D menu and does not yet identify the gameplay projection. A user-driven in-game capture is still required.
+A later 122-frame capture in the main menu observed repeated matrix-mode changes and two `glOrtho` calls per steady-state frame, but no `glLoadMatrixf` call. This is consistent with a 2D menu.
+
+An actual 3D gameplay capture then observed 702 consecutive frames. Every logged sample contained one perspective projection load, 64 model-view loads and three orthographic calls. The projection remained:
+
+```text
+[0.803333 0        0         0]
+[0        1.428148 0         0]
+[0        0       -1        -1]
+[0        0       -0.100000  0]
+```
+
+Under OpenGL's column-major convention, this is a symmetric infinite-far perspective projection with a 70-degree vertical field of view, 16:9 aspect ratio and 0.05 near plane. It matches the released HPL1 camera projection formula.
+
+A subsequent 1,560-frame capture grouped the model-view loads by exact matrix value. In a representative frame, 56 loads reduced to 20 unique matrices and the dominant matrix appeared 10 times. While the player moved and looked around, this dominant matrix changed coherently in both rotation and translation while the projection remained fixed. Representative samples were:
+
+```text
+initial rotation/translation:
+[ 0.987300  0.007912  0.158671  0]
+[-0.000000  0.998759 -0.049801  0]
+[-0.158868  0.049168  0.986075  0]
+[ 4.199785 -1.447538  2.489121  1]
+
+after movement:
+[-0.844894  0.063100 -0.531199  0]
+[-0.000000  0.993019  0.117959  0]
+[ 0.534933  0.099663 -0.838996  0]
+[-0.726727 -0.725464 -7.200001  1]
+```
+
+This confirms a reliable API-level view-matrix signal. It does not yet establish the address or layout of the owning HPL camera object.
 
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
@@ -74,4 +103,4 @@ Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path
 
 ## Next question
 
-The next capture must enter actual 3D gameplay and classify its projection/model-view setup. This evidence will determine whether an API-level matrix hook is sufficient or whether the backend must hook a higher HPL1 camera/render entry point.
+The next research step is to connect the confirmed OpenGL projection/view behavior to a safe scene-render entry point. Stereo rendering needs two scene passes with eye-specific transforms while keeping the three orthographic UI passes out of the world render.

@@ -6,6 +6,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <array>
 #include <cstring>
 
 namespace penumbra_vr::hooks {
@@ -14,6 +15,12 @@ namespace {
 constexpr unsigned int kGlModelView = 0x1700;
 constexpr unsigned int kGlProjection = 0x1701;
 constexpr unsigned int kGlTexture = 0x1702;
+constexpr std::size_t kMaxTrackedModelViewMatrices = 64;
+
+struct ModelViewObservation {
+    std::array<float, 16> matrix{};
+    std::uint32_t loads = 0;
+};
 
 using GlMatrixMode = void(APIENTRY*)(unsigned int mode);
 using GlLoadMatrixf = void(APIENTRY*)(const float* matrix);
@@ -25,6 +32,34 @@ IatHook g_ortho_hook;
 std::atomic<unsigned int> g_current_matrix_mode{kGlModelView};
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 OpenGlFrameTelemetry g_telemetry;
+std::array<ModelViewObservation, kMaxTrackedModelViewMatrices> g_model_view_observations;
+std::size_t g_model_view_observation_count = 0;
+std::uint32_t g_dropped_model_view_matrices = 0;
+
+void RecordModelViewMatrix(const float* matrix) noexcept {
+    if (matrix == nullptr) {
+        return;
+    }
+
+    constexpr std::size_t kMatrixBytes = 16 * sizeof(float);
+    for (std::size_t index = 0; index < g_model_view_observation_count; ++index) {
+        ModelViewObservation& observation = g_model_view_observations[index];
+        if (std::memcmp(observation.matrix.data(), matrix, kMatrixBytes) == 0) {
+            ++observation.loads;
+            return;
+        }
+    }
+
+    if (g_model_view_observation_count == g_model_view_observations.size()) {
+        ++g_dropped_model_view_matrices;
+        return;
+    }
+
+    ModelViewObservation& observation =
+        g_model_view_observations[g_model_view_observation_count++];
+    std::memcpy(observation.matrix.data(), matrix, kMatrixBytes);
+    observation.loads = 1;
+}
 
 void APIENTRY HookedGlMatrixMode(unsigned int mode) noexcept {
     AcquireSRWLockExclusive(&g_telemetry_lock);
@@ -48,6 +83,7 @@ void APIENTRY HookedGlLoadMatrixf(const float* matrix) noexcept {
         }
     } else if (mode == kGlModelView) {
         ++g_telemetry.model_view_loads;
+        RecordModelViewMatrix(matrix);
     } else if (mode == kGlTexture) {
         ++g_telemetry.texture_loads;
     }
@@ -76,6 +112,8 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
     g_current_matrix_mode.store(kGlModelView, std::memory_order_relaxed);
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
+    g_model_view_observation_count = 0;
+    g_dropped_model_view_matrices = 0;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 
     if (!InstallIatHook(
@@ -123,7 +161,20 @@ bool RemoveOpenGlMatrixTelemetry(std::string& error) noexcept {
 OpenGlFrameTelemetry ConsumeOpenGlFrameTelemetry() noexcept {
     AcquireSRWLockExclusive(&g_telemetry_lock);
     OpenGlFrameTelemetry result = g_telemetry;
+    result.unique_model_view_matrices =
+        static_cast<std::uint32_t>(g_model_view_observation_count);
+    result.dropped_model_view_matrices = g_dropped_model_view_matrices;
+    for (std::size_t index = 0; index < g_model_view_observation_count; ++index) {
+        const ModelViewObservation& observation = g_model_view_observations[index];
+        if (observation.loads > result.dominant_model_view_loads) {
+            result.dominant_model_view_loads = observation.loads;
+            result.dominant_model_view = observation.matrix;
+            result.has_dominant_model_view = true;
+        }
+    }
     g_telemetry = {};
+    g_model_view_observation_count = 0;
+    g_dropped_model_view_matrices = 0;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     return result;
 }

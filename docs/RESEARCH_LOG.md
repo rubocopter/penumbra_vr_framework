@@ -35,6 +35,17 @@ Use this log for conclusions that have been reproduced against an exact executab
 
 OpenGL observation hooks for `glMatrixMode`, `glLoadMatrixf` and `glOrtho` were then verified independently in Debug and Release and run for 122 menu frames. Steady-state frames showed two orthographic calls and no loaded float matrix. Result: telemetry works, but the menu capture does not expose the 3D camera.
 
+### 2026-09-03 — Black Plague gameplay projection and view behavior
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`
+- Question: can the 3D projection and camera view be distinguished non-invasively at the imported OpenGL boundary?
+- Projection evidence: a 702-frame gameplay capture reported one projection load, 64 model-view loads and three orthographic calls in every logged sample. The projection was stable at `[0.803333, 1.428148, -1, -1, -0.1]` in its non-zero OpenGL column-major elements.
+- Projection classification: `fovY = 2*atan(1/1.428148) = 70.0000003 degrees`; `aspect = 1.428148/0.803333 = 1.7777783`; the infinite-far term gives `near = 0.1/2 = 0.05`.
+- View evidence: a bounded exact-value histogram was validated in Debug and Release, then attached for 1,560 gameplay frames. A representative frame had 56 model-view loads, 20 unique values, no dropped values, and one matrix repeated 10 times. During player movement the dominant matrix changed coherently in rotation and translation while the projection stayed fixed.
+- Modified state: only the existing IAT observation slots; no OpenGL arguments or executable code bytes were changed.
+- Negative test: the earlier main-menu capture had orthographic calls but no float projection load, so the gameplay result is not merely a global per-frame UI matrix.
+- Result: confirmed API-level perspective projection and moving view-matrix signals for this exact build. The owning HPL camera object and a safe stereo scene-render entry point remain unknown.
+
 ### 2026-09-03 — Original Steam executables contain a `.bind` entry layer
 
 - Builds inspected: observed Overture retail, Black Plague and Requiem executables.

@@ -20,6 +20,46 @@
       "initializedMemoryEntropyBitsPerByte": 6.43571
     }
   },
+  "runtimeObservations": {
+    "gameplayMatrices": {
+      "status": "confirmed-runtime",
+      "projectionCaptureFrames": 702,
+      "movingViewCaptureFrames": 1560,
+      "projectionLoadsPerSampledFrame": 1,
+      "orthographicCallsPerSampledFrame": 3,
+      "projectionColumnMajor": [
+        0.803333,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.428148,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0,
+        -1.0,
+        0.0,
+        0.0,
+        -0.1,
+        0.0
+      ],
+      "inferredProjection": {
+        "verticalFovDegrees": 70.0,
+        "aspectRatio": 1.777778,
+        "nearPlane": 0.05,
+        "farPlane": "infinite"
+      },
+      "modelViewEvidence": {
+        "representativeLoads": 56,
+        "representativeUniqueMatrices": 20,
+        "representativeDominantLoads": 10,
+        "droppedMatrices": 0,
+        "dominantMatrixChangedWithPlayerMotion": true
+      }
+    }
+  },
   "symbols": {
     "hpl.cLowLevelGraphicsSDL.SetMatrix": {
       "status": "confirmed-static-mapping",

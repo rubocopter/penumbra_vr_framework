@@ -33,11 +33,13 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     if (frame_number <= 10 || frame_number % 300 == 0) {
         penumbra_vr::probe::WriteLog(
             "frame=%llu matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
-            "texture_loads=%lu ortho_calls=%lu",
+            "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),
+            static_cast<unsigned long>(telemetry.unique_model_view_matrices),
+            static_cast<unsigned long>(telemetry.dropped_model_view_matrices),
             static_cast<unsigned long>(telemetry.texture_loads),
             static_cast<unsigned long>(telemetry.ortho_calls));
         if (telemetry.has_projection) {
@@ -45,6 +47,18 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             penumbra_vr::probe::WriteLog(
                 "projection=[%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] "
                 "[%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f]",
+                m[0], m[1], m[2], m[3],
+                m[4], m[5], m[6], m[7],
+                m[8], m[9], m[10], m[11],
+                m[12], m[13], m[14], m[15]);
+        }
+        if (telemetry.has_dominant_model_view) {
+            const auto& m = telemetry.dominant_model_view;
+            penumbra_vr::probe::WriteLog(
+                "dominant_model_view_loads=%lu matrix=[%.6f %.6f %.6f %.6f] "
+                "[%.6f %.6f %.6f %.6f] [%.6f %.6f %.6f %.6f] "
+                "[%.6f %.6f %.6f %.6f]",
+                static_cast<unsigned long>(telemetry.dominant_model_view_loads),
                 m[0], m[1], m[2], m[3],
                 m[4], m[5], m[6], m[7],
                 m[8], m[9], m[10], m[11],

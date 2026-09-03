@@ -29,7 +29,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Add non-mutating OpenGL matrix telemetry with tested teardown
 - [x] Establish initialized-memory inspection for protected Steam executables
 - [x] Map the first HPL routine from evidence (`SetMatrix`, static validation)
-- [ ] Observe and classify a projection matrix during actual 3D gameplay
+- [x] Observe and classify the projection matrix during actual 3D gameplay
+- [x] Identify the moving view matrix at the OpenGL boundary
 - [ ] Locate the active camera and projection path
 - [ ] Locate a safe scene-render entry point
 - [ ] Create and resize per-eye render targets
