@@ -69,6 +69,7 @@ pvr_enable_warnings(pvr_black_plague_probe)
 
 add_executable(pvr_probe_launcher
     src/launcher/main.cpp
+    src/launcher/pe_memory_inspector.cpp
 )
 target_link_libraries(pvr_probe_launcher PRIVATE pvr_build_catalog)
 set_target_properties(pvr_probe_launcher PROPERTIES

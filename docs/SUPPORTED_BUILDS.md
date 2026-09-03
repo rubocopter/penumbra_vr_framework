@@ -11,6 +11,8 @@ This document distinguishes **observed** executables from **supported** backends
 | Black Plague Steam executable observed during initial audit | x86 | 3,338,240 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Research target; unsupported |
 | Requiem Steam executable observed during initial audit | x86 | 3,350,528 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Research target; unsupported |
 
+The first evidence manifest is stored at [../manifests/black_plague/FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF.json](../manifests/black_plague/FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF.json). A manifest records observations for one hash; its existence does not make that build playable or supported.
+
 ## Support rules
 
 - A binary backend supports only hashes explicitly validated in-game.

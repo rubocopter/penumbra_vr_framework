@@ -1,4 +1,5 @@
 #include "penumbra_vr/build_catalog.hpp"
+#include "pe_memory_inspector.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -325,22 +326,28 @@ bool ValidateBlackPlagueTarget(
 int wmain(int argc, wchar_t** argv) {
     const bool attach = argc == 3 && _wcsicmp(argv[1], L"--attach") == 0;
     const bool detach = argc == 3 && _wcsicmp(argv[1], L"--detach") == 0;
-    if ((!attach && !detach && argc != 2) || ((attach || detach) && argc != 3)) {
+    const bool inspect = argc == 3 && _wcsicmp(argv[1], L"--inspect") == 0;
+    const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
+    if ((!attach && !detach && !inspect && !capture_image && argc != 2) ||
+        ((attach || detach || inspect) && argc != 3) ||
+        (capture_image && argc != 4)) {
         std::wcerr << L"Usage:\n"
                    << L"  PenumbraVR.ProbeLauncher.exe <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --attach <process-id>\n"
-                   << L"  PenumbraVR.ProbeLauncher.exe --detach <process-id>\n";
+                   << L"  PenumbraVR.ProbeLauncher.exe --detach <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
         return 2;
     }
 
     const std::filesystem::path probe_path =
         CurrentExecutableDirectory() / L"PenumbraVR.BlackPlague.Probe.dll";
-    if (!std::filesystem::is_regular_file(probe_path)) {
+    if (!inspect && !capture_image && !std::filesystem::is_regular_file(probe_path)) {
         std::wcerr << L"Probe DLL not found beside the launcher: " << probe_path << L'\n';
         return 5;
     }
 
-    if (attach || detach) {
+    if (attach || detach || inspect || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
         if (parsed_pid == 0 || parse_end == argv[2] || *parse_end != L'\0') {
@@ -348,10 +355,14 @@ int wmain(int argc, wchar_t** argv) {
             return 2;
         }
 
-        constexpr DWORD kProcessAccess = PROCESS_CREATE_THREAD | PROCESS_QUERY_INFORMATION |
-            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_OPERATION | PROCESS_VM_READ |
-            PROCESS_VM_WRITE | SYNCHRONIZE;
-        Handle process(OpenProcess(kProcessAccess, FALSE, parsed_pid));
+        constexpr DWORD kInspectionAccess = PROCESS_QUERY_INFORMATION |
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ | SYNCHRONIZE;
+        constexpr DWORD kInjectionAccess = kInspectionAccess | PROCESS_CREATE_THREAD |
+            PROCESS_VM_OPERATION | PROCESS_VM_WRITE;
+        Handle process(OpenProcess(
+            (inspect || capture_image) ? kInspectionAccess : kInjectionAccess,
+            FALSE,
+            parsed_pid));
         if (!process.valid()) {
             std::wcerr << LastErrorText(L"OpenProcess") << L'\n';
             return 6;
@@ -368,6 +379,58 @@ int wmain(int argc, wchar_t** argv) {
         if (!ValidateBlackPlagueTarget(game_path, build, error)) {
             std::wcerr << error << L'\n';
             return 4;
+        }
+        if (inspect || capture_image) {
+            const std::uintptr_t module_base = FindRemoteModuleBase(
+                parsed_pid, game_path.filename().c_str());
+            if (module_base == 0) {
+                std::wcerr << L"Could not find the main module in the target process.\n";
+                return 7;
+            }
+
+            penumbra_vr::launcher::TextSectionInspection result;
+            std::error_code capture_path_error;
+            const std::filesystem::path capture_path = capture_image
+                ? std::filesystem::absolute(argv[3], capture_path_error).lexically_normal()
+                : std::filesystem::path{};
+            if (capture_path_error) {
+                std::wcerr << L"Could not resolve the requested capture path.\n";
+                return 7;
+            }
+            if (capture_image && std::filesystem::exists(capture_path)) {
+                std::wcerr << L"Refusing to overwrite an existing analysis image: "
+                           << capture_path << L'\n';
+                return 7;
+            }
+            if (!penumbra_vr::launcher::InspectRemoteTextSection(
+                    process.get(),
+                    module_base,
+                    game_path,
+                    capture_image ? &capture_path : nullptr,
+                    result,
+                    error)) {
+                std::wcerr << L"Memory inspection failed: " << error << L'\n';
+                return 7;
+            }
+
+            const double changed_percent = result.compared_bytes == 0
+                ? 0.0
+                : 100.0 * static_cast<double>(result.different_bytes) /
+                    static_cast<double>(result.compared_bytes);
+            std::wcout << L"Inspected " << penumbra_vr::GameDisplayName(build->game)
+                       << L" (PID " << parsed_pid << L")\n"
+                       << L".text RVA: 0x" << std::hex << result.rva << std::dec << L'\n'
+                       << L"Compared bytes: " << result.compared_bytes << L'\n'
+                       << L"Different bytes: " << result.different_bytes << L" ("
+                       << changed_percent << L"%)\n"
+                       << L"First difference RVA: 0x" << std::hex
+                       << result.first_difference_rva << std::dec << L'\n'
+                       << L"Disk entropy: " << result.disk_entropy << L" bits/byte\n"
+                       << L"Memory entropy: " << result.memory_entropy << L" bits/byte\n";
+            if (capture_image) {
+                std::wcout << L"Analysis image: " << capture_path << L'\n';
+            }
+            return 0;
         }
         if (!detach && !WaitForRemoteModule(process.get(), parsed_pid, L"SDL.dll", 5'000, error)) {
             std::wcerr << L"Attach failed: " << error << L'\n';

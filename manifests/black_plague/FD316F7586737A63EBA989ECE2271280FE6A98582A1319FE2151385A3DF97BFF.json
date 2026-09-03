@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "game": "black_plague",
+  "buildId": "black-plague-steam-observed",
+  "executable": {
+    "fileName": "Penumbra.exe",
+    "machine": "x86",
+    "sha256": "FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF",
+    "preferredImageBase": "0x00400000"
+  },
+  "protection": {
+    "entryPointRva": "0x002F62ED",
+    "entrySection": ".bind",
+    "signaturesRequireInitializedMemory": true,
+    "textComparison": {
+      "comparedBytes": 2558295,
+      "differentBytes": 2548280,
+      "differentPercent": 99.6085,
+      "diskEntropyBitsPerByte": 7.99993,
+      "initializedMemoryEntropyBitsPerByte": 6.43571
+    }
+  },
+  "symbols": {
+    "hpl.cLowLevelGraphicsSDL.SetMatrix": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x001601D0",
+      "preferredVirtualAddress": "0x005601D0",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "eMatrix matrixType",
+        "const cMatrixf* matrix"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "8B 44 24 04 83 EC 40 83 E8 00 74 14 48 74 0A 48 75 19 68 02 17 00 00 EB 0C 68 01 17 00 00 EB 05 68 00 17 00 00",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "evidence": [
+        "selects GL_TEXTURE, GL_PROJECTION or GL_MODELVIEW from matrixType",
+        "constructs a 64-byte transposed matrix on the stack",
+        "passes the transposed matrix to OPENGL32!glLoadMatrixf",
+        "returns with ret 8",
+        "matches the released HPL1 SetMatrix implementation"
+      ]
+    }
+  }
+}

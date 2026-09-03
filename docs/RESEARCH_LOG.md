@@ -43,3 +43,14 @@ OpenGL observation hooks for `glMatrixMode`, `glLoadMatrixf` and `glOrtho` were 
 - Requiem entry point: `0x006F92ED`, `.bind` begins at `0x006F9000`.
 - Overture retail entry point: `0x006B82ED`, `.bind` begins at `0x006B8000`.
 - Result: confirmed PE layout; likely executable protection/binding. Internal HPL signatures must not be derived from the encrypted-looking on-disk `.text`. The next check is to compare it with initialized process memory before choosing a dumping/disassembly workflow.
+
+### 2026-09-03 — Black Plague `.text` unpacking and first HPL symbol
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`
+- Initialized `.text` bytes compared: 2,558,295.
+- Bytes different from disk: 2,548,280 (99.6085%).
+- On-disk entropy: 7.99993 bits/byte.
+- Initialized-memory entropy: 6.43571 bits/byte.
+- Result: confirmed. Static analysis must use initialized memory for this build. A reconstructed analysis copy is kept locally under the Git-ignored `local/` directory and must not be committed or distributed.
+
+The initialized code contains a unique routine at RVA `0x001601D0` whose behavior matches HPL1 `cLowLevelGraphicsSDL::SetMatrix(eMatrix, const cMatrixf&)`: it selects model-view/projection/texture mode, creates a 64-byte transposed matrix on the stack, calls `glLoadMatrixf`, and returns with `ret 8`. The recorded unpacked-memory signature has exactly one match. Result: confirmed static mapping, not yet hook-validated.

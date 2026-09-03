@@ -27,6 +27,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 ## Phase 2 — Black Plague visual MVP
 
 - [x] Add non-mutating OpenGL matrix telemetry with tested teardown
+- [x] Establish initialized-memory inspection for protected Steam executables
+- [x] Map the first HPL routine from evidence (`SetMatrix`, static validation)
 - [ ] Observe and classify a projection matrix during actual 3D gameplay
 - [ ] Locate the active camera and projection path
 - [ ] Locate a safe scene-render entry point
