@@ -1,0 +1,47 @@
+# Build products
+/build/
+/out/
+/dist/
+/packages/
+/dependencies/
+/_deps/
+
+# CMake and Visual Studio
+CMakeUserPresets.json
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.VC.opendb
+
+# Compiled binaries and symbols
+*.dll
+*.exe
+*.exp
+*.ilk
+*.lib
+*.obj
+*.pdb
+
+# Reverse-engineering databases (export notes/signatures as text or JSON instead)
+*.bak
+*.bndb
+*.ghidra
+*.id0
+*.id1
+*.id2
+*.i64
+*.nam
+*.til
+
+# Local game material and diagnostics
+/local/
+/logs/
+/captures/
+*.dmp
+
+# Editor and OS metadata
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

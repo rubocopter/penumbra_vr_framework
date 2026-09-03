@@ -1,0 +1,76 @@
+# Roadmap
+
+Roadmap states are evidence-based. A directory or compiling stub does not make a feature complete.
+
+## Phase 0 — Repository baseline
+
+- [x] Independent Git repository
+- [x] Honest project status and architectural boundaries
+- [x] Known-build fingerprinting tool
+- [x] Initial executable fingerprints recorded
+- [ ] Decide project license and attribution policy
+- [ ] Record reproducible binary-research workflow
+
+Exit criterion: a clean repository in which every implemented feature is testable and every planned feature is labelled as planned.
+
+## Phase 1 — Black Plague binary probe
+
+- [ ] Confirm a repeatable bootstrap/loading mechanism
+- [ ] Log module identity from inside the process
+- [ ] Find and validate a stable frame or swap hook
+- [ ] Document calling convention, overwritten instructions and teardown
+- [ ] Run repeated launch/play/exit cycles without crashes
+
+Exit criterion: one supported Black Plague hash loads the probe, emits frame telemetry and unloads or exits cleanly.
+
+## Phase 2 — Black Plague visual MVP
+
+- [ ] Locate the active camera and projection path
+- [ ] Locate a safe scene-render entry point
+- [ ] Create and resize per-eye render targets
+- [ ] Apply tracked head view transforms
+- [ ] Submit both eyes to OpenVR
+- [ ] Preserve functional keyboard and mouse input
+
+Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus.
+
+## Phase 3 — Shared runtime extraction
+
+- [ ] Extract only demonstrated reusable systems from Overture VR Rework
+- [ ] Keep Overture's existing build and tests green during extraction
+- [ ] Introduce a minimal backend contract derived from both integrations
+- [ ] Add host-independent tests for transforms, actions and settings
+- [ ] Preserve copyright, license and provenance information
+
+Exit criterion: Overture and the Black Plague MVP consume the same tested runtime behavior without sharing game-specific addresses or layouts.
+
+## Phase 4 — Black Plague gameplay VR
+
+- [ ] VR actions and controller bindings
+- [ ] room-scale body/head relationship
+- [ ] hands, grabbing and interactions
+- [ ] inventory, notes, menus, HUD and subtitles
+- [ ] comfort settings and haptics
+- [ ] representative chapter-level validation
+
+Exit criterion: a documented playable alpha for an exact Black Plague build.
+
+## Phase 5 — Requiem backend
+
+- [ ] Repeat exact-build research rather than assuming Black Plague RVAs
+- [ ] Reuse validated HPL-level hooks where binary evidence permits
+- [ ] Adapt Requiem-specific gameplay and UI behavior
+- [ ] Complete stereo, input and representative-level validation
+
+Exit criterion: a documented playable alpha for an exact Requiem build.
+
+## Phase 6 — Unified installer and release
+
+- [ ] installation discovery and manual selection
+- [ ] build compatibility report
+- [ ] transactional backup, install, verify and rollback
+- [ ] shared manifests and controller bindings
+- [ ] package attribution and licenses
+- [ ] clean-machine and upgrade testing
+
+Exit criterion: one package safely installs any supported combination of the three games and can fully restore the original installations.
