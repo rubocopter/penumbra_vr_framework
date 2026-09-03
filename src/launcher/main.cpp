@@ -301,8 +301,9 @@ bool GetProcessExecutablePath(
     return false;
 }
 
-bool ValidateBlackPlagueTarget(
+bool ValidateKnownTarget(
     const std::filesystem::path& game_path,
+    bool require_black_plague_probe,
     const penumbra_vr::KnownBuild*& build,
     std::wstring& error) {
     std::string sha256;
@@ -312,10 +313,15 @@ bool ValidateBlackPlagueTarget(
     }
 
     build = penumbra_vr::FindKnownBuild(sha256);
-    if (build == nullptr || build->game != penumbra_vr::GameId::black_plague ||
-        !build->black_plague_probe_allowed) {
-        error = L"Refusing to inject an unknown or unsupported research target. SHA-256: " +
+    if (build == nullptr) {
+        error = L"Refusing to inspect or inject an unknown executable. SHA-256: " +
             std::wstring(sha256.begin(), sha256.end());
+        return false;
+    }
+    if (require_black_plague_probe &&
+        (build->game != penumbra_vr::GameId::black_plague ||
+         !build->black_plague_probe_allowed)) {
+        error = L"This operation is only enabled for the whitelisted Black Plague probe build";
         return false;
     }
     return true;
@@ -376,7 +382,8 @@ int wmain(int argc, wchar_t** argv) {
         }
 
         const penumbra_vr::KnownBuild* build = nullptr;
-        if (!ValidateBlackPlagueTarget(game_path, build, error)) {
+        if (!ValidateKnownTarget(
+                game_path, !(inspect || capture_image), build, error)) {
             std::wcerr << error << L'\n';
             return 4;
         }
@@ -467,7 +474,7 @@ int wmain(int argc, wchar_t** argv) {
 
     std::wstring error;
     const penumbra_vr::KnownBuild* build = nullptr;
-    if (!ValidateBlackPlagueTarget(game_path, build, error)) {
+    if (!ValidateKnownTarget(game_path, true, build, error)) {
         std::wcerr << error << L'\n';
         return 4;
     }

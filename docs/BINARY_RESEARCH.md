@@ -2,7 +2,7 @@
 
 ## Why initialized memory is required
 
-The observed retail/Steam executables for Overture, Black Plague and Requiem enter through a final `.bind` section. For the known Black Plague build, 99.6085% of `.text` differs after Steam has initialized the process. The on-disk section has near-maximum byte entropy and does not disassemble as normal code; the initialized section does.
+The observed retail/Steam executables for Overture, Black Plague and Requiem enter through a final `.bind` section. For the known Black Plague and Requiem builds, more than 99.6% of `.text` differs after Steam has initialized the process. The on-disk sections have near-maximum byte entropy and do not disassemble as normal code; the initialized sections do.
 
 Consequences:
 
@@ -13,7 +13,7 @@ Consequences:
 
 ## Inspect without dumping
 
-Build the x86 Release targets, launch Black Plague through Steam, and run:
+Build the x86 Release targets, launch a catalogued game through Steam, and run:
 
 ```powershell
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect <pid>
@@ -26,7 +26,7 @@ This compares `.text` in memory with the executable on disk and reports changed 
 ```powershell
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe `
   --capture-image <pid> `
-  .\local\captures\black-plague-memory-text.analysis.exe
+  .\local\captures\game-memory-text.analysis.exe
 ```
 
 The command copies the original executable and replaces its raw `.text` contents with the initialized section. The result is for local static analysis only:

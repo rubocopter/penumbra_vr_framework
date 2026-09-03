@@ -54,3 +54,14 @@ OpenGL observation hooks for `glMatrixMode`, `glLoadMatrixf` and `glOrtho` were 
 - Result: confirmed. Static analysis must use initialized memory for this build. A reconstructed analysis copy is kept locally under the Git-ignored `local/` directory and must not be committed or distributed.
 
 The initialized code contains a unique routine at RVA `0x001601D0` whose behavior matches HPL1 `cLowLevelGraphicsSDL::SetMatrix(eMatrix, const cMatrixf&)`: it selects model-view/projection/texture mode, creates a 64-byte transposed matrix on the stack, calls `glLoadMatrixf`, and returns with `ret 8`. The recorded unpacked-memory signature has exactly one match. Result: confirmed static mapping, not yet hook-validated.
+
+### 2026-09-03 — Requiem initialized-memory comparison
+
+- Game/build SHA-256: `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2`
+- Initialized `.text` bytes compared: 2,561,079.
+- Bytes different from disk: 2,551,069 (99.6091%).
+- On-disk entropy: 7.99993 bits/byte.
+- Initialized-memory entropy: 6.43634 bits/byte.
+- Result: Requiem uses the same protected-on-disk/normal-in-memory model as Black Plague.
+
+The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphicsSDL::SetMatrix` also has exactly one Requiem match, at RVA `0x00160970`. The routine is displaced by `0x7A0` rather than sharing a hard-coded RVA. Result: strong confirmation that engine-level symbol definitions can be shared while every executable retains its own version manifest.

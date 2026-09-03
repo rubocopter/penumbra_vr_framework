@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "game": "requiem",
+  "buildId": "requiem-steam-observed",
+  "executable": {
+    "fileName": "Requiem.exe",
+    "machine": "x86",
+    "sha256": "B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2",
+    "preferredImageBase": "0x00400000"
+  },
+  "protection": {
+    "entryPointRva": "0x002F92ED",
+    "entrySection": ".bind",
+    "signaturesRequireInitializedMemory": true,
+    "textComparison": {
+      "comparedBytes": 2561079,
+      "differentBytes": 2551069,
+      "differentPercent": 99.6091,
+      "diskEntropyBitsPerByte": 7.99993,
+      "initializedMemoryEntropyBitsPerByte": 6.43634
+    }
+  },
+  "symbols": {
+    "hpl.cLowLevelGraphicsSDL.SetMatrix": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x00160970",
+      "preferredVirtualAddress": "0x00560970",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "eMatrix matrixType",
+        "const cMatrixf* matrix"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "8B 44 24 04 83 EC 40 83 E8 00 74 14 48 74 0A 48 75 19 68 02 17 00 00 EB 0C 68 01 17 00 00 EB 05 68 00 17 00 00",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "evidence": [
+        "same unique 37-byte semantic prefix as the confirmed Black Plague HPL routine",
+        "selects GL_TEXTURE, GL_PROJECTION or GL_MODELVIEW from matrixType",
+        "constructs a 64-byte transposed matrix on the stack",
+        "passes the transposed matrix to OPENGL32!glLoadMatrixf",
+        "returns with ret 8"
+      ]
+    }
+  }
+}
