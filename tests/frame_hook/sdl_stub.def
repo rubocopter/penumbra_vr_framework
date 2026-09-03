@@ -1,0 +1,3 @@
+EXPORTS
+    SDL_GL_SwapBuffers
+    SDLStub_GetSwapCount

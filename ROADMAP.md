@@ -15,13 +15,14 @@ Exit criterion: a clean repository in which every implemented feature is testabl
 
 ## Phase 1 — Black Plague binary probe
 
-- [ ] Confirm a repeatable bootstrap/loading mechanism
-- [ ] Log module identity from inside the process
-- [ ] Find and validate a stable frame or swap hook
-- [ ] Document calling convention, overwritten instructions and teardown
+- [x] Confirm Steam launch followed by repeatable process attachment
+- [x] Log and revalidate module identity from inside the process
+- [x] Find and validate the imported `SDL_GL_SwapBuffers` frame boundary
+- [x] Document calling convention, modified import slot and teardown
+- [x] Complete three attach/frame/detach cycles in one live process
 - [ ] Run repeated launch/play/exit cycles without crashes
 
-Exit criterion: one supported Black Plague hash loads the probe, emits frame telemetry and unloads or exits cleanly.
+Exit criterion: one whitelisted Black Plague research hash loads the probe, emits frame telemetry and unloads cleanly. The mechanism has met this criterion; longer user-driven sessions remain deliberately unchecked.
 
 ## Phase 2 — Black Plague visual MVP
 

@@ -12,9 +12,9 @@ Internally, each game is allowed to use the integration method it actually needs
 
 ## Status
 
-**Pre-alpha: architecture validation and binary research.**
+**Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod, an installer, a VR runtime, or working game hooks. The first target is a minimal Black Plague proof of concept: load code into one known executable build, establish a stable frame hook, and record enough camera/rendering information to plan stereo rendering.
+This repository does not currently contain a playable mod, an installer, or a VR runtime. It does contain the first verified Black Plague research probe: it validates one exact executable build, loads without modifying the installation, observes `SDL_GL_SwapBuffers`, restores the import and unloads cleanly. It does not render VR or alter the game yet.
 
 The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project; it has not yet been copied into this repository.
 
@@ -47,9 +47,26 @@ Penumbra VR
 
 These are architectural boundaries, not claims that the components already exist. Directories and build targets will be added when their first working implementation is ready.
 
-## Current work
+## Build and current probe
 
-The repository currently provides documentation and a read-only executable fingerprinting tool:
+The native targets are Windows/x86 because the observed game executables are 32-bit:
+
+```powershell
+cmake --preset vs2022-win32
+cmake --build --preset release
+ctest --preset release
+```
+
+Black Plague must currently be launched through Steam. Once it is running, attach or remove the probe with:
+
+```powershell
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --attach <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
+```
+
+Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
+
+The repository also provides a read-only executable fingerprinting tool:
 
 ```powershell
 .\tools\Get-PenumbraBuildInfo.ps1 `
@@ -57,7 +74,7 @@ The repository currently provides documentation and a read-only executable finge
   "C:\path\to\Requiem.exe"
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), and [docs/SUPPORTED_BUILDS.md](docs/SUPPORTED_BUILDS.md) before adding runtime or hook code.
+See [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [docs/BLACK_PLAGUE_PROBE.md](docs/BLACK_PLAGUE_PROBE.md), and [docs/SUPPORTED_BUILDS.md](docs/SUPPORTED_BUILDS.md) before adding runtime or hook code.
 
 ## Licensing
 

@@ -1,0 +1,3 @@
+EXPORTS
+    PenumbraVR_Initialize=_PenumbraVR_Initialize@4
+    PenumbraVR_Shutdown=_PenumbraVR_Shutdown@4
