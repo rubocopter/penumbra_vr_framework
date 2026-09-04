@@ -82,6 +82,28 @@
       ],
       "teardownRestoredInstruction": true,
       "gameRemainedResponsive": true
+    },
+    "openGlFramebufferCapability": {
+      "status": "confirmed-runtime",
+      "captureFrames": 362,
+      "currentContextAtRenderWorld": true,
+      "version": "4.6.0 NVIDIA 616.56",
+      "framebufferApi": "core",
+      "viewport": [
+        0,
+        0,
+        2560,
+        1440
+      ],
+      "framebufferBindingAtRenderWorldEntry": 0,
+      "maxTextureSize": 32768,
+      "maxRenderbufferSize": 32768,
+      "maxViewportDimensions": [
+        32768,
+        32768
+      ],
+      "stateMutation": false,
+      "teardownRestoredHooks": true
     }
   },
   "symbols": {

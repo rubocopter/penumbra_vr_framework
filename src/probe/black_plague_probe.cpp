@@ -13,6 +13,19 @@ namespace {
 
 volatile LONG g_state = 0;
 
+const char* FramebufferApiName(
+    penumbra_vr::backends::black_plague::FramebufferApi api) noexcept {
+    using penumbra_vr::backends::black_plague::FramebufferApi;
+    switch (api) {
+        case FramebufferApi::core:
+            return "core";
+        case FramebufferApi::ext:
+            return "EXT";
+        default:
+            return "unavailable";
+    }
+}
+
 std::string WideToUtf8(const std::wstring& value) {
     if (value.empty()) {
         return {};
@@ -36,6 +49,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     if (frame_number <= 10 || frame_number % 300 == 0) {
         penumbra_vr::probe::WriteLog(
             "frame=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
+            "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
+            "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -44,6 +59,18 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             reinterpret_cast<void*>(render_world.world),
             reinterpret_cast<void*>(render_world.camera),
             render_world.frame_time,
+            render_world.has_current_gl_context ? 1U : 0U,
+            render_world.open_gl_version.data(),
+            FramebufferApiName(render_world.framebuffer_api),
+            static_cast<long>(render_world.viewport[0]),
+            static_cast<long>(render_world.viewport[1]),
+            static_cast<long>(render_world.viewport[2]),
+            static_cast<long>(render_world.viewport[3]),
+            static_cast<long>(render_world.framebuffer_binding),
+            static_cast<long>(render_world.max_texture_size),
+            static_cast<long>(render_world.max_renderbuffer_size),
+            static_cast<long>(render_world.max_viewport_dimensions[0]),
+            static_cast<long>(render_world.max_viewport_dimensions[1]),
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),

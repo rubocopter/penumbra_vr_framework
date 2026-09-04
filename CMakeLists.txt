@@ -58,6 +58,7 @@ target_include_directories(
     PUBLIC src/backends/black_plague
     PRIVATE src/hooks)
 target_link_libraries(pvr_black_plague_backend_probe PUBLIC pvr_rel32_call_hook)
+target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)
 
 target_link_libraries(pvr_sdl_frame_hook PUBLIC pvr_iat_hook)

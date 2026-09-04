@@ -110,3 +110,14 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Independent stack evidence: projection loads captured main-module returns `0x00560212` (`SetMatrix` after `glLoadMatrixf`) and `0x004EE015` (`cScene::Render` immediately after the mapped call site).
 - Teardown evidence: all three cycles restored the call, unloaded the DLL and left the same game process responsive.
 - Result: confirmed safe live hook boundary for this exact Black Plague build. This does not validate stereo re-entry yet.
+
+### 2026-09-04 — OpenGL framebuffer capability at `RenderWorld`
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Question: does the validated world-render boundary execute with a current OpenGL context and a usable framebuffer-object API?
+- Method: read-only state queries from the existing `RenderWorld` adapter; no framebuffer, texture or renderbuffer was created or bound.
+- Live evidence: a 362-frame gameplay capture reported a current context at every sampled call, OpenGL version `4.6.0 NVIDIA 616.56`, all nine required core FBO entry points, viewport `[0, 0, 2560, 1440]`, and framebuffer binding `0`.
+- Driver limits: maximum texture size `32768`, maximum renderbuffer size `32768`, maximum viewport dimensions `[32768, 32768]`.
+- Teardown evidence: the call-site instruction and imported OpenGL/SDL pointers were restored, the DLL unloaded, and the game remained responsive.
+- Scope: version and numeric limits are observations of the test GPU/driver, not framework requirements. FBO allocation, completeness and GL-state restoration have not yet been tested.
+- Result: confirmed that this exact build enters `RenderWorld` with the context and core API needed to attempt off-screen eye targets.
