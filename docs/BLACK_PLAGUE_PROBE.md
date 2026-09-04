@@ -104,7 +104,7 @@ On 2026-09-04, the `RenderWorld` call-site probe completed three more attach/det
 
 The projection call-stack capture independently returned `0x00560212` followed by `0x004EE015`: the return from the mapped `SetMatrix` implementation and the instruction immediately after the mapped `cScene::Render` call site. Each detach restored the original five bytes, unloaded the probe and left the game responding. Result: the call site is a verified live hook boundary for this exact executable hash.
 
-A further 362-frame gameplay capture queried the OpenGL state at entry to that boundary without changing it. A current OpenGL context was present on every sampled call. The NVIDIA driver exposed OpenGL `4.6.0 NVIDIA 616.56` and all required core framebuffer-object procedures. The observed state and implementation limits were:
+A 362-frame gameplay capture queried the OpenGL state at entry to that boundary without changing it. After tightening the capability gate to require all ten FBO operations, including depth/stencil attachment, a separate 304-frame capture reproduced the result. A current OpenGL context was present on every sampled call. The NVIDIA driver exposed OpenGL `4.6.0 NVIDIA 616.56` and the complete required core framebuffer-object API. The observed state and implementation limits were:
 
 ```text
 viewport:                  [0, 0, 2560, 1440]
@@ -114,7 +114,7 @@ maximum renderbuffer size: 32768
 maximum viewport:          [32768, 32768]
 ```
 
-These limits describe the test machine, not minimum requirements for Penumbra VR. The relevant conclusion is that `RenderWorld` runs with a current context, enters through the default framebuffer on this build, and provides the framebuffer API needed for reversible off-screen eye targets. The probe did not create or bind an FBO during this capture.
+These limits describe the test machine, not minimum requirements for Penumbra VR. The relevant conclusion is that `RenderWorld` runs with a current context, enters through the default framebuffer on this build, and provides the framebuffer API needed for reversible off-screen eye targets. The probe did not create or bind an FBO during these captures.
 
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 

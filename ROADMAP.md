@@ -35,7 +35,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Map `cRenderer3D::RenderWorld` and its sole `cScene::Render` call site statically
 - [x] Validate the `RenderWorld` call site as a safe live hook boundary
 - [x] Confirm a current OpenGL context, FBO API and target-size limits at the hook boundary
-- [ ] Create and resize per-eye render targets
+- [x] Implement and host-test transactional per-eye render-target allocation
+- [ ] Validate persistent per-eye targets and render-thread teardown in game
 - [ ] Apply tracked head view transforms
 - [ ] Submit both eyes to OpenVR
 - [ ] Preserve functional keyboard and mouse input

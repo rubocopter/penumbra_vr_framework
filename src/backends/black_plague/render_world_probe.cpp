@@ -45,12 +45,13 @@ GLint g_max_renderbuffer_size = 0;
 }
 
 [[nodiscard]] bool HasFramebufferProcedures(const char* suffix) noexcept {
-    constexpr std::array<const char*, 9> kNames{
+    constexpr std::array<const char*, 10> kNames{
         "glGenFramebuffers",
         "glDeleteFramebuffers",
         "glBindFramebuffer",
         "glCheckFramebufferStatus",
         "glFramebufferTexture2D",
+        "glFramebufferRenderbuffer",
         "glGenRenderbuffers",
         "glDeleteRenderbuffers",
         "glBindRenderbuffer",

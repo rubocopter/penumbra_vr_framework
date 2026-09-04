@@ -116,8 +116,19 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
 - Question: does the validated world-render boundary execute with a current OpenGL context and a usable framebuffer-object API?
 - Method: read-only state queries from the existing `RenderWorld` adapter; no framebuffer, texture or renderbuffer was created or bound.
-- Live evidence: a 362-frame gameplay capture reported a current context at every sampled call, OpenGL version `4.6.0 NVIDIA 616.56`, all nine required core FBO entry points, viewport `[0, 0, 2560, 1440]`, and framebuffer binding `0`.
+- Live evidence: a 362-frame gameplay capture reported a current context at every sampled call, OpenGL version `4.6.0 NVIDIA 616.56`, viewport `[0, 0, 2560, 1440]`, and framebuffer binding `0`. A separate 304-frame capture reproduced the result after the gate was tightened to require all ten operations used by an eye target, including `glFramebufferRenderbuffer`.
 - Driver limits: maximum texture size `32768`, maximum renderbuffer size `32768`, maximum viewport dimensions `[32768, 32768]`.
 - Teardown evidence: the call-site instruction and imported OpenGL/SDL pointers were restored, the DLL unloaded, and the game remained responsive.
 - Scope: version and numeric limits are observations of the test GPU/driver, not framework requirements. FBO allocation, completeness and GL-state restoration have not yet been tested.
 - Result: confirmed that this exact build enters `RenderWorld` with the context and core API needed to attempt off-screen eye targets.
+
+### 2026-09-04 — Host-side OpenGL eye-target lifecycle
+
+- Question: can a reusable component allocate two RGBA8 plus 24-bit-depth/8-bit-stencil FBOs, resize them transactionally, and preserve caller GL state?
+- Test context: hidden Win32 window with a real WGL context; the test executable is isolated from the fake `OPENGL32.dll` used by the import-hook test.
+- Evidence: creation produced two distinct complete framebuffers; nested left/right bindings selected the expected framebuffer and viewport; unwind restored the preceding framebuffer and viewport at each level.
+- State evidence: texture, framebuffer and viewport bindings survived creation, successful resize, rejected resize, rejected destruction and final destruction as specified.
+- Failure evidence: zero-sized allocation was rejected without replacing the working targets; resize and destruction were rejected while an owned eye framebuffer was active.
+- Configurations: Debug and Release passed with `/W4 /WX`.
+- Scope: this proves the component against an ordinary WGL context. Persistent allocation and render-thread teardown inside Black Plague are not yet validated.
+- Result: confirmed host-side component; not yet a confirmed game integration.

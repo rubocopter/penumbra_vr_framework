@@ -50,6 +50,13 @@ add_library(pvr_rel32_call_hook STATIC
 target_include_directories(pvr_rel32_call_hook PUBLIC src/hooks)
 pvr_enable_warnings(pvr_rel32_call_hook)
 
+add_library(pvr_opengl_eye_targets STATIC
+    src/graphics/opengl_eye_targets.cpp
+)
+target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
+target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32)
+pvr_enable_warnings(pvr_opengl_eye_targets)
+
 add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/render_world_probe.cpp
 )
@@ -137,4 +144,16 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_rel32_call_hook_test)
 
     add_test(NAME rel32_call_hook COMMAND pvr_rel32_call_hook_test)
+
+    add_executable(pvr_opengl_eye_targets_test
+        tests/opengl_eye_targets/opengl_eye_targets_test.cpp
+    )
+    set_target_properties(pvr_opengl_eye_targets_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/eye_targets"
+    )
+    target_link_libraries(
+        pvr_opengl_eye_targets_test PRIVATE pvr_opengl_eye_targets)
+    pvr_enable_warnings(pvr_opengl_eye_targets_test)
+
+    add_test(NAME opengl_eye_targets COMMAND pvr_opengl_eye_targets_test)
 endif()

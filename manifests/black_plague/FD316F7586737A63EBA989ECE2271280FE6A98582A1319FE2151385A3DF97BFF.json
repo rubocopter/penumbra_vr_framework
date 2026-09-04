@@ -85,10 +85,11 @@
     },
     "openGlFramebufferCapability": {
       "status": "confirmed-runtime",
-      "captureFrames": 362,
+      "captureFrames": 304,
       "currentContextAtRenderWorld": true,
       "version": "4.6.0 NVIDIA 616.56",
       "framebufferApi": "core",
+      "requiredProcedureCount": 10,
       "viewport": [
         0,
         0,
