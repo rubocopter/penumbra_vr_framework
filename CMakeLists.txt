@@ -105,6 +105,7 @@ target_link_libraries(
     PUBLIC
         pvr_rel32_call_hook
         pvr_opengl_eye_targets
+        pvr_openvr_session
         pvr_vr_math)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)

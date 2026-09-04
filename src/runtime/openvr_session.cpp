@@ -249,6 +249,42 @@ bool OpenVrSession::WaitForHmdPose(
     return true;
 }
 
+bool OpenVrSession::SubmitOpenGlEyeTextures(
+    const std::array<std::uint32_t, 2>& color_textures,
+    std::string& error) const noexcept {
+    error.clear();
+    if (!initialized() || compositor_ == nullptr) {
+        error = "OpenVR compositor is not initialized";
+        return false;
+    }
+    if (color_textures[0] == 0 || color_textures[1] == 0) {
+        error = "OpenVR cannot submit a zero OpenGL texture name";
+        return false;
+    }
+
+    auto* compositor = static_cast<vr::IVRCompositor*>(compositor_);
+    constexpr std::array<vr::EVREye, 2> kEyes{
+        vr::Eye_Left,
+        vr::Eye_Right,
+    };
+    for (std::size_t index = 0; index < kEyes.size(); ++index) {
+        vr::Texture_t texture{
+            reinterpret_cast<void*>(
+                static_cast<std::uintptr_t>(color_textures[index])),
+            vr::TextureType_OpenGL,
+            vr::ColorSpace_Gamma,
+        };
+        const vr::EVRCompositorError submit_error = compositor->Submit(
+            kEyes[index], &texture, nullptr, vr::Submit_Default);
+        if (submit_error != vr::VRCompositorError_None) {
+            error = std::string(index == 0 ? "Left" : "Right") +
+                " eye submission failed: " + CompositorError(submit_error);
+            return false;
+        }
+    }
+    return true;
+}
+
 bool OpenVrSession::initialized() const noexcept {
     return library_ != nullptr && system_ != nullptr && compositor_ != nullptr &&
         shutdown_ != nullptr;

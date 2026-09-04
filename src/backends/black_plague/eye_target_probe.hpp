@@ -43,6 +43,9 @@ void ProcessEyeTargetRequestsOnRenderThread() noexcept;
 [[nodiscard]] bool EndPersistentEyeTarget(
     graphics::OpenGlEyeBinding& binding,
     std::string& error) noexcept;
+[[nodiscard]] bool GetPersistentEyeColorTextures(
+    std::array<std::uint32_t, 2>& color_textures,
+    std::string& error) noexcept;
 
 [[nodiscard]] bool PersistentEyeTargetsActive() noexcept;
 [[nodiscard]] std::uint64_t PersistentEyeTargetLifetimeFrames() noexcept;

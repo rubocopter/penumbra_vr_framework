@@ -75,10 +75,11 @@ Black Plague must currently be launched through Steam. Once it is running, attac
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-world-duplication <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 
-The OpenVR-sized target, controlled world-duplication and stereo-matrix commands are experimental. The stereo-matrix command renders only to hidden 512×512 diagnostic targets and does not submit them to the headset. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
+The OpenVR-sized target, controlled world-duplication and stereo-matrix commands are experimental. The stereo-matrix command renders only to hidden 512×512 diagnostic targets. The stereo-submission command is implemented but not yet validated; unlike the other diagnostics, it is intended to display 300 static stereo frames in the headset, without head tracking, before restoring the normal desktop path. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
 
 The repository also provides a read-only executable fingerprinting tool:
 

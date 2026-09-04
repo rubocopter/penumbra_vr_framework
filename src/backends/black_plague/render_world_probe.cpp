@@ -59,6 +59,7 @@ std::atomic<bool> g_stereo_cancel{false};
 std::array<runtime::VrEyeConfiguration, 2> g_stereo_eyes{};
 std::array<runtime::VrMatrix44, 2> g_stereo_projections{};
 std::array<char, 192> g_stereo_error{};
+std::atomic<runtime::OpenVrSession*> g_stereo_session{nullptr};
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
 std::atomic<bool> g_capabilities_initialized{false};
@@ -299,8 +300,24 @@ void ProcessControlledStereoMatrices(
         return;
     }
 
-    CameraMatrixSnapshot camera_snapshot;
+    runtime::OpenVrSession* session =
+        g_stereo_session.load(std::memory_order_acquire);
+    runtime::VrHmdPose pose;
     std::string error;
+    if (session != nullptr) {
+        if (!session->WaitForHmdPose(pose, error)) {
+            FailStereoMatrixValidation(
+                "Could not acquire the compositor frame pose: " + error);
+            return;
+        }
+        if (!pose.device_connected || !pose.pose_valid) {
+            FailStereoMatrixValidation(
+                "The compositor frame did not contain a valid connected HMD pose");
+            return;
+        }
+    }
+
+    CameraMatrixSnapshot camera_snapshot;
     if (!CaptureCameraMatrices(camera, camera_snapshot, error)) {
         FailStereoMatrixValidation("Could not capture the HPL camera: " + error);
         return;
@@ -334,9 +351,28 @@ void ProcessControlledStereoMatrices(
         return;
     }
 
+    if (session != nullptr) {
+        std::array<std::uint32_t, 2> color_textures{};
+        if (!GetPersistentEyeColorTextures(color_textures, error)) {
+            FailStereoMatrixValidation(
+                "Could not obtain the rendered eye textures: " + error);
+            return;
+        }
+        if (!session->SubmitOpenGlEyeTextures(color_textures, error)) {
+            FailStereoMatrixValidation(
+                "Could not submit the rendered stereo pair: " + error);
+            return;
+        }
+        glFlush();
+    }
+
     AcquireSRWLockExclusive(&g_telemetry_lock);
     ++g_telemetry.stereo_frames;
     g_telemetry.stereo_eye_passes += completed_eye_passes;
+    if (session != nullptr) {
+        ++g_telemetry.compositor_submitted_frames;
+        g_telemetry.compositor_hmd_pose_valid = true;
+    }
     g_telemetry.stereo_camera_restored = true;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 
@@ -492,6 +528,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_error = {};
     g_stereo_eyes = {};
     g_stereo_projections = {};
+    g_stereo_session.store(nullptr, std::memory_order_release);
     g_stereo_requested_frames.store(0, std::memory_order_release);
     g_stereo_completed_frames.store(0, std::memory_order_release);
     g_stereo_cancel.store(false, std::memory_order_release);
@@ -589,6 +626,16 @@ bool ValidateControlledWorldDuplication(
     expected = DuplicationState::pending;
     static_cast<void>(g_duplication_state.compare_exchange_strong(
         expected, DuplicationState::failed, std::memory_order_acq_rel));
+    do {
+        state = g_duplication_state.load(std::memory_order_acquire);
+        if (state != DuplicationState::preparing &&
+            state != DuplicationState::pending &&
+            state != DuplicationState::processing) {
+            break;
+        }
+        Sleep(1);
+    } while (true);
+    g_duplication_state.store(DuplicationState::idle, std::memory_order_release);
     error = "Timed out waiting for controlled world duplication";
     return false;
 }
@@ -662,8 +709,43 @@ bool ValidateControlledStereoMatrices(
     expected = StereoMatrixState::pending;
     static_cast<void>(g_stereo_state.compare_exchange_strong(
         expected, StereoMatrixState::failed, std::memory_order_acq_rel));
+    do {
+        state = g_stereo_state.load(std::memory_order_acquire);
+        if (state != StereoMatrixState::preparing &&
+            state != StereoMatrixState::pending &&
+            state != StereoMatrixState::processing) {
+            break;
+        }
+        Sleep(1);
+    } while (true);
+    g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
     error = "Timed out waiting for controlled stereo-matrix validation";
     return false;
+}
+
+bool ValidateControlledStereoSubmission(
+    runtime::OpenVrSession& session,
+    const std::array<runtime::VrEyeConfiguration, 2>& eyes,
+    float near_clip,
+    std::uint32_t frames,
+    std::string& error) noexcept {
+    error.clear();
+    if (!session.initialized()) {
+        error = "OpenVR must be initialized before compositor submission";
+        return false;
+    }
+
+    runtime::OpenVrSession* expected = nullptr;
+    if (!g_stereo_session.compare_exchange_strong(
+            expected, &session, std::memory_order_acq_rel)) {
+        error = "Another compositor-submission request is active";
+        return false;
+    }
+
+    const bool result = ValidateControlledStereoMatrices(
+        eyes, near_clip, frames, error);
+    g_stereo_session.store(nullptr, std::memory_order_release);
+    return result;
 }
 
 RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {

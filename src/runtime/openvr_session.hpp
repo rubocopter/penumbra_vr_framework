@@ -50,6 +50,9 @@ public:
     [[nodiscard]] bool WaitForHmdPose(
         VrHmdPose& pose,
         std::string& error) const noexcept;
+    [[nodiscard]] bool SubmitOpenGlEyeTextures(
+        const std::array<std::uint32_t, 2>& color_textures,
+        std::string& error) const noexcept;
 
     [[nodiscard]] bool initialized() const noexcept;
     [[nodiscard]] VrRenderTargetSize recommended_render_target_size() const noexcept;

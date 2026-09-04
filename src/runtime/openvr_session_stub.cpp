@@ -32,6 +32,13 @@ bool OpenVrSession::WaitForHmdPose(
     return false;
 }
 
+bool OpenVrSession::SubmitOpenGlEyeTextures(
+    const std::array<std::uint32_t, 2>&,
+    std::string& error) const noexcept {
+    error = "This build was compiled without an OpenVR SDK";
+    return false;
+}
+
 bool OpenVrSession::initialized() const noexcept {
     return false;
 }

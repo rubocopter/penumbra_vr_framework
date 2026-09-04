@@ -158,11 +158,14 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: render 60 reversible stereo pairs into hidden targets
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <pid>
 
+# Experimental and not yet live-validated: submit 300 static stereo frames
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <pid>
+
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The unvalidated submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL. It deliberately ignores that pose for camera transforms, so a successful first presentation will have stereo/IPD but no head tracking.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 

@@ -31,6 +31,8 @@ struct RenderWorldFrameTelemetry {
     std::array<char, 64> open_gl_version{};
     std::uint32_t stereo_frames = 0;
     std::uint32_t stereo_eye_passes = 0;
+    std::uint32_t compositor_submitted_frames = 0;
+    bool compositor_hmd_pose_valid = false;
     bool stereo_camera_restored = true;
     EyeTargetProbeTelemetry eye_targets;
 };
@@ -41,6 +43,12 @@ struct RenderWorldFrameTelemetry {
     std::uint32_t frames,
     std::string& error) noexcept;
 [[nodiscard]] bool ValidateControlledStereoMatrices(
+    const std::array<runtime::VrEyeConfiguration, 2>& eyes,
+    float near_clip,
+    std::uint32_t frames,
+    std::string& error) noexcept;
+[[nodiscard]] bool ValidateControlledStereoSubmission(
+    runtime::OpenVrSession& session,
     const std::array<runtime::VrEyeConfiguration, 2>& eyes,
     float near_clip,
     std::uint32_t frames,

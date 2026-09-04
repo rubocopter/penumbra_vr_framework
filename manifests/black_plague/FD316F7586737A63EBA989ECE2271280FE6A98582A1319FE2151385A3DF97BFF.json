@@ -273,6 +273,21 @@
       "newWindowsErrorReportingEvents": 0,
       "gameRemainedResponsive": true,
       "submittedToOpenVr": false
+    },
+    "controlledStereoSubmission": {
+      "status": "implemented-awaiting-runtime-validation",
+      "diagnosticDimensions": [
+        512,
+        512
+      ],
+      "plannedSubmittedFrames": 300,
+      "waitGetPosesBeforeEachFrame": true,
+      "requiresConnectedValidHmdPose": true,
+      "poseAppliedToView": false,
+      "colorSpace": "gamma",
+      "textureType": "OpenGL",
+      "glFlushAfterStereoPair": true,
+      "normalDesktopPassPreserved": true
     }
   },
   "symbols": {

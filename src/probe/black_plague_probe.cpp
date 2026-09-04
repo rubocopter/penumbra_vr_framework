@@ -84,6 +84,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
     if (frame_number <= 10 || frame_number % 300 == 0 ||
         render_world.stereo_eye_passes != 0 ||
+        render_world.compositor_submitted_frames != 0 ||
         !render_world.stereo_camera_restored ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
@@ -93,6 +94,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
             "stereo_frames=%lu stereo_eye_passes=%lu stereo_camera_restored=%u "
+            "submitted_frames=%lu submitted_pose_valid=%u "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -120,6 +122,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.stereo_frames),
             static_cast<unsigned long>(render_world.stereo_eye_passes),
             render_world.stereo_camera_restored ? 1U : 0U,
+            static_cast<unsigned long>(render_world.compositor_submitted_frames),
+            render_world.compositor_hmd_pose_valid ? 1U : 0U,
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),
@@ -173,6 +177,117 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 render_world.eye_targets.error.data());
         }
     }
+}
+
+enum class StereoExperiment : std::uint8_t {
+    offscreen_matrices,
+    compositor_submission,
+};
+
+[[nodiscard]] bool RunStereoExperiment(
+    StereoExperiment experiment,
+    std::uint32_t frames,
+    std::string& error) noexcept {
+    error.clear();
+    const bool submit = experiment == StereoExperiment::compositor_submission;
+    if (g_openvr_session.initialized() ||
+        penumbra_vr::backends::black_plague::PersistentEyeTargetsActive()) {
+        error = "The stereo experiment requires an idle OpenVR and eye-target state";
+        return false;
+    }
+
+    const std::wstring loader_path = OpenVrLoaderPath();
+    if (loader_path.empty()) {
+        error = "Could not resolve the probe directory";
+        return false;
+    }
+    if (!g_openvr_session.Initialize(loader_path, error)) {
+        return false;
+    }
+
+    std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
+    bool success = g_openvr_session.ReadEyeConfiguration(eyes, error);
+    if (success) {
+        for (std::size_t index = 0; index < eyes.size(); ++index) {
+            const auto& eye = eyes[index];
+            penumbra_vr::runtime::VrMatrix44 projection;
+            std::string projection_error;
+            const bool projection_ready =
+                penumbra_vr::runtime::BuildHplInfiniteProjection(
+                    eye, 0.05F, projection, projection_error);
+            penumbra_vr::probe::WriteLog(
+                "stereo_eye=%s tangents=[%.6f %.6f %.6f %.6f] "
+                "eye_to_head_translation=[%.6f %.6f %.6f] "
+                "projection_ready=%u projection_x=[%.6f %.6f] error=%s",
+                index == 0 ? "left" : "right",
+                eye.left_tangent,
+                eye.right_tangent,
+                eye.top_tangent,
+                eye.bottom_tangent,
+                eye.eye_to_head.values[3],
+                eye.eye_to_head.values[7],
+                eye.eye_to_head.values[11],
+                projection_ready ? 1U : 0U,
+                projection.values[0],
+                projection.values[2],
+                projection_error.c_str());
+            if (!projection_ready) {
+                error = projection_error;
+                success = false;
+                break;
+            }
+        }
+    }
+
+    if (success) {
+        success =
+            penumbra_vr::backends::black_plague::RequestPersistentEyeTargets(
+                512, 512, error);
+    }
+    if (success) {
+        success = submit
+            ? penumbra_vr::backends::black_plague::
+                  ValidateControlledStereoSubmission(
+                      g_openvr_session, eyes, 0.05F, frames, error)
+            : penumbra_vr::backends::black_plague::
+                  ValidateControlledStereoMatrices(
+                      eyes, 0.05F, frames, error);
+    }
+
+    const std::string operation_error = error;
+    std::string cleanup_error;
+    if (!penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(
+            cleanup_error)) {
+        if (success) {
+            error = "Stereo target cleanup failed: " + cleanup_error;
+        } else {
+            error = operation_error + "; stereo target cleanup also failed: " +
+                cleanup_error;
+        }
+        success = false;
+    }
+    cleanup_error.clear();
+    if (!g_openvr_session.Shutdown(cleanup_error)) {
+        if (success) {
+            error = "OpenVR cleanup failed: " + cleanup_error;
+        } else {
+            error += "; OpenVR cleanup also failed: " + cleanup_error;
+        }
+        success = false;
+    }
+    if (!success && error.empty()) {
+        error = operation_error.empty()
+            ? "The stereo experiment failed without an error description"
+            : operation_error;
+    }
+    if (success) {
+        penumbra_vr::probe::WriteLog(
+            "%s passed for %lu frames with camera restoration after every eye",
+            submit ? "Controlled OpenVR stereo submission" :
+                     "Controlled per-eye HPL matrix validation",
+            static_cast<unsigned long>(frames));
+    }
+    return success;
 }
 
 } // namespace
@@ -385,109 +500,36 @@ extern "C" DWORD WINAPI PenumbraVR_ValidateStereoMatrices(void*) {
     if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
         return 0;
     }
-    if (g_openvr_session.initialized() ||
-        penumbra_vr::backends::black_plague::PersistentEyeTargetsActive()) {
-        penumbra_vr::probe::WriteLog(
-            "Stereo-matrix validation requires an idle OpenVR and eye-target state");
-        return 0;
-    }
-
-    const std::wstring loader_path = OpenVrLoaderPath();
-    if (loader_path.empty()) {
-        penumbra_vr::probe::WriteLog("Could not resolve the probe directory");
-        return 0;
-    }
-
     std::string error;
-    if (!g_openvr_session.Initialize(loader_path, error)) {
+    constexpr std::uint32_t kValidationFrames = 60;
+    if (!RunStereoExperiment(
+            StereoExperiment::offscreen_matrices,
+            kValidationFrames,
+            error)) {
         penumbra_vr::probe::WriteLog(
-            "OpenVR initialization for stereo matrices failed: %s",
+            "Controlled stereo-matrix validation failed: %s",
             error.c_str());
         return 0;
     }
+    return 1;
+}
 
-    std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
-    bool success = g_openvr_session.ReadEyeConfiguration(eyes, error);
-    if (!success) {
+extern "C" DWORD WINAPI PenumbraVR_ValidateStereoSubmission(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    std::string error;
+    constexpr std::uint32_t kSubmissionFrames = 300;
+    if (!RunStereoExperiment(
+            StereoExperiment::compositor_submission,
+            kSubmissionFrames,
+            error)) {
         penumbra_vr::probe::WriteLog(
-            "Could not read OpenVR eye configuration: %s", error.c_str());
-    } else {
-        for (std::size_t index = 0; index < eyes.size(); ++index) {
-            const auto& eye = eyes[index];
-            penumbra_vr::runtime::VrMatrix44 projection;
-            std::string projection_error;
-            const bool projection_ready =
-                penumbra_vr::runtime::BuildHplInfiniteProjection(
-                    eye, 0.05F, projection, projection_error);
-            penumbra_vr::probe::WriteLog(
-                "stereo_eye=%s tangents=[%.6f %.6f %.6f %.6f] "
-                "eye_to_head_translation=[%.6f %.6f %.6f] "
-                "projection_ready=%u projection_x=[%.6f %.6f] error=%s",
-                index == 0 ? "left" : "right",
-                eye.left_tangent,
-                eye.right_tangent,
-                eye.top_tangent,
-                eye.bottom_tangent,
-                eye.eye_to_head.values[3],
-                eye.eye_to_head.values[7],
-                eye.eye_to_head.values[11],
-                projection_ready ? 1U : 0U,
-                projection.values[0],
-                projection.values[2],
-                projection_error.c_str());
-            if (!projection_ready) {
-                error = projection_error;
-                success = false;
-                break;
-            }
-        }
+            "Controlled OpenVR stereo submission failed: %s",
+            error.c_str());
+        return 0;
     }
-
-    if (success) {
-        success =
-            penumbra_vr::backends::black_plague::RequestPersistentEyeTargets(
-                512, 512, error);
-        if (!success) {
-            penumbra_vr::probe::WriteLog(
-                "Stereo-matrix target creation failed: %s", error.c_str());
-        }
-    }
-
-    constexpr std::uint32_t kValidationFrames = 60;
-    if (success) {
-        success = penumbra_vr::backends::black_plague::
-            ValidateControlledStereoMatrices(eyes, 0.05F, kValidationFrames, error);
-        if (!success) {
-            penumbra_vr::probe::WriteLog(
-                "Controlled stereo-matrix validation failed: %s", error.c_str());
-        }
-    }
-
-    std::string cleanup_error;
-    const bool targets_destroyed =
-        penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(
-            cleanup_error);
-    if (!targets_destroyed) {
-        penumbra_vr::probe::WriteLog(
-            "Stereo-matrix target cleanup failed: %s", cleanup_error.c_str());
-        success = false;
-    }
-    cleanup_error.clear();
-    const bool openvr_shutdown = g_openvr_session.Shutdown(cleanup_error);
-    if (!openvr_shutdown) {
-        penumbra_vr::probe::WriteLog(
-            "OpenVR cleanup after stereo matrices failed: %s",
-            cleanup_error.c_str());
-        success = false;
-    }
-
-    if (success) {
-        penumbra_vr::probe::WriteLog(
-            "Controlled per-eye HPL matrix validation passed for %lu frames "
-            "with camera restoration after every eye",
-            static_cast<unsigned long>(kValidationFrames));
-    }
-    return success ? 1UL : 0UL;
+    return 1;
 }
 
 extern "C" DWORD WINAPI PenumbraVR_CreateOpenVrEyeTargets(void*) {

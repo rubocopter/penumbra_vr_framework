@@ -362,6 +362,28 @@ bool EndPersistentEyeTarget(
     return g_persistent_targets.EndEye(binding, error);
 }
 
+bool GetPersistentEyeColorTextures(
+    std::array<std::uint32_t, 2>& color_textures,
+    std::string& error) noexcept {
+    error.clear();
+    color_textures = {};
+    if (!g_persistent_active.load(std::memory_order_acquire) ||
+        !g_persistent_targets.ready()) {
+        error = "Persistent eye targets are not active";
+        return false;
+    }
+    color_textures = {
+        g_persistent_targets.target(graphics::Eye::left).color_texture,
+        g_persistent_targets.target(graphics::Eye::right).color_texture,
+    };
+    if (color_textures[0] == 0 || color_textures[1] == 0) {
+        color_textures = {};
+        error = "A persistent eye target has no color texture";
+        return false;
+    }
+    return true;
+}
+
 bool PersistentEyeTargetsActive() noexcept {
     return g_persistent_active.load(std::memory_order_acquire);
 }

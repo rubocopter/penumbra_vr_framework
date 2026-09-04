@@ -15,6 +15,11 @@ int wmain(int argc, wchar_t** argv) {
         }
         const penumbra_vr::runtime::VrRenderTargetSize size =
             session.recommended_render_target_size();
+        const std::array<std::uint32_t, 2> zero_textures{};
+        if (session.SubmitOpenGlEyeTextures(zero_textures, error) || error.empty()) {
+            std::cerr << "OpenVR accepted zero OpenGL texture names\n";
+            return 14;
+        }
         std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
         if (!session.ReadEyeConfiguration(eyes, error)) {
             std::cerr << error << '\n';
@@ -75,6 +80,11 @@ int wmain(int argc, wchar_t** argv) {
     if (session.WaitForHmdPose(pose, error) || error.empty()) {
         std::cerr << "Uninitialized OpenVR pose query did not fail closed\n";
         return 4;
+    }
+    const std::array<std::uint32_t, 2> textures{1, 2};
+    if (session.SubmitOpenGlEyeTextures(textures, error) || error.empty()) {
+        std::cerr << "Uninitialized OpenVR submission did not fail closed\n";
+        return 5;
     }
     std::cout << "OpenVR session missing-loader failure path passed\n";
     return 0;
