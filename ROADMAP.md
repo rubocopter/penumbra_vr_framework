@@ -41,6 +41,9 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Read per-eye optics and a live HMD pose through game-neutral runtime types
 - [x] Validate controlled duplicate world rendering without camera mutation
 - [x] Size eye targets from the active OpenVR runtime rather than diagnostic constants
+- [x] Unit-test OpenVR-to-HPL projection, rigid inverse and eye-view composition
+- [x] Host-test byte-exact camera matrix override and restoration
+- [ ] Validate reversible per-eye projection and IPD offsets in the live game
 - [ ] Apply tracked head view transforms
 - [ ] Submit both eyes to OpenVR
 - [ ] Preserve functional keyboard and mouse input

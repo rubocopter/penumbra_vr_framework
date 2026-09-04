@@ -228,6 +228,23 @@
       "postDeactivateObservationSeconds": 12,
       "newWindowsErrorReportingEvents": 0,
       "gameRemainedResponsive": true
+    },
+    "controlledStereoMatrices": {
+      "status": "implemented-host-tested-awaiting-runtime-validation",
+      "diagnosticDimensions": [
+        512,
+        512
+      ],
+      "plannedStereoFrames": 60,
+      "extraPassesPerFrame": 2,
+      "nearPlane": 0.05,
+      "projectionSource": "OpenVR GetProjectionRaw",
+      "eyeOffsetSource": "OpenVR GetEyeToHeadTransform",
+      "headPoseApplied": false,
+      "normalDesktopPassPreserved": true,
+      "cameraLayoutGuarded": true,
+      "cameraRestorationHostTested": true,
+      "submittedToOpenVr": false
     }
   },
   "symbols": {

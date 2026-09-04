@@ -1,6 +1,7 @@
 #pragma once
 
 #include "eye_target_probe.hpp"
+#include "openvr_session.hpp"
 
 #include <array>
 #include <cstdint>
@@ -28,12 +29,20 @@ struct RenderWorldFrameTelemetry {
     std::int32_t max_texture_size = 0;
     std::int32_t max_renderbuffer_size = 0;
     std::array<char, 64> open_gl_version{};
+    std::uint32_t stereo_frames = 0;
+    std::uint32_t stereo_eye_passes = 0;
+    bool stereo_camera_restored = true;
     EyeTargetProbeTelemetry eye_targets;
 };
 
 [[nodiscard]] bool InstallRenderWorldProbe(std::string& error) noexcept;
 [[nodiscard]] bool RemoveRenderWorldProbe(std::string& error) noexcept;
 [[nodiscard]] bool ValidateControlledWorldDuplication(
+    std::uint32_t frames,
+    std::string& error) noexcept;
+[[nodiscard]] bool ValidateControlledStereoMatrices(
+    const std::array<runtime::VrEyeConfiguration, 2>& eyes,
+    float near_clip,
     std::uint32_t frames,
     std::string& error) noexcept;
 [[nodiscard]] RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept;

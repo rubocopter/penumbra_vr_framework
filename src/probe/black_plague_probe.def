@@ -4,4 +4,5 @@ EXPORTS
     PenumbraVR_ValidateEyeTargets=_PenumbraVR_ValidateEyeTargets@4
     PenumbraVR_CreatePersistentEyeTargets=_PenumbraVR_CreatePersistentEyeTargets@4
     PenumbraVR_ValidateWorldDuplication=_PenumbraVR_ValidateWorldDuplication@4
+    PenumbraVR_ValidateStereoMatrices=_PenumbraVR_ValidateStereoMatrices@4
     PenumbraVR_CreateOpenVrEyeTargets=_PenumbraVR_CreateOpenVrEyeTargets@4

@@ -60,6 +60,12 @@ target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
 target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32)
 pvr_enable_warnings(pvr_opengl_eye_targets)
 
+add_library(pvr_vr_math STATIC
+    src/runtime/vr_math.cpp
+)
+target_include_directories(pvr_vr_math PUBLIC src/runtime)
+pvr_enable_warnings(pvr_vr_math)
+
 set(PVR_OPENVR_LOADER "")
 if(PENUMBRA_VR_OPENVR_SDK)
     set(PVR_OPENVR_HEADER "${PENUMBRA_VR_OPENVR_SDK}/headers/openvr.h")
@@ -86,6 +92,7 @@ endif()
 pvr_enable_warnings(pvr_openvr_session)
 
 add_library(pvr_black_plague_backend_probe STATIC
+    src/backends/black_plague/camera_matrix_override.cpp
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
 )
@@ -97,7 +104,8 @@ target_link_libraries(
     pvr_black_plague_backend_probe
     PUBLIC
         pvr_rel32_call_hook
-        pvr_opengl_eye_targets)
+        pvr_opengl_eye_targets
+        pvr_vr_math)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)
 
@@ -205,4 +213,23 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_openvr_session_test)
 
     add_test(NAME openvr_session COMMAND pvr_openvr_session_test)
+
+    add_executable(pvr_vr_math_test
+        tests/vr_math/vr_math_test.cpp
+    )
+    target_link_libraries(pvr_vr_math_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_vr_math_test)
+
+    add_test(NAME vr_math COMMAND pvr_vr_math_test)
+
+    add_executable(pvr_camera_matrix_override_test
+        tests/camera_matrix_override/camera_matrix_override_test.cpp
+        src/backends/black_plague/camera_matrix_override.cpp
+    )
+    target_include_directories(
+        pvr_camera_matrix_override_test PRIVATE src/backends/black_plague)
+    target_link_libraries(pvr_camera_matrix_override_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_camera_matrix_override_test)
+
+    add_test(NAME camera_matrix_override COMMAND pvr_camera_matrix_override_test)
 endif()

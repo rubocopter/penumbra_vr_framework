@@ -1,6 +1,8 @@
 #include "render_world_probe.hpp"
 
+#include "camera_matrix_override.hpp"
 #include "rel32_call_hook.hpp"
+#include "vr_math.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -8,6 +10,7 @@
 
 #include <array>
 #include <atomic>
+#include <cmath>
 #include <cstring>
 
 namespace penumbra_vr::backends::black_plague {
@@ -32,6 +35,15 @@ enum class DuplicationState : std::uint8_t {
     failed,
 };
 
+enum class StereoMatrixState : std::uint8_t {
+    idle,
+    preparing,
+    pending,
+    processing,
+    passed,
+    failed,
+};
+
 hooks::Rel32CallHook g_hook;
 std::atomic<void*> g_original_target{nullptr};
 std::atomic<std::uint32_t> g_active_calls{0};
@@ -40,6 +52,13 @@ std::atomic<std::uint32_t> g_duplication_requested_frames{0};
 std::atomic<std::uint32_t> g_duplication_completed_frames{0};
 std::atomic<bool> g_duplication_cancel{false};
 std::array<char, 192> g_duplication_error{};
+std::atomic<StereoMatrixState> g_stereo_state{StereoMatrixState::idle};
+std::atomic<std::uint32_t> g_stereo_requested_frames{0};
+std::atomic<std::uint32_t> g_stereo_completed_frames{0};
+std::atomic<bool> g_stereo_cancel{false};
+std::array<runtime::VrEyeConfiguration, 2> g_stereo_eyes{};
+std::array<runtime::VrMatrix44, 2> g_stereo_projections{};
+std::array<char, 192> g_stereo_error{};
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
 std::atomic<bool> g_capabilities_initialized{false};
@@ -145,6 +164,189 @@ void FailDuplication(const std::string& error) noexcept {
     g_duplication_state.store(DuplicationState::failed, std::memory_order_release);
 }
 
+[[nodiscard]] bool DuplicationActive() noexcept {
+    const DuplicationState state =
+        g_duplication_state.load(std::memory_order_acquire);
+    return state == DuplicationState::preparing ||
+        state == DuplicationState::pending ||
+        state == DuplicationState::processing;
+}
+
+[[nodiscard]] bool StereoMatrixValidationActive() noexcept {
+    const StereoMatrixState state =
+        g_stereo_state.load(std::memory_order_acquire);
+    return state == StereoMatrixState::preparing ||
+        state == StereoMatrixState::pending ||
+        state == StereoMatrixState::processing;
+}
+
+void RecordStereoCameraRestorationFailure() noexcept {
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    g_telemetry.stereo_camera_restored = false;
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
+[[nodiscard]] bool LooksLikeMappedGameplayCamera(
+    const CameraMatrixSnapshot& snapshot) noexcept {
+    constexpr float kTolerance = 1.0e-3F;
+    const auto& projection = snapshot.projection.values;
+    const auto& view = snapshot.view.values;
+    return snapshot.flags[0] == 1 &&
+        snapshot.flags[1] <= 1 && snapshot.flags[2] <= 1 &&
+        std::fabs(projection[10] + 1.0F) <= kTolerance &&
+        projection[11] < 0.0F &&
+        std::fabs(projection[14] + 1.0F) <= kTolerance &&
+        std::fabs(projection[15]) <= kTolerance &&
+        std::fabs(view[12]) <= kTolerance &&
+        std::fabs(view[13]) <= kTolerance &&
+        std::fabs(view[14]) <= kTolerance &&
+        std::fabs(view[15] - 1.0F) <= kTolerance;
+}
+
+void FailStereoMatrixValidation(const std::string& error) noexcept {
+    strncpy_s(
+        g_stereo_error.data(),
+        g_stereo_error.size(),
+        error.c_str(),
+        _TRUNCATE);
+    g_stereo_state.store(StereoMatrixState::failed, std::memory_order_release);
+}
+
+[[nodiscard]] bool RenderStereoEye(
+    RenderWorld original,
+    void* renderer,
+    void* world,
+    void* camera,
+    const runtime::VrMatrix44& head_view,
+    std::size_t eye_index,
+    std::string& error) noexcept {
+    runtime::VrMatrix44 eye_view;
+    if (!runtime::ComposeEyeViewFromHeadView(
+            head_view, g_stereo_eyes[eye_index].eye_to_head, eye_view, error)) {
+        return false;
+    }
+
+    const graphics::Eye eye = eye_index == 0
+        ? graphics::Eye::left
+        : graphics::Eye::right;
+    graphics::OpenGlEyeBinding binding;
+    if (!BeginPersistentEyeTarget(eye, binding, error)) {
+        return false;
+    }
+
+    CameraMatrixOverride camera_override;
+    if (!camera_override.Apply(
+            camera, eye_view, g_stereo_projections[eye_index], error)) {
+        const std::string operation_error = error;
+        std::string binding_error;
+        static_cast<void>(EndPersistentEyeTarget(binding, binding_error));
+        error = operation_error;
+        if (!binding_error.empty()) {
+            error += "; eye binding cleanup also failed: " + binding_error;
+        }
+        return false;
+    }
+
+    original(renderer, world, camera, 0.0F);
+
+    std::string camera_error;
+    const bool camera_restored = camera_override.Restore(camera_error);
+    std::string binding_error;
+    const bool binding_restored = EndPersistentEyeTarget(binding, binding_error);
+    if (!camera_restored || !binding_restored) {
+        if (!camera_restored) {
+            RecordStereoCameraRestorationFailure();
+            error = "Could not restore the HPL camera after an eye pass: " +
+                camera_error;
+        }
+        if (!binding_restored) {
+            if (!error.empty()) {
+                error += "; ";
+            }
+            error += "Could not restore GL state after an eye pass: " +
+                binding_error;
+        }
+        return false;
+    }
+    return true;
+}
+
+void ProcessControlledStereoMatrices(
+    RenderWorld original,
+    void* renderer,
+    void* world,
+    void* camera) noexcept {
+    StereoMatrixState state = g_stereo_state.load(std::memory_order_acquire);
+    if (state == StereoMatrixState::pending) {
+        StereoMatrixState expected = StereoMatrixState::pending;
+        if (!g_stereo_state.compare_exchange_strong(
+                expected,
+                StereoMatrixState::processing,
+                std::memory_order_acq_rel)) {
+            return;
+        }
+        state = StereoMatrixState::processing;
+    }
+    if (state != StereoMatrixState::processing) {
+        return;
+    }
+    if (g_stereo_cancel.load(std::memory_order_acquire)) {
+        FailStereoMatrixValidation("Controlled stereo-matrix validation was cancelled");
+        return;
+    }
+    if (original == nullptr) {
+        FailStereoMatrixValidation("The original RenderWorld target is unavailable");
+        return;
+    }
+
+    CameraMatrixSnapshot camera_snapshot;
+    std::string error;
+    if (!CaptureCameraMatrices(camera, camera_snapshot, error)) {
+        FailStereoMatrixValidation("Could not capture the HPL camera: " + error);
+        return;
+    }
+    if (!LooksLikeMappedGameplayCamera(camera_snapshot)) {
+        FailStereoMatrixValidation(
+            "The active camera does not match the mapped infinite-perspective layout");
+        return;
+    }
+
+    std::uint32_t completed_eye_passes = 0;
+    for (std::size_t eye_index = 0; eye_index < g_stereo_eyes.size(); ++eye_index) {
+        if (!RenderStereoEye(
+                original,
+                renderer,
+                world,
+                camera,
+                camera_snapshot.view,
+                eye_index,
+                error)) {
+            FailStereoMatrixValidation("Controlled stereo eye pass failed: " + error);
+            return;
+        }
+        ++completed_eye_passes;
+    }
+
+    if (!CameraMatchesSnapshot(camera, camera_snapshot)) {
+        RecordStereoCameraRestorationFailure();
+        FailStereoMatrixValidation(
+            "The camera bytes changed after the controlled stereo pair");
+        return;
+    }
+
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    ++g_telemetry.stereo_frames;
+    g_telemetry.stereo_eye_passes += completed_eye_passes;
+    g_telemetry.stereo_camera_restored = true;
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+
+    const std::uint32_t completed =
+        g_stereo_completed_frames.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (completed >= g_stereo_requested_frames.load(std::memory_order_acquire)) {
+        g_stereo_state.store(StereoMatrixState::passed, std::memory_order_release);
+    }
+}
+
 void ProcessControlledWorldDuplication(
     RenderWorld original,
     void* renderer,
@@ -236,6 +438,8 @@ void __fastcall HookedRenderWorld(
     const auto original = reinterpret_cast<RenderWorld>(
         g_original_target.load(std::memory_order_acquire));
     if (original != nullptr) {
+        ProcessControlledStereoMatrices(
+            original, renderer, world, camera);
         ProcessControlledWorldDuplication(
             original, renderer, world, camera);
         original(renderer, world, camera, frame_time);
@@ -285,6 +489,13 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_duplication_completed_frames.store(0, std::memory_order_release);
     g_duplication_cancel.store(false, std::memory_order_release);
     g_duplication_state.store(DuplicationState::idle, std::memory_order_release);
+    g_stereo_error = {};
+    g_stereo_eyes = {};
+    g_stereo_projections = {};
+    g_stereo_requested_frames.store(0, std::memory_order_release);
+    g_stereo_completed_frames.store(0, std::memory_order_release);
+    g_stereo_cancel.store(false, std::memory_order_release);
+    g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
     ResetEyeTargetProbe();
     g_original_target.store(expected_target, std::memory_order_release);
 
@@ -302,12 +513,12 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
 
 bool RemoveRenderWorldProbe(std::string& error) noexcept {
     error.clear();
-    const DuplicationState duplication =
-        g_duplication_state.load(std::memory_order_acquire);
-    if (duplication == DuplicationState::preparing ||
-        duplication == DuplicationState::pending ||
-        duplication == DuplicationState::processing) {
+    if (DuplicationActive()) {
         error = "A controlled world-duplication request is still active";
+        return false;
+    }
+    if (StereoMatrixValidationActive()) {
+        error = "A controlled stereo-matrix request is still active";
         return false;
     }
     if (!hooks::RemoveRel32CallHook(g_hook, error)) {
@@ -335,6 +546,10 @@ bool ValidateControlledWorldDuplication(
     }
     if (!PersistentEyeTargetsActive()) {
         error = "Persistent eye targets must be active before world duplication";
+        return false;
+    }
+    if (StereoMatrixValidationActive()) {
+        error = "A controlled stereo-matrix request is active";
         return false;
     }
 
@@ -375,6 +590,79 @@ bool ValidateControlledWorldDuplication(
     static_cast<void>(g_duplication_state.compare_exchange_strong(
         expected, DuplicationState::failed, std::memory_order_acq_rel));
     error = "Timed out waiting for controlled world duplication";
+    return false;
+}
+
+bool ValidateControlledStereoMatrices(
+    const std::array<runtime::VrEyeConfiguration, 2>& eyes,
+    float near_clip,
+    std::uint32_t frames,
+    std::string& error) noexcept {
+    error.clear();
+    if (frames == 0 || frames > 300) {
+        error = "Controlled stereo matrices require between 1 and 300 frames";
+        return false;
+    }
+    if (!PersistentEyeTargetsActive()) {
+        error = "Persistent eye targets must be active before stereo validation";
+        return false;
+    }
+    if (DuplicationActive()) {
+        error = "A controlled world-duplication request is active";
+        return false;
+    }
+
+    StereoMatrixState state = g_stereo_state.load(std::memory_order_acquire);
+    if (state == StereoMatrixState::passed || state == StereoMatrixState::failed) {
+        static_cast<void>(g_stereo_state.compare_exchange_strong(
+            state, StereoMatrixState::idle, std::memory_order_acq_rel));
+    }
+    StereoMatrixState expected = StereoMatrixState::idle;
+    if (!g_stereo_state.compare_exchange_strong(
+            expected,
+            StereoMatrixState::preparing,
+            std::memory_order_acq_rel)) {
+        error = "Another controlled stereo-matrix request is active";
+        return false;
+    }
+
+    std::array<runtime::VrMatrix44, 2> projections{};
+    for (std::size_t eye_index = 0; eye_index < eyes.size(); ++eye_index) {
+        if (!runtime::BuildHplInfiniteProjection(
+                eyes[eye_index], near_clip, projections[eye_index], error)) {
+            g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
+            return false;
+        }
+    }
+
+    g_stereo_error = {};
+    g_stereo_eyes = eyes;
+    g_stereo_projections = projections;
+    g_stereo_requested_frames.store(frames, std::memory_order_release);
+    g_stereo_completed_frames.store(0, std::memory_order_release);
+    g_stereo_cancel.store(false, std::memory_order_release);
+    g_stereo_state.store(StereoMatrixState::pending, std::memory_order_release);
+
+    constexpr DWORD kTimeoutMilliseconds = 15000;
+    for (DWORD elapsed = 0; elapsed < kTimeoutMilliseconds; ++elapsed) {
+        state = g_stereo_state.load(std::memory_order_acquire);
+        if (state == StereoMatrixState::passed ||
+            state == StereoMatrixState::failed) {
+            const bool passed = state == StereoMatrixState::passed;
+            if (!passed) {
+                error = g_stereo_error.data();
+            }
+            g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
+            return passed;
+        }
+        Sleep(1);
+    }
+
+    g_stereo_cancel.store(true, std::memory_order_release);
+    expected = StereoMatrixState::pending;
+    static_cast<void>(g_stereo_state.compare_exchange_strong(
+        expected, StereoMatrixState::failed, std::memory_order_acq_rel));
+    error = "Timed out waiting for controlled stereo-matrix validation";
     return false;
 }
 

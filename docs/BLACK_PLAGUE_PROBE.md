@@ -10,7 +10,7 @@ Machine: x86
 Build ID: black-plague-steam-observed
 ```
 
-It is not a VR backend. It neither changes rendering nor initializes OpenVR.
+It is not yet a playable VR backend. Its default attached state only observes and forwards rendering, while explicit experimental commands can initialize OpenVR, create off-screen targets, issue extra world passes and temporarily override the mapped camera matrices. None of those targets are currently submitted to the headset.
 
 ## Loading model
 
@@ -153,14 +153,17 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: issue 120 extra world passes into a diagnostic FBO
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-world-duplication <pid>
 
+# Experimental and not yet live-validated: render 60 reversible stereo pairs
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <pid>
+
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command is prepared but not yet validated in the game: it uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 
 ## Next question
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, and a controlled extra world pass. The next change should derive reversible per-eye matrices from the runtime optics, validate them in the off-screen passes, and only then add headset pose and compositor submission.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, and a controlled extra world pass. OpenVR-to-HPL matrix conversion and byte-exact camera restoration now have host-independent tests; the next live step is to validate those matrices in the off-screen eye passes. Only after that should the probe add headset pose and compositor submission.
