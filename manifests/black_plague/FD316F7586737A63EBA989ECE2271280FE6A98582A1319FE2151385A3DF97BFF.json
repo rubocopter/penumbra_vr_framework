@@ -191,6 +191,43 @@
       "viewMatchesTransposePassedToGlLoadMatrixf": true,
       "projectionMatchesTransposePassedToGlLoadMatrixf": true,
       "memoryMutation": false
+    },
+    "openVrEyeTargetValidation": {
+      "status": "confirmed-runtime",
+      "reportedDimensions": [
+        3400,
+        3468
+      ],
+      "persistentRenderWorldCalls": 423,
+      "createdOnRenderThread": true,
+      "destroyedOnRenderThread": true,
+      "incomingStateRestored": true,
+      "openVrShutdownCompleted": true,
+      "submittedToOpenVr": false,
+      "postDeactivateObservationSeconds": 12,
+      "newWindowsErrorReportingEvents": 0,
+      "gameRemainedResponsive": true
+    },
+    "controlledWorldDuplication": {
+      "status": "confirmed-runtime",
+      "diagnosticDimensions": [
+        512,
+        512
+      ],
+      "requestedExtraPasses": 120,
+      "completedExtraPasses": 120,
+      "extraPassFrameTime": 0.0,
+      "cameraMutation": false,
+      "baselineProjectionLoadsPerFrame": 1,
+      "duplicatedProjectionLoadsPerFrame": 2,
+      "baselineModelViewLoadsPerFrame": 35,
+      "duplicatedModelViewLoadsPerFrame": 68,
+      "normalDesktopPassPreserved": true,
+      "incomingFramebufferAndViewportRestored": true,
+      "targetsDestroyedOnRenderThread": true,
+      "postDeactivateObservationSeconds": 12,
+      "newWindowsErrorReportingEvents": 0,
+      "gameRemainedResponsive": true
     }
   },
   "symbols": {

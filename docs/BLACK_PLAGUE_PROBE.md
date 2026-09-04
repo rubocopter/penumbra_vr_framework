@@ -126,7 +126,9 @@ A second explicit command, `--hold-eye-targets`, created a persistent `512x512` 
 
 The corrected policy first completed two 122-frame menu attach/deactivate cycles against one resident DLL. It then completed two gameplay cycles that kept persistent targets alive for 420 and 422 `RenderWorld` calls respectively. Both cycles destroyed the targets on the render thread, restored incoming GL state, deactivated all hooks, reused the resident module and survived a 12-second post-deactivation observation window with no new Penumbra WER event. This closes the diagnostic persistent-target lifecycle for the tested policy; the targets are still not used for world rendering or compositor submission.
 
-The fixed size is deliberately diagnostic. Production dimensions must come from the active OpenVR runtime, and these textures are still not used to render or submit an eye.
+With SteamVR and the PSVR2 active, the injected OpenVR path subsequently reported a per-eye recommendation of `3400x3468`. It created two targets at that exact size, kept them active for 423 world frames, destroyed them on the render thread, shut down OpenVR and deactivated all hooks. The game remained responsive through a 12-second observation window and produced no matching WER event. A standalone session had earlier reported `4164x4244`; the runtime results are recorded independently rather than assuming one fixed headset size.
+
+The next controlled command created a `512x512` diagnostic pair and issued 120 additional direct `RenderWorld` calls with zero frame time before each normal desktop pass. During steady duplication, projection loads rose from one to two per frame and model-view loads from 35 to 68. The command restored the framebuffer and viewport after every extra pass, destroyed the targets after 121 active frames and left the normal render cadence, process and delayed WER check healthy. It did not modify the camera or submit the diagnostic texture to OpenVR.
 
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
@@ -155,10 +157,10 @@ The test game process did not exit in response to a normal window-close request 
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. It has not yet completed a live in-game headset validation and is not part of the confirmed runtime evidence above. The controlled duplication command is likewise prepared but not yet run: it uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission.
+The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 
 ## Next question
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation confirms the render boundary and a usable current-context FBO path, while the shared runtime now reads a live HMD pose and per-eye optics. The next test is to create in-game targets at OpenVR's `4164x4244` recommendation after restarting the game with the current probe build. A controlled duplicate world pass should precede any camera-field mutation or compositor submission.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, and a controlled extra world pass. The next change should derive reversible per-eye matrices from the runtime optics, validate them in the off-screen passes, and only then add headset pose and compositor submission.

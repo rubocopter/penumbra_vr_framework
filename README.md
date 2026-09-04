@@ -14,7 +14,7 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod or installer. It contains a narrow OpenVR session component and the first verified Black Plague research probe: the probe validates one exact executable build, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional eye-target allocation is tested on a standalone WGL context and inside the game. No eye target is used for world rendering yet. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits; it does not render VR yet.
+This repository does not currently contain a playable mod or installer. It contains a narrow OpenVR session component and the first verified Black Plague research probe: the probe validates one exact executable build, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional eye targets have been created inside the game at OpenVR's runtime-recommended dimensions, and a diagnostic FBO has survived 120 controlled extra world passes. No image has been submitted to the headset yet. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits; it does not render VR yet.
 
 The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project; it has not yet been copied into this repository.
 

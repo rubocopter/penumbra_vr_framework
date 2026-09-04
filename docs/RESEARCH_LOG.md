@@ -177,3 +177,19 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Optical evidence: the runtime reported left-eye tangents `[-1.84177, 0.947191, -1.32898, 1.32898]`, right-eye tangents `[-0.947191, 1.84177, -1.32898, 1.32898]` and eye-to-head X translations of `-0.032` and `+0.032` metres.
 - Tracking evidence: one compositor `WaitGetPoses` sample returned the HMD as connected, pose-valid and `TrackingResult_Running_OK` (`200`).
 - Result: real-runtime dynamic initialization, HMD render-size discovery, per-eye optical geometry, live headset pose and explicit shutdown are confirmed through game-neutral data types in the standalone path. Creation of targets at those dimensions inside Black Plague remains a separate live test.
+
+### 2026-09-04 — OpenVR-sized targets inside Black Plague
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Runtime evidence: the OpenVR scene session initialized inside the injected probe and reported `3400x3468` per eye. The earlier standalone `4164x4244` result is retained separately because the runtime recommendation was not assumed to be globally fixed.
+- GL evidence: two complete RGBA8 plus depth24/stencil8 targets were created at `3400x3468`, with the incoming framebuffer, renderbuffer, texture and viewport state restored. They remained active for 423 `RenderWorld` calls.
+- Teardown evidence: both targets were destroyed on the render thread before OpenVR shutdown and hook restoration. The process remained responsive for 12 seconds and no matching Application Error or WER event appeared.
+- Result: runtime-sized in-game target lifecycle confirmed; no world image was rendered into or submitted from these targets.
+
+### 2026-09-04 — Controlled duplicate world rendering
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Method: create a `512x512` diagnostic pair, bind one eye FBO, call the already-validated original `RenderWorld` target with zero frame time, restore framebuffer and viewport, then execute the untouched normal desktop call.
+- Evidence: 120 requested extra passes completed. Steady frames retained one intercepted scene call while projection loads rose from 1 to 2 and model-view loads from 35 to 68, independently confirming two renderer executions. The direct extra call also appeared as an additional return address in the projection stack.
+- Cleanup: targets were destroyed after 121 active frames with GL state restored; hooks were deactivated under the resident-DLL policy. The game remained responsive after 12 seconds with zero matching WER events.
+- Result: a second HPL world pass is viable at the chosen hook boundary without camera mutation. Per-eye matrices and compositor submission remain untested.
