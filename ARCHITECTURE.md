@@ -82,6 +82,11 @@ The first architectural proof is not a set of compiling classes. It is Black Pla
 
 Only after that milestone should interaction and installer APIs be generalized.
 
+The demonstrated Overture implementation is used as a behavioral and testing
+reference rather than copied as a monolithic game layer. The component-by-
+component boundary and extraction order are tracked in
+[`docs/REWORK_PORTING_PLAN.md`](docs/REWORK_PORTING_PLAN.md).
+
 ## Installer responsibilities
 
 The eventual installer will:
