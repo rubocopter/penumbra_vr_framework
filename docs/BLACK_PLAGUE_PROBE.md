@@ -135,6 +135,8 @@ The next controlled command created a `512x512` diagnostic pair and issued 120 a
 
 The per-eye matrix command then initialized OpenVR, read the live PSVR2 optics and derived HPL-compatible asymmetric infinite projections. It reported horizontal projection terms `[0.717113, -0.320757]` for the left eye and `[0.717113, 0.320757]` for the right, with eye-to-head X translations of `-0.0315 m` and `+0.0315 m`. For 60 consecutive frames it rendered both eyes into separate `512x512` targets, temporarily replacing `camera+0x44` and `camera+0x84` only around each extra pass. Projection loads rose from one to three per frame and representative model-view loads from 27 to 77. All 120 eye passes restored the captured camera bytes, framebuffer and viewport; the normal pass then returned immediately to one projection load. OpenVR and both targets shut down cleanly. The process remained responsive through 12-second pre-deactivation and post-deactivation windows, with no matching Windows Error Reporting event. These images were still not submitted to the compositor, so the headset continued to show SteamVR's cinema presentation rather than native stereo.
 
+The compositor command completed three consecutive 300-frame runs in a later process. Every one of the 900 frames acquired a valid connected HMD pose, rendered both eye targets, submitted both OpenGL textures without a compositor error, flushed GL and restored the camera before the normal desktop pass. The user directly observed native full-view stereo instead of the cinema screen; resolution was visibly low as expected from the deliberate `512x512` diagnostic targets. The pose was used only to delimit compositor frames, so moving the headset did not control the camera. The process remained responsive through the delayed checks and deactivation, with no matching Windows Error Reporting event.
+
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
 ## Commands
@@ -161,17 +163,17 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: render 60 reversible stereo pairs into hidden targets
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <pid>
 
-# Experimental and not yet live-validated: submit 300 static stereo frames
+# Experimental: submit 300 static stereo frames
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <pid>
 
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The unvalidated submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL. It deliberately ignores that pose for camera transforms, so a successful first presentation will have stereo/IPD but no head tracking.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL. It deliberately ignores that pose for camera transforms, so the validated presentation has stereo/IPD but no head tracking.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 
 ## Next question
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, a controlled extra world pass, and reversible per-eye projection/IPD matrices. The next narrow step is compositor submission of these static stereo views; tracked head pose and game/body calibration remain separate work.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, a controlled extra world pass, reversible per-eye projection/IPD matrices and native static stereo presentation. The next narrow step is a recentered relative head transform, initially rotation-only; full positional tracking and game/body calibration remain separate work.

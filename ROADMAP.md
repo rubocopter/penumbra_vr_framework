@@ -44,9 +44,9 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Unit-test OpenVR-to-HPL projection, rigid inverse and eye-view composition
 - [x] Host-test byte-exact camera matrix override and restoration
 - [x] Validate reversible per-eye projection and IPD offsets in the live game
-- [ ] Validate native presentation of the static eye textures in the headset
+- [x] Validate native presentation of the static eye textures in the headset
 - [ ] Apply tracked head view transforms
-- [ ] Submit both eyes to OpenVR
+- [x] Submit both eyes to OpenVR
 - [ ] Preserve functional keyboard and mouse input
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus.

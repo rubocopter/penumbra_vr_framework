@@ -281,19 +281,31 @@
       "submittedToOpenVr": false
     },
     "controlledStereoSubmission": {
-      "status": "implemented-awaiting-runtime-validation",
+      "status": "confirmed-runtime-and-headset",
       "diagnosticDimensions": [
         512,
         512
       ],
       "plannedSubmittedFrames": 300,
+      "successfulCycles": 3,
+      "submittedFramesPerCycle": 300,
+      "totalSubmittedFrames": 900,
       "waitGetPosesBeforeEachFrame": true,
       "requiresConnectedValidHmdPose": true,
       "poseAppliedToView": false,
       "colorSpace": "gamma",
       "textureType": "OpenGL",
       "glFlushAfterStereoPair": true,
-      "normalDesktopPassPreserved": true
+      "normalDesktopPassPreserved": true,
+      "compositorErrors": 0,
+      "cameraRestoredAfterEveryEye": true,
+      "targetsDestroyedOnRenderThread": true,
+      "userObservedNativeFullViewStereo": true,
+      "userObservedLowDiagnosticResolution": true,
+      "postSubmissionObservationSeconds": 12,
+      "postDeactivateObservationSeconds": 12,
+      "newWindowsErrorReportingEvents": 0,
+      "gameRemainedResponsive": true
     }
   },
   "symbols": {
