@@ -95,6 +95,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
             "stereo_frames=%lu stereo_eye_passes=%lu stereo_camera_restored=%u "
             "submitted_frames=%lu submitted_pose_valid=%u "
+            "tracked_head_frames=%lu tracking_anchor_captured=%u "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -124,6 +125,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.stereo_camera_restored ? 1U : 0U,
             static_cast<unsigned long>(render_world.compositor_submitted_frames),
             render_world.compositor_hmd_pose_valid ? 1U : 0U,
+            static_cast<unsigned long>(render_world.tracked_head_frames),
+            render_world.tracking_anchor_captured ? 1U : 0U,
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),
@@ -182,6 +185,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
 enum class StereoExperiment : std::uint8_t {
     offscreen_matrices,
     compositor_submission,
+    tracked_compositor_submission,
 };
 
 [[nodiscard]] bool RunStereoExperiment(
@@ -189,7 +193,9 @@ enum class StereoExperiment : std::uint8_t {
     std::uint32_t frames,
     std::string& error) noexcept {
     error.clear();
-    const bool submit = experiment == StereoExperiment::compositor_submission;
+    const bool submit = experiment != StereoExperiment::offscreen_matrices;
+    const bool track_head =
+        experiment == StereoExperiment::tracked_compositor_submission;
     if (g_openvr_session.initialized() ||
         penumbra_vr::backends::black_plague::PersistentEyeTargetsActive()) {
         error = "The stereo experiment requires an idle OpenVR and eye-target state";
@@ -245,13 +251,19 @@ enum class StereoExperiment : std::uint8_t {
                 512, 512, error);
     }
     if (success) {
-        success = submit
-            ? penumbra_vr::backends::black_plague::
-                  ValidateControlledStereoSubmission(
-                      g_openvr_session, eyes, 0.05F, frames, error)
-            : penumbra_vr::backends::black_plague::
-                  ValidateControlledStereoMatrices(
-                      eyes, 0.05F, frames, error);
+        if (track_head) {
+            success = penumbra_vr::backends::black_plague::
+                ValidateControlledTrackedStereoSubmission(
+                    g_openvr_session, eyes, 0.05F, frames, error);
+        } else if (submit) {
+            success = penumbra_vr::backends::black_plague::
+                ValidateControlledStereoSubmission(
+                    g_openvr_session, eyes, 0.05F, frames, error);
+        } else {
+            success = penumbra_vr::backends::black_plague::
+                ValidateControlledStereoMatrices(
+                    eyes, 0.05F, frames, error);
+        }
     }
 
     const std::string operation_error = error;
@@ -283,6 +295,7 @@ enum class StereoExperiment : std::uint8_t {
     if (success) {
         penumbra_vr::probe::WriteLog(
             "%s passed for %lu frames with camera restoration after every eye",
+            track_head ? "Controlled recentered rotation-only OpenVR stereo submission" :
             submit ? "Controlled OpenVR stereo submission" :
                      "Controlled per-eye HPL matrix validation",
             static_cast<unsigned long>(frames));
@@ -526,6 +539,24 @@ extern "C" DWORD WINAPI PenumbraVR_ValidateStereoSubmission(void*) {
             error)) {
         penumbra_vr::probe::WriteLog(
             "Controlled OpenVR stereo submission failed: %s",
+            error.c_str());
+        return 0;
+    }
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_ValidateTrackedStereoSubmission(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    std::string error;
+    constexpr std::uint32_t kSubmissionFrames = 300;
+    if (!RunStereoExperiment(
+            StereoExperiment::tracked_compositor_submission,
+            kSubmissionFrames,
+            error)) {
+        penumbra_vr::probe::WriteLog(
+            "Controlled tracked OpenVR stereo submission failed: %s",
             error.c_str());
         return 0;
     }

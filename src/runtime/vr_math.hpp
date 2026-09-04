@@ -30,6 +30,17 @@ struct VrMatrix44 {
     VrMatrix44& eye_view,
     std::string& error) noexcept;
 
+// Re-centers tracking at anchor_device_to_absolute, converts current HMD
+// motion to a view-space offset, and prepends it to the game's head view.
+// Set world_units_per_meter to zero for rotation-only validation.
+[[nodiscard]] bool ComposeRelativeTrackedHeadView(
+    const VrMatrix44& game_head_view,
+    const VrMatrix34& anchor_device_to_absolute,
+    const VrMatrix34& current_device_to_absolute,
+    float world_units_per_meter,
+    VrMatrix44& tracked_head_view,
+    std::string& error) noexcept;
+
 // Builds the infinite-far OpenGL projection used by the mapped HPL1 camera
 // path from the raw per-eye tangents returned by OpenVR.
 [[nodiscard]] bool BuildHplInfiniteProjection(

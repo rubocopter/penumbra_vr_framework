@@ -43,6 +43,16 @@ using penumbra_vr::runtime::VrMatrix44;
     return matrix;
 }
 
+[[nodiscard]] VrMatrix34 YawNinetyDegrees(float x, float y, float z) {
+    VrMatrix34 matrix;
+    matrix.values = {
+         0.0F, 0.0F, 1.0F, x,
+         0.0F, 1.0F, 0.0F, y,
+        -1.0F, 0.0F, 0.0F, z,
+    };
+    return matrix;
+}
+
 [[nodiscard]] bool TestRigidInverse() {
     VrMatrix34 transform;
     transform.values = {
@@ -148,6 +158,99 @@ using penumbra_vr::runtime::VrMatrix44;
     return ExpectMatrixValue(eye_view, 0, 3, -0.032F, "Right head-to-eye X");
 }
 
+[[nodiscard]] bool TestRelativeHeadTracking() {
+    const VrMatrix44 game_view = penumbra_vr::runtime::IdentityMatrix();
+    const VrMatrix34 origin = Translation(0.0F, 0.0F, 0.0F);
+    VrMatrix44 tracked_view;
+    std::string error;
+
+    if (!penumbra_vr::runtime::ComposeRelativeTrackedHeadView(
+            game_view,
+            origin,
+            Translation(0.25F, -0.1F, 0.5F),
+            1.0F,
+            tracked_view,
+            error)) {
+        std::cerr << "Relative translation failed: " << error << '\n';
+        return false;
+    }
+    if (!ExpectMatrixValue(tracked_view, 0, 3, -0.25F, "Tracked X") ||
+        !ExpectMatrixValue(tracked_view, 1, 3, 0.1F, "Tracked Y") ||
+        !ExpectMatrixValue(tracked_view, 2, 3, -0.5F, "Tracked Z")) {
+        return false;
+    }
+
+    if (!penumbra_vr::runtime::ComposeRelativeTrackedHeadView(
+            game_view,
+            Translation(4.0F, 2.0F, -3.0F),
+            Translation(4.25F, 1.9F, -2.5F),
+            0.0F,
+            tracked_view,
+            error)) {
+        std::cerr << "Rotation-only recenter failed: " << error << '\n';
+        return false;
+    }
+    if (!ExpectMatrixValue(tracked_view, 0, 3, 0.0F, "Rotation-only X") ||
+        !ExpectMatrixValue(tracked_view, 1, 3, 0.0F, "Rotation-only Y") ||
+        !ExpectMatrixValue(tracked_view, 2, 3, 0.0F, "Rotation-only Z")) {
+        return false;
+    }
+
+    if (!penumbra_vr::runtime::ComposeRelativeTrackedHeadView(
+            game_view,
+            origin,
+            YawNinetyDegrees(0.0F, 0.0F, 0.0F),
+            0.0F,
+            tracked_view,
+            error)) {
+        std::cerr << "Relative yaw failed: " << error << '\n';
+        return false;
+    }
+    if (!ExpectMatrixValue(tracked_view, 0, 0, 0.0F, "Yaw inverse 00") ||
+        !ExpectMatrixValue(tracked_view, 0, 2, -1.0F, "Yaw inverse 02") ||
+        !ExpectMatrixValue(tracked_view, 2, 0, 1.0F, "Yaw inverse 20") ||
+        !ExpectMatrixValue(tracked_view, 2, 2, 0.0F, "Yaw inverse 22")) {
+        return false;
+    }
+
+    const VrMatrix34 same_pose = YawNinetyDegrees(3.0F, 2.0F, 1.0F);
+    if (!penumbra_vr::runtime::ComposeRelativeTrackedHeadView(
+            game_view,
+            same_pose,
+            same_pose,
+            1.0F,
+            tracked_view,
+            error)) {
+        std::cerr << "Identical-pose recenter failed: " << error << '\n';
+        return false;
+    }
+    for (std::size_t row = 0; row < 4; ++row) {
+        for (std::size_t column = 0; column < 4; ++column) {
+            const float expected = row == column ? 1.0F : 0.0F;
+            if (!ExpectMatrixValue(
+                    tracked_view,
+                    row,
+                    column,
+                    expected,
+                    "Identical-pose tracked view")) {
+                return false;
+            }
+        }
+    }
+
+    if (penumbra_vr::runtime::ComposeRelativeTrackedHeadView(
+            game_view,
+            origin,
+            origin,
+            -1.0F,
+            tracked_view,
+            error) || error.empty()) {
+        std::cerr << "A negative tracking scale was accepted\n";
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestInvalidInputs() {
     VrMatrix34 scaled = Translation(0.0F, 0.0F, 0.0F);
     scaled.values[0] = 2.0F;
@@ -184,7 +287,7 @@ using penumbra_vr::runtime::VrMatrix44;
 
 int main() {
     if (!TestRigidInverse() || !TestProjection() || !TestEyeViews() ||
-        !TestInvalidInputs()) {
+        !TestRelativeHeadTracking() || !TestInvalidInputs()) {
         return 1;
     }
     std::cout << "VR matrix tests passed\n";

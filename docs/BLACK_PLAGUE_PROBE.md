@@ -166,11 +166,14 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: submit 300 static stereo frames
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <pid>
 
+# Experimental: submit 300 frames with recentered rotation-only tracking
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-tracked-stereo-submission <pid>
+
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL. It deliberately ignores that pose for camera transforms, so the validated presentation has stereo/IPD but no head tracking.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant recentres against its first valid pose and applies only the relative HMD orientation before composing each eye view. Translation is forced to zero until the rotation axes and signs have been confirmed in the headset.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 

@@ -498,6 +498,39 @@ bool ValidateRemoteStereoSubmission(
     return true;
 }
 
+bool ValidateRemoteTrackedStereoSubmission(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::wstring& error) {
+    const std::uintptr_t remote_probe = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe == 0) {
+        error = L"Attach the Black Plague probe before submitting tracked stereo frames";
+        return false;
+    }
+
+    LPTHREAD_START_ROUTINE remote_validate = nullptr;
+    if (!ResolveRemoteExport(
+            probe_path,
+            remote_probe,
+            "PenumbraVR_ValidateTrackedStereoSubmission",
+            remote_validate,
+            error)) {
+        return false;
+    }
+
+    DWORD validation_result = 0;
+    if (!CallRemote(process, remote_validate, nullptr, validation_result, error)) {
+        return false;
+    }
+    if (validation_result != 1) {
+        error = L"Controlled tracked OpenVR stereo submission failed; inspect the probe log";
+        return false;
+    }
+    return true;
+}
+
 std::filesystem::path CurrentExecutableDirectory() {
     std::wstring path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
@@ -632,15 +665,20 @@ int wmain(int argc, wchar_t** argv) {
         argc == 3 && _wcsicmp(argv[1], L"--validate-stereo-matrices") == 0;
     const bool validate_stereo_submission =
         argc == 3 && _wcsicmp(argv[1], L"--validate-stereo-submission") == 0;
+    const bool validate_tracked_stereo_submission =
+        argc == 3 &&
+        _wcsicmp(argv[1], L"--validate-tracked-stereo-submission") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
     if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
          !hold_openvr_eye_targets && !validate_world_duplication &&
-         !validate_stereo_matrices && !validate_stereo_submission && !capture_image &&
+         !validate_stereo_matrices && !validate_stereo_submission &&
+         !validate_tracked_stereo_submission && !capture_image &&
          !inspect_camera && argc != 2) ||
         ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
           hold_openvr_eye_targets || validate_world_duplication ||
-          validate_stereo_matrices || validate_stereo_submission) &&
+          validate_stereo_matrices || validate_stereo_submission ||
+          validate_tracked_stereo_submission) &&
          argc != 3) ||
         ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
@@ -653,6 +691,7 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-world-duplication <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --validate-tracked-stereo-submission <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect-camera <process-id> <address>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
@@ -670,6 +709,7 @@ int wmain(int argc, wchar_t** argv) {
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
         hold_openvr_eye_targets || validate_world_duplication ||
         validate_stereo_matrices || validate_stereo_submission ||
+        validate_tracked_stereo_submission ||
         inspect_camera || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
@@ -865,6 +905,19 @@ int wmain(int argc, wchar_t** argv) {
                 return 8;
             }
             std::wcout << L"Submitted 300 controlled static stereo frames in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L").\n";
+            return 0;
+        }
+        if (validate_tracked_stereo_submission) {
+            if (!ValidateRemoteTrackedStereoSubmission(
+                    process.get(), parsed_pid, probe_path, error)) {
+                std::wcerr << L"Tracked stereo-submission validation failed: "
+                           << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Submitted 300 controlled stereo frames with recentered "
+                       << L"rotation-only head tracking in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
                        << parsed_pid << L").\n";
             return 0;

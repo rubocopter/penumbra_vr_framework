@@ -60,6 +60,9 @@ std::array<runtime::VrEyeConfiguration, 2> g_stereo_eyes{};
 std::array<runtime::VrMatrix44, 2> g_stereo_projections{};
 std::array<char, 192> g_stereo_error{};
 std::atomic<runtime::OpenVrSession*> g_stereo_session{nullptr};
+bool g_stereo_track_head_rotation = false;
+bool g_stereo_tracking_anchor_valid = false;
+runtime::VrMatrix34 g_stereo_tracking_anchor{};
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
 std::atomic<bool> g_capabilities_initialized{false};
@@ -328,6 +331,26 @@ void ProcessControlledStereoMatrices(
         return;
     }
 
+    runtime::VrMatrix44 head_view = camera_snapshot.view;
+    if (g_stereo_track_head_rotation) {
+        if (!g_stereo_tracking_anchor_valid) {
+            g_stereo_tracking_anchor = pose.device_to_absolute;
+            g_stereo_tracking_anchor_valid = true;
+        }
+        constexpr float kRotationOnlyWorldUnitsPerMeter = 0.0F;
+        if (!runtime::ComposeRelativeTrackedHeadView(
+                camera_snapshot.view,
+                g_stereo_tracking_anchor,
+                pose.device_to_absolute,
+                kRotationOnlyWorldUnitsPerMeter,
+                head_view,
+                error)) {
+            FailStereoMatrixValidation(
+                "Could not compose the recentered HMD rotation: " + error);
+            return;
+        }
+    }
+
     std::uint32_t completed_eye_passes = 0;
     for (std::size_t eye_index = 0; eye_index < g_stereo_eyes.size(); ++eye_index) {
         if (!RenderStereoEye(
@@ -335,7 +358,7 @@ void ProcessControlledStereoMatrices(
                 renderer,
                 world,
                 camera,
-                camera_snapshot.view,
+                head_view,
                 eye_index,
                 error)) {
             FailStereoMatrixValidation("Controlled stereo eye pass failed: " + error);
@@ -372,6 +395,10 @@ void ProcessControlledStereoMatrices(
     if (session != nullptr) {
         ++g_telemetry.compositor_submitted_frames;
         g_telemetry.compositor_hmd_pose_valid = true;
+    }
+    if (g_stereo_track_head_rotation) {
+        ++g_telemetry.tracked_head_frames;
+        g_telemetry.tracking_anchor_captured = g_stereo_tracking_anchor_valid;
     }
     g_telemetry.stereo_camera_restored = true;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
@@ -529,6 +556,9 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_eyes = {};
     g_stereo_projections = {};
     g_stereo_session.store(nullptr, std::memory_order_release);
+    g_stereo_track_head_rotation = false;
+    g_stereo_tracking_anchor_valid = false;
+    g_stereo_tracking_anchor = {};
     g_stereo_requested_frames.store(0, std::memory_order_release);
     g_stereo_completed_frames.store(0, std::memory_order_release);
     g_stereo_cancel.store(false, std::memory_order_release);
@@ -744,6 +774,37 @@ bool ValidateControlledStereoSubmission(
 
     const bool result = ValidateControlledStereoMatrices(
         eyes, near_clip, frames, error);
+    g_stereo_session.store(nullptr, std::memory_order_release);
+    return result;
+}
+
+bool ValidateControlledTrackedStereoSubmission(
+    runtime::OpenVrSession& session,
+    const std::array<runtime::VrEyeConfiguration, 2>& eyes,
+    float near_clip,
+    std::uint32_t frames,
+    std::string& error) noexcept {
+    error.clear();
+    if (!session.initialized()) {
+        error = "OpenVR must be initialized before tracked compositor submission";
+        return false;
+    }
+
+    runtime::OpenVrSession* expected = nullptr;
+    if (!g_stereo_session.compare_exchange_strong(
+            expected, &session, std::memory_order_acq_rel)) {
+        error = "Another compositor-submission request is active";
+        return false;
+    }
+
+    g_stereo_track_head_rotation = true;
+    g_stereo_tracking_anchor_valid = false;
+    g_stereo_tracking_anchor = {};
+    const bool result = ValidateControlledStereoMatrices(
+        eyes, near_clip, frames, error);
+    g_stereo_track_head_rotation = false;
+    g_stereo_tracking_anchor_valid = false;
+    g_stereo_tracking_anchor = {};
     g_stereo_session.store(nullptr, std::memory_order_release);
     return result;
 }

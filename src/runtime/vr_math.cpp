@@ -24,6 +24,26 @@ constexpr float kRigidTolerance = 2.0e-3F;
     return true;
 }
 
+[[nodiscard]] bool IsFinite(const VrMatrix44& matrix) noexcept {
+    for (const float value : matrix.values) {
+        if (!std::isfinite(value)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] VrMatrix34 CollapseRigidMatrix(const VrMatrix44& matrix) noexcept {
+    VrMatrix34 collapsed;
+    for (std::size_t row = 0; row < 3; ++row) {
+        for (std::size_t column = 0; column < 4; ++column) {
+            collapsed.values[row * 4U + column] =
+                matrix.values[Index(row, column)];
+        }
+    }
+    return collapsed;
+}
+
 [[nodiscard]] float DotRotationRows(
     const VrMatrix34& matrix,
     std::size_t first_row,
@@ -149,15 +169,59 @@ bool ComposeEyeViewFromHeadView(
         eye_view = {};
         return false;
     }
-    for (const float value : head_view.values) {
-        if (!std::isfinite(value)) {
-            eye_view = {};
-            error = "The HPL head-view matrix contains a non-finite value";
-            return false;
-        }
+    if (!IsFinite(head_view)) {
+        eye_view = {};
+        error = "The HPL head-view matrix contains a non-finite value";
+        return false;
     }
 
     eye_view = Multiply(head_to_eye, head_view);
+    return true;
+}
+
+bool ComposeRelativeTrackedHeadView(
+    const VrMatrix44& game_head_view,
+    const VrMatrix34& anchor_device_to_absolute,
+    const VrMatrix34& current_device_to_absolute,
+    float world_units_per_meter,
+    VrMatrix44& tracked_head_view,
+    std::string& error) noexcept {
+    error.clear();
+    tracked_head_view = {};
+    if (!IsFinite(game_head_view)) {
+        error = "The HPL head-view matrix contains a non-finite value";
+        return false;
+    }
+    if (!std::isfinite(world_units_per_meter) || world_units_per_meter < 0.0F) {
+        error = "The tracking translation scale must be finite and non-negative";
+        return false;
+    }
+
+    VrMatrix44 absolute_to_anchor;
+    if (!InvertRigidTransform(
+            anchor_device_to_absolute, absolute_to_anchor, error)) {
+        error = "The tracking anchor is invalid: " + error;
+        return false;
+    }
+
+    const VrMatrix44 current_to_absolute =
+        ExpandMatrix(current_device_to_absolute);
+    VrMatrix44 current_to_anchor =
+        Multiply(absolute_to_anchor, current_to_absolute);
+    current_to_anchor.values[Index(0, 3)] *= world_units_per_meter;
+    current_to_anchor.values[Index(1, 3)] *= world_units_per_meter;
+    current_to_anchor.values[Index(2, 3)] *= world_units_per_meter;
+
+    VrMatrix44 relative_tracking_view;
+    if (!InvertRigidTransform(
+            CollapseRigidMatrix(current_to_anchor),
+            relative_tracking_view,
+            error)) {
+        error = "The relative HMD pose is invalid: " + error;
+        return false;
+    }
+
+    tracked_head_view = Multiply(relative_tracking_view, game_head_view);
     return true;
 }
 
