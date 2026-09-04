@@ -26,6 +26,21 @@ const char* FramebufferApiName(
     }
 }
 
+const char* EyeTargetEventName(
+    penumbra_vr::backends::black_plague::EyeTargetProbeEvent event) noexcept {
+    using penumbra_vr::backends::black_plague::EyeTargetProbeEvent;
+    switch (event) {
+        case EyeTargetProbeEvent::transient_validation:
+            return "transient_validation";
+        case EyeTargetProbeEvent::persistent_created:
+            return "persistent_created";
+        case EyeTargetProbeEvent::persistent_destroyed:
+            return "persistent_destroyed";
+        default:
+            return "none";
+    }
+}
+
 std::string WideToUtf8(const std::wstring& value) {
     if (value.empty()) {
         return {};
@@ -47,11 +62,13 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
         penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
     if (frame_number <= 10 || frame_number % 300 == 0 ||
-        render_world.eye_target_validation_completed) {
+        render_world.eye_targets.event !=
+            penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
         penumbra_vr::probe::WriteLog(
             "frame=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
+            "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -72,6 +89,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<long>(render_world.max_renderbuffer_size),
             static_cast<long>(render_world.max_viewport_dimensions[0]),
             static_cast<long>(render_world.max_viewport_dimensions[1]),
+            render_world.eye_targets.persistent_active ? 1U : 0U,
+            static_cast<unsigned long>(render_world.eye_targets.width),
+            static_cast<unsigned long>(render_world.eye_targets.height),
+            render_world.eye_targets.persistent_frames,
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),
@@ -113,12 +134,16 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 m[8], m[9], m[10], m[11],
                 m[12], m[13], m[14], m[15]);
         }
-        if (render_world.eye_target_validation_completed) {
+        if (render_world.eye_targets.event !=
+            penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
             penumbra_vr::probe::WriteLog(
-                "eye_target_validation=%s state_restored=%u resize=512x512->640x480 error=%s",
-                render_world.eye_target_validation_passed ? "passed" : "failed",
-                render_world.eye_target_state_restored ? 1U : 0U,
-                render_world.eye_target_validation_error.data());
+                "eye_target_event=%s result=%s state_restored=%u size=%lux%lu error=%s",
+                EyeTargetEventName(render_world.eye_targets.event),
+                render_world.eye_targets.event_passed ? "passed" : "failed",
+                render_world.eye_targets.state_restored ? 1U : 0U,
+                static_cast<unsigned long>(render_world.eye_targets.width),
+                static_cast<unsigned long>(render_world.eye_targets.height),
+                render_world.eye_targets.error.data());
         }
     }
 }
@@ -208,6 +233,19 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
     }
 
     std::string error;
+    if (!penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(error)) {
+        penumbra_vr::probe::WriteLog(
+            "Render-thread eye-target cleanup failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    const std::uint64_t persistent_frames =
+        penumbra_vr::backends::black_plague::PersistentEyeTargetLifetimeFrames();
+    if (persistent_frames != 0) {
+        penumbra_vr::probe::WriteLog(
+            "Persistent eye targets destroyed on the render thread after %llu frames",
+            persistent_frames);
+    }
     if (!penumbra_vr::hooks::RemoveSdlSwapHook(error)) {
         penumbra_vr::probe::WriteLog("SDL frame hook removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
@@ -238,12 +276,29 @@ extern "C" DWORD WINAPI PenumbraVR_ValidateEyeTargets(void*) {
     }
 
     std::string error;
-    if (!penumbra_vr::backends::black_plague::RequestEyeTargetValidation(error)) {
+    if (!penumbra_vr::backends::black_plague::RequestTransientEyeTargetValidation(error)) {
         penumbra_vr::probe::WriteLog(
             "In-game eye-target validation failed: %s", error.c_str());
         return 0;
     }
     penumbra_vr::probe::WriteLog("In-game eye-target validation passed");
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_CreatePersistentEyeTargets(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+
+    std::string error;
+    if (!penumbra_vr::backends::black_plague::RequestPersistentEyeTargets(
+            512, 512, error)) {
+        penumbra_vr::probe::WriteLog(
+            "Persistent eye-target creation failed: %s", error.c_str());
+        return 0;
+    }
+    penumbra_vr::probe::WriteLog(
+        "Persistent 512x512 diagnostic eye targets created on the render thread");
     return 1;
 }
 

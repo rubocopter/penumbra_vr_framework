@@ -120,6 +120,10 @@ The separate `--validate-eye-targets` command then requested work from the injec
 
 This deliberately transient test proves the GL object lifecycle in the real context. It does not retain targets between frames, duplicate `RenderWorld`, or submit an image to a headset.
 
+A second explicit command, `--hold-eye-targets`, exercises the lifecycle needed by a real backend. It created a persistent `512x512` pair on the render thread, left it allocated for 363 `RenderWorld` calls, and reported it still active at frame 300. `PenumbraVR_Shutdown` then posted a destroy request while the world hook remained installed, waited for render-thread confirmation, and only afterwards removed the SDL, `RenderWorld`, and OpenGL hooks. The destroy operation restored the incoming GL state; the full probe cycle observed 390 frames, unloaded normally and left the game responsive.
+
+The fixed size is deliberately diagnostic. Production dimensions must come from the active OpenVR runtime, and these textures are still not used to render or submit an eye.
+
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
 ## Commands
@@ -133,6 +137,9 @@ The test game process did not exit in response to a normal window-close request 
 
 # With the probe attached, exercise transient eye targets on the render thread
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <pid>
+
+# Keep a diagnostic pair alive until --detach performs render-thread teardown
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <pid>
 ```
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.

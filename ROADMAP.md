@@ -37,7 +37,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Confirm a current OpenGL context, FBO API and target-size limits at the hook boundary
 - [x] Implement and host-test transactional per-eye render-target allocation
 - [x] Validate transient allocation, binding, resize, restoration and destruction in game
-- [ ] Validate persistent per-eye targets and render-thread teardown in game
+- [x] Validate persistent per-eye targets and render-thread teardown in game
+- [ ] Size eye targets from the active OpenVR runtime rather than diagnostic constants
 - [ ] Apply tracked head view transforms
 - [ ] Submit both eyes to OpenVR
 - [ ] Preserve functional keyboard and mouse input

@@ -58,6 +58,7 @@ target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32)
 pvr_enable_warnings(pvr_opengl_eye_targets)
 
 add_library(pvr_black_plague_backend_probe STATIC
+    src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
 )
 target_include_directories(

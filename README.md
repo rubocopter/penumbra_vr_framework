@@ -62,6 +62,7 @@ Black Plague must currently be launched through Steam. Once it is running, attac
 ```powershell
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --attach <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 

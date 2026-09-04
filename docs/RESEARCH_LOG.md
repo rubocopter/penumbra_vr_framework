@@ -143,3 +143,14 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Lifecycle evidence: the command succeeded during a 172-frame attach/detach cycle, all hooks restored, the DLL unloaded, and the game remained responsive.
 - Negative scope: the targets were not retained across frames, used to render the world, or submitted to OpenVR.
 - Result: confirmed transient in-game object lifecycle for this exact build. Persistent render-thread ownership and teardown remain open.
+
+### 2026-09-04 — Persistent eye-target ownership and teardown
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Question: can eye FBOs remain alive across frames and still be destroyed on the owning OpenGL thread before hook removal and DLL unload?
+- Creation: an explicit request created a `512x512` left/right pair in `RenderWorld`; framebuffer, renderbuffer, texture and viewport state were restored immediately afterwards.
+- Lifetime: the pair remained allocated for 363 `RenderWorld` calls. Frame 300 of the 390-frame probe cycle still reported the targets active, with no change to the observed default framebuffer at world entry.
+- Teardown order: shutdown posted a destroy request while the world hook remained active, waited for render-thread completion, then restored the SDL swap import, the `RenderWorld` call instruction and the OpenGL telemetry imports before unloading.
+- Teardown result: all six GL objects were destroyed, incoming GL state was restored, the DLL unloaded, and the game remained responsive.
+- Negative scope: fixed diagnostic dimensions were used; no world rendering or OpenVR submission targeted these FBOs.
+- Result: confirmed persistent allocation and render-thread teardown for this exact build.

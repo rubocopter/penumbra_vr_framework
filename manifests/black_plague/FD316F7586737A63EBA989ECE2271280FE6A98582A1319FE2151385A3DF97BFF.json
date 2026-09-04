@@ -129,6 +129,23 @@
       "objectsDestroyedOnRenderThread": true,
       "gameRemainedResponsive": true,
       "teardownRestoredHooks": true
+    },
+    "persistentEyeTargetValidation": {
+      "status": "confirmed-runtime",
+      "probeCycleFrames": 390,
+      "persistentRenderWorldCalls": 363,
+      "dimensions": [
+        512,
+        512
+      ],
+      "createdOnRenderThread": true,
+      "destroyedOnRenderThreadBeforeHookRemoval": true,
+      "incomingStateRestoredOnCreate": true,
+      "incomingStateRestoredOnDestroy": true,
+      "usedForWorldRendering": false,
+      "submittedToOpenVr": false,
+      "gameRemainedResponsive": true,
+      "teardownRestoredHooks": true
     }
   },
   "symbols": {
