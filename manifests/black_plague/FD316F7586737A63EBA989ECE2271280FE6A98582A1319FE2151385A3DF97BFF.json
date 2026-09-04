@@ -105,6 +105,30 @@
       ],
       "stateMutation": false,
       "teardownRestoredHooks": true
+    },
+    "transientEyeTargetValidation": {
+      "status": "confirmed-runtime",
+      "probeCycleFrames": 172,
+      "initialDimensions": [
+        512,
+        512
+      ],
+      "resizedDimensions": [
+        640,
+        480
+      ],
+      "colorFormat": "RGBA8",
+      "depthStencilFormat": "DEPTH24_STENCIL8",
+      "leftAndRightBindingsValidated": true,
+      "incomingStateRestored": [
+        "framebuffer",
+        "renderbuffer",
+        "texture2D",
+        "viewport"
+      ],
+      "objectsDestroyedOnRenderThread": true,
+      "gameRemainedResponsive": true,
+      "teardownRestoredHooks": true
     }
   },
   "symbols": {

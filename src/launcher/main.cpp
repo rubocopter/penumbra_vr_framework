@@ -266,6 +266,39 @@ bool ShutdownAndEject(
     return true;
 }
 
+bool ValidateRemoteEyeTargets(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::wstring& error) {
+    const std::uintptr_t remote_probe = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe == 0) {
+        error = L"Attach the Black Plague probe before validating eye targets";
+        return false;
+    }
+
+    LPTHREAD_START_ROUTINE remote_validate = nullptr;
+    if (!ResolveRemoteExport(
+            probe_path,
+            remote_probe,
+            "PenumbraVR_ValidateEyeTargets",
+            remote_validate,
+            error)) {
+        return false;
+    }
+
+    DWORD validation_result = 0;
+    if (!CallRemote(process, remote_validate, nullptr, validation_result, error)) {
+        return false;
+    }
+    if (validation_result != 1) {
+        error = L"The in-game eye-target validation failed; inspect the probe log";
+        return false;
+    }
+    return true;
+}
+
 std::filesystem::path CurrentExecutableDirectory() {
     std::wstring path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
@@ -333,14 +366,18 @@ int wmain(int argc, wchar_t** argv) {
     const bool attach = argc == 3 && _wcsicmp(argv[1], L"--attach") == 0;
     const bool detach = argc == 3 && _wcsicmp(argv[1], L"--detach") == 0;
     const bool inspect = argc == 3 && _wcsicmp(argv[1], L"--inspect") == 0;
+    const bool validate_eye_targets =
+        argc == 3 && _wcsicmp(argv[1], L"--validate-eye-targets") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
-    if ((!attach && !detach && !inspect && !capture_image && argc != 2) ||
-        ((attach || detach || inspect) && argc != 3) ||
+    if ((!attach && !detach && !inspect && !validate_eye_targets &&
+         !capture_image && argc != 2) ||
+        ((attach || detach || inspect || validate_eye_targets) && argc != 3) ||
         (capture_image && argc != 4)) {
         std::wcerr << L"Usage:\n"
                    << L"  PenumbraVR.ProbeLauncher.exe <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --attach <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --detach <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
         return 2;
@@ -353,7 +390,7 @@ int wmain(int argc, wchar_t** argv) {
         return 5;
     }
 
-    if (attach || detach || inspect || capture_image) {
+    if (attach || detach || inspect || validate_eye_targets || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
         if (parsed_pid == 0 || parse_end == argv[2] || *parse_end != L'\0') {
@@ -439,9 +476,21 @@ int wmain(int argc, wchar_t** argv) {
             }
             return 0;
         }
-        if (!detach && !WaitForRemoteModule(process.get(), parsed_pid, L"SDL.dll", 5'000, error)) {
+        if (attach && !WaitForRemoteModule(
+                process.get(), parsed_pid, L"SDL.dll", 5'000, error)) {
             std::wcerr << L"Attach failed: " << error << L'\n';
             return 7;
+        }
+        if (validate_eye_targets) {
+            if (!ValidateRemoteEyeTargets(
+                    process.get(), parsed_pid, probe_path, error)) {
+                std::wcerr << L"Eye-target validation failed: " << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Validated transient OpenGL eye targets in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L").\n";
+            return 0;
         }
         if (detach) {
             if (!ShutdownAndEject(process.get(), parsed_pid, probe_path, error)) {

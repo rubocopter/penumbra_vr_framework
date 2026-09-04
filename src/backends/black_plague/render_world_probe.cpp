@@ -1,5 +1,6 @@
 #include "render_world_probe.hpp"
 
+#include "opengl_eye_targets.hpp"
 #include "rel32_call_hook.hpp"
 
 #define WIN32_LEAN_AND_MEAN
@@ -17,6 +18,7 @@ constexpr std::uintptr_t kRenderWorldRva = 0x0012CB10;
 constexpr std::uintptr_t kRenderWorldCallSiteRva = 0x000EE010;
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
 constexpr GLenum kGlMaxRenderbufferSize = 0x84E8;
+constexpr GLenum kGlRenderbufferBinding = 0x8CA7;
 constexpr std::array<std::uint8_t, 5> kExpectedCall{
     0xE8, 0xFB, 0xEA, 0x03, 0x00,
 };
@@ -34,6 +36,18 @@ std::array<char, 64> g_open_gl_version{};
 std::array<GLint, 2> g_max_viewport_dimensions{};
 GLint g_max_texture_size = 0;
 GLint g_max_renderbuffer_size = 0;
+
+enum class EyeTargetValidationState : std::uint8_t {
+    idle,
+    pending,
+    processing,
+    passed,
+    failed,
+};
+
+std::atomic<EyeTargetValidationState> g_eye_target_validation_state{
+    EyeTargetValidationState::idle};
+std::array<char, 192> g_eye_target_validation_error{};
 
 [[nodiscard]] bool HasOpenGlProcedure(const char* name) noexcept {
     const PROC procedure = wglGetProcAddress(name);
@@ -110,6 +124,112 @@ void InitializeOpenGlCapabilities() noexcept {
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 }
 
+struct OpenGlStateSnapshot {
+    GLint framebuffer = 0;
+    GLint renderbuffer = 0;
+    GLint texture = 0;
+    std::array<GLint, 4> viewport{};
+};
+
+[[nodiscard]] OpenGlStateSnapshot CaptureOpenGlState() noexcept {
+    OpenGlStateSnapshot state;
+    glGetIntegerv(kGlFramebufferBinding, &state.framebuffer);
+    glGetIntegerv(kGlRenderbufferBinding, &state.renderbuffer);
+    glGetIntegerv(GL_TEXTURE_BINDING_2D, &state.texture);
+    glGetIntegerv(GL_VIEWPORT, state.viewport.data());
+    return state;
+}
+
+[[nodiscard]] bool SameOpenGlState(
+    const OpenGlStateSnapshot& left,
+    const OpenGlStateSnapshot& right) noexcept {
+    return left.framebuffer == right.framebuffer &&
+        left.renderbuffer == right.renderbuffer &&
+        left.texture == right.texture &&
+        left.viewport == right.viewport;
+}
+
+[[nodiscard]] bool ValidateEyeTargetsOnRenderThread(
+    bool& state_restored,
+    std::string& error) noexcept {
+    error.clear();
+    state_restored = false;
+    if (wglGetCurrentContext() == nullptr) {
+        error = "No current OpenGL context at RenderWorld";
+        return false;
+    }
+
+    const OpenGlStateSnapshot before = CaptureOpenGlState();
+    graphics::OpenGlEyeTargets targets;
+    graphics::OpenGlEyeBinding binding;
+    bool success = targets.CreateOrResize(512, 512, error);
+    if (success) {
+        success = targets.BeginEye(graphics::Eye::left, binding, error);
+    }
+    if (success) {
+        success = targets.EndEye(binding, error);
+    }
+    if (success) {
+        success = targets.CreateOrResize(640, 480, error);
+    }
+    if (success) {
+        success = targets.BeginEye(graphics::Eye::right, binding, error);
+    }
+    if (success) {
+        success = targets.EndEye(binding, error);
+    }
+
+    const std::string operation_error = error;
+    std::string cleanup_error;
+    if (binding.active) {
+        static_cast<void>(targets.EndEye(binding, cleanup_error));
+    }
+    const bool destroyed = targets.Destroy(cleanup_error);
+    const OpenGlStateSnapshot after = CaptureOpenGlState();
+    state_restored = SameOpenGlState(before, after);
+
+    if (!success) {
+        error = operation_error;
+    } else if (!destroyed) {
+        error = "Eye target cleanup failed: " + cleanup_error;
+        success = false;
+    } else if (!state_restored) {
+        error = "Eye target validation did not restore the incoming OpenGL state";
+        success = false;
+    }
+    return success;
+}
+
+void ProcessPendingEyeTargetValidation() noexcept {
+    EyeTargetValidationState expected = EyeTargetValidationState::pending;
+    if (!g_eye_target_validation_state.compare_exchange_strong(
+            expected,
+            EyeTargetValidationState::processing,
+            std::memory_order_acq_rel)) {
+        return;
+    }
+
+    bool state_restored = false;
+    std::string error;
+    const bool passed = ValidateEyeTargetsOnRenderThread(state_restored, error);
+    strncpy_s(
+        g_eye_target_validation_error.data(),
+        g_eye_target_validation_error.size(),
+        error.c_str(),
+        _TRUNCATE);
+
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    g_telemetry.eye_target_validation_completed = true;
+    g_telemetry.eye_target_validation_passed = passed;
+    g_telemetry.eye_target_state_restored = state_restored;
+    g_telemetry.eye_target_validation_error = g_eye_target_validation_error;
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+
+    g_eye_target_validation_state.store(
+        passed ? EyeTargetValidationState::passed : EyeTargetValidationState::failed,
+        std::memory_order_release);
+}
+
 class ActiveCall final {
 public:
     ActiveCall() noexcept {
@@ -130,6 +250,7 @@ void __fastcall HookedRenderWorld(
     float frame_time) noexcept {
     ActiveCall active_call;
     InitializeOpenGlCapabilities();
+    ProcessPendingEyeTargetValidation();
 
     std::array<GLint, 4> viewport{};
     GLint framebuffer_binding = 0;
@@ -205,6 +326,9 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_max_viewport_dimensions = {};
     g_max_texture_size = 0;
     g_max_renderbuffer_size = 0;
+    g_eye_target_validation_error = {};
+    g_eye_target_validation_state.store(
+        EyeTargetValidationState::idle, std::memory_order_release);
     g_original_target.store(expected_target, std::memory_order_release);
 
     if (!hooks::InstallRel32CallHook(
@@ -234,6 +358,43 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         Sleep(1);
     }
     error = "Timed out waiting for an active RenderWorld probe call to finish";
+    return false;
+}
+
+bool RequestEyeTargetValidation(std::string& error) noexcept {
+    error.clear();
+    EyeTargetValidationState expected = EyeTargetValidationState::idle;
+    if (!g_eye_target_validation_state.compare_exchange_strong(
+            expected,
+            EyeTargetValidationState::pending,
+            std::memory_order_acq_rel)) {
+        error = "An eye-target validation request is already active or complete";
+        return false;
+    }
+
+    constexpr DWORD kTimeoutMilliseconds = 5000;
+    for (DWORD elapsed = 0; elapsed < kTimeoutMilliseconds; ++elapsed) {
+        const EyeTargetValidationState state =
+            g_eye_target_validation_state.load(std::memory_order_acquire);
+        if (state == EyeTargetValidationState::passed ||
+            state == EyeTargetValidationState::failed) {
+            const bool passed = state == EyeTargetValidationState::passed;
+            if (!passed) {
+                error = g_eye_target_validation_error.data();
+            }
+            g_eye_target_validation_state.store(
+                EyeTargetValidationState::idle, std::memory_order_release);
+            return passed;
+        }
+        Sleep(1);
+    }
+
+    expected = EyeTargetValidationState::pending;
+    static_cast<void>(g_eye_target_validation_state.compare_exchange_strong(
+        expected,
+        EyeTargetValidationState::idle,
+        std::memory_order_acq_rel));
+    error = "Timed out waiting for RenderWorld to process the eye-target validation";
     return false;
 }
 

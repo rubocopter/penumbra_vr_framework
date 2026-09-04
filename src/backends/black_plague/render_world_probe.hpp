@@ -26,10 +26,15 @@ struct RenderWorldFrameTelemetry {
     std::int32_t max_texture_size = 0;
     std::int32_t max_renderbuffer_size = 0;
     std::array<char, 64> open_gl_version{};
+    bool eye_target_validation_completed = false;
+    bool eye_target_validation_passed = false;
+    bool eye_target_state_restored = false;
+    std::array<char, 192> eye_target_validation_error{};
 };
 
 [[nodiscard]] bool InstallRenderWorldProbe(std::string& error) noexcept;
 [[nodiscard]] bool RemoveRenderWorldProbe(std::string& error) noexcept;
+[[nodiscard]] bool RequestEyeTargetValidation(std::string& error) noexcept;
 [[nodiscard]] RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague

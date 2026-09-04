@@ -46,7 +46,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         penumbra_vr::backends::black_plague::ConsumeRenderWorldFrameTelemetry();
     const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
         penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
-    if (frame_number <= 10 || frame_number % 300 == 0) {
+    if (frame_number <= 10 || frame_number % 300 == 0 ||
+        render_world.eye_target_validation_completed) {
         penumbra_vr::probe::WriteLog(
             "frame=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
@@ -111,6 +112,13 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 m[4], m[5], m[6], m[7],
                 m[8], m[9], m[10], m[11],
                 m[12], m[13], m[14], m[15]);
+        }
+        if (render_world.eye_target_validation_completed) {
+            penumbra_vr::probe::WriteLog(
+                "eye_target_validation=%s state_restored=%u resize=512x512->640x480 error=%s",
+                render_world.eye_target_validation_passed ? "passed" : "failed",
+                render_world.eye_target_state_restored ? 1U : 0U,
+                render_world.eye_target_validation_error.data());
         }
     }
 }
@@ -221,6 +229,21 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
         penumbra_vr::hooks::ObservedFrameCount());
     penumbra_vr::probe::CloseLog();
     InterlockedExchange(&g_state, 0);
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_ValidateEyeTargets(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+
+    std::string error;
+    if (!penumbra_vr::backends::black_plague::RequestEyeTargetValidation(error)) {
+        penumbra_vr::probe::WriteLog(
+            "In-game eye-target validation failed: %s", error.c_str());
+        return 0;
+    }
+    penumbra_vr::probe::WriteLog("In-game eye-target validation passed");
     return 1;
 }
 

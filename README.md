@@ -14,7 +14,7 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod, an installer, or a VR runtime. It does contain the first verified Black Plague research probe: it validates one exact executable build, loads without modifying the installation, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. A separate host-tested component now owns transactional OpenGL eye-target allocation, but it is not active in the game. The probe restores every hook and unloads cleanly; it does not render VR yet.
+This repository does not currently contain a playable mod, an installer, or a VR runtime. It does contain the first verified Black Plague research probe: it validates one exact executable build, loads without modifying the installation, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional OpenGL eye-target allocation is tested both on a standalone WGL context and through a transient create/resize/destroy cycle inside the game. No eye target is used for world rendering yet. The probe restores every hook and unloads cleanly; it does not render VR yet.
 
 The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project; it has not yet been copied into this repository.
 
@@ -61,6 +61,7 @@ Black Plague must currently be launched through Steam. Once it is running, attac
 
 ```powershell
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --attach <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 

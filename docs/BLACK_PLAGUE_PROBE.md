@@ -116,6 +116,10 @@ maximum viewport:          [32768, 32768]
 
 These limits describe the test machine, not minimum requirements for Penumbra VR. The relevant conclusion is that `RenderWorld` runs with a current context, enters through the default framebuffer on this build, and provides the framebuffer API needed for reversible off-screen eye targets. The probe did not create or bind an FBO during these captures.
 
+The separate `--validate-eye-targets` command then requested work from the injected DLL while leaving all OpenGL calls on the game's render thread. In one 172-frame attach/detach cycle, it created two complete RGBA8 plus depth24/stencil8 targets at `512x512`, bound and restored the left target, transactionally replaced both targets at `640x480`, bound and restored the right target, and destroyed every object. Framebuffer, renderbuffer, 2D texture and viewport state matched their incoming values afterwards. The game remained responsive and the probe unloaded normally.
+
+This deliberately transient test proves the GL object lifecycle in the real context. It does not retain targets between frames, duplicate `RenderWorld`, or submit an image to a headset.
+
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
 ## Commands
@@ -126,6 +130,9 @@ The test game process did not exit in response to a normal window-close request 
 
 # Restore the import and unload the probe
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <pid>
+
+# With the probe attached, exercise transient eye targets on the render thread
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <pid>
 ```
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.

@@ -132,3 +132,14 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Configurations: Debug and Release passed with `/W4 /WX`.
 - Scope: this proves the component against an ordinary WGL context. Persistent allocation and render-thread teardown inside Black Plague are not yet validated.
 - Result: confirmed host-side component; not yet a confirmed game integration.
+
+### 2026-09-04 — Transient eye targets in Black Plague
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Question: does the tested eye-target component behave correctly inside the game's actual render-thread context?
+- Control path: an explicit launcher command invokes a probe export; the export posts an atomic request and waits while the existing `RenderWorld` adapter performs every GL operation on the render thread.
+- Operations: create two complete RGBA8 plus depth24/stencil8 targets at `512x512`; bind/restore left; transactionally resize both to `640x480`; bind/restore right; destroy all six GL objects.
+- State evidence: framebuffer, renderbuffer, active-unit 2D texture and viewport bindings were identical before and after validation.
+- Lifecycle evidence: the command succeeded during a 172-frame attach/detach cycle, all hooks restored, the DLL unloaded, and the game remained responsive.
+- Negative scope: the targets were not retained across frames, used to render the world, or submitted to OpenVR.
+- Result: confirmed transient in-game object lifecycle for this exact build. Persistent render-thread ownership and teardown remain open.
