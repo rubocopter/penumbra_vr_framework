@@ -38,11 +38,24 @@ The game imports `SDL_GL_SwapBuffers` from `SDL.dll`. The probe parses the host 
 
 The hook implementation does not assume the preferred image base and does not scan for an instruction pattern.
 
+## RenderWorld call-site probe
+
+The current build also prepares a passive counter at the single `cScene::Render` call to `cRenderer3D::RenderWorld`:
+
+- call-site RVA: `0x000EE010`
+- expected initialized bytes: `E8 FB EA 03 00`
+- original target RVA: `0x0012CB10`
+- replacement ABI: x86 `fastcall` adapter for the original `thiscall` function
+- observed values: call count plus renderer, world, camera and frame-time arguments
+- forwarding: the adapter invokes the original function exactly once and does not change an argument
+
+Installation fails closed unless all five call bytes match. Other process threads are briefly suspended while the five-byte instruction is replaced or restored, and installation is aborted if a thread is currently executing inside that instruction. This call-site mechanism has host-independent Debug and Release coverage, but has not yet been attached to the live game; it therefore remains a prepared validator rather than a verified game hook.
+
 ## Teardown
 
-The current research build also observes the imported `glMatrixMode`, `glLoadMatrixf` and `glOrtho` calls. These hooks collect per-frame counters, the most recent projection matrix, and a bounded frequency table of model-view matrices. The table identifies the most frequently loaded model-view matrix without assuming a game address. All OpenGL arguments are forwarded unchanged.
+The current research build also observes the imported `glMatrixMode`, `glLoadMatrixf` and `glOrtho` calls. These hooks collect per-frame counters, the most recent projection matrix, a short projection call stack, and a bounded frequency table of model-view matrices. The table identifies the most frequently loaded model-view matrix without assuming a game address. All OpenGL arguments are forwarded unchanged.
 
-`PenumbraVR_Shutdown` first restores the SDL and OpenGL IAT entries, then closes the log. The launcher waits for that call to finish and only then invokes `FreeLibrary` in the target process. If restoring an expected pointer fails, the DLL is not unloaded.
+`PenumbraVR_Shutdown` restores the SDL import first, restores the `RenderWorld` call, waits for any already-active adapter invocation to finish, and then restores the OpenGL imports before closing the log. The launcher waits for shutdown to finish and only then invokes `FreeLibrary` in the target process. If any expected pointer or instruction differs, or an active call does not quiesce, the DLL is not unloaded.
 
 ## Verification performed
 
@@ -54,7 +67,7 @@ On 2026-09-03, a Release build was attached and detached three times in the same
 - unloaded the probe
 - left the game process alive for the next cycle
 
-The cycles observed 1, 31 and 73 swaps respectively. Separate Debug and Release tests use a small fake `SDL.dll` to verify interception, forwarding and restoration of the import.
+The cycles observed 1, 31 and 73 swaps respectively. Separate Debug and Release tests use small fake SDL/OpenGL libraries to verify IAT interception, forwarding, telemetry reset and restoration. A third test verifies direct `rel32` call interception, exact-byte rejection, forwarding and byte-for-byte restoration.
 
 A later 122-frame capture in the main menu observed repeated matrix-mode changes and two `glOrtho` calls per steady-state frame, but no `glLoadMatrixf` call. This is consistent with a 2D menu.
 

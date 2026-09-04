@@ -48,6 +48,8 @@ A backend translates runtime concepts into one game's implementation:
 
 The backend API will be frozen only after the Black Plague proof of concept reveals the real data and lifecycle requirements. Defining a large speculative interface first would merely encode guesses.
 
+The first backend-owned code now lives under `src/backends/black_plague`. It contains only the exact-build `RenderWorld` call-site validator; it is not yet a general backend interface or a claim of playable support.
+
 ## Build identity
 
 Filename detection is insufficient because both Overture and Black Plague commonly use `Penumbra.exe`. Each binary backend must select a manifest using a cryptographic executable hash. A manifest will eventually contain:

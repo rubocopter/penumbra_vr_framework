@@ -44,6 +44,22 @@ add_library(pvr_iat_hook STATIC
 target_include_directories(pvr_iat_hook PUBLIC src/hooks)
 pvr_enable_warnings(pvr_iat_hook)
 
+add_library(pvr_rel32_call_hook STATIC
+    src/hooks/rel32_call_hook.cpp
+)
+target_include_directories(pvr_rel32_call_hook PUBLIC src/hooks)
+pvr_enable_warnings(pvr_rel32_call_hook)
+
+add_library(pvr_black_plague_backend_probe STATIC
+    src/backends/black_plague/render_world_probe.cpp
+)
+target_include_directories(
+    pvr_black_plague_backend_probe
+    PUBLIC src/backends/black_plague
+    PRIVATE src/hooks)
+target_link_libraries(pvr_black_plague_backend_probe PUBLIC pvr_rel32_call_hook)
+pvr_enable_warnings(pvr_black_plague_backend_probe)
+
 target_link_libraries(pvr_sdl_frame_hook PUBLIC pvr_iat_hook)
 
 add_library(pvr_opengl_telemetry STATIC
@@ -61,7 +77,11 @@ add_library(pvr_black_plague_probe SHARED
 target_include_directories(pvr_black_plague_probe PRIVATE src/probe)
 target_link_libraries(
     pvr_black_plague_probe
-    PRIVATE pvr_build_catalog pvr_sdl_frame_hook pvr_opengl_telemetry)
+    PRIVATE
+        pvr_build_catalog
+        pvr_sdl_frame_hook
+        pvr_opengl_telemetry
+        pvr_black_plague_backend_probe)
 set_target_properties(pvr_black_plague_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.BlackPlague.Probe"
 )
@@ -108,4 +128,12 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_opengl_telemetry_test)
 
     add_test(NAME opengl_telemetry COMMAND pvr_opengl_telemetry_test)
+
+    add_executable(pvr_rel32_call_hook_test
+        tests/rel32_call_hook/rel32_call_hook_test.cpp
+    )
+    target_link_libraries(pvr_rel32_call_hook_test PRIVATE pvr_rel32_call_hook)
+    pvr_enable_warnings(pvr_rel32_call_hook_test)
+
+    add_test(NAME rel32_call_hook COMMAND pvr_rel32_call_hook_test)
 endif()
