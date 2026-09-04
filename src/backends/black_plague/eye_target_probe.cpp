@@ -345,6 +345,23 @@ bool DestroyPersistentEyeTargets(std::string& error) noexcept {
     return SubmitRequest(RequestKind::persistent_destroy, 0, 0, error);
 }
 
+bool BeginPersistentEyeTarget(
+    graphics::Eye eye,
+    graphics::OpenGlEyeBinding& binding,
+    std::string& error) noexcept {
+    if (!g_persistent_active.load(std::memory_order_acquire)) {
+        error = "Persistent eye targets are not active";
+        return false;
+    }
+    return g_persistent_targets.BeginEye(eye, binding, error);
+}
+
+bool EndPersistentEyeTarget(
+    graphics::OpenGlEyeBinding& binding,
+    std::string& error) noexcept {
+    return g_persistent_targets.EndEye(binding, error);
+}
+
 bool PersistentEyeTargetsActive() noexcept {
     return g_persistent_active.load(std::memory_order_acquire);
 }

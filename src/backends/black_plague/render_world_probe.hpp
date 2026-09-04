@@ -33,6 +33,9 @@ struct RenderWorldFrameTelemetry {
 
 [[nodiscard]] bool InstallRenderWorldProbe(std::string& error) noexcept;
 [[nodiscard]] bool RemoveRenderWorldProbe(std::string& error) noexcept;
+[[nodiscard]] bool ValidateControlledWorldDuplication(
+    std::uint32_t frames,
+    std::string& error) noexcept;
 [[nodiscard]] RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague

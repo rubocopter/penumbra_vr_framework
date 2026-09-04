@@ -23,9 +23,23 @@ constexpr std::array<std::uint8_t, 5> kExpectedCall{
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
 
+enum class DuplicationState : std::uint8_t {
+    idle,
+    preparing,
+    pending,
+    processing,
+    passed,
+    failed,
+};
+
 hooks::Rel32CallHook g_hook;
 std::atomic<void*> g_original_target{nullptr};
 std::atomic<std::uint32_t> g_active_calls{0};
+std::atomic<DuplicationState> g_duplication_state{DuplicationState::idle};
+std::atomic<std::uint32_t> g_duplication_requested_frames{0};
+std::atomic<std::uint32_t> g_duplication_completed_frames{0};
+std::atomic<bool> g_duplication_cancel{false};
+std::array<char, 192> g_duplication_error{};
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
 std::atomic<bool> g_capabilities_initialized{false};
@@ -122,6 +136,65 @@ public:
     }
 };
 
+void FailDuplication(const std::string& error) noexcept {
+    strncpy_s(
+        g_duplication_error.data(),
+        g_duplication_error.size(),
+        error.c_str(),
+        _TRUNCATE);
+    g_duplication_state.store(DuplicationState::failed, std::memory_order_release);
+}
+
+void ProcessControlledWorldDuplication(
+    RenderWorld original,
+    void* renderer,
+    void* world,
+    void* camera) noexcept {
+    DuplicationState state = g_duplication_state.load(std::memory_order_acquire);
+    if (state == DuplicationState::pending) {
+        DuplicationState expected = DuplicationState::pending;
+        if (!g_duplication_state.compare_exchange_strong(
+                expected,
+                DuplicationState::processing,
+                std::memory_order_acq_rel)) {
+            return;
+        }
+        state = DuplicationState::processing;
+    }
+    if (state != DuplicationState::processing) {
+        return;
+    }
+    if (g_duplication_cancel.load(std::memory_order_acquire)) {
+        FailDuplication("Controlled world duplication was cancelled");
+        return;
+    }
+    if (original == nullptr) {
+        FailDuplication("The original RenderWorld target is unavailable");
+        return;
+    }
+
+    graphics::OpenGlEyeBinding binding;
+    std::string error;
+    if (!BeginPersistentEyeTarget(graphics::Eye::left, binding, error)) {
+        FailDuplication("Could not bind the diagnostic world target: " + error);
+        return;
+    }
+
+    original(renderer, world, camera, 0.0F);
+
+    if (!EndPersistentEyeTarget(binding, error)) {
+        FailDuplication("Could not restore GL state after the duplicate world pass: " + error);
+        return;
+    }
+
+    const std::uint32_t completed =
+        g_duplication_completed_frames.fetch_add(1, std::memory_order_acq_rel) + 1;
+    if (completed >=
+        g_duplication_requested_frames.load(std::memory_order_acquire)) {
+        g_duplication_state.store(DuplicationState::passed, std::memory_order_release);
+    }
+}
+
 void __fastcall HookedRenderWorld(
     void* renderer,
     void*,
@@ -163,6 +236,8 @@ void __fastcall HookedRenderWorld(
     const auto original = reinterpret_cast<RenderWorld>(
         g_original_target.load(std::memory_order_acquire));
     if (original != nullptr) {
+        ProcessControlledWorldDuplication(
+            original, renderer, world, camera);
         original(renderer, world, camera, frame_time);
     }
 }
@@ -205,6 +280,11 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_max_viewport_dimensions = {};
     g_max_texture_size = 0;
     g_max_renderbuffer_size = 0;
+    g_duplication_error = {};
+    g_duplication_requested_frames.store(0, std::memory_order_release);
+    g_duplication_completed_frames.store(0, std::memory_order_release);
+    g_duplication_cancel.store(false, std::memory_order_release);
+    g_duplication_state.store(DuplicationState::idle, std::memory_order_release);
     ResetEyeTargetProbe();
     g_original_target.store(expected_target, std::memory_order_release);
 
@@ -222,6 +302,14 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
 
 bool RemoveRenderWorldProbe(std::string& error) noexcept {
     error.clear();
+    const DuplicationState duplication =
+        g_duplication_state.load(std::memory_order_acquire);
+    if (duplication == DuplicationState::preparing ||
+        duplication == DuplicationState::pending ||
+        duplication == DuplicationState::processing) {
+        error = "A controlled world-duplication request is still active";
+        return false;
+    }
     if (!hooks::RemoveRel32CallHook(g_hook, error)) {
         return false;
     }
@@ -234,6 +322,59 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         Sleep(1);
     }
     error = "Timed out waiting for an active RenderWorld probe call to finish";
+    return false;
+}
+
+bool ValidateControlledWorldDuplication(
+    std::uint32_t frames,
+    std::string& error) noexcept {
+    error.clear();
+    if (frames == 0 || frames > 600) {
+        error = "Controlled world duplication requires between 1 and 600 frames";
+        return false;
+    }
+    if (!PersistentEyeTargetsActive()) {
+        error = "Persistent eye targets must be active before world duplication";
+        return false;
+    }
+
+    DuplicationState state = g_duplication_state.load(std::memory_order_acquire);
+    if (state == DuplicationState::passed || state == DuplicationState::failed) {
+        static_cast<void>(g_duplication_state.compare_exchange_strong(
+            state, DuplicationState::idle, std::memory_order_acq_rel));
+    }
+    DuplicationState expected = DuplicationState::idle;
+    if (!g_duplication_state.compare_exchange_strong(
+            expected, DuplicationState::preparing, std::memory_order_acq_rel)) {
+        error = "Another controlled world-duplication request is active";
+        return false;
+    }
+
+    g_duplication_error = {};
+    g_duplication_requested_frames.store(frames, std::memory_order_release);
+    g_duplication_completed_frames.store(0, std::memory_order_release);
+    g_duplication_cancel.store(false, std::memory_order_release);
+    g_duplication_state.store(DuplicationState::pending, std::memory_order_release);
+
+    constexpr DWORD kTimeoutMilliseconds = 15000;
+    for (DWORD elapsed = 0; elapsed < kTimeoutMilliseconds; ++elapsed) {
+        state = g_duplication_state.load(std::memory_order_acquire);
+        if (state == DuplicationState::passed || state == DuplicationState::failed) {
+            const bool passed = state == DuplicationState::passed;
+            if (!passed) {
+                error = g_duplication_error.data();
+            }
+            g_duplication_state.store(DuplicationState::idle, std::memory_order_release);
+            return passed;
+        }
+        Sleep(1);
+    }
+
+    g_duplication_cancel.store(true, std::memory_order_release);
+    expected = DuplicationState::pending;
+    static_cast<void>(g_duplication_state.compare_exchange_strong(
+        expected, DuplicationState::failed, std::memory_order_acq_rel));
+    error = "Timed out waiting for controlled world duplication";
     return false;
 }
 

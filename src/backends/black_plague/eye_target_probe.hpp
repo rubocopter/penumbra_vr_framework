@@ -1,5 +1,7 @@
 #pragma once
 
+#include "opengl_eye_targets.hpp"
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -34,6 +36,13 @@ void ProcessEyeTargetRequestsOnRenderThread() noexcept;
     std::uint32_t height,
     std::string& error) noexcept;
 [[nodiscard]] bool DestroyPersistentEyeTargets(std::string& error) noexcept;
+[[nodiscard]] bool BeginPersistentEyeTarget(
+    graphics::Eye eye,
+    graphics::OpenGlEyeBinding& binding,
+    std::string& error) noexcept;
+[[nodiscard]] bool EndPersistentEyeTarget(
+    graphics::OpenGlEyeBinding& binding,
+    std::string& error) noexcept;
 
 [[nodiscard]] bool PersistentEyeTargetsActive() noexcept;
 [[nodiscard]] std::uint64_t PersistentEyeTargetLifetimeFrames() noexcept;

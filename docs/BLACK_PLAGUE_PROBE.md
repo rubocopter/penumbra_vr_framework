@@ -148,11 +148,14 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: initialize OpenVR and use its recommended per-eye dimensions
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <pid>
 
+# Experimental: issue 120 extra world passes into a diagnostic FBO
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-world-duplication <pid>
+
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. It has not yet completed a live headset validation and is not part of the confirmed runtime evidence above.
+The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. It has not yet completed a live in-game headset validation and is not part of the confirmed runtime evidence above. The controlled duplication command is likewise prepared but not yet run: it uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 

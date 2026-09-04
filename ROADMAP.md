@@ -39,6 +39,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Validate transient allocation, binding, resize, restoration and destruction in game
 - [x] Revalidate persistent per-eye targets with resident-DLL teardown policy
 - [x] Read per-eye optics and a live HMD pose through game-neutral runtime types
+- [ ] Validate controlled duplicate world rendering without camera mutation
 - [ ] Size eye targets from the active OpenVR runtime rather than diagnostic constants
 - [ ] Apply tracked head view transforms
 - [ ] Submit both eyes to OpenVR

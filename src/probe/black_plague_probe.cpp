@@ -328,6 +328,52 @@ extern "C" DWORD WINAPI PenumbraVR_CreatePersistentEyeTargets(void*) {
     return 1;
 }
 
+extern "C" DWORD WINAPI PenumbraVR_ValidateWorldDuplication(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+
+    std::string error;
+    if (!penumbra_vr::backends::black_plague::RequestPersistentEyeTargets(
+            512, 512, error)) {
+        penumbra_vr::probe::WriteLog(
+            "World-duplication target creation failed: %s", error.c_str());
+        return 0;
+    }
+
+    constexpr std::uint32_t kValidationFrames = 120;
+    const bool duplicated =
+        penumbra_vr::backends::black_plague::ValidateControlledWorldDuplication(
+            kValidationFrames, error);
+    const std::string duplication_error = error;
+
+    std::string cleanup_error;
+    const bool destroyed =
+        penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(cleanup_error);
+    if (!duplicated) {
+        penumbra_vr::probe::WriteLog(
+            "Controlled world duplication failed: %s",
+            duplication_error.c_str());
+        if (!destroyed) {
+            penumbra_vr::probe::WriteLog(
+                "World-duplication target cleanup also failed: %s",
+                cleanup_error.c_str());
+        }
+        return 0;
+    }
+    if (!destroyed) {
+        penumbra_vr::probe::WriteLog(
+            "World-duplication target cleanup failed: %s",
+            cleanup_error.c_str());
+        return 0;
+    }
+
+    penumbra_vr::probe::WriteLog(
+        "Controlled duplicate RenderWorld validation passed for %lu frames",
+        static_cast<unsigned long>(kValidationFrames));
+    return 1;
+}
+
 extern "C" DWORD WINAPI PenumbraVR_CreateOpenVrEyeTargets(void*) {
     if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
         return 0;

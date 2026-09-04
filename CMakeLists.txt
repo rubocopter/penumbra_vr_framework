@@ -95,8 +95,9 @@ target_include_directories(
     PRIVATE src/hooks)
 target_link_libraries(
     pvr_black_plague_backend_probe
-    PUBLIC pvr_rel32_call_hook
-    PRIVATE pvr_opengl_eye_targets)
+    PUBLIC
+        pvr_rel32_call_hook
+        pvr_opengl_eye_targets)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)
 

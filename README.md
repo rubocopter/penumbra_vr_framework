@@ -71,10 +71,11 @@ Black Plague must currently be launched through Steam. Once it is running, attac
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-world-duplication <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 
-The OpenVR-sized target command is experimental and is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
+The OpenVR-sized target and controlled world-duplication commands are experimental. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`; world duplication must not be treated as headset rendering. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
 
 The repository also provides a read-only executable fingerprinting tool:
 

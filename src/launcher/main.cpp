@@ -352,6 +352,39 @@ bool CreateRemoteOpenVrEyeTargets(
     return true;
 }
 
+bool ValidateRemoteWorldDuplication(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::wstring& error) {
+    const std::uintptr_t remote_probe = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe == 0) {
+        error = L"Attach the Black Plague probe before validating world duplication";
+        return false;
+    }
+
+    LPTHREAD_START_ROUTINE remote_validate = nullptr;
+    if (!ResolveRemoteExport(
+            probe_path,
+            remote_probe,
+            "PenumbraVR_ValidateWorldDuplication",
+            remote_validate,
+            error)) {
+        return false;
+    }
+
+    DWORD validation_result = 0;
+    if (!CallRemote(process, remote_validate, nullptr, validation_result, error)) {
+        return false;
+    }
+    if (validation_result != 1) {
+        error = L"Controlled world duplication failed; inspect the probe log";
+        return false;
+    }
+    return true;
+}
+
 std::filesystem::path CurrentExecutableDirectory() {
     std::wstring path(32768, L'\0');
     const DWORD length = GetModuleFileNameW(nullptr, path.data(), static_cast<DWORD>(path.size()));
@@ -480,12 +513,15 @@ int wmain(int argc, wchar_t** argv) {
         argc == 3 && _wcsicmp(argv[1], L"--hold-eye-targets") == 0;
     const bool hold_openvr_eye_targets =
         argc == 3 && _wcsicmp(argv[1], L"--hold-openvr-eye-targets") == 0;
+    const bool validate_world_duplication =
+        argc == 3 && _wcsicmp(argv[1], L"--validate-world-duplication") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
     if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
-         !hold_openvr_eye_targets && !capture_image && !inspect_camera && argc != 2) ||
+         !hold_openvr_eye_targets && !validate_world_duplication && !capture_image &&
+         !inspect_camera && argc != 2) ||
         ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
-          hold_openvr_eye_targets) &&
+          hold_openvr_eye_targets || validate_world_duplication) &&
          argc != 3) ||
         ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
@@ -495,6 +531,7 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --validate-world-duplication <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect-camera <process-id> <address>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
@@ -510,7 +547,7 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
-        hold_openvr_eye_targets || inspect_camera || capture_image) {
+        hold_openvr_eye_targets || validate_world_duplication || inspect_camera || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
         if (parsed_pid == 0 || parse_end == argv[2] || *parse_end != L'\0') {
@@ -666,6 +703,18 @@ int wmain(int argc, wchar_t** argv) {
             std::wcout << L"Holding OpenVR-sized eye targets in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
                        << parsed_pid << L"); detach the probe to destroy them and shut down OpenVR.\n";
+            return 0;
+        }
+        if (validate_world_duplication) {
+            if (!ValidateRemoteWorldDuplication(
+                    process.get(), parsed_pid, probe_path, error)) {
+                std::wcerr << L"World-duplication validation failed: "
+                           << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Validated 120 controlled duplicate world passes in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L").\n";
             return 0;
         }
         if (detach) {
