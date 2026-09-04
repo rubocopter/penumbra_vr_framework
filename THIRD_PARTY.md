@@ -2,10 +2,20 @@
 
 The repository is licensed under GPLv3 or later. Imported or adapted work is recorded below; build outputs and the optional OpenVR SDK are not source-controlled.
 
+## Project lineage
+
+[`veryjos/penumbra_vr`](https://github.com/veryjos/penumbra_vr) is the original
+Overture-only VR mod. GitHub records
+[`rubocopter/penumbra_vr_rework`](https://github.com/rubocopter/penumbra_vr_rework)
+as its direct fork. This repository, `rubocopter/penumbra_vr_framework`, is a
+separate trilogy framework and is not presented as an official continuation of
+the original project. The distinct repository name is intentional.
+
 Likely upstream inputs include:
 
 | Component | Upstream | Known license | Current state |
 |---|---|---|---|
+| Original Penumbra: Overture VR mod lineage | `veryjos/penumbra_vr`; upstream of the Rework fork | No top-level license file or GitHub license metadata observed; embedded HPL1/Overture source retains its own notices | Historical attribution recorded here; this framework does not bulk-import the original repository |
 | Penumbra Overture game code | Frictional Games | GPLv3 | Not imported |
 | HPL1 Engine | Frictional Games | GPLv3, with separately documented asset/shader terms | Not imported |
 | Penumbra VR Rework tracking-space behavior | `rubocopter/penumbra_vr_rework` revision `23c890f`; `HPL1Engine/include/game/VRTracking.h`, `HPL1Engine/sources/scene/Camera3D.cpp`, `tests/VRTrackingTest/main.cpp` | GPLv3 or later | Adapted to runtime-neutral matrices in `src/runtime/vr_math.*` and `tests/vr_math/vr_math_test.cpp`; HPL types and game-specific placement were not copied |

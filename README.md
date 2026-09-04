@@ -20,6 +20,20 @@ SteamVR still shows Black Plague on a virtual cinema screen during normal execut
 
 The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project. Selected behavior has begun moving into game-neutral modules with explicit provenance; the Overture game layer is not copied wholesale.
 
+## Identity and lineage
+
+**Penumbra VR** remains the user-facing name. The repository uses the distinct
+slug [`rubocopter/penumbra_vr_framework`](https://github.com/rubocopter/penumbra_vr_framework)
+to avoid being confused with
+[`veryjos/penumbra_vr`](https://github.com/veryjos/penumbra_vr), the original
+Overture-only VR mod. `rubocopter/penumbra_vr_rework` is a direct GitHub fork of
+that original project.
+
+This framework is a new, standalone repository for the trilogy. It is not a
+GitHub fork of `veryjos/penumbra_vr`, does not claim to be its official
+continuation, and preserves attribution for the original mod, the Rework fork,
+Frictional Games and Valve in [THIRD_PARTY.md](THIRD_PARTY.md).
+
 ## Project principles
 
 - One product and installer for users; game-specific backends internally.

@@ -32,6 +32,10 @@ features validated in a headset.
 
 ### Changed
 
+- Renamed the GitHub repository from `rubocopter/penumbra_vr` to
+  `rubocopter/penumbra_vr_framework`, while retaining **Penumbra VR** as the
+  public project name, to distinguish this trilogy framework from the original
+  `veryjos/penumbra_vr` Overture mod.
 - Moved camera override behavior out of the Black Plague backend into the shared
   HPL1 adapter; exact camera offsets remain backend-owned.
 - Documented Enhanced visuals, audio, action and tracking provenance against
