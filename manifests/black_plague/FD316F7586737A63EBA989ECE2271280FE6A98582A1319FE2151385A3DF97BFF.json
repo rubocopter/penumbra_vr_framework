@@ -306,6 +306,24 @@
       "postDeactivateObservationSeconds": 12,
       "newWindowsErrorReportingEvents": 0,
       "gameRemainedResponsive": true
+    },
+    "controlledTrackedStereoSubmission": {
+      "status": "rejected-visual-validation",
+      "diagnosticDimensions": [
+        512,
+        512
+      ],
+      "successfulTechnicalCycles": 7,
+      "totalSubmittedFrames": 2100,
+      "validPoseAndAnchorFrames": 2100,
+      "translationApplied": false,
+      "cameraRestoreFailures": 0,
+      "compositorErrors": 0,
+      "gameRemainedResponsive": true,
+      "rejectedMethod": "full-orientation relative anchor",
+      "userObservation": "world appeared like a wall while the viewer stood tilted forwards",
+      "replacementCandidate": "Overture-derived horizontal-yaw alignment with raw pitch and roll",
+      "replacementLiveValidated": false
     }
   },
   "symbols": {

@@ -338,7 +338,7 @@ void ProcessControlledStereoMatrices(
             g_stereo_tracking_anchor_valid = true;
         }
         constexpr float kRotationOnlyWorldUnitsPerMeter = 0.0F;
-        if (!runtime::ComposeRelativeTrackedHeadView(
+        if (!runtime::ComposeYawRecenteredTrackedHeadView(
                 camera_snapshot.view,
                 g_stereo_tracking_anchor,
                 pose.device_to_absolute,
@@ -346,7 +346,7 @@ void ProcessControlledStereoMatrices(
                 head_view,
                 error)) {
             FailStereoMatrixValidation(
-                "Could not compose the recentered HMD rotation: " + error);
+                "Could not compose the yaw-recentered HMD rotation: " + error);
             return;
         }
     }

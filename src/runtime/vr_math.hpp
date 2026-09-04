@@ -41,6 +41,18 @@ struct VrMatrix44 {
     VrMatrix44& tracked_head_view,
     std::string& error) noexcept;
 
+// Preserves the raw OpenVR pitch and roll while aligning only the anchor yaw
+// with the game's current camera heading. This follows the tracking-space
+// boundary proven by Penumbra Overture VR Rework, adapted to runtime-neutral
+// matrices and an exact-build camera adapter.
+[[nodiscard]] bool ComposeYawRecenteredTrackedHeadView(
+    const VrMatrix44& game_head_view,
+    const VrMatrix34& anchor_device_to_absolute,
+    const VrMatrix34& current_device_to_absolute,
+    float world_units_per_meter,
+    VrMatrix44& tracked_head_view,
+    std::string& error) noexcept;
+
 // Builds the infinite-far OpenGL projection used by the mapped HPL1 camera
 // path from the raw per-eye tangents returned by OpenVR.
 [[nodiscard]] bool BuildHplInfiniteProjection(

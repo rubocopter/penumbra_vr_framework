@@ -53,6 +53,19 @@ using penumbra_vr::runtime::VrMatrix44;
     return matrix;
 }
 
+[[nodiscard]] VrMatrix34 PitchDegrees(float degrees) {
+    const float radians = degrees * 3.14159265358979323846F / 180.0F;
+    const float cosine = std::cos(radians);
+    const float sine = std::sin(radians);
+    VrMatrix34 matrix;
+    matrix.values = {
+        1.0F, 0.0F, 0.0F, 0.0F,
+        0.0F, cosine, -sine, 0.0F,
+        0.0F, sine, cosine, 0.0F,
+    };
+    return matrix;
+}
+
 [[nodiscard]] bool TestRigidInverse() {
     VrMatrix34 transform;
     transform.values = {
@@ -251,6 +264,71 @@ using penumbra_vr::runtime::VrMatrix44;
     return true;
 }
 
+[[nodiscard]] bool TestYawRecenteredHeadTracking() {
+    const VrMatrix44 game_view = penumbra_vr::runtime::IdentityMatrix();
+    VrMatrix44 tracked_view;
+    std::string error;
+
+    const VrMatrix34 yawed_anchor =
+        YawNinetyDegrees(3.0F, 1.5F, -2.0F);
+    if (!penumbra_vr::runtime::ComposeYawRecenteredTrackedHeadView(
+            game_view,
+            yawed_anchor,
+            yawed_anchor,
+            0.0F,
+            tracked_view,
+            error)) {
+        std::cerr << "Yaw-only recenter failed: " << error << '\n';
+        return false;
+    }
+    for (std::size_t row = 0; row < 4; ++row) {
+        for (std::size_t column = 0; column < 4; ++column) {
+            const float expected = row == column ? 1.0F : 0.0F;
+            if (!ExpectMatrixValue(
+                    tracked_view,
+                    row,
+                    column,
+                    expected,
+                    "Yaw-only centre aligns with game heading")) {
+                return false;
+            }
+        }
+    }
+
+    const VrMatrix34 level_anchor = Translation(0.0F, 1.6F, 0.0F);
+    const VrMatrix34 pitched_current = PitchDegrees(30.0F);
+    if (!penumbra_vr::runtime::ComposeYawRecenteredTrackedHeadView(
+            game_view,
+            level_anchor,
+            pitched_current,
+            0.0F,
+            tracked_view,
+            error)) {
+        std::cerr << "Tracked pitch preservation failed: " << error << '\n';
+        return false;
+    }
+    const float cosine = std::cos(30.0F * 3.14159265358979323846F / 180.0F);
+    const float sine = std::sin(30.0F * 3.14159265358979323846F / 180.0F);
+    if (!ExpectMatrixValue(tracked_view, 1, 1, cosine, "Pitch view 11") ||
+        !ExpectMatrixValue(tracked_view, 1, 2, sine, "Pitch view 12") ||
+        !ExpectMatrixValue(tracked_view, 2, 1, -sine, "Pitch view 21") ||
+        !ExpectMatrixValue(tracked_view, 2, 2, cosine, "Pitch view 22")) {
+        return false;
+    }
+
+    if (penumbra_vr::runtime::ComposeYawRecenteredTrackedHeadView(
+            game_view,
+            PitchDegrees(90.0F),
+            pitched_current,
+            0.0F,
+            tracked_view,
+            error) || error.empty()) {
+        std::cerr << "A vertical tracking anchor was accepted\n";
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestInvalidInputs() {
     VrMatrix34 scaled = Translation(0.0F, 0.0F, 0.0F);
     scaled.values[0] = 2.0F;
@@ -287,7 +365,8 @@ using penumbra_vr::runtime::VrMatrix44;
 
 int main() {
     if (!TestRigidInverse() || !TestProjection() || !TestEyeViews() ||
-        !TestRelativeHeadTracking() || !TestInvalidInputs()) {
+        !TestRelativeHeadTracking() || !TestYawRecenteredHeadTracking() ||
+        !TestInvalidInputs()) {
         return 1;
     }
     std::cout << "VR matrix tests passed\n";

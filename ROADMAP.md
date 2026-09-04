@@ -8,7 +8,7 @@ Roadmap states are evidence-based. A directory or compiling stub does not make a
 - [x] Honest project status and architectural boundaries
 - [x] Known-build fingerprinting tool
 - [x] Initial executable fingerprints recorded
-- [ ] Decide project license and attribution policy
+- [x] Adopt GPLv3-or-later and begin component-level provenance records
 - [ ] Record reproducible binary-research workflow
 
 Exit criterion: a clean repository in which every implemented feature is testable and every planned feature is labelled as planned.

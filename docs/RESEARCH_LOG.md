@@ -193,3 +193,13 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Evidence: 120 requested extra passes completed. Steady frames retained one intercepted scene call while projection loads rose from 1 to 2 and model-view loads from 35 to 68, independently confirming two renderer executions. The direct extra call also appeared as an additional return address in the projection stack.
 - Cleanup: targets were destroyed after 121 active frames with GL state restored; hooks were deactivated under the resident-DLL policy. The game remained responsive after 12 seconds with zero matching WER events.
 - Result: a second HPL world pass is viable at the chosen hook boundary without camera mutation. Per-eye matrices and compositor submission remain untested.
+
+### 2026-09-04 — Rejected full-orientation tracking anchor
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Method: use the first compositor pose as a complete orientation anchor, apply the inverse relative HMD rotation before the game view, keep translation disabled, and submit two `512x512` eye textures.
+- Technical evidence: seven 300-frame cycles completed, for 2,100 tracked stereo frames. Every frame reported a valid anchor and HMD pose; both eyes were submitted, the camera was restored after every eye, no compositor failure occurred, and the process remained responsive.
+- Headset evidence: the user reported being positioned as though standing on a wall and leaning forwards. The presentation was therefore visually invalid despite clean telemetry.
+- Diagnosis from the Overture reference: `rubocopter/penumbra_vr_rework@23c890f` preserves the raw OpenVR pitch and roll and owns world placement separately; recentering changes only horizontal yaw. A complete pose anchor can incorrectly preserve the orientation of a visor that is being handled while the user changes windows.
+- Corrective direction: align only the anchor's horizontal heading with the current game camera, reject a near-vertical anchor, preserve current runtime pitch and roll, and keep translation at zero for the next bounded validation.
+- Result: full-orientation-relative anchoring rejected. It is not evidence of working head tracking.
