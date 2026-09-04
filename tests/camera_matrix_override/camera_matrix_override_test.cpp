@@ -16,6 +16,7 @@ constexpr std::size_t kProjectionOffset = 0x84;
 constexpr std::size_t kFlagsOffset = 0x8D0;
 
 using penumbra_vr::backends::black_plague::CameraMatrixOverride;
+using penumbra_vr::backends::black_plague::kCameraLayout;
 using penumbra_vr::runtime::VrMatrix44;
 
 [[nodiscard]] VrMatrix44 FilledMatrix(float first) {
@@ -48,14 +49,14 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
 
     penumbra_vr::backends::black_plague::CameraMatrixSnapshot snapshot;
     std::string error;
-    if (!penumbra_vr::backends::black_plague::CaptureCameraMatrices(
-            camera.data(), snapshot, error) ||
+    if (!penumbra_vr::adapters::hpl1::CaptureCameraMatrices(
+            camera.data(), kCameraLayout, snapshot, error) ||
         snapshot.flags != std::array<std::uint8_t, 3>{1, 1, 1}) {
         std::cerr << "Could not capture the original camera: " << error << '\n';
         return false;
     }
 
-    CameraMatrixOverride override;
+    CameraMatrixOverride override(kCameraLayout);
     if (!override.Apply(camera.data(), view, projection, error)) {
         std::cerr << "Could not apply camera override: " << error << '\n';
         return false;
@@ -93,7 +94,7 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
     const auto original = camera;
     std::string error;
     {
-        CameraMatrixOverride override;
+        CameraMatrixOverride override(kCameraLayout);
         if (!override.Apply(
                 camera.data(), FilledMatrix(100.0F), FilledMatrix(200.0F), error)) {
             std::cerr << "Could not apply scoped camera override: " << error << '\n';
@@ -112,7 +113,7 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
     SetOriginalCamera(camera);
     VrMatrix44 invalid = FilledMatrix(100.0F);
     invalid.values[3] = std::numeric_limits<float>::infinity();
-    CameraMatrixOverride override;
+    CameraMatrixOverride override(kCameraLayout);
     std::string error;
     if (override.Apply(
             camera.data(), invalid, FilledMatrix(200.0F), error) || error.empty()) {

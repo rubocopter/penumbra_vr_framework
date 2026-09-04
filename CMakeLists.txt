@@ -60,11 +60,44 @@ target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
 target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32)
 pvr_enable_warnings(pvr_opengl_eye_targets)
 
+add_library(pvr_visual_calibration STATIC
+    src/graphics/visual_calibration.cpp
+)
+target_include_directories(pvr_visual_calibration PUBLIC src/graphics)
+pvr_enable_warnings(pvr_visual_calibration)
+
+add_library(pvr_spatial_audio STATIC
+    src/audio/spatial_audio.cpp
+)
+target_include_directories(pvr_spatial_audio PUBLIC src/audio)
+pvr_enable_warnings(pvr_spatial_audio)
+
 add_library(pvr_vr_math STATIC
     src/runtime/vr_math.cpp
 )
 target_include_directories(pvr_vr_math PUBLIC src/runtime)
 pvr_enable_warnings(pvr_vr_math)
+
+add_library(pvr_hpl1_camera_adapter STATIC
+    src/adapters/hpl1/camera_matrix_override.cpp
+)
+target_include_directories(
+    pvr_hpl1_camera_adapter
+    PUBLIC src/adapters/hpl1 src/runtime)
+target_link_libraries(pvr_hpl1_camera_adapter PUBLIC pvr_vr_math)
+pvr_enable_warnings(pvr_hpl1_camera_adapter)
+
+add_library(pvr_render_target_policy STATIC
+    src/runtime/render_target_policy.cpp
+)
+target_include_directories(pvr_render_target_policy PUBLIC src/runtime)
+pvr_enable_warnings(pvr_render_target_policy)
+
+add_library(pvr_pe_large_address STATIC
+    src/deployment/pe_large_address.cpp
+)
+target_include_directories(pvr_pe_large_address PUBLIC src/deployment)
+pvr_enable_warnings(pvr_pe_large_address)
 
 set(PVR_OPENVR_LOADER "")
 if(PENUMBRA_VR_OPENVR_SDK)
@@ -92,7 +125,6 @@ endif()
 pvr_enable_warnings(pvr_openvr_session)
 
 add_library(pvr_black_plague_backend_probe STATIC
-    src/backends/black_plague/camera_matrix_override.cpp
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
 )
@@ -106,6 +138,7 @@ target_link_libraries(
         pvr_rel32_call_hook
         pvr_opengl_eye_targets
         pvr_openvr_session
+        pvr_hpl1_camera_adapter
         pvr_vr_math)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)
@@ -132,6 +165,7 @@ target_link_libraries(
         pvr_sdl_frame_hook
         pvr_opengl_telemetry
         pvr_openvr_session
+        pvr_render_target_policy
         pvr_black_plague_backend_probe)
 set_target_properties(pvr_black_plague_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.BlackPlague.Probe"
@@ -223,13 +257,48 @@ if(BUILD_TESTING)
 
     add_test(NAME vr_math COMMAND pvr_vr_math_test)
 
+    add_executable(pvr_render_target_policy_test
+        tests/render_target_policy/render_target_policy_test.cpp
+    )
+    target_link_libraries(
+        pvr_render_target_policy_test PRIVATE pvr_render_target_policy)
+    pvr_enable_warnings(pvr_render_target_policy_test)
+
+    add_test(NAME render_target_policy COMMAND pvr_render_target_policy_test)
+
+    add_executable(pvr_pe_large_address_test
+        tests/pe_large_address/pe_large_address_test.cpp
+    )
+    target_link_libraries(
+        pvr_pe_large_address_test PRIVATE pvr_pe_large_address)
+    pvr_enable_warnings(pvr_pe_large_address_test)
+
+    add_test(NAME pe_large_address COMMAND pvr_pe_large_address_test)
+
+    add_executable(pvr_visual_calibration_test
+        tests/visual_calibration/visual_calibration_test.cpp
+    )
+    target_link_libraries(
+        pvr_visual_calibration_test PRIVATE pvr_visual_calibration)
+    pvr_enable_warnings(pvr_visual_calibration_test)
+
+    add_test(NAME visual_calibration COMMAND pvr_visual_calibration_test)
+
+    add_executable(pvr_spatial_audio_test
+        tests/spatial_audio/spatial_audio_test.cpp
+    )
+    target_link_libraries(pvr_spatial_audio_test PRIVATE pvr_spatial_audio)
+    pvr_enable_warnings(pvr_spatial_audio_test)
+
+    add_test(NAME spatial_audio COMMAND pvr_spatial_audio_test)
+
     add_executable(pvr_camera_matrix_override_test
         tests/camera_matrix_override/camera_matrix_override_test.cpp
-        src/backends/black_plague/camera_matrix_override.cpp
     )
     target_include_directories(
         pvr_camera_matrix_override_test PRIVATE src/backends/black_plague)
-    target_link_libraries(pvr_camera_matrix_override_test PRIVATE pvr_vr_math)
+    target_link_libraries(
+        pvr_camera_matrix_override_test PRIVATE pvr_hpl1_camera_adapter)
     pvr_enable_warnings(pvr_camera_matrix_override_test)
 
     add_test(NAME camera_matrix_override COMMAND pvr_camera_matrix_override_test)

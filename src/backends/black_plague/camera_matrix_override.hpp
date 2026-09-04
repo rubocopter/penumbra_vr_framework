@@ -1,50 +1,18 @@
 #pragma once
 
-#include "vr_math.hpp"
-
-#include <array>
-#include <cstdint>
-#include <string>
+#include "../../adapters/hpl1/camera_matrix_override.hpp"
 
 namespace penumbra_vr::backends::black_plague {
 
-struct CameraMatrixSnapshot {
-    runtime::VrMatrix44 view;
-    runtime::VrMatrix44 projection;
-    std::array<std::uint8_t, 3> flags{};
+inline constexpr adapters::hpl1::CameraLayout kCameraLayout{
+    .view_matrix_offset = 0x44,
+    .projection_matrix_offset = 0x84,
+    .flags_offset = 0x8D0,
+    .view_updated_flag_index = 1,
+    .projection_updated_flag_index = 2,
 };
 
-[[nodiscard]] bool CaptureCameraMatrices(
-    const void* camera,
-    CameraMatrixSnapshot& snapshot,
-    std::string& error) noexcept;
-
-// Exact-build adapter for the camera layout observed in the whitelisted
-// Black Plague executable. An active override always restores its snapshot.
-class CameraMatrixOverride final {
-public:
-    CameraMatrixOverride() noexcept = default;
-    ~CameraMatrixOverride() noexcept;
-    CameraMatrixOverride(const CameraMatrixOverride&) = delete;
-    CameraMatrixOverride& operator=(const CameraMatrixOverride&) = delete;
-
-    [[nodiscard]] bool Apply(
-        void* camera,
-        const runtime::VrMatrix44& view,
-        const runtime::VrMatrix44& projection,
-        std::string& error) noexcept;
-    [[nodiscard]] bool Restore(std::string& error) noexcept;
-
-    [[nodiscard]] bool active() const noexcept;
-    [[nodiscard]] const CameraMatrixSnapshot& snapshot() const noexcept;
-
-private:
-    void* camera_ = nullptr;
-    CameraMatrixSnapshot snapshot_{};
-};
-
-[[nodiscard]] bool CameraMatchesSnapshot(
-    const void* camera,
-    const CameraMatrixSnapshot& snapshot) noexcept;
+using CameraMatrixSnapshot = adapters::hpl1::CameraMatrixSnapshot;
+using CameraMatrixOverride = adapters::hpl1::CameraMatrixOverride;
 
 } // namespace penumbra_vr::backends::black_plague

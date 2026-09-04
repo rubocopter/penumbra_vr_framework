@@ -22,6 +22,8 @@ Penumbra VR is GPLv3 or later and records each adapted component in
 | flashlight and glowstick grip presentation | shared HPL behavior/config | medium/high | verify each game's resource geometry, light entity and inventory state |
 | room-anchored menus, subtitles and cinematics | shared HPL behavior | medium | map each game's draw order and menu state |
 | HRTF, occlusion and environmental reverb | shared audio runtime | medium/high | validate the proxy/hook boundary and world ray queries |
+| Enhanced visuals v4 calibration, final curve and halo math | shared visual runtime and shader package | high | binary games need mapped material/render-stage hooks; GPU path remains opt-in |
+| Large Address Aware requirement | unified installer | direct policy reuse | patch only known x86 PE32 hashes with backup and rollback |
 | backup, hash verification, repair and rollback | unified installer | high | manifests and deployed payload differ by game/build |
 | Overture melee/weapon state machines | Overture backend only | none for current BP/Requiem scope | do not burden the shared API with unused combat concepts |
 | executable addresses, layouts and direct C++ calls | exact-build backend manifests | none | research and validate Black Plague and Requiem independently |
@@ -60,3 +62,21 @@ because their names match.
 
 This order proves each boundary in isolation and keeps a failure in a game
 adapter from being mistaken for a shared-runtime defect.
+
+## Extracted so far
+
+- `src/runtime/render_target_policy.*` preserves the Rework scale range,
+  default scale and allocation fallback without depending on HPL types.
+- `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4
+  tone, ambient, dark-diffuse, sharpening and glowstick-halo behavior. The GPU
+  shader and renderer-stage adapter are still pending.
+- `src/audio/spatial_audio.*` owns the HRTF config text, distance/occlusion
+  low-pass calculation and mine-gallery EFX preset. It does not yet claim a
+  safe binary audio hook.
+- `src/deployment/pe_large_address.*` performs the one-bit PE32 transformation
+  in memory. Transactional file replacement remains installer work.
+- `src/adapters/hpl1/camera_matrix_override.*` now owns the byte-exact camera
+  transaction; exact-build backends provide the layout.
+- `assets/openvr` contains the shared action schema and bindings for PSVR2 Sense,
+  Vive, Index, Oculus, Pico and Windows motion controllers. These files are
+  imported data only until runtime polling and installer registration exist.
