@@ -164,41 +164,45 @@ bool InjectAndInitialize(
     DWORD process_id,
     const std::filesystem::path& probe_path,
     std::wstring& error) {
-    if (FindRemoteModuleBase(process_id, L"PenumbraVR.BlackPlague.Probe.dll") != 0) {
-        error = L"The Black Plague probe is already loaded in this process";
-        return false;
-    }
-
-    const std::wstring probe = probe_path.wstring();
-    const SIZE_T byte_count = (probe.size() + 1) * sizeof(wchar_t);
-    void* remote_path = VirtualAllocEx(process, nullptr, byte_count, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
-    if (remote_path == nullptr) {
-        error = LastErrorText(L"VirtualAllocEx");
-        return false;
-    }
-
-    auto release_remote_path = [&]() { VirtualFreeEx(process, remote_path, 0, MEM_RELEASE); };
-    if (!WriteProcessMemory(process, remote_path, probe.c_str(), byte_count, nullptr)) {
-        error = LastErrorText(L"WriteProcessMemory");
-        release_remote_path();
-        return false;
-    }
-
-    LPTHREAD_START_ROUTINE remote_load_library = nullptr;
-    if (!ResolveRemoteKernelProcedure(process_id, "LoadLibraryW", remote_load_library, error)) {
-        release_remote_path();
-        return false;
-    }
-
-    DWORD remote_probe_base = 0;
-    const bool loaded = CallRemote(
-        process, remote_load_library, remote_path, remote_probe_base, error);
-    release_remote_path();
-    if (!loaded || remote_probe_base == 0) {
-        if (loaded) {
-            error = L"The remote LoadLibraryW call returned NULL";
+    std::uintptr_t remote_probe_base = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe_base == 0) {
+        const std::wstring probe = probe_path.wstring();
+        const SIZE_T byte_count = (probe.size() + 1) * sizeof(wchar_t);
+        void* remote_path = VirtualAllocEx(
+            process, nullptr, byte_count, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+        if (remote_path == nullptr) {
+            error = LastErrorText(L"VirtualAllocEx");
+            return false;
         }
-        return false;
+
+        auto release_remote_path = [&]() {
+            VirtualFreeEx(process, remote_path, 0, MEM_RELEASE);
+        };
+        if (!WriteProcessMemory(process, remote_path, probe.c_str(), byte_count, nullptr)) {
+            error = LastErrorText(L"WriteProcessMemory");
+            release_remote_path();
+            return false;
+        }
+
+        LPTHREAD_START_ROUTINE remote_load_library = nullptr;
+        if (!ResolveRemoteKernelProcedure(
+                process_id, "LoadLibraryW", remote_load_library, error)) {
+            release_remote_path();
+            return false;
+        }
+
+        DWORD loaded_base = 0;
+        const bool loaded = CallRemote(
+            process, remote_load_library, remote_path, loaded_base, error);
+        release_remote_path();
+        if (!loaded || loaded_base == 0) {
+            if (loaded) {
+                error = L"The remote LoadLibraryW call returned NULL";
+            }
+            return false;
+        }
+        remote_probe_base = loaded_base;
     }
 
     LPTHREAD_START_ROUTINE remote_initialize = nullptr;
@@ -218,7 +222,7 @@ bool InjectAndInitialize(
     return true;
 }
 
-bool ShutdownAndEject(
+bool ShutdownAndDeactivate(
     HANDLE process,
     DWORD process_id,
     const std::filesystem::path& probe_path,
@@ -245,24 +249,6 @@ bool ShutdownAndEject(
         return false;
     }
 
-    LPTHREAD_START_ROUTINE remote_free_library = nullptr;
-    if (!ResolveRemoteKernelProcedure(process_id, "FreeLibrary", remote_free_library, error)) {
-        return false;
-    }
-
-    DWORD free_result = 0;
-    if (!CallRemote(
-            process,
-            remote_free_library,
-            reinterpret_cast<void*>(remote_probe),
-            free_result,
-            error)) {
-        return false;
-    }
-    if (free_result == 0) {
-        error = L"The remote FreeLibrary call failed";
-        return false;
-    }
     return true;
 }
 
@@ -327,6 +313,39 @@ bool CreateRemotePersistentEyeTargets(
     }
     if (creation_result != 1) {
         error = L"Persistent eye-target creation failed; inspect the probe log";
+        return false;
+    }
+    return true;
+}
+
+bool CreateRemoteOpenVrEyeTargets(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::wstring& error) {
+    const std::uintptr_t remote_probe = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe == 0) {
+        error = L"Attach the Black Plague probe before initializing OpenVR";
+        return false;
+    }
+
+    LPTHREAD_START_ROUTINE remote_create = nullptr;
+    if (!ResolveRemoteExport(
+            probe_path,
+            remote_probe,
+            "PenumbraVR_CreateOpenVrEyeTargets",
+            remote_create,
+            error)) {
+        return false;
+    }
+
+    DWORD creation_result = 0;
+    if (!CallRemote(process, remote_create, nullptr, creation_result, error)) {
+        return false;
+    }
+    if (creation_result != 1) {
+        error = L"OpenVR initialization or eye-target creation failed; inspect the probe log";
         return false;
     }
     return true;
@@ -403,10 +422,13 @@ int wmain(int argc, wchar_t** argv) {
         argc == 3 && _wcsicmp(argv[1], L"--validate-eye-targets") == 0;
     const bool hold_eye_targets =
         argc == 3 && _wcsicmp(argv[1], L"--hold-eye-targets") == 0;
+    const bool hold_openvr_eye_targets =
+        argc == 3 && _wcsicmp(argv[1], L"--hold-openvr-eye-targets") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
-         !capture_image && argc != 2) ||
-        ((attach || detach || inspect || validate_eye_targets || hold_eye_targets) &&
+         !hold_openvr_eye_targets && !capture_image && argc != 2) ||
+        ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
+          hold_openvr_eye_targets) &&
          argc != 3) ||
         (capture_image && argc != 4)) {
         std::wcerr << L"Usage:\n"
@@ -415,6 +437,7 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --detach <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
         return 2;
@@ -428,7 +451,7 @@ int wmain(int argc, wchar_t** argv) {
     }
 
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
-        capture_image) {
+        hold_openvr_eye_targets || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
         if (parsed_pid == 0 || parse_end == argv[2] || *parse_end != L'\0') {
@@ -542,14 +565,27 @@ int wmain(int argc, wchar_t** argv) {
                        << parsed_pid << L"); detach the probe to destroy them.\n";
             return 0;
         }
+        if (hold_openvr_eye_targets) {
+            if (!CreateRemoteOpenVrEyeTargets(
+                    process.get(), parsed_pid, probe_path, error)) {
+                std::wcerr << L"OpenVR eye-target creation failed: "
+                           << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Holding OpenVR-sized eye targets in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L"); detach the probe to destroy them and shut down OpenVR.\n";
+            return 0;
+        }
         if (detach) {
-            if (!ShutdownAndEject(process.get(), parsed_pid, probe_path, error)) {
+            if (!ShutdownAndDeactivate(process.get(), parsed_pid, probe_path, error)) {
                 std::wcerr << L"Probe removal failed: " << error << L'\n';
                 return 8;
             }
-            std::wcout << L"Removed the frame probe from "
+            std::wcout << L"Deactivated the frame probe in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
-                       << parsed_pid << L").\n";
+                       << parsed_pid
+                       << L"); its DLL remains resident until the game exits.\n";
             return 0;
         }
 

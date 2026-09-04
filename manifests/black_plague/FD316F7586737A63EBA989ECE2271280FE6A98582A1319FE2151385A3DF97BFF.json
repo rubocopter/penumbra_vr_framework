@@ -81,7 +81,8 @@
         "0x004EE015"
       ],
       "teardownRestoredInstruction": true,
-      "gameRemainedResponsive": true
+      "gameRemainedResponsiveImmediatelyAfterDetach": true,
+      "safeDllUnloadEstablished": false
     },
     "openGlFramebufferCapability": {
       "status": "confirmed-runtime",
@@ -127,11 +128,11 @@
         "viewport"
       ],
       "objectsDestroyedOnRenderThread": true,
-      "gameRemainedResponsive": true,
+      "gameRemainedResponsiveImmediatelyAfterDetach": true,
       "teardownRestoredHooks": true
     },
     "persistentEyeTargetValidation": {
-      "status": "confirmed-runtime",
+      "status": "confirmed-runtime-resident-teardown",
       "probeCycleFrames": 390,
       "persistentRenderWorldCalls": 363,
       "dimensions": [
@@ -144,8 +145,37 @@
       "incomingStateRestoredOnDestroy": true,
       "usedForWorldRendering": false,
       "submittedToOpenVr": false,
+      "gameRemainedResponsiveImmediatelyAfterDetach": true,
+      "delayedUnloadCrashObserved": true,
+      "delayedCrashException": "0xC0000005 execute violation",
+      "delayedCrashModule": "PenumbraVR.BlackPlague.Probe.dll_unloaded",
+      "delayedCrashModuleOffset": "0x0001E0F0",
+      "teardownRestoredHooks": true,
+      "residentPolicyRetest": {
+        "gameplayCycles": 2,
+        "persistentRenderWorldCalls": [
+          420,
+          422
+        ],
+        "targetsDestroyedOnRenderThread": true,
+        "incomingStateRestoredOnDestroy": true,
+        "postDeactivateObservationSecondsPerCycle": 12,
+        "newWindowsErrorReportingEvents": 0,
+        "gameRemainedResponsive": true,
+        "residentModuleReinitialized": true
+      }
+    },
+    "probeDeactivation": {
+      "status": "confirmed-menu-retest",
+      "policy": "restore-hooks-keep-dll-resident-until-process-exit",
+      "cycleFrames": [
+        122,
+        122
+      ],
+      "postDeactivateObservationSeconds": 12,
+      "newWindowsErrorReportingEvents": 0,
       "gameRemainedResponsive": true,
-      "teardownRestoredHooks": true
+      "residentModuleReinitialized": true
     }
   },
   "symbols": {

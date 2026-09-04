@@ -55,7 +55,9 @@ Installation fails closed unless all five call bytes match. Other process thread
 
 The current research build also observes the imported `glMatrixMode`, `glLoadMatrixf` and `glOrtho` calls. These hooks collect per-frame counters, the most recent projection matrix, a short projection call stack, and a bounded frequency table of model-view matrices. The table identifies the most frequently loaded model-view matrix without assuming a game address. All OpenGL arguments are forwarded unchanged.
 
-`PenumbraVR_Shutdown` restores the SDL import first, restores the `RenderWorld` call, waits for any already-active adapter invocation to finish, and then restores the OpenGL imports before closing the log. The launcher waits for shutdown to finish and only then invokes `FreeLibrary` in the target process. If any expected pointer or instruction differs, or an active call does not quiesce, the DLL is not unloaded.
+`PenumbraVR_Shutdown` first destroys persistent GL resources through a render-thread request, then restores the SDL import, the `RenderWorld` call and the OpenGL imports. SDL, OpenGL and world adapters retain atomically published original targets and wait for active calls to quiesce.
+
+The launcher deliberately does not invoke `FreeLibrary` after deactivation. A live test exposed a late callback into the unloaded research DLL despite successful pointer restoration. Keeping this small DLL resident until process exit makes late already-dispatched calls safe and matches the eventual mod's normal process-lifetime model. A subsequent `--attach` reinitializes the resident module; rebuilding the DLL requires restarting the game.
 
 ## Verification performed
 
@@ -64,7 +66,7 @@ On 2026-09-03, a Release build was attached and detached three times in the same
 - revalidated the executable hash inside the game
 - observed at least one real swap
 - restored the original import
-- unloaded the probe
+- appeared to unload the probe without an immediate fault
 - left the game process alive for the next cycle
 
 The cycles observed 1, 31 and 73 swaps respectively. Separate Debug and Release tests use small fake SDL/OpenGL libraries to verify IAT interception, forwarding, telemetry reset and restoration. A third test verifies direct `rel32` call interception, exact-byte rejection, forwarding and byte-for-byte restoration.
@@ -102,7 +104,7 @@ This confirms a reliable API-level view-matrix signal. It does not yet establish
 
 On 2026-09-04, the `RenderWorld` call-site probe completed three more attach/detach cycles in one live gameplay process, observing 1,676, 336 and 324 frames. Every sampled steady-state frame contained exactly one forwarded `RenderWorld` call. Renderer, world and camera pointers remained stable across the cycles, and frame time tracked the observed 60 Hz cadence at roughly 0.016–0.018 seconds.
 
-The projection call-stack capture independently returned `0x00560212` followed by `0x004EE015`: the return from the mapped `SetMatrix` implementation and the instruction immediately after the mapped `cScene::Render` call site. Each detach restored the original five bytes, unloaded the probe and left the game responding. Result: the call site is a verified live hook boundary for this exact executable hash.
+The projection call-stack capture independently returned `0x00560212` followed by `0x004EE015`: the return from the mapped `SetMatrix` implementation and the instruction immediately after the mapped `cScene::Render` call site. Each detach restored the original five bytes and left the game responding immediately afterwards. Result: the call site is a verified live hook boundary for this exact executable hash; this evidence did not prove that unloading the containing DLL was safe.
 
 A 362-frame gameplay capture queried the OpenGL state at entry to that boundary without changing it. After tightening the capability gate to require all ten FBO operations, including depth/stencil attachment, a separate 304-frame capture reproduced the result. A current OpenGL context was present on every sampled call. The NVIDIA driver exposed OpenGL `4.6.0 NVIDIA 616.56` and the complete required core framebuffer-object API. The observed state and implementation limits were:
 
@@ -116,11 +118,13 @@ maximum viewport:          [32768, 32768]
 
 These limits describe the test machine, not minimum requirements for Penumbra VR. The relevant conclusion is that `RenderWorld` runs with a current context, enters through the default framebuffer on this build, and provides the framebuffer API needed for reversible off-screen eye targets. The probe did not create or bind an FBO during these captures.
 
-The separate `--validate-eye-targets` command then requested work from the injected DLL while leaving all OpenGL calls on the game's render thread. In one 172-frame attach/detach cycle, it created two complete RGBA8 plus depth24/stencil8 targets at `512x512`, bound and restored the left target, transactionally replaced both targets at `640x480`, bound and restored the right target, and destroyed every object. Framebuffer, renderbuffer, 2D texture and viewport state matched their incoming values afterwards. The game remained responsive and the probe unloaded normally.
+The separate `--validate-eye-targets` command then requested work from the injected DLL while leaving all OpenGL calls on the game's render thread. In one 172-frame attach/deactivate cycle, it created two complete RGBA8 plus depth24/stencil8 targets at `512x512`, bound and restored the left target, transactionally replaced both targets at `640x480`, bound and restored the right target, and destroyed every object. Framebuffer, renderbuffer, 2D texture and viewport state matched their incoming values afterwards. This validated the GL operations, but predated the corrected resident-DLL policy.
 
 This deliberately transient test proves the GL object lifecycle in the real context. It does not retain targets between frames, duplicate `RenderWorld`, or submit an image to a headset.
 
-A second explicit command, `--hold-eye-targets`, exercises the lifecycle needed by a real backend. It created a persistent `512x512` pair on the render thread, left it allocated for 363 `RenderWorld` calls, and reported it still active at frame 300. `PenumbraVR_Shutdown` then posted a destroy request while the world hook remained installed, waited for render-thread confirmation, and only afterwards removed the SDL, `RenderWorld`, and OpenGL hooks. The destroy operation restored the incoming GL state; the full probe cycle observed 390 frames, unloaded normally and left the game responsive.
+A second explicit command, `--hold-eye-targets`, created a persistent `512x512` pair on the render thread, left it allocated for 363 `RenderWorld` calls, and reported it still active at frame 300. `PenumbraVR_Shutdown` posted a destroy request while the world hook remained installed and restored the GL state before removing hooks. The game initially remained responsive, but Windows Error Reporting recorded a `0xC0000005` execution fault in `PenumbraVR.BlackPlague.Probe.dll_unloaded` roughly three seconds later. This disproved safe live unloading even though GL destruction itself completed.
+
+The corrected policy first completed two 122-frame menu attach/deactivate cycles against one resident DLL. It then completed two gameplay cycles that kept persistent targets alive for 420 and 422 `RenderWorld` calls respectively. Both cycles destroyed the targets on the render thread, restored incoming GL state, deactivated all hooks, reused the resident module and survived a 12-second post-deactivation observation window with no new Penumbra WER event. This closes the diagnostic persistent-target lifecycle for the tested policy; the targets are still not used for world rendering or compositor submission.
 
 The fixed size is deliberately diagnostic. Production dimensions must come from the active OpenVR runtime, and these textures are still not used to render or submit an eye.
 
@@ -132,7 +136,7 @@ The test game process did not exit in response to a normal window-close request 
 # Attach to a Steam-launched process
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --attach <pid>
 
-# Restore the import and unload the probe
+# Restore hooks and deactivate; the DLL remains resident until game exit
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <pid>
 
 # With the probe attached, exercise transient eye targets on the render thread
@@ -140,7 +144,12 @@ The test game process did not exit in response to a normal window-close request 
 
 # Keep a diagnostic pair alive until --detach performs render-thread teardown
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <pid>
+
+# Experimental: initialize OpenVR and use its recommended per-eye dimensions
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <pid>
 ```
+
+The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. It has not yet completed a live headset validation and is not part of the confirmed runtime evidence above.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 

@@ -100,7 +100,8 @@ bool InstallIatHook(
     const char* imported_function,
     void* replacement,
     IatHook& hook,
-    std::string& error) noexcept {
+    std::string& error,
+    PublishIatOriginal publish_original) noexcept {
     error.clear();
     if (hook.installed()) {
         error = std::string(imported_function) + " is already hooked";
@@ -119,6 +120,9 @@ bool InstallIatHook(
     hook.slot = slot;
     hook.original = *slot;
     hook.replacement = replacement;
+    if (publish_original != nullptr) {
+        publish_original(hook.original);
+    }
     if (!ReplacePointer(slot, hook.original, hook.replacement, error)) {
         hook = {};
         return false;

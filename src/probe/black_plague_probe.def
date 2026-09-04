@@ -3,3 +3,4 @@ EXPORTS
     PenumbraVR_Shutdown=_PenumbraVR_Shutdown@4
     PenumbraVR_ValidateEyeTargets=_PenumbraVR_ValidateEyeTargets@4
     PenumbraVR_CreatePersistentEyeTargets=_PenumbraVR_CreatePersistentEyeTargets@4
+    PenumbraVR_CreateOpenVrEyeTargets=_PenumbraVR_CreateOpenVrEyeTargets@4

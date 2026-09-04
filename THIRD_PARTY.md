@@ -9,7 +9,7 @@ Likely upstream inputs include:
 | Penumbra Overture game code | Frictional Games | GPLv3 | Not imported |
 | HPL1 Engine | Frictional Games | GPLv3, with separately documented asset/shader terms | Not imported |
 | Penumbra VR Rework modifications | rubocopter/penumbra_vr_rework and its contributors | Requires provenance review; built on GPLv3 sources | Not imported |
-| OpenVR SDK | Valve Software | BSD-style 3-clause license | Not imported |
+| OpenVR SDK 2.15.6 | Valve Software | BSD-style 3-clause license | Optional external build dependency; not stored in this repository |
 | Other libraries | To be selected | To be reviewed | Not imported |
 
 Before importing or deriving code, the change must record:

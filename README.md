@@ -14,7 +14,7 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod, an installer, or a VR runtime. It does contain the first verified Black Plague research probe: it validates one exact executable build, loads without modifying the installation, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional OpenGL eye-target allocation is tested both on a standalone WGL context and through a transient create/resize/destroy cycle inside the game. No eye target is used for world rendering yet. The probe restores every hook and unloads cleanly; it does not render VR yet.
+This repository does not currently contain a playable mod or installer. It contains a narrow OpenVR session component and the first verified Black Plague research probe: the probe validates one exact executable build, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional eye-target allocation is tested on a standalone WGL context and inside the game. No eye target is used for world rendering yet. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits; it does not render VR yet.
 
 The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project; it has not yet been copied into this repository.
 
@@ -57,16 +57,24 @@ cmake --build --preset release
 ctest --preset release
 ```
 
+OpenVR support is optional at configure time. Point `PENUMBRA_VR_OPENVR_SDK` at an unpacked SDK containing `headers/openvr.h` and `bin/win32/openvr_api.dll`; the SDK remains external to this repository:
+
+```powershell
+cmake --preset vs2022-win32 `
+  -DPENUMBRA_VR_OPENVR_SDK=C:\path\to\openvr-2.15.6
+```
+
 Black Plague must currently be launched through Steam. Once it is running, attach or remove the probe with:
 
 ```powershell
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --attach <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 
-Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
+The OpenVR-sized target command is experimental and is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
 
 The repository also provides a read-only executable fingerprinting tool:
 

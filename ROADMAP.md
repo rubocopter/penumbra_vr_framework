@@ -22,7 +22,7 @@ Exit criterion: a clean repository in which every implemented feature is testabl
 - [x] Complete three attach/frame/detach cycles in one live process
 - [ ] Run repeated launch/play/exit cycles without crashes
 
-Exit criterion: one whitelisted Black Plague research hash loads the probe, emits frame telemetry and unloads cleanly. The mechanism has met this criterion; longer user-driven sessions remain deliberately unchecked.
+Exit criterion: one whitelisted Black Plague research hash loads the probe, emits frame telemetry and deactivates cleanly. Hook restoration now meets this criterion with the DLL intentionally resident until process exit; longer user-driven sessions remain deliberately unchecked.
 
 ## Phase 2 — Black Plague visual MVP
 
@@ -37,7 +37,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Confirm a current OpenGL context, FBO API and target-size limits at the hook boundary
 - [x] Implement and host-test transactional per-eye render-target allocation
 - [x] Validate transient allocation, binding, resize, restoration and destruction in game
-- [x] Validate persistent per-eye targets and render-thread teardown in game
+- [x] Revalidate persistent per-eye targets with resident-DLL teardown policy
 - [ ] Size eye targets from the active OpenVR runtime rather than diagnostic constants
 - [ ] Apply tracked head view transforms
 - [ ] Submit both eyes to OpenVR

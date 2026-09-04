@@ -1,6 +1,7 @@
 #include "log.hpp"
 #include "penumbra_vr/build_catalog.hpp"
 #include "opengl_matrix_telemetry.hpp"
+#include "openvr_session.hpp"
 #include "render_world_probe.hpp"
 #include "sdl_frame_hook.hpp"
 
@@ -12,6 +13,25 @@
 namespace {
 
 volatile LONG g_state = 0;
+HINSTANCE g_instance = nullptr;
+penumbra_vr::runtime::OpenVrSession g_openvr_session;
+
+std::wstring OpenVrLoaderPath() {
+    std::wstring path(32768, L'\0');
+    const DWORD length = GetModuleFileNameW(
+        g_instance, path.data(), static_cast<DWORD>(path.size()));
+    if (length == 0 || length >= path.size()) {
+        return {};
+    }
+    path.resize(length);
+    const std::size_t separator = path.find_last_of(L"\\/");
+    if (separator == std::wstring::npos) {
+        return {};
+    }
+    path.resize(separator + 1);
+    path += L"openvr_api.dll";
+    return path;
+}
 
 const char* FramebufferApiName(
     penumbra_vr::backends::black_plague::FramebufferApi api) noexcept {
@@ -246,6 +266,12 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
             "Persistent eye targets destroyed on the render thread after %llu frames",
             persistent_frames);
     }
+    if (!g_openvr_session.Shutdown(error)) {
+        penumbra_vr::probe::WriteLog(
+            "OpenVR shutdown failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
     if (!penumbra_vr::hooks::RemoveSdlSwapHook(error)) {
         penumbra_vr::probe::WriteLog("SDL frame hook removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
@@ -302,8 +328,53 @@ extern "C" DWORD WINAPI PenumbraVR_CreatePersistentEyeTargets(void*) {
     return 1;
 }
 
+extern "C" DWORD WINAPI PenumbraVR_CreateOpenVrEyeTargets(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+
+    const std::wstring loader_path = OpenVrLoaderPath();
+    if (loader_path.empty()) {
+        penumbra_vr::probe::WriteLog("Could not resolve the probe directory");
+        return 0;
+    }
+
+    std::string error;
+    if (!g_openvr_session.Initialize(loader_path, error)) {
+        penumbra_vr::probe::WriteLog(
+            "OpenVR initialization failed: %s", error.c_str());
+        return 0;
+    }
+
+    const penumbra_vr::runtime::VrRenderTargetSize size =
+        g_openvr_session.recommended_render_target_size();
+    penumbra_vr::probe::WriteLog(
+        "OpenVR initialized; recommended eye size is %lux%lu",
+        static_cast<unsigned long>(size.width),
+        static_cast<unsigned long>(size.height));
+    if (!penumbra_vr::backends::black_plague::RequestPersistentEyeTargets(
+            size.width, size.height, error)) {
+        penumbra_vr::probe::WriteLog(
+            "OpenVR-sized eye-target creation failed: %s", error.c_str());
+        std::string shutdown_error;
+        if (!g_openvr_session.Shutdown(shutdown_error)) {
+            penumbra_vr::probe::WriteLog(
+                "OpenVR cleanup after eye-target failure also failed: %s",
+                shutdown_error.c_str());
+        }
+        return 0;
+    }
+
+    penumbra_vr::probe::WriteLog(
+        "Persistent OpenVR-sized eye targets created at %lux%lu",
+        static_cast<unsigned long>(size.width),
+        static_cast<unsigned long>(size.height));
+    return 1;
+}
+
 BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, void*) {
     if (reason == DLL_PROCESS_ATTACH) {
+        g_instance = instance;
         DisableThreadLibraryCalls(instance);
     }
     return TRUE;

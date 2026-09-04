@@ -12,6 +12,9 @@ endif()
 
 include(CTest)
 
+set(PENUMBRA_VR_OPENVR_SDK "" CACHE PATH
+    "Optional OpenVR SDK root containing headers/openvr.h and bin/win32/openvr_api.dll")
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -57,6 +60,31 @@ target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
 target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32)
 pvr_enable_warnings(pvr_opengl_eye_targets)
 
+set(PVR_OPENVR_LOADER "")
+if(PENUMBRA_VR_OPENVR_SDK)
+    set(PVR_OPENVR_HEADER "${PENUMBRA_VR_OPENVR_SDK}/headers/openvr.h")
+    set(PVR_OPENVR_LOADER "${PENUMBRA_VR_OPENVR_SDK}/bin/win32/openvr_api.dll")
+    if(NOT EXISTS "${PVR_OPENVR_HEADER}" OR NOT EXISTS "${PVR_OPENVR_LOADER}")
+        message(FATAL_ERROR
+            "PENUMBRA_VR_OPENVR_SDK must contain headers/openvr.h and bin/win32/openvr_api.dll")
+    endif()
+    add_library(pvr_openvr_session STATIC
+        src/runtime/openvr_session.cpp
+    )
+    target_include_directories(
+        pvr_openvr_session
+        PUBLIC src/runtime
+        PRIVATE "${PENUMBRA_VR_OPENVR_SDK}/headers")
+    target_compile_definitions(pvr_openvr_session PUBLIC PVR_HAS_OPENVR=1)
+else()
+    add_library(pvr_openvr_session STATIC
+        src/runtime/openvr_session_stub.cpp
+    )
+    target_include_directories(pvr_openvr_session PUBLIC src/runtime)
+    target_compile_definitions(pvr_openvr_session PUBLIC PVR_HAS_OPENVR=0)
+endif()
+pvr_enable_warnings(pvr_openvr_session)
+
 add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
@@ -93,11 +121,19 @@ target_link_libraries(
         pvr_build_catalog
         pvr_sdl_frame_hook
         pvr_opengl_telemetry
+        pvr_openvr_session
         pvr_black_plague_backend_probe)
 set_target_properties(pvr_black_plague_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.BlackPlague.Probe"
 )
 pvr_enable_warnings(pvr_black_plague_probe)
+if(PVR_OPENVR_LOADER)
+    add_custom_command(TARGET pvr_black_plague_probe POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PVR_OPENVR_LOADER}"
+            "$<TARGET_FILE_DIR:pvr_black_plague_probe>/openvr_api.dll"
+        VERBATIM)
+endif()
 
 add_executable(pvr_probe_launcher
     src/launcher/main.cpp
@@ -160,4 +196,12 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_opengl_eye_targets_test)
 
     add_test(NAME opengl_eye_targets COMMAND pvr_opengl_eye_targets_test)
+
+    add_executable(pvr_openvr_session_test
+        tests/openvr_session/openvr_session_test.cpp
+    )
+    target_link_libraries(pvr_openvr_session_test PRIVATE pvr_openvr_session)
+    pvr_enable_warnings(pvr_openvr_session_test)
+
+    add_test(NAME openvr_session COMMAND pvr_openvr_session_test)
 endif()

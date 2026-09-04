@@ -199,7 +199,6 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     ReleaseSRWLockExclusive(&g_telemetry_lock);
-    g_active_calls.store(0, std::memory_order_release);
     g_capabilities_initialized.store(false, std::memory_order_release);
     g_framebuffer_api = FramebufferApi::unavailable;
     g_open_gl_version = {};
@@ -230,7 +229,6 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
     constexpr DWORD kQuiescenceTimeoutMilliseconds = 2000;
     for (DWORD elapsed = 0; elapsed < kQuiescenceTimeoutMilliseconds; ++elapsed) {
         if (g_active_calls.load(std::memory_order_acquire) == 0) {
-            g_original_target.store(nullptr, std::memory_order_release);
             return true;
         }
         Sleep(1);

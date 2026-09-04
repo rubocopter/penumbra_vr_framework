@@ -29,12 +29,40 @@ using GlOrtho = void(APIENTRY*)(double, double, double, double, double, double);
 IatHook g_matrix_mode_hook;
 IatHook g_load_matrix_hook;
 IatHook g_ortho_hook;
+std::atomic<void*> g_original_matrix_mode{nullptr};
+std::atomic<void*> g_original_load_matrix{nullptr};
+std::atomic<void*> g_original_ortho{nullptr};
+std::atomic<std::uint32_t> g_active_calls{0};
 std::atomic<unsigned int> g_current_matrix_mode{kGlModelView};
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 OpenGlFrameTelemetry g_telemetry;
 std::array<ModelViewObservation, kMaxTrackedModelViewMatrices> g_model_view_observations;
 std::size_t g_model_view_observation_count = 0;
 std::uint32_t g_dropped_model_view_matrices = 0;
+
+class ActiveCall final {
+public:
+    ActiveCall() noexcept {
+        g_active_calls.fetch_add(1, std::memory_order_acq_rel);
+    }
+    ActiveCall(const ActiveCall&) = delete;
+    ActiveCall& operator=(const ActiveCall&) = delete;
+    ~ActiveCall() {
+        g_active_calls.fetch_sub(1, std::memory_order_acq_rel);
+    }
+};
+
+void PublishOriginalMatrixMode(void* original) noexcept {
+    g_original_matrix_mode.store(original, std::memory_order_release);
+}
+
+void PublishOriginalLoadMatrix(void* original) noexcept {
+    g_original_load_matrix.store(original, std::memory_order_release);
+}
+
+void PublishOriginalOrtho(void* original) noexcept {
+    g_original_ortho.store(original, std::memory_order_release);
+}
 
 void RecordModelViewMatrix(const float* matrix) noexcept {
     if (matrix == nullptr) {
@@ -62,14 +90,20 @@ void RecordModelViewMatrix(const float* matrix) noexcept {
 }
 
 void APIENTRY HookedGlMatrixMode(unsigned int mode) noexcept {
+    ActiveCall active_call;
     AcquireSRWLockExclusive(&g_telemetry_lock);
     ++g_telemetry.matrix_mode_calls;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     g_current_matrix_mode.store(mode, std::memory_order_relaxed);
-    reinterpret_cast<GlMatrixMode>(g_matrix_mode_hook.original)(mode);
+    const auto original = reinterpret_cast<GlMatrixMode>(
+        g_original_matrix_mode.load(std::memory_order_acquire));
+    if (original != nullptr) {
+        original(mode);
+    }
 }
 
 void APIENTRY HookedGlLoadMatrixf(const float* matrix) noexcept {
+    ActiveCall active_call;
     const unsigned int mode = g_current_matrix_mode.load(std::memory_order_relaxed);
     AcquireSRWLockExclusive(&g_telemetry_lock);
     if (mode == kGlProjection) {
@@ -101,7 +135,11 @@ void APIENTRY HookedGlLoadMatrixf(const float* matrix) noexcept {
         ++g_telemetry.texture_loads;
     }
     ReleaseSRWLockExclusive(&g_telemetry_lock);
-    reinterpret_cast<GlLoadMatrixf>(g_load_matrix_hook.original)(matrix);
+    const auto original = reinterpret_cast<GlLoadMatrixf>(
+        g_original_load_matrix.load(std::memory_order_acquire));
+    if (original != nullptr) {
+        original(matrix);
+    }
 }
 
 void APIENTRY HookedGlOrtho(
@@ -111,11 +149,15 @@ void APIENTRY HookedGlOrtho(
     double top,
     double near_value,
     double far_value) noexcept {
+    ActiveCall active_call;
     AcquireSRWLockExclusive(&g_telemetry_lock);
     ++g_telemetry.ortho_calls;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
-    reinterpret_cast<GlOrtho>(g_ortho_hook.original)(
-        left, right, bottom, top, near_value, far_value);
+    const auto original = reinterpret_cast<GlOrtho>(
+        g_original_ortho.load(std::memory_order_acquire));
+    if (original != nullptr) {
+        original(left, right, bottom, top, near_value, far_value);
+    }
 }
 
 } // namespace
@@ -134,7 +176,8 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
             "glMatrixMode",
             reinterpret_cast<void*>(&HookedGlMatrixMode),
             g_matrix_mode_hook,
-            error)) {
+            error,
+            &PublishOriginalMatrixMode)) {
         return false;
     }
     if (!InstallIatHook(
@@ -142,7 +185,8 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
             "glLoadMatrixf",
             reinterpret_cast<void*>(&HookedGlLoadMatrixf),
             g_load_matrix_hook,
-            error)) {
+            error,
+            &PublishOriginalLoadMatrix)) {
         std::string ignored;
         static_cast<void>(RemoveIatHook(g_matrix_mode_hook, ignored));
         return false;
@@ -152,7 +196,8 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
             "glOrtho",
             reinterpret_cast<void*>(&HookedGlOrtho),
             g_ortho_hook,
-            error)) {
+            error,
+            &PublishOriginalOrtho)) {
         std::string ignored;
         static_cast<void>(RemoveIatHook(g_load_matrix_hook, ignored));
         static_cast<void>(RemoveIatHook(g_matrix_mode_hook, ignored));
@@ -168,7 +213,21 @@ bool RemoveOpenGlMatrixTelemetry(std::string& error) noexcept {
     if (!RemoveIatHook(g_load_matrix_hook, error)) {
         return false;
     }
-    return RemoveIatHook(g_matrix_mode_hook, error);
+    if (!RemoveIatHook(g_matrix_mode_hook, error)) {
+        return false;
+    }
+
+    constexpr std::uint32_t kQuiescenceTimeoutMilliseconds = 2000;
+    for (std::uint32_t elapsed = 0;
+         elapsed < kQuiescenceTimeoutMilliseconds;
+         ++elapsed) {
+        if (g_active_calls.load(std::memory_order_acquire) == 0) {
+            return true;
+        }
+        Sleep(1);
+    }
+    error = "Timed out waiting for active OpenGL telemetry calls to finish";
+    return false;
 }
 
 OpenGlFrameTelemetry ConsumeOpenGlFrameTelemetry() noexcept {

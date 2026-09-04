@@ -27,8 +27,8 @@ Use this log for conclusions that have been reproduced against an exact executab
 ### 2026-09-03 — Verified Black Plague frame and OpenGL telemetry
 
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`
-- Question: can a version-gated DLL attach through Steam, observe a stable frame boundary, and unload without inline code patches?
-- Evidence: three consecutive attach/detach cycles observed 1, 31 and 73 `SDL_GL_SwapBuffers` calls. Every detach restored the expected IAT pointer and unloaded the DLL while the game remained active.
+- Question: can a version-gated DLL attach through Steam and observe a stable frame boundary without inline code patches?
+- Evidence: three consecutive attach/deactivate cycles observed 1, 31 and 73 `SDL_GL_SwapBuffers` calls. Every cycle restored the expected IAT pointer and left the game active immediately afterwards. Later testing showed that this did not establish safe DLL unloading; see the delayed-unload entry below.
 - Modified address: the main module IAT entry for `SDL.dll!SDL_GL_SwapBuffers`; resolved from PE metadata at runtime.
 - Calling convention: `void __cdecl SDL_GL_SwapBuffers(void)`.
 - Result: confirmed for this exact build.
@@ -104,11 +104,11 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
 - Hooked instruction: main-module RVA `0x000EE010`, expected bytes `E8 FB EA 03 00`, original target RVA `0x0012CB10`.
-- Safety mechanism: exact-byte validation, temporary suspension of other process threads while replacing/restoring five bytes, rejection if a thread instruction pointer overlaps the patch, original-call forwarding, active-call quiescence before DLL unload.
+- Safety mechanism: exact-byte validation, temporary suspension of other process threads while replacing/restoring five bytes, rejection if a thread instruction pointer overlaps the patch, original-call forwarding and active-call quiescence.
 - Host-independent tests: Debug and Release both reject mismatched bytes, intercept and forward two calls, restore the original instruction byte for byte, and verify that later calls bypass the removed hook.
 - Live evidence: three attach/detach cycles in one gameplay process observed 1,676, 336 and 324 frames. Steady-state samples contained one `RenderWorld` call per frame with stable renderer/world/camera pointers and frame time around 0.016–0.018 seconds.
 - Independent stack evidence: projection loads captured main-module returns `0x00560212` (`SetMatrix` after `glLoadMatrixf`) and `0x004EE015` (`cScene::Render` immediately after the mapped call site).
-- Teardown evidence: all three cycles restored the call, unloaded the DLL and left the same game process responsive.
+- Teardown evidence: all three cycles restored the call and left the same game process responsive immediately afterwards. Safe live DLL unloading was not established.
 - Result: confirmed safe live hook boundary for this exact Black Plague build. This does not validate stereo re-entry yet.
 
 ### 2026-09-04 — OpenGL framebuffer capability at `RenderWorld`
@@ -118,7 +118,7 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Method: read-only state queries from the existing `RenderWorld` adapter; no framebuffer, texture or renderbuffer was created or bound.
 - Live evidence: a 362-frame gameplay capture reported a current context at every sampled call, OpenGL version `4.6.0 NVIDIA 616.56`, viewport `[0, 0, 2560, 1440]`, and framebuffer binding `0`. A separate 304-frame capture reproduced the result after the gate was tightened to require all ten operations used by an eye target, including `glFramebufferRenderbuffer`.
 - Driver limits: maximum texture size `32768`, maximum renderbuffer size `32768`, maximum viewport dimensions `[32768, 32768]`.
-- Teardown evidence: the call-site instruction and imported OpenGL/SDL pointers were restored, the DLL unloaded, and the game remained responsive.
+- Teardown evidence: the call-site instruction and imported OpenGL/SDL pointers were restored and the game remained responsive at the immediate post-deactivation check.
 - Scope: version and numeric limits are observations of the test GPU/driver, not framework requirements. FBO allocation, completeness and GL-state restoration have not yet been tested.
 - Result: confirmed that this exact build enters `RenderWorld` with the context and core API needed to attempt off-screen eye targets.
 
@@ -140,17 +140,28 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Control path: an explicit launcher command invokes a probe export; the export posts an atomic request and waits while the existing `RenderWorld` adapter performs every GL operation on the render thread.
 - Operations: create two complete RGBA8 plus depth24/stencil8 targets at `512x512`; bind/restore left; transactionally resize both to `640x480`; bind/restore right; destroy all six GL objects.
 - State evidence: framebuffer, renderbuffer, active-unit 2D texture and viewport bindings were identical before and after validation.
-- Lifecycle evidence: the command succeeded during a 172-frame attach/detach cycle, all hooks restored, the DLL unloaded, and the game remained responsive.
+- Lifecycle evidence: the command succeeded during a 172-frame attach/deactivate cycle, all GL objects and hooks were restored, and the game remained responsive at the immediate check. This predated the corrected resident-DLL policy.
 - Negative scope: the targets were not retained across frames, used to render the world, or submitted to OpenVR.
 - Result: confirmed transient in-game object lifecycle for this exact build. Persistent render-thread ownership and teardown remain open.
 
 ### 2026-09-04 — Persistent eye-target ownership and teardown
 
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
-- Question: can eye FBOs remain alive across frames and still be destroyed on the owning OpenGL thread before hook removal and DLL unload?
+- Question: can eye FBOs remain alive across frames and be destroyed on the owning OpenGL thread before hook removal?
 - Creation: an explicit request created a `512x512` left/right pair in `RenderWorld`; framebuffer, renderbuffer, texture and viewport state were restored immediately afterwards.
 - Lifetime: the pair remained allocated for 363 `RenderWorld` calls. Frame 300 of the 390-frame probe cycle still reported the targets active, with no change to the observed default framebuffer at world entry.
-- Teardown order: shutdown posted a destroy request while the world hook remained active, waited for render-thread completion, then restored the SDL swap import, the `RenderWorld` call instruction and the OpenGL telemetry imports before unloading.
-- Teardown result: all six GL objects were destroyed, incoming GL state was restored, the DLL unloaded, and the game remained responsive.
+- Teardown order: shutdown posted a destroy request while the world hook remained active, waited for render-thread completion, then restored the SDL swap import, the `RenderWorld` call instruction and the OpenGL telemetry imports.
+- Immediate result: all six GL objects were destroyed, incoming GL state was restored, and the game remained responsive at the command's immediate check.
 - Negative scope: fixed diagnostic dimensions were used; no world rendering or OpenVR submission targeted these FBOs.
-- Result: confirmed persistent allocation and render-thread teardown for this exact build.
+- Result: GL allocation and render-thread destruction confirmed, but the overall lifecycle is not confirmed because a delayed unloaded-DLL crash followed this cycle.
+
+### 2026-09-04 — Delayed crash after live DLL unload
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Observation: Windows Error Reporting recorded the process failure at `04:00:26`, roughly three seconds after the persistent-target detach command had reported success.
+- Failure: exception `0xC0000005`, execute violation, fault module `PenumbraVR.BlackPlague.Probe.dll_unloaded`, module-relative offset `0x0001E0F0`.
+- Interpretation: an already-dispatched callback could outlive IAT restoration; the callback also read its original target from hook state that removal cleared. Immediate process responsiveness was insufficient teardown evidence.
+- Fix: original targets are published to stable atomics before patching; SDL and OpenGL adapters count and quiesce active calls; the `RenderWorld` adapter retains its original target; deactivation restores hooks but intentionally leaves the DLL resident until process exit.
+- Regression evidence: the corrected build completed two attach/deactivate cycles of 122 menu frames each in one process, reused the resident module, then remained responsive for a 12-second observation window with zero new Penumbra WER events. It subsequently completed two gameplay cycles with persistent targets alive for 420 and 422 `RenderWorld` calls. Each cycle destroyed both targets on the render thread with GL state restored, deactivated the hooks, survived a further 12-second observation window and produced zero matching WER events. A blocking host-side SDL test independently proves removal waits for an in-flight callback and that the callback still forwards to the original function.
+- Scope: persistent gameplay target teardown must be repeated under the corrected policy.
+- Result: unsafe live unloading rejected; resident-DLL deactivation and persistent-target teardown confirmed for the tested menu and gameplay cycles.
