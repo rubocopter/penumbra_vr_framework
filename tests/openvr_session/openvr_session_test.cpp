@@ -1,5 +1,6 @@
 #include "openvr_session.hpp"
 
+#include <array>
 #include <iostream>
 #include <string>
 
@@ -14,11 +15,37 @@ int wmain(int argc, wchar_t** argv) {
         }
         const penumbra_vr::runtime::VrRenderTargetSize size =
             session.recommended_render_target_size();
-        std::cout << "OpenVR initialized; recommended per-eye render target: "
-                  << size.width << 'x' << size.height << '\n';
-        if (!session.Shutdown(error)) {
+        std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
+        if (!session.ReadEyeConfiguration(eyes, error)) {
             std::cerr << error << '\n';
             return 11;
+        }
+        penumbra_vr::runtime::VrHmdPose pose;
+        if (!session.WaitForHmdPose(pose, error)) {
+            std::cerr << error << '\n';
+            return 12;
+        }
+        std::cout << "OpenVR initialized; recommended per-eye render target: "
+                  << size.width << 'x' << size.height << '\n'
+                  << "left projection tangents: "
+                  << eyes[0].left_tangent << ", "
+                  << eyes[0].right_tangent << ", "
+                  << eyes[0].top_tangent << ", "
+                  << eyes[0].bottom_tangent << '\n'
+                  << "right projection tangents: "
+                  << eyes[1].left_tangent << ", "
+                  << eyes[1].right_tangent << ", "
+                  << eyes[1].top_tangent << ", "
+                  << eyes[1].bottom_tangent << '\n'
+                  << "eye-to-head X translations: "
+                  << eyes[0].eye_to_head.values[3] << ", "
+                  << eyes[1].eye_to_head.values[3] << '\n'
+                  << "HMD connected=" << pose.device_connected
+                  << " pose_valid=" << pose.pose_valid
+                  << " tracking_result=" << pose.tracking_result << '\n';
+        if (!session.Shutdown(error)) {
+            std::cerr << error << '\n';
+            return 13;
         }
         return 0;
     }
@@ -38,6 +65,16 @@ int wmain(int argc, wchar_t** argv) {
     if (!session.Shutdown(error) || !error.empty()) {
         std::cerr << "Empty OpenVR session shutdown failed: " << error << '\n';
         return 2;
+    }
+    std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
+    if (session.ReadEyeConfiguration(eyes, error) || error.empty()) {
+        std::cerr << "Uninitialized OpenVR eye query did not fail closed\n";
+        return 3;
+    }
+    penumbra_vr::runtime::VrHmdPose pose;
+    if (session.WaitForHmdPose(pose, error) || error.empty()) {
+        std::cerr << "Uninitialized OpenVR pose query did not fail closed\n";
+        return 4;
     }
     std::cout << "OpenVR session missing-loader failure path passed\n";
     return 0;

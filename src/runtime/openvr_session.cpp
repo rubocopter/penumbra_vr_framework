@@ -5,6 +5,7 @@
 
 #include <openvr.h>
 
+#include <algorithm>
 #include <array>
 
 namespace penumbra_vr::runtime {
@@ -41,6 +42,17 @@ template <typename Procedure>
             std::to_string(static_cast<int>(error_code));
     }
     return std::string("OpenVR initialization failed: ") + description;
+}
+
+void CopyMatrix(
+    const vr::HmdMatrix34_t& source,
+    VrMatrix34& destination) noexcept {
+    std::copy_n(&source.m[0][0], destination.values.size(), destination.values.begin());
+}
+
+[[nodiscard]] std::string CompositorError(vr::EVRCompositorError error_code) {
+    return "OpenVR compositor call failed with code " +
+        std::to_string(static_cast<int>(error_code));
 }
 
 } // namespace
@@ -118,6 +130,18 @@ bool OpenVrSession::Initialize(
         return false;
     }
 
+    interface_error = vr::VRInitError_None;
+    const std::intptr_t compositor_address = get_interface(
+        vr::IVRCompositor_Version, &interface_error);
+    if (interface_error != vr::VRInitError_None || compositor_address == 0) {
+        error = InitializationError(interface_error, describe_error);
+        shutdown();
+        FreeLibrary(library);
+        return false;
+    }
+    auto* compositor = reinterpret_cast<vr::IVRCompositor*>(compositor_address);
+    compositor->SetTrackingSpace(vr::TrackingUniverseStanding);
+
     VrRenderTargetSize recommended_size;
     system->GetRecommendedRenderTargetSize(
         &recommended_size.width, &recommended_size.height);
@@ -130,6 +154,7 @@ bool OpenVrSession::Initialize(
 
     library_ = library;
     system_ = system;
+    compositor_ = compositor;
     shutdown_ = reinterpret_cast<void*>(shutdown);
     recommended_size_ = recommended_size;
     return true;
@@ -139,6 +164,7 @@ bool OpenVrSession::Shutdown(std::string& error) noexcept {
     error.clear();
     if (library_ == nullptr) {
         system_ = nullptr;
+        compositor_ = nullptr;
         shutdown_ = nullptr;
         recommended_size_ = {};
         return true;
@@ -148,6 +174,7 @@ bool OpenVrSession::Shutdown(std::string& error) noexcept {
         reinterpret_cast<VrShutdownInternal>(shutdown_)();
     }
     system_ = nullptr;
+    compositor_ = nullptr;
     shutdown_ = nullptr;
     recommended_size_ = {};
 
@@ -161,8 +188,70 @@ bool OpenVrSession::Shutdown(std::string& error) noexcept {
     return true;
 }
 
+bool OpenVrSession::ReadEyeConfiguration(
+    std::array<VrEyeConfiguration, 2>& eyes,
+    std::string& error) const noexcept {
+    error.clear();
+    eyes = {};
+    if (!initialized()) {
+        error = "OpenVR is not initialized";
+        return false;
+    }
+
+    auto* system = static_cast<vr::IVRSystem*>(system_);
+    constexpr std::array<vr::EVREye, 2> kEyes{
+        vr::Eye_Left,
+        vr::Eye_Right,
+    };
+    for (std::size_t index = 0; index < kEyes.size(); ++index) {
+        system->GetProjectionRaw(
+            kEyes[index],
+            &eyes[index].left_tangent,
+            &eyes[index].right_tangent,
+            &eyes[index].top_tangent,
+            &eyes[index].bottom_tangent);
+        CopyMatrix(
+            system->GetEyeToHeadTransform(kEyes[index]),
+            eyes[index].eye_to_head);
+    }
+    return true;
+}
+
+bool OpenVrSession::WaitForHmdPose(
+    VrHmdPose& pose,
+    std::string& error) const noexcept {
+    error.clear();
+    pose = {};
+    if (!initialized() || compositor_ == nullptr) {
+        error = "OpenVR compositor is not initialized";
+        return false;
+    }
+
+    std::array<vr::TrackedDevicePose_t, vr::k_unMaxTrackedDeviceCount> poses{};
+    const vr::EVRCompositorError wait_error =
+        static_cast<vr::IVRCompositor*>(compositor_)->WaitGetPoses(
+            poses.data(), static_cast<std::uint32_t>(poses.size()), nullptr, 0);
+    if (wait_error != vr::VRCompositorError_None) {
+        error = CompositorError(wait_error);
+        return false;
+    }
+
+    const vr::TrackedDevicePose_t& hmd = poses[vr::k_unTrackedDeviceIndex_Hmd];
+    CopyMatrix(hmd.mDeviceToAbsoluteTracking, pose.device_to_absolute);
+    std::copy_n(hmd.vVelocity.v, pose.velocity.size(), pose.velocity.begin());
+    std::copy_n(
+        hmd.vAngularVelocity.v,
+        pose.angular_velocity.size(),
+        pose.angular_velocity.begin());
+    pose.tracking_result = static_cast<std::uint32_t>(hmd.eTrackingResult);
+    pose.pose_valid = hmd.bPoseIsValid;
+    pose.device_connected = hmd.bDeviceIsConnected;
+    return true;
+}
+
 bool OpenVrSession::initialized() const noexcept {
-    return library_ != nullptr && system_ != nullptr && shutdown_ != nullptr;
+    return library_ != nullptr && system_ != nullptr && compositor_ != nullptr &&
+        shutdown_ != nullptr;
 }
 
 VrRenderTargetSize OpenVrSession::recommended_render_target_size() const noexcept {

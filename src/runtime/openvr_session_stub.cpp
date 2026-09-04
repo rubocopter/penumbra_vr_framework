@@ -16,6 +16,22 @@ bool OpenVrSession::Shutdown(std::string& error) noexcept {
     return true;
 }
 
+bool OpenVrSession::ReadEyeConfiguration(
+    std::array<VrEyeConfiguration, 2>& eyes,
+    std::string& error) const noexcept {
+    eyes = {};
+    error = "This build was compiled without an OpenVR SDK";
+    return false;
+}
+
+bool OpenVrSession::WaitForHmdPose(
+    VrHmdPose& pose,
+    std::string& error) const noexcept {
+    pose = {};
+    error = "This build was compiled without an OpenVR SDK";
+    return false;
+}
+
 bool OpenVrSession::initialized() const noexcept {
     return false;
 }
