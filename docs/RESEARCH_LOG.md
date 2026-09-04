@@ -165,3 +165,10 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Regression evidence: the corrected build completed two attach/deactivate cycles of 122 menu frames each in one process, reused the resident module, then remained responsive for a 12-second observation window with zero new Penumbra WER events. It subsequently completed two gameplay cycles with persistent targets alive for 420 and 422 `RenderWorld` calls. Each cycle destroyed both targets on the render thread with GL state restored, deactivated the hooks, survived a further 12-second observation window and produced zero matching WER events. A blocking host-side SDL test independently proves removal waits for an in-flight callback and that the callback still forwards to the original function.
 - Scope: persistent gameplay target teardown must be repeated under the corrected policy.
 - Result: unsafe live unloading rejected; resident-DLL deactivation and persistent-target teardown confirmed for the tested menu and gameplay cycles.
+
+### 2026-09-04 — OpenVR loader smoke test without an available HMD
+
+- Runtime input: the locally installed SteamVR runtime through OpenVR SDK `2.15.6`'s Win32 `openvr_api.dll`.
+- Method: a standalone smoke-test path dynamically loaded the API, requested a scene application and would have queried the recommended per-eye render size before shutting down.
+- Evidence: SteamVR started `vrmonitor` and returned `VRInitError_Init_HmdNotFound` (`108`). The test reported the error and exited without retaining an OpenVR session.
+- Result: dynamic loading and the real-runtime failure path are confirmed; successful HMD initialization and render-size discovery remain unverified until a headset is available to SteamVR.
