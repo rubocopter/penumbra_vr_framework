@@ -166,9 +166,10 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Scope: persistent gameplay target teardown must be repeated under the corrected policy.
 - Result: unsafe live unloading rejected; resident-DLL deactivation and persistent-target teardown confirmed for the tested menu and gameplay cycles.
 
-### 2026-09-04 — OpenVR loader smoke test without an available HMD
+### 2026-09-04 — OpenVR loader and render-size smoke tests
 
 - Runtime input: the locally installed SteamVR runtime through OpenVR SDK `2.15.6`'s Win32 `openvr_api.dll`.
 - Method: a standalone smoke-test path dynamically loaded the API, requested a scene application and would have queried the recommended per-eye render size before shutting down.
-- Evidence: SteamVR started `vrmonitor` and returned `VRInitError_Init_HmdNotFound` (`108`). The test reported the error and exited without retaining an OpenVR session.
-- Result: dynamic loading and the real-runtime failure path are confirmed; successful HMD initialization and render-size discovery remain unverified until a headset is available to SteamVR.
+- Startup evidence: the first attempt caused SteamVR to start but returned `VRInitError_Init_HmdNotFound` (`108`) before `vrserver` and `vrcompositor` were ready. The test reported the error and exited without retaining an OpenVR session.
+- Success evidence: after `vrserver`, `vrcompositor` and `vrmonitor` were active and the PSVR2 was recognized, the same executable initialized successfully and reported a recommended per-eye target of `4164x4244`.
+- Result: real-runtime dynamic initialization, HMD render-size discovery and explicit shutdown are confirmed in the standalone path. Creation of targets at those dimensions inside Black Plague remains a separate live test.
