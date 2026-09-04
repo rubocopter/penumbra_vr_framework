@@ -58,6 +58,30 @@
         "droppedMatrices": 0,
         "dominantMatrixChangedWithPlayerMotion": true
       }
+    },
+    "renderWorldCallSite": {
+      "status": "confirmed-runtime-hook",
+      "attachDetachCycleFrames": [
+        1676,
+        336,
+        324
+      ],
+      "steadyStateCallsPerFrame": 1,
+      "argumentsStableAcrossCycles": [
+        "renderer",
+        "world",
+        "camera"
+      ],
+      "observedFrameTimeSeconds": {
+        "minimum": 0.016,
+        "maximum": 0.018
+      },
+      "projectionStackReturnAddresses": [
+        "0x00560212",
+        "0x004EE015"
+      ],
+      "teardownRestoredInstruction": true,
+      "gameRemainedResponsive": true
     }
   },
   "symbols": {
@@ -141,7 +165,7 @@
       }
     },
     "hpl.cRenderer3D.RenderWorld": {
-      "status": "confirmed-static-mapping",
+      "status": "confirmed-runtime-hook",
       "rva": "0x0012CB10",
       "preferredVirtualAddress": "0x0052CB10",
       "callingConvention": "thiscall",

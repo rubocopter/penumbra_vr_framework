@@ -49,7 +49,7 @@ The current build also prepares a passive counter at the single `cScene::Render`
 - observed values: call count plus renderer, world, camera and frame-time arguments
 - forwarding: the adapter invokes the original function exactly once and does not change an argument
 
-Installation fails closed unless all five call bytes match. Other process threads are briefly suspended while the five-byte instruction is replaced or restored, and installation is aborted if a thread is currently executing inside that instruction. This call-site mechanism has host-independent Debug and Release coverage, but has not yet been attached to the live game; it therefore remains a prepared validator rather than a verified game hook.
+Installation fails closed unless all five call bytes match. Other process threads are briefly suspended while the five-byte instruction is replaced or restored, and installation is aborted if a thread is currently executing inside that instruction. This call-site mechanism has host-independent Debug and Release coverage and has completed three live attach/detach cycles for the exact supported hash.
 
 ## Teardown
 
@@ -100,6 +100,10 @@ after movement:
 
 This confirms a reliable API-level view-matrix signal. It does not yet establish the address or layout of the owning HPL camera object.
 
+On 2026-09-04, the `RenderWorld` call-site probe completed three more attach/detach cycles in one live gameplay process, observing 1,676, 336 and 324 frames. Every sampled steady-state frame contained exactly one forwarded `RenderWorld` call. Renderer, world and camera pointers remained stable across the cycles, and frame time tracked the observed 60 Hz cadence at roughly 0.016–0.018 seconds.
+
+The projection call-stack capture independently returned `0x00560212` followed by `0x004EE015`: the return from the mapped `SetMatrix` implementation and the instruction immediately after the mapped `cScene::Render` call site. Each detach restored the original five bytes, unloaded the probe and left the game responding. Result: the call site is a verified live hook boundary for this exact executable hash.
+
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
 ## Commands
@@ -116,4 +120,4 @@ Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path
 
 ## Next question
 
-Static analysis now maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`, which obtains the projection through `cCamera3D::GetProjectionMatrix` at RVA `0x00113D20`. This is the same architectural seam used by Overture VR Rework to issue one world pass per eye while leaving later UI work outside the duplicated call. The next research step is a passive live call-site count with tested restoration; only after that succeeds can this boundary be treated as safe for stereo work.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`, which obtains the projection through `cCamera3D::GetProjectionMatrix` at RVA `0x00113D20`. Live validation now confirms this boundary. The next step is to create per-eye render targets and use this single intercepted call to issue two world passes while leaving later UI work outside the duplicated region.
