@@ -19,12 +19,15 @@ Launching this executable directly on the development machine exits voluntarily 
 1. Launch Black Plague through Steam.
 2. Locate the resulting process and obtain its executable path.
 3. Recompute and whitelist-check its SHA-256.
-4. Load the probe DLL with a remote `LoadLibraryW` call.
-5. Call the exported `PenumbraVR_Initialize` function explicitly.
+4. Wait for `SDL.dll` and for the exact initialized bytes at the mapped `RenderWorld` call site.
+5. Load the probe DLL with a remote `LoadLibraryW` call.
+6. Call the exported `PenumbraVR_Initialize` function explicitly.
 
 No substantial work is performed from `DllMain`; it only disables thread attach/detach notifications.
 
 The direct-path launcher mode remains useful for diagnosing non-Steam builds, but it is not the verified route for this Steam installation.
+
+The initialized-code gate is necessary because the executable is protected. One launch exposed `SDL.dll` before RVA `0x000EE010` had been reconstructed; the probe correctly rejected the still-mismatching call instruction, but loading it that early was itself unsafe. The launcher now polls for the exact five manifest bytes before injecting any DLL.
 
 ## Frame hook
 

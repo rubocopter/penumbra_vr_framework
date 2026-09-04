@@ -14,6 +14,11 @@
 
 namespace {
 
+constexpr std::uintptr_t kBlackPlagueRenderWorldCallRva = 0x000EE010;
+constexpr std::array<std::uint8_t, 5> kBlackPlagueRenderWorldCall{
+    0xE8, 0xFB, 0xEA, 0x03, 0x00,
+};
+
 class Handle {
 public:
     Handle() = default;
@@ -83,6 +88,48 @@ bool WaitForRemoteModule(
     } while (GetTickCount64() < deadline);
 
     error = std::wstring(L"Timed out waiting for ") + module_name + L" in the game process";
+    return false;
+}
+
+bool WaitForBlackPlagueInitializedCode(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& executable_path,
+    DWORD timeout_ms,
+    std::wstring& error) {
+    const ULONGLONG deadline = GetTickCount64() + timeout_ms;
+    do {
+        const std::uintptr_t module_base = FindRemoteModuleBase(
+            process_id, executable_path.filename().c_str());
+        if (module_base != 0) {
+            std::array<std::uint8_t, kBlackPlagueRenderWorldCall.size()> bytes{};
+            SIZE_T bytes_read = 0;
+            if (ReadProcessMemory(
+                    process,
+                    reinterpret_cast<const void*>(
+                        module_base + kBlackPlagueRenderWorldCallRva),
+                    bytes.data(),
+                    bytes.size(),
+                    &bytes_read) &&
+                bytes_read == bytes.size() &&
+                bytes == kBlackPlagueRenderWorldCall) {
+                return true;
+            }
+        }
+
+        DWORD process_exit_code = 0;
+        if (!GetExitCodeProcess(process, &process_exit_code)) {
+            error = LastErrorText(L"GetExitCodeProcess");
+            return false;
+        }
+        if (process_exit_code != STILL_ACTIVE) {
+            error = L"The game exited before its protected code finished initialization";
+            return false;
+        }
+        Sleep(25);
+    } while (GetTickCount64() < deadline);
+
+    error = L"Timed out waiting for the exact initialized RenderWorld call bytes";
     return false;
 }
 
@@ -746,6 +793,11 @@ int wmain(int argc, wchar_t** argv) {
             std::wcerr << L"Attach failed: " << error << L'\n';
             return 7;
         }
+        if (attach && !WaitForBlackPlagueInitializedCode(
+                process.get(), parsed_pid, game_path, 15'000, error)) {
+            std::wcerr << L"Attach failed: " << error << L'\n';
+            return 7;
+        }
         if (validate_eye_targets) {
             if (!ValidateRemoteEyeTargets(
                     process.get(), parsed_pid, probe_path, error)) {
@@ -887,6 +939,17 @@ int wmain(int argc, wchar_t** argv) {
 
     if (!WaitForRemoteModule(
             process.get(), process_info.dwProcessId, L"SDL.dll", 15'000, error)) {
+        std::wcerr << L"Game startup failed: " << error << L'\n';
+        TerminateProcess(process.get(), 1);
+        WaitForSingleObject(process.get(), 5'000);
+        return 8;
+    }
+    if (!WaitForBlackPlagueInitializedCode(
+            process.get(),
+            process_info.dwProcessId,
+            game_path,
+            15'000,
+            error)) {
         std::wcerr << L"Game startup failed: " << error << L'\n';
         TerminateProcess(process.get(), 1);
         WaitForSingleObject(process.get(), 5'000);

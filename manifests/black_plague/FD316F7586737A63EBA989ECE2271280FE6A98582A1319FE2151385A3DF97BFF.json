@@ -12,6 +12,12 @@
     "entryPointRva": "0x002F62ED",
     "entrySection": ".bind",
     "signaturesRequireInitializedMemory": true,
+    "runtimeReadinessGate": {
+      "module": "SDL.dll",
+      "rva": "0x000EE010",
+      "bytes": "E8 FB EA 03 00",
+      "checkedBeforeDllInjection": true
+    },
     "textComparison": {
       "comparedBytes": 2558295,
       "differentBytes": 2548280,
