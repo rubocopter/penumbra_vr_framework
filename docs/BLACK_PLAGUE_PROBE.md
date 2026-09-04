@@ -130,6 +130,8 @@ With SteamVR and the PSVR2 active, the injected OpenVR path subsequently reporte
 
 The next controlled command created a `512x512` diagnostic pair and issued 120 additional direct `RenderWorld` calls with zero frame time before each normal desktop pass. During steady duplication, projection loads rose from one to two per frame and model-view loads from 35 to 68. The command restored the framebuffer and viewport after every extra pass, destroyed the targets after 121 active frames and left the normal render cadence, process and delayed WER check healthy. It did not modify the camera or submit the diagnostic texture to OpenVR.
 
+The per-eye matrix command then initialized OpenVR, read the live PSVR2 optics and derived HPL-compatible asymmetric infinite projections. It reported horizontal projection terms `[0.717113, -0.320757]` for the left eye and `[0.717113, 0.320757]` for the right, with eye-to-head X translations of `-0.0315 m` and `+0.0315 m`. For 60 consecutive frames it rendered both eyes into separate `512x512` targets, temporarily replacing `camera+0x44` and `camera+0x84` only around each extra pass. Projection loads rose from one to three per frame and representative model-view loads from 27 to 77. All 120 eye passes restored the captured camera bytes, framebuffer and viewport; the normal pass then returned immediately to one projection load. OpenVR and both targets shut down cleanly. The process remained responsive through 12-second pre-deactivation and post-deactivation windows, with no matching Windows Error Reporting event. These images were still not submitted to the compositor, so the headset continued to show SteamVR's cinema presentation rather than native stereo.
+
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
 ## Commands
@@ -153,17 +155,17 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: issue 120 extra world passes into a diagnostic FBO
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-world-duplication <pid>
 
-# Experimental and not yet live-validated: render 60 reversible stereo pairs
+# Experimental: render 60 reversible stereo pairs into hidden targets
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <pid>
 
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command is prepared but not yet validated in the game: it uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 
 ## Next question
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, and a controlled extra world pass. OpenVR-to-HPL matrix conversion and byte-exact camera restoration now have host-independent tests; the next live step is to validate those matrices in the off-screen eye passes. Only after that should the probe add headset pose and compositor submission.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, a controlled extra world pass, and reversible per-eye projection/IPD matrices. The next narrow step is compositor submission of these static stereo views; tracked head pose and game/body calibration remain separate work.

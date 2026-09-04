@@ -14,7 +14,7 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod or installer. It contains a narrow OpenVR session component and the first verified Black Plague research probe: the probe validates one exact executable build, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional eye targets have been created inside the game at OpenVR's runtime-recommended dimensions, and a diagnostic FBO has survived 120 controlled extra world passes. No image has been submitted to the headset yet. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits; it does not render VR yet.
+This repository does not currently contain a playable mod or installer. It contains a narrow OpenVR session component and the first verified Black Plague research probe: the probe validates one exact executable build, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional eye targets have been created inside the game at OpenVR's runtime-recommended dimensions, a diagnostic FBO has survived 120 controlled extra world passes, and two OpenVR-derived eye views and asymmetric projections have survived 60 controlled stereo frames with byte-exact camera restoration. No image has been submitted to the headset yet. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits; it does not render visible VR yet.
 
 SteamVR may therefore show Black Plague on a virtual cinema screen when the headset is active. That is expected desktop mirroring, not stereo VR. Native headset presentation begins only after two rendered eye textures are passed to the OpenVR compositor; that path is not implemented yet.
 
@@ -78,7 +78,7 @@ Black Plague must currently be launched through Steam. Once it is running, attac
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 
-The OpenVR-sized target, controlled world-duplication and stereo-matrix commands are experimental. The stereo-matrix command renders only to hidden 512×512 diagnostic targets, has not yet completed an in-game validation cycle, and does not submit them to the headset. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
+The OpenVR-sized target, controlled world-duplication and stereo-matrix commands are experimental. The stereo-matrix command renders only to hidden 512×512 diagnostic targets and does not submit them to the headset. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
 
 The repository also provides a read-only executable fingerprinting tool:
 

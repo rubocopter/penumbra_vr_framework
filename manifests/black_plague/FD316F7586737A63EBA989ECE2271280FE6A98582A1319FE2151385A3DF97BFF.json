@@ -230,20 +230,48 @@
       "gameRemainedResponsive": true
     },
     "controlledStereoMatrices": {
-      "status": "implemented-host-tested-awaiting-runtime-validation",
+      "status": "confirmed-runtime",
       "diagnosticDimensions": [
         512,
         512
       ],
       "plannedStereoFrames": 60,
       "extraPassesPerFrame": 2,
+      "completedStereoFrames": 60,
+      "completedExtraPasses": 120,
       "nearPlane": 0.05,
       "projectionSource": "OpenVR GetProjectionRaw",
       "eyeOffsetSource": "OpenVR GetEyeToHeadTransform",
       "headPoseApplied": false,
+      "observedProjectionTerms": {
+        "left": [
+          0.717113,
+          -0.320757
+        ],
+        "right": [
+          0.717113,
+          0.320757
+        ]
+      },
+      "observedEyeToHeadX": [
+        -0.0315,
+        0.0315
+      ],
+      "baselineProjectionLoadsPerFrame": 1,
+      "stereoProjectionLoadsPerFrame": 3,
+      "representativeBaselineModelViewLoadsPerFrame": 27,
+      "representativeStereoModelViewLoadsPerFrame": 77,
       "normalDesktopPassPreserved": true,
       "cameraLayoutGuarded": true,
       "cameraRestorationHostTested": true,
+      "cameraRestoredAfterEveryEye": true,
+      "incomingFramebufferAndViewportRestored": true,
+      "targetsDestroyedOnRenderThread": true,
+      "openVrShutdownCompleted": true,
+      "postValidationObservationSeconds": 12,
+      "postDeactivateObservationSeconds": 12,
+      "newWindowsErrorReportingEvents": 0,
+      "gameRemainedResponsive": true,
       "submittedToOpenVr": false
     }
   },
