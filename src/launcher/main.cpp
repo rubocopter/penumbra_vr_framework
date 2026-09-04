@@ -300,6 +300,41 @@ bool ShutdownAndDeactivate(
     return true;
 }
 
+bool InvokeRemotePresentationAction(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    const char* export_name,
+    const wchar_t* failure_message,
+    std::wstring& error) {
+    const std::uintptr_t remote_probe = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe == 0) {
+        error = L"Attach the Black Plague probe before changing VR presentation state";
+        return false;
+    }
+
+    LPTHREAD_START_ROUTINE remote_action = nullptr;
+    if (!ResolveRemoteExport(
+            probe_path,
+            remote_probe,
+            export_name,
+            remote_action,
+            error)) {
+        return false;
+    }
+
+    DWORD action_result = 0;
+    if (!CallRemote(process, remote_action, nullptr, action_result, error)) {
+        return false;
+    }
+    if (action_result != 1) {
+        error = failure_message;
+        return false;
+    }
+    return true;
+}
+
 bool ValidateRemoteEyeTargets(
     HANDLE process,
     DWORD process_id,
@@ -668,17 +703,19 @@ int wmain(int argc, wchar_t** argv) {
     const bool validate_tracked_stereo_submission =
         argc == 3 &&
         _wcsicmp(argv[1], L"--validate-tracked-stereo-submission") == 0;
+    const bool start_vr = argc == 3 && _wcsicmp(argv[1], L"--start-vr") == 0;
+    const bool stop_vr = argc == 3 && _wcsicmp(argv[1], L"--stop-vr") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
     if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
          !hold_openvr_eye_targets && !validate_world_duplication &&
          !validate_stereo_matrices && !validate_stereo_submission &&
-         !validate_tracked_stereo_submission && !capture_image &&
+         !validate_tracked_stereo_submission && !start_vr && !stop_vr && !capture_image &&
          !inspect_camera && argc != 2) ||
         ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
           hold_openvr_eye_targets || validate_world_duplication ||
           validate_stereo_matrices || validate_stereo_submission ||
-          validate_tracked_stereo_submission) &&
+          validate_tracked_stereo_submission || start_vr || stop_vr) &&
          argc != 3) ||
         ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
@@ -692,6 +729,8 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-tracked-stereo-submission <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --start-vr <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --stop-vr <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect-camera <process-id> <address>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
@@ -709,7 +748,7 @@ int wmain(int argc, wchar_t** argv) {
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
         hold_openvr_eye_targets || validate_world_duplication ||
         validate_stereo_matrices || validate_stereo_submission ||
-        validate_tracked_stereo_submission ||
+        validate_tracked_stereo_submission || start_vr || stop_vr ||
         inspect_camera || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
@@ -918,6 +957,38 @@ int wmain(int argc, wchar_t** argv) {
             }
             std::wcout << L"Submitted 300 controlled stereo frames with recentered "
                        << L"rotation-only head tracking in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L").\n";
+            return 0;
+        }
+        if (start_vr) {
+            if (!InvokeRemotePresentationAction(
+                    process.get(),
+                    parsed_pid,
+                    probe_path,
+                    "PenumbraVR_StartPresentation",
+                    L"Persistent VR presentation could not start; inspect the probe log",
+                    error)) {
+                std::wcerr << L"VR presentation startup failed: " << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Started continuous tracked VR presentation in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L").\n";
+            return 0;
+        }
+        if (stop_vr) {
+            if (!InvokeRemotePresentationAction(
+                    process.get(),
+                    parsed_pid,
+                    probe_path,
+                    "PenumbraVR_StopPresentation",
+                    L"Persistent VR presentation could not stop; inspect the probe log",
+                    error)) {
+                std::wcerr << L"VR presentation stop failed: " << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Stopped continuous VR presentation in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
                        << parsed_pid << L").\n";
             return 0;

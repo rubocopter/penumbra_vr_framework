@@ -2,6 +2,7 @@
 #include "penumbra_vr/build_catalog.hpp"
 #include "opengl_matrix_telemetry.hpp"
 #include "openvr_session.hpp"
+#include "render_target_policy.hpp"
 #include "render_world_probe.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_math.hpp"
@@ -10,10 +11,12 @@
 #include <windows.h>
 
 #include <string>
+#include <vector>
 
 namespace {
 
 volatile LONG g_state = 0;
+volatile LONG g_presentation_state = 0;
 HINSTANCE g_instance = nullptr;
 penumbra_vr::runtime::OpenVrSession g_openvr_session;
 
@@ -82,9 +85,13 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         penumbra_vr::backends::black_plague::ConsumeRenderWorldFrameTelemetry();
     const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
         penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
+    const bool bounded_stereo_activity =
+        !render_world.persistent_stereo_active &&
+        (render_world.stereo_eye_passes != 0 ||
+         render_world.compositor_submitted_frames != 0);
     if (frame_number <= 10 || frame_number % 300 == 0 ||
-        render_world.stereo_eye_passes != 0 ||
-        render_world.compositor_submitted_frames != 0 ||
+        bounded_stereo_activity ||
+        render_world.stereo_failed ||
         !render_world.stereo_camera_restored ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
@@ -93,9 +100,11 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
-            "stereo_frames=%lu stereo_eye_passes=%lu stereo_camera_restored=%u "
+            "stereo_frames=%lu stereo_eye_passes=%lu stereo_lifetime_frames=%llu "
+            "stereo_camera_restored=%u "
             "submitted_frames=%lu submitted_pose_valid=%u "
             "tracked_head_frames=%lu tracking_anchor_captured=%u "
+            "persistent_stereo_active=%u stereo_failed=%u stereo_error=%s "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -122,11 +131,15 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.eye_targets.persistent_frames,
             static_cast<unsigned long>(render_world.stereo_frames),
             static_cast<unsigned long>(render_world.stereo_eye_passes),
+            render_world.stereo_lifetime_frames,
             render_world.stereo_camera_restored ? 1U : 0U,
             static_cast<unsigned long>(render_world.compositor_submitted_frames),
             render_world.compositor_hmd_pose_valid ? 1U : 0U,
             static_cast<unsigned long>(render_world.tracked_head_frames),
             render_world.tracking_anchor_captured ? 1U : 0U,
+            render_world.persistent_stereo_active ? 1U : 0U,
+            render_world.stereo_failed ? 1U : 0U,
+            render_world.stereo_error.data(),
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),
@@ -187,6 +200,129 @@ enum class StereoExperiment : std::uint8_t {
     compositor_submission,
     tracked_compositor_submission,
 };
+
+[[nodiscard]] bool CreateAdaptiveEyeTargets(
+    penumbra_vr::runtime::VrRenderTargetSize recommended,
+    float render_scale,
+    penumbra_vr::runtime::VrRenderTargetSize& selected,
+    std::string& error) noexcept {
+    selected = {};
+    std::vector<penumbra_vr::runtime::VrRenderTargetSize> candidates;
+    penumbra_vr::runtime::RenderTargetPolicy policy;
+    policy.scale = render_scale;
+    if (!penumbra_vr::runtime::BuildRenderTargetCandidates(
+            recommended, policy, candidates, error)) {
+        return false;
+    }
+
+    std::string last_error;
+    for (const auto& candidate : candidates) {
+        penumbra_vr::probe::WriteLog(
+            "Trying VR eye targets at %lux%lu (recommended %lux%lu x %.2f)",
+            static_cast<unsigned long>(candidate.width),
+            static_cast<unsigned long>(candidate.height),
+            static_cast<unsigned long>(recommended.width),
+            static_cast<unsigned long>(recommended.height),
+            render_scale);
+        if (penumbra_vr::backends::black_plague::RequestPersistentEyeTargets(
+                candidate.width, candidate.height, last_error)) {
+            selected = candidate;
+            return true;
+        }
+        penumbra_vr::probe::WriteLog(
+            "VR eye-target allocation at %lux%lu failed: %s",
+            static_cast<unsigned long>(candidate.width),
+            static_cast<unsigned long>(candidate.height),
+            last_error.c_str());
+    }
+
+    error = "All adaptive VR eye-target allocation attempts failed";
+    if (!last_error.empty()) {
+        error += ": " + last_error;
+    }
+    return false;
+}
+
+[[nodiscard]] bool StartPersistentVrPresentation(std::string& error) noexcept {
+    error.clear();
+    if (g_openvr_session.initialized() ||
+        penumbra_vr::backends::black_plague::PersistentEyeTargetsActive()) {
+        error = "Persistent VR presentation requires an idle OpenVR and eye-target state";
+        return false;
+    }
+
+    const std::wstring loader_path = OpenVrLoaderPath();
+    if (loader_path.empty()) {
+        error = "Could not resolve the probe directory";
+        return false;
+    }
+    if (!g_openvr_session.Initialize(loader_path, error)) {
+        return false;
+    }
+
+    std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
+    bool success = g_openvr_session.ReadEyeConfiguration(eyes, error);
+    penumbra_vr::runtime::VrRenderTargetSize selected;
+    if (success) {
+        constexpr float kDefaultRenderScale = 1.0F;
+        success = CreateAdaptiveEyeTargets(
+            g_openvr_session.recommended_render_target_size(),
+            kDefaultRenderScale,
+            selected,
+            error);
+    }
+    if (success) {
+        success = penumbra_vr::backends::black_plague::
+            StartTrackedStereoPresentation(
+                g_openvr_session, eyes, 0.05F, error);
+    }
+    if (success) {
+        penumbra_vr::probe::WriteLog(
+            "Persistent tracked VR presentation started at %lux%lu per eye",
+            static_cast<unsigned long>(selected.width),
+            static_cast<unsigned long>(selected.height));
+        return true;
+    }
+
+    const std::string operation_error = error;
+    std::string cleanup_error;
+    if (!penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(
+            cleanup_error)) {
+        error = operation_error + "; eye-target cleanup also failed: " + cleanup_error;
+    }
+    cleanup_error.clear();
+    if (!g_openvr_session.Shutdown(cleanup_error)) {
+        error = operation_error + "; OpenVR cleanup also failed: " + cleanup_error;
+    } else if (error.empty()) {
+        error = operation_error;
+    }
+    return false;
+}
+
+[[nodiscard]] bool StopPersistentVrPresentation(std::string& error) noexcept {
+    error.clear();
+    bool success = penumbra_vr::backends::black_plague::
+        StopTrackedStereoPresentation(error);
+    const std::string operation_error = error;
+
+    std::string cleanup_error;
+    if (!penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(
+            cleanup_error)) {
+        error = operation_error.empty()
+            ? "Eye-target cleanup failed: " + cleanup_error
+            : operation_error + "; eye-target cleanup also failed: " + cleanup_error;
+        success = false;
+    }
+    cleanup_error.clear();
+    if (!g_openvr_session.Shutdown(cleanup_error)) {
+        if (!error.empty()) {
+            error += "; ";
+        }
+        error += "OpenVR cleanup failed: " + cleanup_error;
+        success = false;
+    }
+    return success;
+}
 
 [[nodiscard]] bool RunStereoExperiment(
     StereoExperiment experiment,
@@ -388,6 +524,16 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
     }
 
     std::string error;
+    if (InterlockedCompareExchange(&g_presentation_state, 3, 2) == 2) {
+        if (!StopPersistentVrPresentation(error)) {
+            penumbra_vr::probe::WriteLog(
+                "Persistent VR presentation shutdown failed: %s", error.c_str());
+            InterlockedExchange(&g_presentation_state, 2);
+            InterlockedExchange(&g_state, 2);
+            return 0;
+        }
+        InterlockedExchange(&g_presentation_state, 0);
+    }
     if (!penumbra_vr::backends::black_plague::DestroyPersistentEyeTargets(error)) {
         penumbra_vr::probe::WriteLog(
             "Render-thread eye-target cleanup failed: %s", error.c_str());
@@ -428,6 +574,49 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
         penumbra_vr::hooks::ObservedFrameCount());
     penumbra_vr::probe::CloseLog();
     InterlockedExchange(&g_state, 0);
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_StartPresentation(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    if (InterlockedCompareExchange(&g_presentation_state, 1, 0) != 0) {
+        return g_presentation_state == 2 ? 1UL : 0UL;
+    }
+
+    std::string error;
+    if (!StartPersistentVrPresentation(error)) {
+        penumbra_vr::probe::WriteLog(
+            "Persistent VR presentation startup failed: %s", error.c_str());
+        InterlockedExchange(&g_presentation_state, 0);
+        return 0;
+    }
+    InterlockedExchange(&g_presentation_state, 2);
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_StopPresentation(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    const LONG previous = InterlockedCompareExchange(&g_presentation_state, 3, 2);
+    if (previous == 0) {
+        return 1;
+    }
+    if (previous != 2) {
+        return 0;
+    }
+
+    std::string error;
+    if (!StopPersistentVrPresentation(error)) {
+        penumbra_vr::probe::WriteLog(
+            "Persistent VR presentation stop failed: %s", error.c_str());
+        InterlockedExchange(&g_presentation_state, 2);
+        return 0;
+    }
+    penumbra_vr::probe::WriteLog("Persistent tracked VR presentation stopped cleanly");
+    InterlockedExchange(&g_presentation_state, 0);
     return 1;
 }
 

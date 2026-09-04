@@ -31,10 +31,14 @@ struct RenderWorldFrameTelemetry {
     std::array<char, 64> open_gl_version{};
     std::uint32_t stereo_frames = 0;
     std::uint32_t stereo_eye_passes = 0;
+    std::uint64_t stereo_lifetime_frames = 0;
     std::uint32_t compositor_submitted_frames = 0;
     bool compositor_hmd_pose_valid = false;
     std::uint32_t tracked_head_frames = 0;
     bool tracking_anchor_captured = false;
+    bool persistent_stereo_active = false;
+    bool stereo_failed = false;
+    std::array<char, 192> stereo_error{};
     bool stereo_camera_restored = true;
     EyeTargetProbeTelemetry eye_targets;
 };
@@ -61,6 +65,13 @@ struct RenderWorldFrameTelemetry {
     float near_clip,
     std::uint32_t frames,
     std::string& error) noexcept;
+[[nodiscard]] bool StartTrackedStereoPresentation(
+    runtime::OpenVrSession& session,
+    const std::array<runtime::VrEyeConfiguration, 2>& eyes,
+    float near_clip,
+    std::string& error) noexcept;
+[[nodiscard]] bool StopTrackedStereoPresentation(std::string& error) noexcept;
+[[nodiscard]] bool TrackedStereoPresentationActive() noexcept;
 [[nodiscard]] RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague
