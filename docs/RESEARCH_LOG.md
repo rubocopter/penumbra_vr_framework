@@ -76,3 +76,15 @@ The initialized code contains a unique routine at RVA `0x001601D0` whose behavio
 - Result: Requiem uses the same protected-on-disk/normal-in-memory model as Black Plague.
 
 The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphicsSDL::SetMatrix` also has exactly one Requiem match, at RVA `0x00160970`. The routine is displaced by `0x7A0` rather than sharing a hard-coded RVA. Result: strong confirmation that engine-level symbol definitions can be shared while every executable retains its own version manifest.
+
+### 2026-09-04 — Shared `cRenderer3D::RenderWorld` mapping
+
+- Builds: Black Plague `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`; Requiem `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2`.
+- Question: where does HPL render one complete 3D world pass, excluding the later scene/UI work?
+- Source basis: released HPL1 `cRenderer3D::RenderWorld(cWorld3D*, cCamera3D*, float)` adds frame time, configures logging, begins rendering, and executes Z, occlusion, light, diffuse, fog, skybox, transparent and debug passes. Overture VR Rework invokes this function once per eye and passes zero frame time to the extra eye.
+- Binary evidence: both initialized images contain the same unique 32-byte function prefix. It loads the float at stack argument three, adds it to `this+0x10`, tests debug flag bit 3 at `this+0x36C`, and updates the two logging flags described by the source.
+- Black Plague: function RVA `0x0012CB10`; its only direct call is at RVA `0x000EE010` inside the source-matching `cScene::Render` control flow.
+- Requiem: function RVA `0x0012D110`; its only direct call is at RVA `0x000EDE90` inside the equivalent control flow.
+- Calling convention: x86 `thiscall`; stack arguments are `cWorld3D*`, `cCamera3D*`, `float`; the function returns with `ret 0x0C`.
+- Negative test: no other direct call to either build's function address appears in the initialized `.text` section.
+- Result: confirmed static mappings and a strong stereo interception candidate for both manifests. Live hook installation, re-entry and teardown have not yet been validated, so the call site is not yet classified as safe.

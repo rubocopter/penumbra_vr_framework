@@ -14,6 +14,8 @@ struct OpenGlFrameTelemetry {
     std::uint32_t ortho_calls = 0;
     bool has_projection = false;
     std::array<float, 16> last_projection{};
+    std::uint16_t projection_call_stack_depth = 0;
+    std::array<std::uintptr_t, 8> projection_call_stack{};
     std::uint32_t unique_model_view_matrices = 0;
     std::uint32_t dropped_model_view_matrices = 0;
     std::uint32_t dominant_model_view_loads = 0;

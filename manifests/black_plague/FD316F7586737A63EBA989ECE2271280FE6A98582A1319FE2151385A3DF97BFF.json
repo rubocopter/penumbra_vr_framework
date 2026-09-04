@@ -83,6 +83,38 @@
         "returns with ret 8",
         "matches the released HPL1 SetMatrix implementation"
       ]
+    },
+    "hpl.cRenderer3D.RenderWorld": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0012CB10",
+      "preferredVirtualAddress": "0x0052CB10",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "cWorld3D* world",
+        "cCamera3D* camera",
+        "float frameTime"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "D9 44 24 0C 53 55 56 8B F1 D8 46 10 8B 86 6C 03 00 00 33 DB A8 08 D9 5E 10 57 74 0D C6 46 0C 01",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "owner": "hpl.cScene.Render",
+          "rva": "0x000EE010",
+          "bytes": "E8 FB EA 03 00",
+          "matchesInText": 1
+        }
+      ],
+      "evidence": [
+        "adds stack argument frameTime to this+0x10",
+        "updates source-matching renderer debug logging state",
+        "contains source-matching world render pass ordering",
+        "returns with ret 0x0C",
+        "has one direct caller in the source-matching cScene::Render flow"
+      ]
     }
   }
 }

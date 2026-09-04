@@ -32,7 +32,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Observe and classify the projection matrix during actual 3D gameplay
 - [x] Identify the moving view matrix at the OpenGL boundary
 - [ ] Locate the active camera and projection path
-- [ ] Locate a safe scene-render entry point
+- [x] Map `cRenderer3D::RenderWorld` and its sole `cScene::Render` call site statically
+- [ ] Validate the `RenderWorld` call site as a safe live hook boundary
 - [ ] Create and resize per-eye render targets
 - [ ] Apply tracked head view transforms
 - [ ] Submit both eyes to OpenVR

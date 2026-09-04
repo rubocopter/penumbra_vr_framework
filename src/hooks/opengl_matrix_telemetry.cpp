@@ -81,6 +81,19 @@ void APIENTRY HookedGlLoadMatrixf(const float* matrix) noexcept {
                 g_telemetry.last_projection.size() * sizeof(float));
             g_telemetry.has_projection = true;
         }
+        if (g_telemetry.projection_call_stack_depth == 0) {
+            std::array<void*, 8> frames{};
+            const USHORT depth = RtlCaptureStackBackTrace(
+                0,
+                static_cast<ULONG>(frames.size()),
+                frames.data(),
+                nullptr);
+            g_telemetry.projection_call_stack_depth = depth;
+            for (USHORT index = 0; index < depth; ++index) {
+                g_telemetry.projection_call_stack[index] =
+                    reinterpret_cast<std::uintptr_t>(frames[index]);
+            }
+        }
     } else if (mode == kGlModelView) {
         ++g_telemetry.model_view_loads;
         RecordModelViewMatrix(matrix);

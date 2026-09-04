@@ -103,4 +103,4 @@ Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path
 
 ## Next question
 
-The next research step is to connect the confirmed OpenGL projection/view behavior to a safe scene-render entry point. Stereo rendering needs two scene passes with eye-specific transforms while keeping the three orthographic UI passes out of the world render.
+Static analysis now maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. This is the same architectural seam used by Overture VR Rework to issue one world pass per eye while leaving later UI work outside the duplicated call. The next research step is a passive live call-site count with tested restoration; only after that succeeds can this boundary be treated as safe for stereo work.

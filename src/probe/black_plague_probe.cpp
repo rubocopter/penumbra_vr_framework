@@ -51,6 +51,18 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 m[4], m[5], m[6], m[7],
                 m[8], m[9], m[10], m[11],
                 m[12], m[13], m[14], m[15]);
+            const auto& stack = telemetry.projection_call_stack;
+            penumbra_vr::probe::WriteLog(
+                "projection_call_stack_depth=%u frames=%p,%p,%p,%p,%p,%p,%p,%p",
+                static_cast<unsigned int>(telemetry.projection_call_stack_depth),
+                reinterpret_cast<void*>(stack[0]),
+                reinterpret_cast<void*>(stack[1]),
+                reinterpret_cast<void*>(stack[2]),
+                reinterpret_cast<void*>(stack[3]),
+                reinterpret_cast<void*>(stack[4]),
+                reinterpret_cast<void*>(stack[5]),
+                reinterpret_cast<void*>(stack[6]),
+                reinterpret_cast<void*>(stack[7]));
         }
         if (telemetry.has_dominant_model_view) {
             const auto& m = telemetry.dominant_model_view;
@@ -100,8 +112,9 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
 
     const penumbra_vr::KnownBuild* build = penumbra_vr::FindKnownBuild(sha256);
     penumbra_vr::probe::WriteLog(
-        "Host path=%s sha256=%s",
+        "Host path=%s module_base=%p sha256=%s",
         WideToUtf8(executable_path).c_str(),
+        GetModuleHandleW(nullptr),
         sha256.c_str());
     if (build == nullptr || build->game != penumbra_vr::GameId::black_plague ||
         !build->black_plague_probe_allowed) {

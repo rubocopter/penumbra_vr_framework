@@ -76,6 +76,7 @@ int main() {
         telemetry.model_view_loads != 3 || telemetry.texture_loads != 1 ||
         telemetry.ortho_calls != 1 || !telemetry.has_projection ||
         telemetry.last_projection != projection ||
+        telemetry.projection_call_stack_depth == 0 ||
         telemetry.unique_model_view_matrices != 2 ||
         telemetry.dropped_model_view_matrices != 0 ||
         telemetry.dominant_model_view_loads != 2 ||
