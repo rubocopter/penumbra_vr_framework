@@ -82,6 +82,23 @@
       },
       "projectionSetMatrixVtableOffset": "0x6C"
     },
+    "hpl.cCamera3D.GetViewMatrix": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x00113880",
+      "preferredVirtualAddress": "0x00513880",
+      "callingConvention": "thiscall",
+      "returnValue": "const cMatrixf*",
+      "objectOffsets": {
+        "viewMatrix": "0x44",
+        "viewUpdated": "0x8D1"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "81 EC 8C 00 00 00 53 55 8B E9 8A 85 D1 08 00 00 84 C0 56 57 0F 84 0C 01 00 00 8B 45 3C 85 C0 0F 85 FA 00 00 00 8D 5D 44 B9 10 00 00 00",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      }
+    },
     "hpl.cCamera3D.GetProjectionMatrix": {
       "status": "confirmed-static-mapping",
       "rva": "0x001139C0",

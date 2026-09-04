@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <tlhelp32.h>
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <iostream>
@@ -386,6 +387,61 @@ bool GetProcessExecutablePath(
     return false;
 }
 
+bool ReadCameraSnapshot(
+    HANDLE process,
+    std::uintptr_t camera,
+    std::array<float, 16>& view,
+    std::array<float, 16>& projection,
+    std::array<std::uint8_t, 3>& flags,
+    std::wstring& error) {
+    SIZE_T bytes_read = 0;
+    if (!ReadProcessMemory(
+            process,
+            reinterpret_cast<const void*>(camera + 0x44),
+            view.data(),
+            sizeof(view),
+            &bytes_read) ||
+        bytes_read != sizeof(view)) {
+        error = LastErrorText(L"ReadProcessMemory(camera view)");
+        return false;
+    }
+    if (!ReadProcessMemory(
+            process,
+            reinterpret_cast<const void*>(camera + 0x84),
+            projection.data(),
+            sizeof(projection),
+            &bytes_read) ||
+        bytes_read != sizeof(projection)) {
+        error = LastErrorText(L"ReadProcessMemory(camera projection)");
+        return false;
+    }
+    if (!ReadProcessMemory(
+            process,
+            reinterpret_cast<const void*>(camera + 0x8D0),
+            flags.data(),
+            sizeof(flags),
+            &bytes_read) ||
+        bytes_read != sizeof(flags)) {
+        error = LastErrorText(L"ReadProcessMemory(camera flags)");
+        return false;
+    }
+    return true;
+}
+
+void PrintMatrix(const wchar_t* name, const std::array<float, 16>& matrix) {
+    std::wcout << name << L":\n";
+    for (std::size_t row = 0; row < 4; ++row) {
+        std::wcout << L"  [";
+        for (std::size_t column = 0; column < 4; ++column) {
+            if (column != 0) {
+                std::wcout << L", ";
+            }
+            std::wcout << matrix[row * 4 + column];
+        }
+        std::wcout << L"]\n";
+    }
+}
+
 bool ValidateKnownTarget(
     const std::filesystem::path& game_path,
     bool require_black_plague_probe,
@@ -425,12 +481,13 @@ int wmain(int argc, wchar_t** argv) {
     const bool hold_openvr_eye_targets =
         argc == 3 && _wcsicmp(argv[1], L"--hold-openvr-eye-targets") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
+    const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
     if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
-         !hold_openvr_eye_targets && !capture_image && argc != 2) ||
+         !hold_openvr_eye_targets && !capture_image && !inspect_camera && argc != 2) ||
         ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
           hold_openvr_eye_targets) &&
          argc != 3) ||
-        (capture_image && argc != 4)) {
+        ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
                    << L"  PenumbraVR.ProbeLauncher.exe <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --attach <process-id>\n"
@@ -439,19 +496,21 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --inspect-camera <process-id> <address>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
         return 2;
     }
 
     const std::filesystem::path probe_path =
         CurrentExecutableDirectory() / L"PenumbraVR.BlackPlague.Probe.dll";
-    if (!inspect && !capture_image && !std::filesystem::is_regular_file(probe_path)) {
+    if (!inspect && !inspect_camera && !capture_image &&
+        !std::filesystem::is_regular_file(probe_path)) {
         std::wcerr << L"Probe DLL not found beside the launcher: " << probe_path << L'\n';
         return 5;
     }
 
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
-        hold_openvr_eye_targets || capture_image) {
+        hold_openvr_eye_targets || inspect_camera || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
         if (parsed_pid == 0 || parse_end == argv[2] || *parse_end != L'\0') {
@@ -464,7 +523,7 @@ int wmain(int argc, wchar_t** argv) {
         constexpr DWORD kInjectionAccess = kInspectionAccess | PROCESS_CREATE_THREAD |
             PROCESS_VM_OPERATION | PROCESS_VM_WRITE;
         Handle process(OpenProcess(
-            (inspect || capture_image) ? kInspectionAccess : kInjectionAccess,
+            (inspect || inspect_camera || capture_image) ? kInspectionAccess : kInjectionAccess,
             FALSE,
             parsed_pid));
         if (!process.valid()) {
@@ -481,9 +540,41 @@ int wmain(int argc, wchar_t** argv) {
 
         const penumbra_vr::KnownBuild* build = nullptr;
         if (!ValidateKnownTarget(
-                game_path, !(inspect || capture_image), build, error)) {
+                game_path, !(inspect || inspect_camera || capture_image), build, error)) {
             std::wcerr << error << L'\n';
             return 4;
+        }
+        if (inspect_camera) {
+            wchar_t* address_end = nullptr;
+            const unsigned long parsed_address = wcstoul(argv[3], &address_end, 0);
+            if (parsed_address == 0 || address_end == argv[3] || *address_end != L'\0') {
+                std::wcerr << L"Invalid camera address: " << argv[3] << L'\n';
+                return 2;
+            }
+
+            std::array<float, 16> view{};
+            std::array<float, 16> projection{};
+            std::array<std::uint8_t, 3> flags{};
+            if (!ReadCameraSnapshot(
+                    process.get(),
+                    static_cast<std::uintptr_t>(parsed_address),
+                    view,
+                    projection,
+                    flags,
+                    error)) {
+                std::wcerr << L"Camera inspection failed: " << error << L'\n';
+                return 7;
+            }
+            std::wcout << L"Read camera "
+                       << reinterpret_cast<void*>(static_cast<std::uintptr_t>(parsed_address))
+                       << L" from " << penumbra_vr::GameDisplayName(build->game) << L"\n";
+            PrintMatrix(L"view (camera+0x44)", view);
+            PrintMatrix(L"projection (camera+0x84)", projection);
+            std::wcout << L"flags: infinite_far=" << static_cast<unsigned int>(flags[0])
+                       << L" view_updated=" << static_cast<unsigned int>(flags[1])
+                       << L" projection_updated=" << static_cast<unsigned int>(flags[2])
+                       << L'\n';
+            return 0;
         }
         if (inspect || capture_image) {
             const std::uintptr_t module_base = FindRemoteModuleBase(

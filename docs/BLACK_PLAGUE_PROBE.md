@@ -100,7 +100,7 @@ after movement:
 [-0.726727 -0.725464 -7.200001  1]
 ```
 
-This confirms a reliable API-level view-matrix signal. It does not yet establish the address or layout of the owning HPL camera object.
+This confirms a reliable API-level view-matrix signal. The later camera mapping ties it to `cCamera3D::GetViewMatrix`, which returns the matrix at `camera+0x44`. A version-gated remote read then confirmed that this field, after the normal `SetMatrix` transpose, exactly matches the dominant `glLoadMatrixf` value. The projection at `camera+0x84` matched in the same way; the read did not mutate game memory.
 
 On 2026-09-04, the `RenderWorld` call-site probe completed three more attach/detach cycles in one live gameplay process, observing 1,676, 336 and 324 frames. Every sampled steady-state frame contained exactly one forwarded `RenderWorld` call. Renderer, world and camera pointers remained stable across the cycles, and frame time tracked the observed 60 Hz cadence at roughly 0.016–0.018 seconds.
 
@@ -147,6 +147,9 @@ The test game process did not exit in response to a normal window-close request 
 
 # Experimental: initialize OpenVR and use its recommended per-eye dimensions
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <pid>
+
+# Read known cCamera3D fields without injecting or writing memory
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
 The OpenVR-sized command requires a build configured with `PENUMBRA_VR_OPENVR_SDK`. It has not yet completed a live headset validation and is not part of the confirmed runtime evidence above.
@@ -155,4 +158,4 @@ Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path
 
 ## Next question
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`, which obtains the projection through `cCamera3D::GetProjectionMatrix` at RVA `0x00113D20`. Live validation confirms this boundary and a usable current-context FBO path. The next step is to implement a state-preserving eye-target abstraction, test it outside the game, and only then use this single intercepted call to issue controlled world passes while leaving later UI work outside the duplicated region.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation confirms the render boundary and a usable current-context FBO path, while the shared runtime now reads a live HMD pose and per-eye optics. The next test is to create in-game targets at OpenVR's `4164x4244` recommendation after restarting the game with the current probe build. A controlled duplicate world pass should precede any camera-field mutation or compositor submission.
