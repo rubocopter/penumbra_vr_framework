@@ -31,7 +31,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Map the first HPL routine from evidence (`SetMatrix`, static validation)
 - [x] Observe and classify the projection matrix during actual 3D gameplay
 - [x] Identify the moving view matrix at the OpenGL boundary
-- [ ] Locate the active camera and projection path
+- [x] Locate the active camera and projection path statically
 - [x] Map `cRenderer3D::RenderWorld` and its sole `cScene::Render` call site statically
 - [ ] Validate the `RenderWorld` call site as a safe live hook boundary
 - [ ] Create and resize per-eye render targets

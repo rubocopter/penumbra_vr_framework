@@ -44,6 +44,62 @@
         "returns with ret 8"
       ]
     },
+    "hpl.cScene.Render": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000EDE30",
+      "preferredVirtualAddress": "0x004EDE30",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "cUpdater* updater",
+        "float frameTime"
+      ],
+      "objectOffsets": {
+        "graphics": "0x20",
+        "currentWorld3D": "0x50",
+        "activeCamera": "0x64",
+        "renderer3DWithinGraphics": "0x18"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "56 8B F1 8A 46 40 84 C0 57 74 72 8B 46 64 85 C0 74 6B 8B C8 8B 01 FF 50 0C 85 C0 75 2C 8B 4E 54 85 C9 8B 7E 64 74 06 57 E8",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      }
+    },
+    "hpl.cRenderer3D.BeginRendering": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0012ADD0",
+      "preferredVirtualAddress": "0x0052ADD0",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "cCamera3D* camera"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "83 EC 10 53 56 8B F1 8B 0E 8B 01 57 6A 00 FF 90 D4 00 00 00 8B 0E 8B 39 6A 00 6A 00 8D 4C 24 14",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "projectionSetMatrixVtableOffset": "0x6C"
+    },
+    "hpl.cCamera3D.GetProjectionMatrix": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x001139C0",
+      "preferredVirtualAddress": "0x005139C0",
+      "callingConvention": "thiscall",
+      "returnValue": "const cMatrixf*",
+      "objectOffsets": {
+        "projectionMatrix": "0x84",
+        "infiniteFarPlane": "0x8D0",
+        "projectionUpdated": "0x8D2"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "8B C1 8A 88 D2 08 00 00 83 EC 54 84 C9 0F 84 1C 01 00 00 D9 40 10 8B 50 1C",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      }
+    },
     "hpl.cRenderer3D.RenderWorld": {
       "status": "confirmed-static-mapping",
       "rva": "0x0012D110",
