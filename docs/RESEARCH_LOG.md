@@ -203,3 +203,13 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Diagnosis from the Overture reference: `rubocopter/penumbra_vr_rework@23c890f` preserves the raw OpenVR pitch and roll and owns world placement separately; recentering changes only horizontal yaw. A complete pose anchor can incorrectly preserve the orientation of a visor that is being handled while the user changes windows.
 - Corrective direction: align only the anchor's horizontal heading with the current game camera, reject a near-vertical anchor, preserve current runtime pitch and roll, and keep translation at zero for the next bounded validation.
 - Result: full-orientation-relative anchoring rejected. It is not evidence of working head tracking.
+
+### 2026-09-04 — Yaw-aligned rotational tracking from the Overture reference
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Source behavior: adapted the yaw-only tracking/world alignment from `rubocopter/penumbra_vr_rework@23c890f`, preserving raw OpenVR pitch and roll while keeping game placement separate. Provenance is recorded in `THIRD_PARTY.md`.
+- Guard: an initial pose whose forward direction is nearly vertical is rejected, preventing a visor being handled flat from becoming a full 3D world anchor.
+- Automated evidence: the new composition tests cover yaw alignment, pitch preservation, rotation-only translation suppression and vertical-anchor rejection. All seven project tests passed in Debug, Release and the no-OpenVR Release configuration.
+- Live evidence: six consecutive cycles submitted 1,800 tracked stereo frames. Every frame used a valid pose and anchor; there were no compositor errors or camera-restoration failures, and the game remained responsive.
+- Headset evidence: the user confirmed that the world orientation was now correct and that rotational tracking behaved correctly. The image was low resolution by design. It returned briefly between cycles because each bounded 300-frame command shut down and reinitialized OpenVR.
+- Result: yaw-aligned rotation-only tracking confirmed for this exact Black Plague build. Positional tracking, continuous session ownership and production resolution remain unvalidated.

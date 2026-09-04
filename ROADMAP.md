@@ -45,7 +45,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Host-test byte-exact camera matrix override and restoration
 - [x] Validate reversible per-eye projection and IPD offsets in the live game
 - [x] Validate native presentation of the static eye textures in the headset
-- [ ] Apply tracked head view transforms
+- [x] Apply and live-validate yaw-aligned rotational head tracking
+- [ ] Apply positional tracking with game/body calibration
 - [x] Submit both eyes to OpenVR
 - [ ] Preserve functional keyboard and mouse input
 

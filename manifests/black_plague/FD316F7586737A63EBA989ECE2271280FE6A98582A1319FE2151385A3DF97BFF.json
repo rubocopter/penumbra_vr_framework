@@ -307,7 +307,7 @@
       "newWindowsErrorReportingEvents": 0,
       "gameRemainedResponsive": true
     },
-    "controlledTrackedStereoSubmission": {
+    "rejectedFullOrientationTrackedStereoSubmission": {
       "status": "rejected-visual-validation",
       "diagnosticDimensions": [
         512,
@@ -323,7 +323,30 @@
       "rejectedMethod": "full-orientation relative anchor",
       "userObservation": "world appeared like a wall while the viewer stood tilted forwards",
       "replacementCandidate": "Overture-derived horizontal-yaw alignment with raw pitch and roll",
-      "replacementLiveValidated": false
+      "replacementLiveValidated": true
+    },
+    "controlledTrackedStereoSubmission": {
+      "status": "confirmed-runtime-and-headset-rotation-only",
+      "sourceBehavior": "rubocopter/penumbra_vr_rework@23c890f yaw-only world alignment",
+      "diagnosticDimensions": [
+        512,
+        512
+      ],
+      "successfulCycles": 6,
+      "submittedFramesPerCycle": 300,
+      "totalSubmittedFrames": 1800,
+      "validPoseAndAnchorFrames": 1800,
+      "horizontalYawAlignedToGameCamera": true,
+      "rawRuntimePitchAndRollPreserved": true,
+      "nearVerticalAnchorRejected": true,
+      "translationApplied": false,
+      "cameraRestoreFailures": 0,
+      "compositorErrors": 0,
+      "userConfirmedWorldOrientation": true,
+      "userConfirmedRotationalResponse": true,
+      "userObservedLowDiagnosticResolution": true,
+      "boundedSessionTransitionsVisible": true,
+      "gameRemainedResponsive": true
     }
   },
   "symbols": {
