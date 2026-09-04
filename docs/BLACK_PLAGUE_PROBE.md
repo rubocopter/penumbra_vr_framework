@@ -10,7 +10,7 @@ Machine: x86
 Build ID: black-plague-steam-observed
 ```
 
-It is not yet a playable VR backend. Its default attached state only observes and forwards rendering, while explicit experimental commands can initialize OpenVR, create off-screen targets, issue extra world passes and temporarily override the mapped camera matrices. None of those targets are currently submitted to the headset.
+It is not yet a playable VR backend. Its default attached state only observes and forwards rendering. Bounded experimental commands have submitted native stereo and validated rotation-only tracking. A newer explicit continuous mode keeps OpenVR and adaptive runtime-sized targets active until stopped; that path is build-verified but not yet headset-validated.
 
 ## Loading model
 
@@ -169,14 +169,18 @@ The test game process did not exit in response to a normal window-close request 
 # Experimental: submit 300 frames with recentered rotation-only tracking
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-tracked-stereo-submission <pid>
 
+# Experimental: start/stop continuous tracked presentation at adaptive resolution
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --start-vr <pid>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --stop-vr <pid>
+
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. Translation remains forced to zero.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. Translation remains forced to zero. The continuous mode retains that transform, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Black Plague and Requiem are not Large Address Aware in their installed state, so the future installer must apply that known-build-gated change before the much heavier Enhanced visuals buffers are enabled.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 
 ## Next question
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, a controlled extra world pass, reversible per-eye projection/IPD matrices, native stereo presentation and yaw-aligned rotation-only head tracking. The next narrow step is one continuous session at a scaled runtime-derived resolution; positional tracking and game/body calibration remain separate work.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, a controlled extra world pass, reversible per-eye projection/IPD matrices, native stereo presentation and yaw-aligned rotation-only head tracking. Continuous presentation at adaptive resolution is implemented and deliberately queued for a later, longer headset session together with further gameplay progress. Positional tracking, input/hands and the binary renderer hooks needed by Enhanced visuals remain separate work.

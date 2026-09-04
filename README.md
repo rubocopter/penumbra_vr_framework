@@ -14,11 +14,11 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: Black Plague bootstrap and render-path research.**
 
-This repository does not currently contain a playable mod or installer. It contains a narrow OpenVR session component and the first verified Black Plague research probe: the probe validates one exact executable build, observes `SDL_GL_SwapBuffers` and OpenGL matrix setup, and has identified the gameplay projection and moving view matrix at the OpenGL boundary. Transactional eye targets have been created inside the game at OpenVR's runtime-recommended dimensions, a diagnostic FBO has survived 120 controlled extra world passes, and two OpenVR-derived eye views and asymmetric projections have survived 60 controlled stereo frames with byte-exact camera restoration. Three subsequent runs submitted 900 static stereo frames to the headset; native full-view stereo was observed at the deliberately low diagnostic resolution. Six more runs submitted 1,800 frames with Overture-derived yaw alignment and live rotation-only head tracking; the user confirmed correct world orientation and horizontal/vertical response. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits. Positional tracking and a persistent playable mode are not implemented yet.
+This repository does not currently contain a playable mod or installer. It contains the first verified Black Plague binary integration plus shared OpenVR, HPL1-camera, render-target, visual-calibration, spatial-audio and deployment components. Three runs submitted 900 static stereo frames to the headset; native full-view stereo was observed at the deliberately low diagnostic resolution. Six more runs submitted 1,800 frames with Overture-derived yaw alignment and live rotation-only head tracking; the user confirmed correct world orientation and horizontal/vertical response. A continuous presentation lifecycle now keeps OpenVR and runtime-sized eye targets active until explicitly stopped, with proportional allocation fallback copied from the proven Rework policy; this new path compiles with the passing test suite but has not yet received an in-headset run. Deactivation restores every hook but deliberately keeps the research DLL resident until the game exits. Shared OpenVR action/binding data has been imported, including PSVR2 Sense, but action polling, positional tracking, hands and gameplay interaction are not implemented yet.
 
-SteamVR still shows Black Plague on a virtual cinema screen during normal execution. That is desktop mirroring, not stereo VR. The experimental stereo-submission command temporarily switches to native headset presentation by passing two rendered eye textures to the OpenVR compositor, then returns to the normal desktop path after 300 frames.
+SteamVR still shows Black Plague on a virtual cinema screen during normal execution. That is desktop mirroring, not stereo VR. The bounded diagnostic commands return to that path after 300 frames. The new `--start-vr` command instead begins continuous native presentation and `--stop-vr` tears it down; both remain explicitly experimental pending a longer headset test.
 
-The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project; it has not yet been copied into this repository.
+The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project. Selected behavior has begun moving into game-neutral modules with explicit provenance; the Overture game layer is not copied wholesale.
 
 ## Project principles
 
@@ -77,10 +77,12 @@ Black Plague must currently be launched through Steam. Once it is running, attac
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-matrices <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-stereo-submission <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-tracked-stereo-submission <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --start-vr <process-id>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --stop-vr <process-id>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --detach <process-id>
 ```
 
-The OpenVR-sized target, controlled world-duplication and stereo commands are experimental. The stereo-matrix command renders only to hidden 512×512 diagnostic targets. The stereo-submission command displays 300 static stereo frames in the headset at that same low resolution, without head tracking, before restoring the normal desktop path. The tracked variant uses its first valid pose only to align the horizontal heading with the game, preserves the runtime pitch and roll, and applies the now-live-validated orientation for 300 frames. Positional motion remains disabled. Repeated commands visibly return to the desktop/cinema path while each bounded OpenVR session is torn down; that transition is not a continuous-play mode. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
+The OpenVR-sized target, controlled world-duplication and stereo commands are experimental. The diagnostic submission commands remain fixed at 512×512 so their prior evidence stays reproducible. `--start-vr` uses SteamVR's recommended per-eye size at the Rework default scale of 1.0 and retries progressively smaller proportional targets if allocation fails; it preserves the validated yaw-aligned rotation and runs until `--stop-vr` or `--detach`. This continuous mode has not yet been validated in the headset. Positional motion remains disabled. OpenVR is only available in builds configured with `PENUMBRA_VR_OPENVR_SDK`. Logs are written to `%LOCALAPPDATA%\PenumbraVR\logs`. This is a developer probe, not an end-user launcher.
 
 The repository also provides a read-only executable fingerprinting tool:
 
@@ -90,7 +92,7 @@ The repository also provides a read-only executable fingerprinting tool:
   "C:\path\to\Requiem.exe"
 ```
 
-See [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [docs/REWORK_PORTING_PLAN.md](docs/REWORK_PORTING_PLAN.md), [docs/BLACK_PLAGUE_PROBE.md](docs/BLACK_PLAGUE_PROBE.md), [docs/BINARY_RESEARCH.md](docs/BINARY_RESEARCH.md), and [docs/SUPPORTED_BUILDS.md](docs/SUPPORTED_BUILDS.md) before adding runtime or hook code.
+See [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md](CHANGELOG.md), [docs/INSTALLER_DESIGN.md](docs/INSTALLER_DESIGN.md), [docs/REWORK_PORTING_PLAN.md](docs/REWORK_PORTING_PLAN.md), [docs/BLACK_PLAGUE_PROBE.md](docs/BLACK_PLAGUE_PROBE.md), [docs/BINARY_RESEARCH.md](docs/BINARY_RESEARCH.md), and [docs/SUPPORTED_BUILDS.md](docs/SUPPORTED_BUILDS.md) before adding runtime, deployment or hook code.
 
 ## Licensing
 

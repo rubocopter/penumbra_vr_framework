@@ -46,6 +46,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Validate reversible per-eye projection and IPD offsets in the live game
 - [x] Validate native presentation of the static eye textures in the headset
 - [x] Apply and live-validate yaw-aligned rotational head tracking
+- [x] Implement continuous start/stop presentation and adaptive runtime-sized targets
+- [ ] Validate continuous presentation at runtime-derived resolution in the headset
 - [ ] Apply positional tracking with game/body calibration
 - [x] Submit both eyes to OpenVR
 - [ ] Preserve functional keyboard and mouse input
@@ -54,7 +56,9 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 
 ## Phase 3 — Shared runtime extraction
 
-- [ ] Extract only demonstrated reusable systems from Overture VR Rework
+- [x] Extract render-scale fallback, visual-calibration and spatial-audio reference behavior
+- [x] Import the shared OpenVR action manifest and controller bindings as data
+- [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
 - [ ] Keep Overture's existing build and tests green during extraction
 - [ ] Introduce a minimal backend contract derived from both integrations
 - [ ] Add host-independent tests for transforms, actions and settings
@@ -64,7 +68,7 @@ Exit criterion: Overture and the Black Plague MVP consume the same tested runtim
 
 ## Phase 4 — Black Plague gameplay VR
 
-- [ ] VR actions and controller bindings
+- [ ] Connect OpenVR action polling to the imported manifest and bindings
 - [ ] room-scale body/head relationship
 - [ ] hands, grabbing and interactions
 - [ ] inventory, notes, menus, HUD and subtitles
@@ -87,7 +91,10 @@ Exit criterion: a documented playable alpha for an exact Requiem build.
 - [ ] installation discovery and manual selection
 - [ ] build compatibility report
 - [ ] transactional backup, install, verify and rollback
-- [ ] shared manifests and controller bindings
+- [x] Implement and unit-test the x86 PE Large Address Aware byte transformation
+- [ ] Gate LAA behind known hashes and a transactional backup/rollback operation
+- [x] import the shared action manifest and controller bindings
+- [ ] register and deploy action assets through the installer
 - [ ] package attribution and licenses
 - [ ] clean-machine and upgrade testing
 

@@ -24,6 +24,21 @@ Use this log for conclusions that have been reproduced against an exact executab
 - None matched. Those patterns are not carried into this repository.
 - The Overture source and working VR Rework remain useful behavioral and structural references, but do not establish binary equivalence with either closed game.
 
+### 2026-09-04 — Large Address Aware state of the binary games
+
+- Builds inspected: Black Plague `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`; Requiem `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2`.
+- Question: do the installed 32-bit executables already opt into an address
+  space larger than the original 2 GB user-mode range?
+- Evidence: both files have the PE32 optional-header magic `0x010B`, x86 machine
+  type and COFF characteristics `0x010F`. Bit `0x0020`
+  (`IMAGE_FILE_LARGE_ADDRESS_AWARE`) is clear in both images.
+- Reference: Overture VR Rework explicitly enables the Visual Studio
+  `LargeAddressAware` linker setting for its rebuilt game executable.
+- Result: confirmed absent in these exact Black Plague and Requiem files. The
+  unified installer should enable the one-bit flag only after exact-hash
+  matching and verified backup; it must record the transformed hash and support
+  byte-exact rollback.
+
 ### 2026-09-03 — Verified Black Plague frame and OpenGL telemetry
 
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`

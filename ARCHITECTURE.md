@@ -22,7 +22,7 @@ The public experience is unified even though these implementations are intention
 
 ## Runtime boundary
 
-The future runtime may own:
+The game-independent runtime owns, or is intended to own:
 
 - OpenVR lifecycle and compositor access
 - tracked poses and coordinate conversion
@@ -31,7 +31,28 @@ The future runtime may own:
 - renderer-neutral eye/view data
 - host-independent tests
 
-It must not own game RVAs, binary signatures, HPL object layouts or assumptions about a specific player class. Those belong to a backend and, where appropriate, to an exact build manifest.
+The current implementation already provides the OpenVR session, render-target
+policy, tracking mathematics and host-independent reference functions for the
+accepted visual and spatial-audio tuning. The imported OpenVR action manifest
+and controller bindings are data only for now: action polling, hands and game
+input injection are not connected.
+
+The runtime must not own game RVAs, binary signatures, HPL object layouts or
+assumptions about a specific player class. Those belong to a backend and, where
+appropriate, to an exact build manifest.
+
+## Shared HPL1 adapter boundary
+
+Black Plague and Requiem use closely related HPL1 layouts, while Overture is
+available as source. Reusable engine behavior therefore lives in a narrow HPL1
+adapter layer between the runtime and the exact-build backends. For example,
+`src/adapters/hpl1/camera_matrix_override.*` implements the byte-exact camera
+transaction, while the Black Plague backend supplies the validated offsets.
+
+This layer may share renderer, light, material, physics and sound behavior only
+after it has been demonstrated in at least one real integration. It must not
+turn a coincidental RVA or game-specific player state into a supposed engine
+contract.
 
 ## Backend responsibilities
 
@@ -48,7 +69,12 @@ A backend translates runtime concepts into one game's implementation:
 
 The backend API will be frozen only after the Black Plague proof of concept reveals the real data and lifecycle requirements. Defining a large speculative interface first would merely encode guesses.
 
-The first backend-owned code now lives under `src/backends/black_plague`. It contains only the exact-build `RenderWorld` call-site validator; it is not yet a general backend interface or a claim of playable support.
+The first backend-owned code lives under `src/backends/black_plague`. It validates
+and intercepts the exact-build `RenderWorld` call site, performs reversible
+per-eye camera overrides, renders to shared eye targets and can submit a
+continuous rotation-tracked stereo stream. This remains a research backend: the
+continuous path has not received its longer headset validation, and positional
+tracking, controls, hands, UI integration and a production launcher are absent.
 
 ## Build identity
 
@@ -67,7 +93,11 @@ Unknown hashes must never receive hooks intended for a known build. Unsupported 
 
 The preferred direction is one small, dependable bootstrap installed beside each supported binary game. It identifies the host, validates its build, loads exactly one backend, and otherwise exits without modifying the process.
 
-Whether the bootstrap is loaded by a launcher, an SDL proxy, or another mechanism remains an open decision until a minimal injection experiment has been tested. Multiple simultaneous SDL/OpenAL/OpenGL proxy layers are not a design goal.
+The current research launcher injects a version-gated probe into an already
+running Steam process. That proves the binary boundary but is not the intended
+end-user bootstrap. Whether the product bootstrap is loaded by a launcher, an
+SDL proxy, or another mechanism remains an open decision. Multiple simultaneous
+SDL/OpenAL/OpenGL proxy layers are not a design goal.
 
 ## Rendering milestone
 
@@ -95,7 +125,14 @@ The eventual installer will:
 - distinguish games and exact executable builds
 - show supported, unknown and already-modded states
 - back up every replaced file transactionally
+- enable Large Address Aware only for allowlisted x86 PE32 executables, after a
+  backup, and restore the original bytes during rollback
 - deploy only the files needed by each integration model
 - preserve saves and configuration
 - support verification, repair and rollback
 - never patch an unknown executable silently
+
+The transaction and state model are specified in
+[`docs/INSTALLER_DESIGN.md`](docs/INSTALLER_DESIGN.md). The repository currently
+contains only the tested in-memory LAA byte transformation; it does not yet
+modify installed game files.

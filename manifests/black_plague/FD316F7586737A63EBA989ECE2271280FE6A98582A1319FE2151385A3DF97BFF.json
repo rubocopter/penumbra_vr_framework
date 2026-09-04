@@ -5,6 +5,7 @@
   "executable": {
     "fileName": "Penumbra.exe",
     "machine": "x86",
+    "largeAddressAware": false,
     "sha256": "FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF",
     "preferredImageBase": "0x00400000"
   },
@@ -347,6 +348,15 @@
       "userObservedLowDiagnosticResolution": true,
       "boundedSessionTransitionsVisible": true,
       "gameRemainedResponsive": true
+    },
+    "continuousTrackedPresentation": {
+      "status": "implemented-build-verified-awaiting-headset-validation",
+      "renderScale": 1.0,
+      "resolutionSource": "OpenVR recommended per-eye size",
+      "allocationFallback": "proportional halving to a 512-pixel minimum dimension",
+      "explicitStartStop": true,
+      "translationApplied": false,
+      "headsetValidated": false
     }
   },
   "symbols": {
