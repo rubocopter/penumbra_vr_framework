@@ -10,7 +10,7 @@ Machine: x86
 Build ID: black-plague-steam-observed
 ```
 
-It is not yet a playable VR backend. Its default attached state only observes and forwards rendering. Bounded experimental commands have submitted native stereo and validated rotation-only tracking. A newer explicit continuous mode keeps OpenVR and adaptive runtime-sized targets active until stopped; that path is build-verified but not yet headset-validated.
+It is not yet a playable VR backend. Its default attached state only observes and forwards rendering. Bounded experimental commands have submitted native stereo and validated rotation-only tracking. A newer explicit continuous mode keeps OpenVR and adaptive runtime-sized targets active until stopped. Full-resolution PS VR2 sessions have validated its technical lifecycle, keyboard/mouse preservation and HMD-relative visibility. Frame pacing remains open.
 
 ## Loading model
 
@@ -52,7 +52,7 @@ The current build also prepares a passive counter at the single `cScene::Render`
 - observed values: call count plus renderer, world, camera and frame-time arguments
 - forwarding: the adapter invokes the original function exactly once and does not change an argument
 
-Installation fails closed unless all five call bytes match. Other process threads are briefly suspended while the five-byte instruction is replaced or restored, and installation is aborted if a thread is currently executing inside that instruction. This call-site mechanism has host-independent Debug and Release coverage and has completed three live attach/detach cycles for the exact supported hash.
+Installation fails closed unless all five call bytes match. Other process threads are briefly suspended while the five-byte instruction is replaced or restored, and installation is aborted if a thread is currently executing inside that instruction. This call-site mechanism has host-independent Debug and Release coverage and has completed three live attach/detach cycles for the exact allowlisted research hash.
 
 ## Teardown
 
@@ -139,6 +139,14 @@ The compositor command completed three consecutive 300-frame runs in a later pro
 
 The test game process did not exit in response to a normal window-close request after verification and was therefore explicitly stopped. This does not count as successful launch/play/exit validation, which remains open on the roadmap.
 
+On 2026-09-04, continuous presentation was started in a fresh Steam-launched process and retained SteamVR's full `3400x3468` recommendation without allocation fallback. It submitted 6,847 yaw-aligned rotation-tracked stereo frames during 120.6 seconds and crossed two observed changes of the `RenderWorld` world pointer. Every sampled frame reported a valid HMD pose, captured tracking anchor, two completed eye passes, restored camera and an empty stereo error. Explicit stop destroyed the eye targets on the render thread with GL state restored; detach then removed every hook after 6,990 observed frames. The game remained responsive for more than 23 seconds afterwards, its later process exit was observed, and the Application log contained no matching Application Error or Windows Error Reporting event from launch through exit.
+
+SteamVR 2.17.8 recorded 10,839 presents, two dropped frames and 3,467 reprojected frames for PID 9448: 31.99% reprojection at a 90 Hz target. Its cumulative application times were 16.160 ms CPU and 14.721 ms GPU, while the probe commonly observed an approximately 60 Hz game cadence. This is evidence of a working continuous lifecycle, not acceptable final frame pacing. The startup-only SRV and unrelated dashboard/input-manifest warnings predated the game connection.
+
+The user reported that keyboard and mouse appeared functional and that the image generally looked good. However, walls and other geometry were sometimes absent when looking towards them with the HMD and appeared after moving the game camera towards the same area; some nearby objects also appeared and disappeared. Static analysis then mapped `cScene::UpdateRenderList` at RVA `0x000EDF50`, its call at RVA `0x000EDF84`, and `cRenderer3D::UpdateRenderList` at RVA `0x0012A8F0`. This confirms the source-matching order: HPL1 prepares its portal/frustum render list before the intercepted `RenderWorld` call, while the original backend applied tracked per-eye matrices only inside that later call.
+
+The correction hooks that earlier call while continuous stereo is active. After the first valid tracked frame, it derives the next visibility view from the latest valid HMD pose and current game-camera view, builds one symmetric frustum containing both OpenVR eye frusta plus a five-degree angular guard, and invokes the original update once. View/projection matrices, FOV, aspect and dirty flags are restored byte-exactly afterwards. It falls back to the untouched game-camera update on any validation error and exposes per-frame success, failure and restoration telemetry. A 110.3-second follow-up run exercised it without a technical failure, and the user confirmed that all geometry looked correct: neither missing walls on HMD turns nor nearby-object popping recurred.
+
 ## Commands
 
 ```powershell
@@ -171,16 +179,37 @@ The test game process did not exit in response to a normal window-close request 
 
 # Experimental: start/stop continuous tracked presentation at adaptive resolution
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --start-vr <pid>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --vr-mirror-on <pid>
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --vr-mirror-off <pid>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --stop-vr <pid>
 
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. Translation remains forced to zero. The continuous mode retains that transform, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Black Plague and Requiem are not Large Address Aware in their installed state, so the future installer must apply that known-build-gated change before the much heavier Enhanced visuals buffers are enabled.
+`--vr-mirror-on` and `--vr-mirror-off` persist the successful choice in
+`%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--start-vr` applies that value before
+starting presentation; a missing file or key safely defaults to mirror off.
+
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. Translation remains forced to zero. The continuous mode retains that transform, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Its Rework-derived mirror policy defaults off: the first eye receives the game frame time and the original desktop world pass is skipped, reducing three world renders to two. `--vr-mirror-on` retains the separately timed desktop pass and `--vr-mirror-off` restores the two-pass path. Bounded diagnostics always keep their prior desktop pass. If stereo fails after the first timed eye, the fallback desktop pass receives zero frame time to avoid a double update. Pass ownership and counts are exposed in telemetry. Both continuous schedules have executed with the expected live pass counts and no stereo or camera-restoration errors; an explicit visual check of the desktop mirror and a comparable frame-pacing measurement remain pending. Black Plague and Requiem are not Large Address Aware in their installed state, so the future installer must apply that known-build-gated change before the much heavier Enhanced visuals buffers are enabled.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 
-## Next question
+## Current boundary and next validation
 
-Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation now covers the render boundary, OpenVR-sized targets, a controlled extra world pass, reversible per-eye projection/IPD matrices, native stereo presentation and yaw-aligned rotation-only head tracking. Continuous presentation at adaptive resolution is implemented and deliberately queued for a later, longer headset session together with further gameplay progress. Positional tracking, input/hands and the binary renderer hooks needed by Enhanced visuals remain separate work.
+Static analysis maps `cRenderer3D::RenderWorld` to RVA `0x0012CB10` and its sole direct call in `cScene::Render` to RVA `0x000EE010`. The call passes `mpActiveCamera` from `cScene+0x64`; `RenderWorld` forwards it to `BeginRendering` at RVA `0x0012A7F0`. The separate render-list update target is RVA `0x0012A8F0`, called from `cScene::UpdateRenderList` at RVA `0x000EDF84` before `cScene::Render`. The mapped camera getters return the view matrix at `camera+0x44` and projection at `camera+0x84`. Live validation covers these boundaries, stereo projection/IPD, yaw-aligned rotation tracking, HMD-aware visibility, keyboard/mouse input and continuous start/stop. Both two-pass and monitor-mirror schedules have executed with the expected live pass counts. The latest cap-disabled session has sampled intervals near 90 submissions per second; this does not establish compositor reprojection or worst-case timing.
+
+The next physical boundary is the medium-distance lamp dropout. A reversible
+`glScissor` IAT hook now adapts desktop-pixel rectangles to each eye's viewport
+only during stereo world rendering. It checks the current context, framebuffer
+and viewport, leaving other destinations untouched. Eye bindings save/restore
+scissor enable and box state, clearing inherited clipping before each eye.
+`eye_scissor_remapped` and `eye_scissor_bypassed` expose per-frame activity in
+the standard log. Host tests cover actual GL pixel coverage and hook teardown;
+the [lighting checklist](VR_LIGHTING_VALIDATION.md) remains pending in game.
+As of 2026-09-06, real VR input, native intents, tracked menus, provisional gloves
+and free-body grab/throw are implemented and code-tested, not headset-validated.
+See [startup/controller status](VR_STARTUP_AND_CONTROLLERS.md) and
+[spatial adapter evidence](BLACK_PLAGUE_SPATIAL_NOTES.md). Positional tracking,
+palm collision, articulated mechanisms, tool/light attachment and Enhanced
+visuals renderer hooks remain separate work.

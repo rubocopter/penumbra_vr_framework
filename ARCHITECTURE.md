@@ -32,10 +32,17 @@ The game-independent runtime owns, or is intended to own:
 - host-independent tests
 
 The current implementation already provides the OpenVR session, render-target
-policy, tracking mathematics and host-independent reference functions for the
-accepted visual and spatial-audio tuning. The imported OpenVR action manifest
-and controller bindings are data only for now: action polling, hands and game
-input injection are not connected.
+and stereo-pass policies, tracking mathematics and host-independent reference
+functions for the accepted visual and spatial-audio tuning. The imported OpenVR
+action manifest and controller bindings are joined by a device-independent
+logical input router covering dead zones, context/handedness edge latching,
+pose-loss releases and transient action-idle grace. Real OpenVR polling and
+exact-build native intent consumption are connected, along with tracked menus,
+procedural gloves and a free-body grab/throw adapter. These paths are code-tested,
+not yet headset-validated. A runtime-owned settings model now
+centralizes the Rework defaults, ranges, enum values and migration behavior;
+the launcher persists the Black Plague monitor-mirror preference, while full
+configuration storage and application remain adapter/backend responsibilities.
 
 The runtime must not own game RVAs, binary signatures, HPL object layouts or
 assumptions about a specific player class. Those belong to a backend and, where
@@ -73,12 +80,22 @@ The first backend-owned code lives under `src/backends/black_plague`. It validat
 and intercepts the exact-build `RenderWorld` call site, performs reversible
 per-eye camera overrides, renders to shared eye targets and can submit a
 continuous rotation-tracked stereo stream. This remains a research backend: the
-continuous path has not received its longer headset validation, and positional
-tracking, controls, hands, UI integration and a production launcher are absent.
+continuous path has completed a two-minute full-resolution runtime session and
+preserved keyboard/mouse input, but the user observed HMD-relative geometry
+popping consistent with a render list prepared before the per-eye camera
+overrides. The new conservative HMD-aware update has removed those observed
+artifacts in a follow-up headset run. Frame-pacing work remains open; positional
+tracking and a production installer are still absent. Native controller intents,
+tracked UI panels, provisional hands and free-body interaction are implemented;
+palm collision, articulated mechanisms and tool/light attachment remain pending.
+Continuous stereo now defaults to two world passes, with game time advanced on
+the first eye; an optional mirror retains a third desktop pass. This Rework-derived
+schedule has host coverage and live pass-count telemetry; comprehensive visual
+and frame-pacing validation remains open.
 
 ## Build identity
 
-Filename detection is insufficient because both Overture and Black Plague commonly use `Penumbra.exe`. Each binary backend must select a manifest using a cryptographic executable hash. A manifest will eventually contain:
+Filename detection is insufficient because both Overture and Black Plague commonly use `Penumbra.exe`. Each binary backend must select a manifest using a cryptographic executable hash. The current evidence manifests contain, and any future production manifest must preserve:
 
 - game and release/channel identity
 - executable architecture and SHA-256
@@ -94,8 +111,10 @@ Unknown hashes must never receive hooks intended for a known build. Unsupported 
 The preferred direction is one small, dependable bootstrap installed beside each supported binary game. It identifies the host, validates its build, loads exactly one backend, and otherwise exits without modifying the process.
 
 The current research launcher injects a version-gated probe into an already
-running Steam process. That proves the binary boundary but is not the intended
-end-user bootstrap. Whether the product bootstrap is loaded by a launcher, an
+running Steam process. `--launch-vr` also starts the exact game through Steam,
+waits for initialization and enables continuous VR with the saved mirror setting.
+The full startup sequence still needs live validation. This is not a production
+installer/bootstrap. Whether the product bootstrap is loaded by a launcher, an
 SDL proxy, or another mechanism remains an open decision. Multiple simultaneous
 SDL/OpenAL/OpenGL proxy layers are not a design goal.
 

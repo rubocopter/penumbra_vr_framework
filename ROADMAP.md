@@ -9,7 +9,7 @@ Roadmap states are evidence-based. A directory or compiling stub does not make a
 - [x] Known-build fingerprinting tool
 - [x] Initial executable fingerprints recorded
 - [x] Adopt GPLv3-or-later and begin component-level provenance records
-- [ ] Record reproducible binary-research workflow
+- [x] Record reproducible binary-research workflow
 
 Exit criterion: a clean repository in which every implemented feature is testable and every planned feature is labelled as planned.
 
@@ -47,10 +47,22 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Validate native presentation of the static eye textures in the headset
 - [x] Apply and live-validate yaw-aligned rotational head tracking
 - [x] Implement continuous start/stop presentation and adaptive runtime-sized targets
-- [ ] Validate continuous presentation at runtime-derived resolution in the headset
+- [x] Validate the continuous technical lifecycle at runtime-derived resolution
+- [x] Map the exact-build render-list update boundary
+- [x] Implement a conservative HMD-aware render-list update
+- [x] Live-validate HMD-relative portal/frustum visibility correction
+- [x] Confirm continuous visual behavior in the headset
+- [x] Implement the Rework-derived optional monitor mirror and default two-pass schedule
+- [x] Live-validate the two-pass path and runtime monitor-mirror toggle telemetry
+- [x] Implement and host-test eye-resolution light scissoring and GL-state isolation
+- [ ] Headset-validate medium-distance lamp lighting and scissor-hook performance
+- [ ] Achieve acceptable frame pacing at the headset's target refresh rate
 - [ ] Apply positional tracking with game/body calibration
 - [x] Submit both eyes to OpenVR
-- [ ] Preserve functional keyboard and mouse input
+- [x] Preserve functional keyboard and mouse input
+- [x] Implement one-step Steam launch, VR activation and read-only preflight
+- [x] Host-test tracked menu panels and controller-ray projection
+- [ ] Live-validate direct VR startup and menu/gameplay transitions
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus.
 
@@ -58,17 +70,21 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 
 - [x] Extract render-scale fallback, visual-calibration and spatial-audio reference behavior
 - [x] Import the shared OpenVR action manifest and controller bindings as data
+- [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
 - [ ] Keep Overture's existing build and tests green during extraction
 - [ ] Introduce a minimal backend contract derived from both integrations
-- [ ] Add host-independent tests for transforms, actions and settings
+- [x] Add host-independent tests for transforms, actions and settings
 - [ ] Preserve copyright, license and provenance information
 
 Exit criterion: Overture and the Black Plague MVP consume the same tested runtime behavior without sharing game-specific addresses or layouts.
 
 ## Phase 4 — Black Plague gameplay VR
 
-- [ ] Connect OpenVR action polling to the imported manifest and bindings
+- [x] Connect OpenVR action polling to the imported manifest and bindings
+- [x] Code-test native intents, tracked menus and provisional depth-tested gloves
+- [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
+- [ ] Complete palm collision, jointed mechanisms and tool/light attachment
 - [ ] room-scale body/head relationship
 - [ ] hands, grabbing and interactions
 - [ ] inventory, notes, menus, HUD and subtitles

@@ -30,6 +30,12 @@ Penumbra VR is GPLv3 or later and records each adapted component in
 
 ## Installed-resource evidence
 
+The framework now adapts Rework's VR-sized light clipping through
+`src/hooks/opengl_eye_scissor.*`: HPL desktop-pixel scissor rectangles are scaled
+only within each stereo eye's destination. The host math and OpenGL pixel tests
+pass; the medium-distance lamp dropout still requires a headset retest. This
+does not port Enhanced visuals or change the original Rework installation.
+
 Black Plague and Requiem share the installed `redist` tree. It contains both
 `Penumbra.exe` and `Requiem.exe`, plus the same HPL resource families needed by
 the rework: `hud_object_glowstick`, `hud_object_flashlight`, their inventory
@@ -43,6 +49,41 @@ overlay with per-game visual validation, not assumed to be interchangeable
 because their names match.
 
 ## Extraction order
+
+### Immediate priority: PSVR2 Sense playability (2026-09-05)
+
+The user explicitly prioritizes playing with PSVR2 Sense, reusing the working
+Overture Rework implementation. As of 2026-09-06, real OpenVR polling, native
+intent consumption, tracked menus, provisional gloves and free-body grab/throw
+are connected and code-tested. Tool attachment, palm collision and articulated
+mechanisms remain pending. Existing bindings and host tests alone must not be
+described as a completed/headset-validated Rework port.
+
+The next input implementation should proceed through these acceptance gates:
+
+1. Adapt Rework's `HPL1Engine/sources/input/SteamVRInput.cpp` into the shared
+   runtime: manifest registration, action handles, handed gameplay/UI sets,
+   hand/aim poses, button/stick sampling and haptics. Keep missing-controller
+   and initialization failures nonfatal to the existing keyboard/mouse path.
+2. Map Black Plague's input/update and UI-context boundaries from binary
+   evidence. Adapt the intent consumption in Rework's
+   `PenumbraOverture/ButtonHandler.cpp`: movement, turning, interaction,
+   inventory, notebook, lights, pause and menu navigation. Update inputs once
+   per game tick, never once per rendered eye. Test focus/tracking loss and
+   context changes without leaving a held action stuck.
+3. Port the spatial interaction separately, using `PlayerHands.*` and
+   `PlayerState_Interact_VR.*` as references: visible hands, controller-directed
+   selection, grabbing/releasing objects and tool/light attachment. This
+   requires per-game entity/physics/render integration, not different PSVR2
+   button definitions.
+
+Do not invent Black Plague addresses, replace these systems with an undocumented
+keyboard-emulation layer, or bulk-copy Overture game classes. Report separately
+whether actions are merely readable, basic gameplay is connected, and spatial
+interaction is headset-validated. The lamp-fix retest remains an independent
+pending validation, not a claim that the controller work is already complete.
+
+### Overall sequence
 
 1. Finish stable stereo and head tracking in Black Plague using the shared
    runtime types.
@@ -77,6 +118,21 @@ adapter from being mistaken for a shared-runtime defect.
   in memory. Transactional file replacement remains installer work.
 - `src/adapters/hpl1/camera_matrix_override.*` now owns the byte-exact camera
   transaction; exact-build backends provide the layout.
+- `src/runtime/stereo_render_policy.*` makes Rework's optional monitor mirror
+  explicit: continuous headset-only rendering owns frame time on the first eye
+  and needs two world passes, while mirroring keeps a separately timed desktop
+  pass. The Black Plague hook consumes this policy; headset validation is pending.
+- `src/runtime/vr_input_state.*` owns logical actions, radial move dead-zone
+  scaling, context/handedness edge latching, pose-loss releases and the 500 ms
+  action-idle grace period without depending on HPL or OpenVR types. Runtime
+  OpenVR polling and exact-build native intent consumption are now connected in
+  code; see `VR_STARTUP_AND_CONTROLLERS.md` for unvalidated behavior and limits.
+- `src/runtime/vr_settings.*` owns the Rework defaults, limits, enum text
+  values and legacy smooth-turn migration, plus framework monitor-mirror state.
+  The render-target and input policies consume its shared limits. The launcher
+  persists the Black Plague mirror flag; storage and per-game application for
+  the remaining settings are pending.
 - `assets/openvr` contains the shared action schema and bindings for PSVR2 Sense,
   Vive, Index, Oculus, Pico and Windows motion controllers. These files are
-  imported data only until runtime polling and installer registration exist.
+  consumed by the runtime reader and copied beside the probe on each build.
+  Physical interaction and unified installer registration remain separate work.

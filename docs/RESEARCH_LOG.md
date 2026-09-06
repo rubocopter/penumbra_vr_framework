@@ -2,6 +2,28 @@
 
 Use this log for conclusions that have been reproduced against an exact executable hash. Do not record guesses as resolved addresses.
 
+## Current checkpoint — 2026-09-06
+
+Real OpenVR actions, native Black Plague intents, tracked menus, procedural
+gloves and free-body palm-relative grab/throw are integrated and code-tested.
+One-step Steam startup is implemented; only its read-only preflight has been
+executed in this batch. The launcher checks the loaded probe path and relocates
+forwarded Windows exports through their actual owner. No new game/SteamVR
+session was started, and the separate Overture Rework repository is unchanged.
+
+All 21 tests pass locally in Release, Debug and SDK-less Release. The capture
+verifier checks native input and spatial boundaries without modifying a process.
+Proprietary captures, dependencies and build outputs are excluded from Git.
+Hosted CI runs the 20 non-WGL-driver tests per configuration; that result is
+separate from local GPU tests and from headset validation.
+
+The third gameplay gate remains partial: palm collision, articulated mechanisms,
+tool/light attachment and full Rework hand assets are not finished. See
+`VR_STARTUP_AND_CONTROLLERS.md` for behavior/limits and
+`BLACK_PLAGUE_SPATIAL_NOTES.md` for exact RVAs and the next integration boundary.
+Earlier dated entries below describe historical milestones, not physical
+validation of these newly implemented systems.
+
 ## Entry template
 
 ### YYYY-MM-DD — Short description
@@ -209,6 +231,14 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Cleanup: targets were destroyed after 121 active frames with GL state restored; hooks were deactivated under the resident-DLL policy. The game remained responsive after 12 seconds with zero matching WER events.
 - Result: a second HPL world pass is viable at the chosen hook boundary without camera mutation. Per-eye matrices and compositor submission remain untested.
 
+### 2026-09-04 — Reversible per-eye matrices and static stereo presentation
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Matrix evidence: a controlled command used OpenVR projection tangents and eye-to-head transforms to render 60 stereo pairs into separate `512x512` targets. The observed horizontal projection terms were `[0.717113, -0.320757]` and `[0.717113, 0.320757]`, with eye translations of `-0.0315 m` and `+0.0315 m`. All 120 extra passes restored the camera bytes, framebuffer and viewport before the normal desktop pass.
+- Compositor evidence: a subsequent command completed three 300-frame cycles. All 900 frames acquired a valid HMD pose for frame timing, rendered and submitted both OpenGL textures without compositor errors, and restored the camera after each eye.
+- Headset evidence: the user observed native full-view stereo rather than SteamVR's cinema screen. The image was visibly low resolution as expected from the deliberately bounded diagnostic targets; the pose was not yet applied to the view.
+- Result: asymmetric per-eye rendering and native compositor presentation confirmed for this build. Head tracking remained separate work at this point.
+
 ### 2026-09-04 — Rejected full-orientation tracking anchor
 
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
@@ -228,3 +258,157 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Live evidence: six consecutive cycles submitted 1,800 tracked stereo frames. Every frame used a valid pose and anchor; there were no compositor errors or camera-restoration failures, and the game remained responsive.
 - Headset evidence: the user confirmed that the world orientation was now correct and that rotational tracking behaved correctly. The image was low resolution by design. It returned briefly between cycles because each bounded 300-frame command shut down and reinitialized OpenVR.
 - Result: yaw-aligned rotation-only tracking confirmed for this exact Black Plague build. Positional tracking, continuous session ownership and production resolution remain unvalidated.
+
+### 2026-09-04 — Continuous adaptive presentation implemented
+
+- Implementation: `--start-vr` retains one OpenVR session and yaw-aligned rotational tracking until `--stop-vr` or `--detach`. Eye targets begin at SteamVR's recommended per-eye dimensions at scale 1.0 and retry progressively smaller proportional sizes down to a 512-pixel minimum dimension if allocation fails.
+- Host evidence: the OpenVR and no-OpenVR configurations compile with warnings treated as errors, and the component test suite passes. These tests do not simulate the complete injected process lifetime or establish headset behavior.
+- Scope: translation remains disabled, the normal desktop pass remains present and the research DLL stays resident after hook deactivation.
+- Result: continuous presentation is implemented and build-verified, but runtime-derived resolution, longer gameplay, keyboard/mouse preservation, explicit stop and normal game exit still require one in-headset validation session.
+
+### 2026-09-04 — Continuous full-resolution runtime validation
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Runtime: SteamVR 2.17.8 and OpenVR SDK 2.15.6 with a PS VR2 reported `3400x3468` per eye. The first allocation succeeded, so no proportional fallback was used.
+- Probe evidence: continuous mode submitted 6,847 yaw-aligned rotation-tracked stereo frames during 120.6 seconds. Every sampled active frame had a valid HMD pose and tracking anchor, two eye passes, restored camera state and no stereo error. Two changes of the observed world pointer exercised more than one renderer-world lifetime.
+- Teardown and exit: explicit stop destroyed both targets on the render thread and restored incoming GL state. Detach removed the hooks after 6,990 observed frames while keeping the DLL resident. The process remained responsive for more than 23 seconds, later exited, and produced no matching Application Error or Windows Error Reporting event from launch through exit. Probe log SHA-256: `A996CE132A461EE439D3A0CD8D6F04F4189F37E602121FF0ACF4289C0C3D01F5`.
+- Frame pacing: SteamVR reported 10,839 presents, two dropped and 3,467 reprojected frames, or 31.99% reprojection at a 90 Hz target. Cumulative application time was 16.160 ms CPU and 14.721 ms GPU; sampled game frames commonly followed an approximately 60 Hz cadence.
+- Result: runtime-sized continuous start, presentation, world changes, stop and teardown are technically confirmed. The reprojection rate requires investigation; user-visible behavior is recorded separately below.
+
+### 2026-09-04 — Continuous-session user feedback
+
+- Input: the user reported that keyboard and mouse appeared functional throughout the test.
+- Overall presentation: the full-resolution image generally looked good.
+- Visibility defect: walls and other room geometry could be absent when exposed by an HMD turn, then appear after the player moved the game camera towards that area. Some nearby objects also popped in and out.
+- Root-cause evidence: source-level HPL1 calls `cScene::UpdateRenderList` separately from and before `cScene::Render`. The initialized Black Plague image contains the matching scene wrapper at RVA `0x000EDF50`, its only renderer update call at RVA `0x000EDF84`, and the source-matching `cRenderer3D::UpdateRenderList` target at RVA `0x0012A8F0`; each selected signature occurs once in `.text`. The target clears and compiles the render list from `camera->GetFrustum()`. The current hook applies tracked per-eye matrices only later at RVA `0x000EE010`, so the submitted eyes consume visibility prepared from the game camera.
+- Enhanced visuals: this run used the stock Black Plague lighting path. The imported Rework v4 CPU calibration is test-only; HDR/MSAA targets, final tonemapping, enhanced light/material shaders, sharpening and glowstick-halo integration are not active in the binary backend.
+- Implementation: the exact update call is now hooked only during continuous tracked presentation. Starting with the second tracked frame, the original update receives the latest valid HMD orientation applied to the current game-camera view and a symmetric cull frustum containing both asymmetric eyes plus a five-degree guard. A shared transaction restores matrices, FOV, aspect and dirty flags after the call; failures fall back to the untouched update and are reported in frame telemetry.
+- Host verification: the conservative-frustum math and byte-exact visibility-camera transaction have positive and rejection coverage. OpenVR Release, OpenVR Debug and no-OpenVR Release builds each pass all 12 tests.
+- Result: keyboard/mouse preservation is provisionally validated and the corrective visibility hook is implemented. Continuous visual acceptance remains open pending live hook validation and another headset run.
+
+### 2026-09-04 — HMD-aware visibility runtime validation
+
+- Runtime: the exact Black Plague build ran on PS VR2 at SteamVR's `3400x3468` per-eye recommendation for 110.282 seconds.
+- Probe evidence: 6,570 tracked stereo frames were submitted. Every sampled active frame reported one HMD-aware render-list update, zero visibility failures, exact visibility-camera restoration, two completed eye passes, a valid pose and no stereo error.
+- Teardown: explicit stop destroyed the targets on the render thread after 6,571 target frames; detach restored both exact-build call sites after 6,745 observed probe frames. The game remained responsive and no matching Application Error or Windows Error Reporting event was present after deactivation.
+- Frame pacing: SteamVR reported 9,913 presents, zero dropped and 3,286 reprojected frames, or 33.15% reprojection at a 90 Hz target. Cumulative application time was 16.442 ms CPU and 15.723 ms GPU. Different scene content prevents attributing the change from the prior run solely to the wider visibility set, but the result does not improve the existing pacing concern.
+- Probe log SHA-256: `AC7EECBE3E8C5228709BC1E21695821E816B5895D6B96811AACAFEEF3A03C69E`.
+- Headset result: the user reported that everything looked correct. Missing walls on HMD turns and nearby-object popping did not recur, so no separate occlusion-query defect was exposed by this run.
+- Result: the HMD-aware update hook, fallback telemetry, restoration path and intended visual correction are live-confirmed. Frame pacing remains a separate open problem.
+
+### 2026-09-04 — Rework-derived mirror policy and logical input extraction
+
+- Motivation: the validated continuous path rendered the world once per eye and once again for the desktop while SteamVR measured 33.15% reprojection. Overture Rework already makes that third pass optional through its `RenderToMonitor` setting and advances frame time on the first eye when it is disabled.
+- Stereo implementation: `src/runtime/stereo_render_policy.*` now defines frame-time ownership and world-pass count independently of Black Plague. Continuous presentation defaults to two eye passes; the optional mirror retains the original desktop pass. Bounded diagnostics keep their previous three-pass behavior. A partial failure after the timed first eye falls back to the desktop with zero frame time.
+- Control and evidence: `--vr-mirror-on` and `--vr-mirror-off` call exported probe controls, and telemetry distinguishes mirrored, suppressed-monitor and eye-timed frames. The policy and both hook configurations compile with warnings as errors.
+- Input extraction: `src/runtime/vr_input_state.*` adapts Rework's device-independent intents, radial dead zone, context/handedness edge suppression, pointer/interact pose-loss release and 500 ms all-actions-idle grace period. It deliberately does not poll OpenVR or inject input into Black Plague yet.
+- Host verification: all 14 tests pass in OpenVR Release, OpenVR Debug and no-OpenVR Release. The new tests also cover inactive analog cleanup and a non-monotonic supplied clock.
+- Validation boundary: the game and SteamVR were closed for this work. No claim is made yet about headset presentation, desktop mirror contents, reprojection improvement or controller behavior.
+
+### 2026-09-04 — Live two-pass schedule, mirror toggle and 60 Hz cap diagnosis
+
+- Runtime: continuous Black Plague presentation started at SteamVR's
+  `3400x3468` recommendation with the monitor mirror disabled.
+- Two-pass evidence: sampled active frames contained exactly two completed eye
+  passes, zero monitor world passes, one suppressed original pass and first-eye
+  frame-time ownership. Poses remained valid and camera restoration and stereo
+  error counts remained clean.
+- Mirror evidence: enabling the mirror at runtime changed the same session to
+  two eye passes plus one separately timed monitor world pass. The probe
+  reported the mirror flag and expected ownership transition with no hook or
+  restoration failure. The user had needed the desktop view to operate options;
+  explicit confirmation of the displayed mirror contents was not recorded.
+- Frame-cap evidence: although `LimitFPS=false` was written to the game config
+  while Black Plague was running, telemetry remained at exactly 300 frames per
+  five seconds. The engine does not hot-reload that value and wrote its live
+  `true` state back on exit. Overture Rework independently forces
+  `SetLimitFPS(false)` during initialization.
+- Static follow-up: the captured initialized Black Plague image contains
+  `cGame::Run` at RVA `0x000C89F0` and two unique checks of the limit byte at
+  object offset `0x28`, beginning at RVAs `0x000C8B8A` and `0x000C8BA2`.
+  This is evidence for a future exact-build reversible override, not permission
+  to patch the installed executable.
+- Result: both scheduling branches are live telemetry-validated. Comparable
+  SteamVR timing and an explicit monitor-image check remain open. The game was
+  stopped and exited normally before configuration work continued.
+
+### 2026-09-04 — Trilogy VR configuration baseline and shared settings model
+
+- Local configuration: with all games and SteamVR closed, the Overture Rework,
+  Black Plague and Requiem `settings.cfg` files were normalized to the documented
+  VR baseline. Each original received a same-directory backup before modification.
+  Unrelated controls, saves, calibration and game preferences were preserved.
+- Comfort and pacing policy: all three profiles now disable the legacy 60 FPS
+  cap, desktop VSync, window FSAA, motion blur, depth of field and noise filtering.
+  Physics remains at 60 updates per second. Existing high-quality textures and
+  atmospheric effects were retained; Overture's Enhanced visuals, render scale,
+  HRTF and personal VR calibration were not replaced.
+- Shared implementation: `src/runtime/vr_settings.*` adapts Rework's defaults,
+  numeric limits, canonical enum text and version-0 smooth-turn migration without
+  HPL or OpenVR types. Non-finite numbers and invalid enum states fail to safe
+  defaults. The framework adds monitor-mirror state while leaving storage and
+  UI ownership to adapters/backends.
+- Integration: render-target scale and input dead-zone policy now consume the
+  shared setting limits instead of duplicating constants.
+- Verification: all 15 host-independent tests pass in OpenVR Release, OpenVR
+  Debug and no-OpenVR Release with warnings treated as errors. Metadata also
+  passes under PowerShell 7 and Windows PowerShell 5.1.
+- Validation boundary: the settings model is not yet loaded by the Black Plague
+  or Requiem binary backend, and the adjusted local files have not yet received
+  a new headset performance run.
+
+### 2026-09-04 — Persistent Black Plague monitor-mirror preference
+
+- Storage: `src/launcher/vr_settings_store.*` owns a narrowly scoped Windows INI
+  adapter at `%LOCALAPPDATA%\PenumbraVR\settings.ini`. Missing storage defaults
+  to mirror off; malformed recognized values fail with an explicit error.
+- Launcher behavior: a successful `--vr-mirror-on` or `--vr-mirror-off` call
+  persists the new state. `--start-vr` loads and applies it before starting the
+  continuous presentation, including an explicit reset to the safe off default.
+- Local baseline: the current user profile was created with
+  `VR/MonitorMirror=false`, matching the two-pass performance default.
+- Verification: the new file-store test covers missing files, directory
+  creation, true/false round trips, malformed input and the default path. All 16
+  host-independent tests pass in OpenVR Release, OpenVR Debug and no-OpenVR
+  Release with warnings treated as errors.
+- Validation boundary: persistence has not yet been exercised against a live
+  injected process; the remaining shared settings still lack storage and
+  backend application.
+
+### 2026-09-05 — Lamp scissor correction prepared after the 90 Hz session
+
+- Live evidence before this change: PID 15184 rendered at desktop viewport
+  2560x1440 and eye targets 3400x3468 with mirror enabled, two eye world passes,
+  one desktop world pass, valid poses and no reported stereo/restoration errors.
+  Sampled 300-frame intervals of approximately 3.337 seconds show about 90
+  frame submissions per second after the config frame-cap change. This is not
+  a measurement of compositor reprojection or proof of stable pacing everywhere.
+- User report: near a lamp, head rotation is safe; at medium distance, looking
+  up/down removes illumination on the environment while the bulb remains lit.
+- Rework comparison at revision `23c890f7dbd06b939be9951d282e6e948d9a6623`:
+  `LowLevelGraphicsSDL::GetScreenSize` returns VR dimensions while VR is enabled.
+  Point/spot `CreateClipRect` consume that size. `cMath::GetClipRectFromBV`
+  bypasses scissoring near/intersecting the light volume. The binary backend
+  lacked this dimension adaptation, matching the distance-dependent symptom.
+- Binary corroboration from `artifacts/black-plague-22000-live.bin`: the
+  `glScissor` IAT slot is VA `0x00672638`; its sole direct IAT call is at RVA
+  `0x0015DE3A`, inside the wrapper beginning at RVA `0x0015DE20`. The wrapper
+  forwards rectangle X/W/H and computes Y as `[this+8] - rect.y - rect.h - 1`.
+  The installed executable also imports `OPENGL32.dll!glScissor`. These offsets
+  are research observations, not new runtime patches or layout assumptions.
+- Implementation: reversible main-image IAT hook, thread-local per-eye scope,
+  actual context/FBO/viewport checks, outwards-rounded and clamped rescaling
+  with a one-source-pixel guard. Invalid inputs pass through and empty bounds
+  stay empty. Original GL entry remains published for late calls after removal.
+- Eye bindings now save/restore the scissor box and enable flag, and disable
+  inherited clipping before the eye world clear. Scope ends before restoration
+  so desktop coordinates are never scaled on the way back.
+- Diagnostics: `eye_scissor_remapped` / `eye_scissor_bypassed` counts per frame.
+- Verification: all 17 tests pass in OpenVR Release, OpenVR Debug and no-OpenVR
+  Release. Real-WGL tests inspect colored framebuffer pixels, IAT removal and
+  reinstallation, nested scopes, intermediate viewport/FBO bypass and exact
+  restoration. Metadata validation passes. No game was launched for this batch.
+- Boundary: ready for the focused checklist in `VR_LIGHTING_VALIDATION.md`, not
+  headset-validated. Scissor query cost, menus, flashlight and both mirror modes
+  require the next live session. No new tonemapping/shader integration; Rework
+  remains untouched and the installed game executables are unchanged.
