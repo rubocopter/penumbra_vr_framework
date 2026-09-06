@@ -90,6 +90,7 @@ int RunSpatialTest() {
     hand.device_to_absolute.values[3]=0.2F;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (Read<Matrix>(body.data(),0x34).values[3]!=0.2F || test_native_updates) return 4;
+    HookedGrabUpdate(state.data(),nullptr,0.016F); // stable second release sample
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || test_leaves!=1 || Read<float>(body.data(),0x42C)!=3 ||
@@ -115,6 +116,9 @@ int RunSpatialTest() {
     hand.device_to_absolute.values[3]+=2;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 10;
+    const auto diagnostics=ConsumeSpatialDiagnostics();
+    if (diagnostics.grabs_acquired<5 || diagnostics.grabs_released<5 ||
+        diagnostics.guarded_releases<3 || diagnostics.collision_restore_failures) return 22;
     // Failed teardown keeps the release path resident; the native tick drains it.
     begin(); std::string error;
     if (RemoveSpatialInteraction(error) || error.empty()) return 11;

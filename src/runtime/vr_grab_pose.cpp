@@ -40,6 +40,33 @@ bool VrGrabPose::Update(const VrMatrix44& palm, VrMatrix44& body, std::string& e
     if (!Inverse(palm, ignored, error)) return false;
     body = Multiply(palm, local_); return true;
 }
+void VrReleaseVelocity::Add(const std::array<float,3>& linear,
+    const std::array<float,3>& angular) noexcept {
+    const auto finite=[](const std::array<float,3>& value) {
+        return std::all_of(value.begin(),value.end(),[](float v){return std::isfinite(v);});
+    };
+    if (!finite(linear) || !finite(angular)) return;
+    linear_[next_]=linear; angular_[next_]=angular;
+    next_=(next_+1)%kCapacity;
+    count_=std::min(count_+1,kCapacity);
+}
+void VrReleaseVelocity::Estimate(std::array<float,3>& linear,
+    std::array<float,3>& angular) const noexcept {
+    linear={}; angular={};
+    // An immediate grab/release has no reliable motion history.
+    if (count_<2) return;
+    const auto median=[&](const auto& samples,std::size_t component) {
+        std::array<float,kCapacity> values{};
+        for (std::size_t i=0;i<count_;++i) values[i]=samples[i][component];
+        std::sort(values.begin(),values.begin()+count_);
+        const auto middle=count_/2;
+        return count_%2 ? values[middle] : (values[middle-1]+values[middle])*0.5F;
+    };
+    for (std::size_t component=0;component<3;++component) {
+        linear[component]=median(linear_,component);
+        angular[component]=median(angular_,component);
+    }
+}
 std::array<float, 3> LimitTrackedVelocity(std::array<float, 3> v, float scale, float maximum) noexcept {
     if (!std::isfinite(scale) || !std::isfinite(maximum) || scale < 0 || maximum < 0 ||
         !std::all_of(v.begin(), v.end(), [](float x) { return std::isfinite(x); })) return {};

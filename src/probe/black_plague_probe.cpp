@@ -85,9 +85,11 @@ std::string WideToUtf8(const std::wstring& value) {
 void OnFrame(std::uint64_t frame_number) noexcept {
     if (frame_number%300==0) {
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
-        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu",
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu guarded_releases=%llu collision_restore_failures=%llu",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
-            static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs));
+            static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs),
+            static_cast<unsigned long long>(spatial.grabs_acquired),static_cast<unsigned long long>(spatial.grabs_released),
+            static_cast<unsigned long long>(spatial.guarded_releases),static_cast<unsigned long long>(spatial.collision_restore_failures));
     }
     const auto timing=penumbra_vr::backends::black_plague::ConsumeNativeUpdateTiming();
     if (timing.ready) penumbra_vr::probe::WriteLog(

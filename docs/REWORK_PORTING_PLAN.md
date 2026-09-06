@@ -128,6 +128,10 @@ adapter from being mistaken for a shared-runtime defect.
   explicit: continuous headset-only rendering owns frame time on the first eye
   and needs two world passes, while mirroring keeps a separately timed desktop
   pass. The Black Plague hook consumes this policy; headset validation is pending.
+- `src/runtime/vr_grab_pose.*` preserves the selected palm/body transform and
+  now improves Rework's single-sample throw with a five-sample median, minimum
+  history and bounded tracking-discontinuity release. The Black Plague adapter
+  restores its exact-build character-collision flag on every owned release.
 - `src/runtime/vr_input_state.*` owns logical actions, radial move dead-zone
   scaling, context/handedness edge latching, pose-loss releases and the 500 ms
   action-idle grace period without depending on HPL or OpenVR types. Runtime

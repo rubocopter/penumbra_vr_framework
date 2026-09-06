@@ -48,6 +48,15 @@ real. Tampoco existe colisión de palmas. Los cuerpos libres siguen la palma con
 SetMatrix nativo; puertas, palancas y estados Push/Move conservan su mecánica
 nativa. El rayo secundario de examinar durante Grab sigue pendiente.
 
+La liberación ya no usa una única lectura instantánea del mando. Conserva las
+cinco últimas muestras finitas y aplica la mediana por componente; con menos de
+dos muestras no transfiere momento. Esto rechaza picos aislados sin eliminar un
+lanzamiento deliberado y sostenido. La velocidad lineal queda limitada a 9 m/s
+tanto durante el seguimiento como al soltar, y la angular a 6 rad/s. Un salto de
+palma superior a 0,35 m entre ticks cancela el agarre sin momento, igual que UI,
+pérdida de foco o tracking. Los contadores `grabs_acquired`, `grabs_released`,
+`guarded_releases` y `collision_restore_failures` quedan en el log periódico.
+
 El adaptador tiene un contador de callbacks activos y se niega a retirar hooks
 mientras queda un cuerpo propio. Solo el hilo de actualización del juego puede
 ejecutar la liberación. No se invocan métodos de física desde el hilo remoto.
@@ -103,6 +112,8 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 ejecuta el código del adaptador en una imagen sintética con trampolines a dobles
 nativos; no prueba Newton ni el juego real. El test OpenGL usa el driver WGL,
 verifica píxeles de guantes y oclusión/restauración de estado en ambos ojos.
+La prueba matemática de agarre inyecta un pico extremo en una ventana estable y
+comprueba que la estimación conserva la mediana; una sola muestra produce cero.
 El verificador PowerShell contrasta la captura inicializada sin modificar procesos.
 
 No se ha iniciado el juego/SteamVR ni solicitado una prueba física en esta tanda.

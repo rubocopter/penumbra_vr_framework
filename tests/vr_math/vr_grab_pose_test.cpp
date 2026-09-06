@@ -19,6 +19,18 @@ int main() {
     if (LimitTrackedVelocity({100,0,0},1.25F,9) != std::array<float,3>{9,0,0} ||
         LimitTrackedVelocity({0,2,0},0.5F,12) != std::array<float,3>{0,1,0} ||
         LimitTrackedVelocity({std::numeric_limits<float>::infinity(),0,0},1,9) != std::array<float,3>{}) return 5;
+    VrReleaseVelocity release;
+    std::array<float,3> release_linear{},release_angular{};
+    release.Add({1,2,3},{0,1,0});
+    release.Estimate(release_linear,release_angular);
+    if (release_linear!=std::array<float,3>{}) return 8;
+    release.Add({1,2,3},{0,1,0});
+    release.Add({100,-100,50},{20,20,20});
+    release.Add({1.2F,2.2F,3.2F},{0,1.2F,0});
+    release.Add({0.8F,1.8F,2.8F},{0,0.8F,0});
+    release.Estimate(release_linear,release_angular);
+    if (release.sample_count()!=5 || release_linear!=std::array<float,3>{1,2,3} ||
+        release_angular!=std::array<float,3>{0,1,0}) return 9;
     auto anchor = VrMatrix34{{1,0,0,0, 0,1,0,1.6F, 0,0,1,0}};
     VrHmdPose hand; hand.device_connected = true; hand.pose_valid = true;
     hand.device_to_absolute = anchor;

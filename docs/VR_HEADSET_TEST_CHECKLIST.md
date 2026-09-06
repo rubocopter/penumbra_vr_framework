@@ -30,6 +30,7 @@ ancladas a la mano y manipulación de joints/puertas siguen incompletas.
 
 1. Arranca con el BAT actualizado. El log debe incluir `VR monitor mirror
    readback: enabled`; el launcher muestra el archivo leído y confirma el valor.
+   Cada bloque `spatial` debe mantener `collision_restore_failures=0`.
 2. Comprueba el monitor durante partida y al abrir/cerrar inventario. Debe mostrar
    el ojo izquierdo en partida, sin blanco uniforme. Una captura si falla basta.
 3. En una zona despejada, usa L1 para glowstick/linterna/apagado. Mueve y gira la
@@ -117,6 +118,9 @@ R1, Cuadrado u Options envían cerrar. El ratón tiene prioridad aproximadamente
   inmediatamente y no continuar. No usar barras, puertas ni palancas.
 - [ ] **Propiedad:** sin lanzar, pulsar la otra mano mientras se sostiene el objeto:
   no debe cambiar de mano ni quedar pegado al soltar el gatillo propietario.
+- [ ] **Rotación y corte de tracking:** rota lentamente la muñeca; el objeto debe
+  conservar su punto y orientación relativos a la palma. Evita provocar un salto
+  real del mando: si ocurre por tracking, debe soltar sin lanzar el objeto.
 - [ ] **Inventario, libreta y pausa:** abrir/cerrar varias veces desde partida,
   apuntar y seleccionar. Verificar que vuelve el mundo y no quedan acciones
   pulsadas. Abrir pausa mientras sujetas un objeto: debe soltar sin lanzarlo.

@@ -39,6 +39,9 @@ validation of these newly implemented systems.
 - Implementation: snapshot `+0x3C8`, set false only for an acquired free body,
   then restore the snapshot after native Grab Leave. Installation remains
   fail-closed unless every instruction signature matches.
+- Release safety: the latest five finite controller velocities use a component
+  median, require two samples, and are bounded to 9 m/s linear and 6 rad/s
+  angular. A palm discontinuity above 0.35 m releases with zero momentum.
 - Negative test: a synthetic body whose map-authored value starts false remains
   false after release; a true value is restored true. Parented and jointed
   bodies remain excluded from palm tracking.

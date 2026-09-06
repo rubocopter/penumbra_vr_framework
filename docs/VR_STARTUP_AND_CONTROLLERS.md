@@ -93,6 +93,9 @@ Comprobación sin abrir el juego ni SteamVR:
    Mientras se sostiene el cuerpo, su `CollideCharacter` nativo se desactiva para
    impedir que empuje al jugador y se restaura exactamente al soltar. La instalación
    exige firmas de constructor, mundo, rayo y las dos ramas de contacto Newton.
+   La velocidad de lanzamiento usa una mediana móvil de hasta cinco muestras:
+   ignora picos aislados y una liberación sin historial suficiente no transfiere
+   momento. Un salto de tracking mayor de 35 cm suelta de forma segura.
    Corregido el orden de Enter: el juego publica el estado Grab después de
    regresar de Enter. La adquisición espera al estado confirmado; antes podía
    quedar en el agarre nativo de escritorio. Regresión añadida con ese orden.
@@ -151,7 +154,8 @@ independiente de los 22/22 locales; ninguno certifica una prueba con visor.
   funciones nativas dobles: restauración de límites/masa/gravedad, lanzamiento,
   foco/tracking/UI, cero tiempo, salto de pose, joints, retirada segura y
   restauración de `CollideCharacter` para cuerpos originalmente true/false.
-  `vr_grab_pose` cubre transformaciones y límites; OpenGL comprueba además píxeles
+  `vr_grab_pose` cubre transformaciones, límites y filtrado robusto de lanzamiento;
+  OpenGL comprueba además píxeles
   de manos y que no atraviesen una profundidad más cercana.
 - `tools/Test-BlackPlagueInputMap.ps1 -ImagePath <captura-inicializada>` contrasta
   los bytes de 76 consultas, 2 movimientos, 3 cursores y la vtable de Update.

@@ -27,6 +27,7 @@ std::array<hooks::IatHook,5> g_hooks;
 hooks::Rel32CallHook g_tool_hook;
 thread_local void* g_updating_hands = nullptr;
 std::atomic<std::uint64_t> g_tools_attached{0},g_tools_native{0},g_invalid_tool_pose{0},g_blocked_grabs{0};
+std::atomic<std::uint64_t> g_grabs_acquired{0},g_grabs_released{0},g_guarded_releases{0},g_collision_restore_failures{0};
 std::atomic<bool> g_enabled{false};
 std::atomic<unsigned> g_callbacks{0};
 struct CallbackScope {
@@ -44,6 +45,7 @@ struct Hold {
     void* body = nullptr;
     runtime::VrHand hand = runtime::VrHand::right;
     runtime::VrGrabPose pose;
+    runtime::VrReleaseVelocity release_velocity;
     float max_linear = 0, max_angular = 0;
     Vec previous_palm{};
     bool collide_character = true;
@@ -181,6 +183,7 @@ void AcquirePendingGrab(void* state) {
     g_hold=hold;
     SetFloat(body,0x19C360,20); SetFloat(body,0x19C380,30);
     g_held.store(true,std::memory_order_release);
+    ++g_grabs_acquired;
     NativeControllerHaptic(hold.hand,true);
 }
 void __fastcall HookedLeave(void* state, void*, void* next) {
@@ -188,21 +191,22 @@ void __fastcall HookedLeave(void* state, void*, void* next) {
     if (g_pending_state == state) g_pending_state = nullptr;
     const bool owned=g_held.load(std::memory_order_acquire) && g_hold.state==state;
     Hold hold;
-    Matrix palm; Vec velocity{},angular{};
+    Vec velocity{},angular{};
     if (owned) {
         hold=g_hold;
-        if (!hold.discard_momentum) static_cast<void>(HandPose(hold.hand,false,palm,velocity,angular));
+        if (!hold.discard_momentum) hold.release_velocity.Estimate(velocity,angular);
         g_hold={}; g_held.store(false,std::memory_order_release);
     }
     reinterpret_cast<Transition>(g_image+0xAA4C0)(state,next);
     if (owned && BodyMatches(hold.body)) {
-        static_cast<void>(Store(static_cast<std::uint8_t*>(hold.body)+0x3C8,
-            &hold.collide_character,sizeof(hold.collide_character)));
+        if (!Store(static_cast<std::uint8_t*>(hold.body)+0x3C8,
+            &hold.collide_character,sizeof(hold.collide_character))) ++g_collision_restore_failures;
         SetFloat(hold.body,0x19C360,hold.max_linear); SetFloat(hold.body,0x19C380,hold.max_angular);
         SetVelocity(hold.body,0x19C2A0,runtime::LimitTrackedVelocity(velocity,1.25F,9));
         SetVelocity(hold.body,0x19C2C0,runtime::LimitTrackedVelocity(angular,0.5F,6));
         NativeControllerHaptic(hold.hand,false);
     }
+    if (owned) ++g_grabs_released;
 }
 void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     CallbackScope scope;
@@ -217,25 +221,29 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     if (valid) {
         const float displacement=std::hypot(palm.values[3]-g_hold.previous_palm[0],
             palm.values[7]-g_hold.previous_palm[1],palm.values[11]-g_hold.previous_palm[2]);
-        valid=displacement<=1.0F;
+        valid=displacement<=0.35F;
     }
     if (!valid) {
         g_hold.discard_momentum=true;
+        ++g_guarded_releases;
         reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xA9FD0)(state);
         return;
     }
     g_hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
+    g_hold.release_velocity.Add(velocity,angular);
     reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19C590)(g_hold.body,false);
     // SetMatrix not a raw write: native transform callbacks update Newton and
     // the linked scene node. Parented/jointed bodies never enter this path.
     reinterpret_cast<void(__thiscall*)(void*,const Matrix*)>(g_image+0xCA120)(g_hold.body,&destination);
-    SetVelocity(g_hold.body,0x19C2A0,runtime::LimitTrackedVelocity(velocity,1,20));
+    SetVelocity(g_hold.body,0x19C2A0,runtime::LimitTrackedVelocity(velocity,1,9));
     SetVelocity(g_hold.body,0x19C2C0,runtime::LimitTrackedVelocity(angular,0.5F,6));
 }
 }
 
 SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
-    return {g_tools_attached.exchange(0),g_tools_native.exchange(0),g_invalid_tool_pose.exchange(0),g_blocked_grabs.exchange(0)};
+    return {g_tools_attached.exchange(0),g_tools_native.exchange(0),g_invalid_tool_pose.exchange(0),
+        g_blocked_grabs.exchange(0),g_grabs_acquired.exchange(0),g_grabs_released.exchange(0),
+        g_guarded_releases.exchange(0),g_collision_restore_failures.exchange(0)};
 }
 bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();
@@ -356,6 +364,7 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
     if (!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused ||
         !frame.input.state.interact.pressed || !valid_pose) {
         g_hold.discard_momentum=!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused || !valid_pose;
+        if (g_hold.discard_momentum) ++g_guarded_releases;
         reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xA9FD0)(g_hold.state);
     }
 }
