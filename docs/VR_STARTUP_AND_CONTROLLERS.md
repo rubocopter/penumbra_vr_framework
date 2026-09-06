@@ -1,7 +1,38 @@
 # Arranque VR y estado de los mandos
 
 Actualizado: 2026-09-06. Backend **Black Plague FD316F…** únicamente.
-Esta tanda tiene pruebas de código/OpenGL, no una prueba nueva con visor.
+La prueba del usuario confirmó arranque BAT, menús, inventario/libreta, dedos,
+giro, correr/agacharse y ausencia del fallo de luces en la zona probada.
+Las correcciones posteriores descritas aquí todavía necesitan visor.
+
+La prueba posterior de herramientas confirmó que el glowstick sigue la mano
+izquierda. Su socket provisional lo deja dentro de la mano; se aplaza el ajuste
+visual hasta integrar las manos definitivas, para no calibrarlo dos veces. El
+usuario percibió el movimiento de dedos parecido al anterior: la política nueva
+queda validada por tests matemáticos, pero no como mejora visual apreciable.
+
+### Aviso tras la segunda prueba (2026-09-06)
+
+Tanda posterior lista para prueba acotada: glowstick/linterna anclados a la mano
+izquierda (sockets provisionales); limpieza de textura rectangular GL antes de
+dibujar mirror/menús/manos; lectura de vuelta del mirror desde el proceso tras
+arrancar con BAT. El registro añade `native_update_timing` (ratio tiempo simulado
+/real del ButtonHandler, no del solver Newton), contadores de herramientas y
+agarres bloqueados. Se amplía el buffer de log para evitar truncar diagnósticos.
+No se modifica la velocidad de simulación, gravedad ni duración del salto.
+
+El usuario reportó salida del mapa al caminar con una barra agarrada. Se bloquea
+la adquisición cinemática en producción hasta integrar el filtro objeto/jugador
+de Rework en consultas de mundo, rayos de personaje y contactos Newton. R2 y la
+selección permanecen, pero el objeto usa temporalmente el agarre nativo. Los tests
+sintéticos habilitan explícitamente la ruta para comprobarla: no la certifican
+como segura en el motor real. No probar lanzamientos VR de esta versión.
+
+El stick ahora limita su vector a longitud 1 para evitar sobrevelocidad diagonal.
+Esto no resuelve por sí solo la sensación de salto/tiempo acelerado, aún pendiente.
+El launcher imprime ruta efectiva de settings y valor del mirror tanto en
+preflight como al activarlo. La lectura actual comprobada es `on`; el registro
+de la sesión 9156 decía `disabled`. No se considera resuelto el mirror en visor.
 
 ## Arrancar sin adjuntar el mod a mano
 
@@ -15,7 +46,7 @@ adjunta el framework y activa la presentación continua con el mirror guardado.
 No modifica el ejecutable del juego ni sus opciones de lanzamiento en Steam.
 Abrir directamente el juego en Steam **no** ejecuta este lanzador automáticamente.
 SteamVR debe estar instalado y los dispositivos configurados; OpenVR solicita
-su inicialización. No se ha comprobado esta secuencia completa en vivo todavía.
+su inicialización. El usuario confirmó el arranque directo con el BAT.
 
 Si ya está abierto el mismo ejecutable, reutiliza ese proceso. No elige procesos
 por nombre solamente: Overture, Black Plague y Requiem deben distinguirse por
@@ -37,7 +68,10 @@ Comprobación sin abrir el juego ni SteamVR:
    lo hace una vez `cButtonHandler::Update`.
 2. Puente nativo exacto: movimiento analógico combinado con teclado, giro por
    pasos de 45 grados con retorno a neutro, salto, correr, agacharse, interactuar,
-   examinar, guardar objeto, inventario, libreta, pausa y alternancia de linterna.
+   examinar, guardar objeto, inventario, libreta, pausa y ciclo de luz rápida
+   apagado → glowstick → linterna → apagado, como Rework. El stick sigue el yaw
+   horizontal del HMD; el teclado conserva sus ejes nativos. Tracking obsoleto
+   inhibe movimiento VR. No equivale a cuerpo completo ni room-scale.
    No usa emulación de teclas de Windows. Los nombres de acción conservan su
    ABI antiguo y siempre se ejecuta la consulta original del juego.
 3. Menú inicial, pausa/inventario/libreta: captura del escritorio presentada en
@@ -48,7 +82,7 @@ Comprobación sin abrir el juego ni SteamVR:
    cobertura en ejecución. Se restauran matrices, texturas, programas GL,
    viewport, scissor y demás estado gráfico tras dibujar el panel.
 4. Adaptador espacial integrado en la DLL y compilación: selección desde aim
-   derecho/izquierdo en el estado normal, refresco de selección antes de pulsar,
+   dominante (derecho en este puente) en el estado normal, refresco antes de pulsar,
    agarre relativo a la palma de cuerpos libres y lanzamiento limitado a 9 m/s.
    Las transiciones originales conservan la gestión de masa/gravedad; el
    adaptador restaura los límites de velocidad que cambia. Un botón de la otra
@@ -56,11 +90,18 @@ Comprobación sin abrir el juego ni SteamVR:
    Pérdida de tracking/foco, UI o salto de pose sueltan sin impulso de lanzamiento.
    Se emiten pulsos hápticos cortos al coger/soltar. Son rutas verificadas con
    dobles de las funciones nativas, no una simulación del motor Newton real.
+   Corregido el orden de Enter: el juego publica el estado Grab después de
+   regresar de Enter. La adquisición espera al estado confirmado; antes podía
+   quedar en el agarre nativo de escritorio. Regresión añadida con ese orden.
 5. Guantes geométricos provisionales para ambas manos, dedos según curls OpenVR
    (o postura aproximada sin skeleton), rayo de apuntado y oclusión por profundidad
    en cada ojo. No son las mallas/esqueletos HPL de Rework y no proyectan sombras.
    Las manos se sitúan respecto al HMD actual para convivir con el tracking
    rotacional existente; esto no añade room-scale ni colisión de las palmas.
+6. Mirror en partida: copia de la textura del ojo izquierdo al escritorio justo
+   antes del swap, conservando proporción y bandas negras. No renderiza un tercer
+   mundo nativo. Los menús conservan la captura/presentación nativa del escritorio.
+   Prueba WGL de píxeles, orientación, bandas y restauración de viewport/scissor.
 
 La numeración anterior describe módulos implementados, **no certifica que los
 tres hitos pedidos por el usuario estén terminados**.
@@ -70,24 +111,25 @@ tres hitos pedidos por el usuario estén terminados**.
 - El tercer hito original sigue parcial: puertas/palancas y cuerpos con joints
   o padres conservan el comportamiento nativo. Falta la colisión de palmas,
   la exclusión de colisión cuerpo/jugador durante el agarre, las mallas HPL de
-  Rework y herramientas/luces ancladas a la mano. Durante un agarre espacial
+  Rework y calibrar físicamente las herramientas/luces ancladas. Durante un agarre espacial
   todavía no se actualiza el rayo secundario de examinar como hace Rework.
 - `PlayerState_Interact_VR.cpp` es la referencia, pero no se copian offsets de
   Overture. Véase `BLACK_PLAGUE_SPATIAL_NOTES.md` para llamadas verificadas,
   pruebas, límites y el siguiente punto de integración de herramientas.
 - La configuración de este puente es diestra y de giro por pasos. El lector
   soporta acciones zurdas, pero falta persistir/aplicar esa preferencia al puente.
-  Quick light alterna la linterna nativa; falta el ciclo linterna/glowstick de
-  Rework. La locomoción sigue los ejes del jugador, no una calibración corporal
-  completa del HMD.
+  Se desactiva el action set offhand para evitar propiedad mezclada. L2 no
+  interactúa ni selecciona en el perfil PSVR2 diestro; R2 es el gatillo principal.
 - Tracking corporal posicional y Enhanced visuals GPU no están conectados.
 - Falta validar transiciones mientras se mantiene un botón, la pérdida de
   tracking/foco en una partida real y la convivencia de mandos y teclado al
   mantener ambos la misma acción. Las pruebas puras no sustituyen esa prueba.
-- La corrección de iluminación a media distancia sigue pendiente de visor.
+- La iluminación pasó la zona probada por el usuario; falta cobertura en otras zonas.
 
-No se solicita una prueba intermedia al usuario ni se marca el trabajo como
-completo. Rework permanece intacto en `E:\penumbra_vr_rework`.
+A petición del usuario se prepara una prueba experimental de lo incorporado,
+sin marcar los tres hitos como completos. Véase la
+[lista para el visor](VR_HEADSET_TEST_CHECKLIST.md). Rework permanece intacto
+en `E:\penumbra_vr_rework`.
 
 ## Evidencia reproducible
 

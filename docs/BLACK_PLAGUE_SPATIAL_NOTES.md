@@ -8,7 +8,8 @@ Rework de referencia: 23c890f7dbd06b939be9951d282e6e948d9a6623, sin modificar.
 ## Rutas integradas
 
 `spatial_interaction.cpp` se compila y se instala después del puente de entrada.
-Comprueba todos los slots/entradas usados antes de instalar los cuatro hooks.
+Comprueba todos los slots/entradas usados antes de instalar cinco hooks de
+vtable y una llamada rel32 de herramientas.
 Un fallo deja el comportamiento nativo y se registra; no invalida el estéreo.
 
 | Límite | RVA | Evidencia y uso |
@@ -31,6 +32,10 @@ la matriz del cuerpo y transformar el punto seleccionado.
 Body: vtable 292C08, matriz local +34, padre nodo +10, padre entidad +330,
 masa Newton +434. Se rechazan padres, joints y masa no positiva/no finita.
 
+**Tras el incidente de la barra, la adquisición cinemática está bloqueada en
+producción.** El seguimiento se conserva en tests sintéticos, pero necesita
+filtros completos de colisión antes de volver a habilitarlo.
+
 No se escribe un supuesto campo CollidePlayer: ese añadido de Rework no está
 mapeado en Black Plague. La ausencia de esa exclusión y de colisión de palmas es
 una limitación real del prototipo. Los cuerpos libres siguen la palma con
@@ -43,7 +48,7 @@ mientras queda un cuerpo propio. Solo el hilo de actualización del juego puede
 ejecutar la liberación. No se invocan métodos de física desde el hilo remoto.
 La DLL permanece residente al desactivar, como en el resto del framework.
 
-## Siguiente integración: herramientas HUD (investigación, no activada)
+## Herramientas HUD: integración experimental activada
 
 Constructor `cPlayerHands` A4A30: usa el nombre heredado `FadeHandler`, escribe
 vtable 27CB5C, guarda init +20, modelos actuales +6C/+70 y número de slots +74=2.
@@ -51,7 +56,24 @@ La vtable +14 (27CB70) apunta a Update A3DE0. Dentro de ese Update, la llamada
 **A4313 → CA120** aplica la matriz al entity +118 del modelo HUD. El bucle procesa
 ambos slots y conserva animaciones/equipado. Esta es una frontera candidata para
 anclar herramientas sin sustituir carga de recursos ni batería/lógica de luces.
-Todavía NO hay hook ni contrato de identificación/calibración de esos modelos.
+Se instala un hook de Update para delimitar el PlayerHands actual y otro de
+A4313 para sustituir exclusivamente la matriz de Flashlight/Glowstick. Se
+identifica el modelo por su entity +118 y nombre +4 mediante el operador nativo
+de MSVCP71 (IAT 272138), sin interpretar ni construir/destruir std::string viejo.
+La dirección importada se contrasta con GetProcAddress antes de instalar.
+
+La herramienta sigue la mano izquierda del perfil diestro. Rotación X de +90
+grados: el -Y nativo de la linterna queda hacia el -Z del mando. Los sockets
+provisionales usan nodos de los DAE instalados: linterna (0,-0.016669,0), glowstick
+(0,0.059722,0.00504). Requieren ajuste visual; no son calibraciones certificadas.
+SetMatrix nativo conserva la propagación hacia las luces. Modelos desconocidos,
+UI o tracking inválido mantienen su matriz nativa. No hay colisión de herramienta
+con paredes todavía. Las pruebas cubren sockets, dirección y estos fallbacks.
+
+Prueba física: el glowstick acompañó correctamente a la mano, pero quedó
+literalmente dentro de ella. No se modifica aún el socket porque la geometría de
+mano es provisional; se recalibrarán palma, herramienta y luz como una unidad
+cuando se integren las mallas definitivas.
 
 `cPlayerFlashLight::Update`, zona A8A60–A8F2D, obtiene el modelo Flashlight y usa
 su matriz de mundo para la dirección de luz hacia enemigos. La llamada A8B23

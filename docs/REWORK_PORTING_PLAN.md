@@ -5,6 +5,12 @@ Overture reference, not as a binary that can be dropped into every game.
 Penumbra VR is GPLv3 or later and records each adapted component in
 `THIRD_PARTY.md`.
 
+Current integration policy: retain the framework's responsive per-finger OpenVR
+input, adapt Rework interaction/tool behavior at verified boundaries, and tune
+final sockets only after the definitive hand meshes are present. The externally
+downloaded TurboSquid hand was evaluated as a reference candidate but no mesh,
+rig, weights, textures or poses were imported.
+
 ## Portability boundary
 
 | Rework subsystem | Unified destination | Expected reuse | Per-game work still required |
