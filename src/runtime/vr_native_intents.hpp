@@ -9,12 +9,17 @@ enum class NativeVrAction : std::uint8_t {
     interact, examine, holster, count
 };
 enum class NativeVrQuery : std::uint8_t { held, pressed, released };
+struct VrQuickLightPlan { bool toggle_glow; bool toggle_flashlight; };
+// Rework order: off -> glowstick -> flashlight -> off.
+[[nodiscard]] constexpr VrQuickLightPlan PlanQuickLight(bool glow, bool flashlight) noexcept {
+    return {glow || !flashlight, glow || flashlight};
+}
 
 // Consumes an edge once even when the native handler checks several aliases
 // (e.g. LeftClick and Interact). Held queries are deliberately repeatable.
 class VrNativeIntents final {
 public:
-    void Begin(const VrInputState& state, VrInputContext context) noexcept;
+    void Begin(const VrInputState& state, VrInputContext context, float head_yaw = 0) noexcept;
     [[nodiscard]] bool Query(NativeVrAction action, NativeVrQuery query) noexcept;
     [[nodiscard]] float Move(float keyboard, bool sideways) const noexcept;
 private:

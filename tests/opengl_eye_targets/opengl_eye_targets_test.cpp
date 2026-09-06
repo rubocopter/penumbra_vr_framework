@@ -413,6 +413,33 @@ int main() {
         glGetFloatv(GL_TEXTURE_MATRIX, matrix_after.data());
         if (matrix_before != matrix_after || !ScissorEquals({0, 4, 8, 4}, true)) return 33;
     }
+    {
+        GLuint eye_texture=0; glGenTextures(1,&eye_texture); glBindTexture(GL_TEXTURE_2D,eye_texture);
+        const std::array<GLubyte,8> pixels{255,0,0,255,0,255,0,255};
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,1,2,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+        // A rectangle target left enabled by legacy postprocessing must not
+        // override our 2D eye texture, and its enable state must be restored.
+        GLuint rectangle=0; glGenTextures(1,&rectangle); glBindTexture(0x84F5,rectangle);
+        const std::array<GLubyte,4> white{255,255,255,255};
+        glTexImage2D(0x84F5,0,GL_RGBA8,1,1,0,GL_RGBA,GL_UNSIGNED_BYTE,white.data());
+        glTexParameteri(0x84F5,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameteri(0x84F5,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+        glEnable(0x84F5);
+        glViewport(0,0,8,8); glEnable(GL_SCISSOR_TEST); glScissor(1,2,3,4);
+        if (!penumbra_vr::graphics::DrawMonitorMirror(eye_texture,error) ||
+            !ScissorEquals({1,2,3,4},true) || !ViewportEquals({0,0,8,8}) || !glIsEnabled(0x84F5)) return 39;
+        glReadBuffer(GL_BACK);
+        std::array<GLubyte,4> bottom{},top{},bar{};
+        glReadPixels(4,1,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bottom.data());
+        glReadPixels(4,6,1,1,GL_RGBA,GL_UNSIGNED_BYTE,top.data());
+        glReadPixels(0,4,1,1,GL_RGBA,GL_UNSIGNED_BYTE,bar.data());
+        if (bottom!=std::array<GLubyte,4>{255,0,0,255} || top!=std::array<GLubyte,4>{0,255,0,255} ||
+            bar!=std::array<GLubyte,4>{0,0,0,255}) return 40;
+        glDeleteTextures(1,&eye_texture);
+        glDisable(0x84F5); glDeleteTextures(1,&rectangle);
+    }
     std::cout << "OpenGL eye target allocation, resize and state restoration passed\n";
     return 0;
 }

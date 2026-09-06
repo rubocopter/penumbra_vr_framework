@@ -756,11 +756,24 @@ bool StartRemoteVr(HANDLE process, DWORD pid, const std::filesystem::path& probe
     bool mirror = false;
     if (settings.empty() || !penumbra_vr::launcher::LoadMonitorMirrorSetting(settings, mirror, error))
         return false;
-    return InvokeRemotePresentationAction(process, pid, probe,
+    std::wcout << L"VR settings: " << settings << L"; monitor mirror "
+               << (mirror ? L"on" : L"off") << L'\n' << std::flush;
+    if (!InvokeRemotePresentationAction(process, pid, probe,
         mirror ? "PenumbraVR_EnableMonitorMirror" : "PenumbraVR_DisableMonitorMirror",
-        L"Could not apply the saved mirror setting", error) &&
-        InvokeRemotePresentationAction(process, pid, probe, "PenumbraVR_StartPresentation",
-        L"Could not start VR; inspect %LOCALAPPDATA%\\PenumbraVR\\logs", error);
+        L"Could not apply the saved mirror setting", error) ||
+        !InvokeRemotePresentationAction(process, pid, probe, "PenumbraVR_StartPresentation",
+        L"Could not start VR; inspect %LOCALAPPDATA%\\PenumbraVR\\logs", error)) return false;
+    LPTHREAD_START_ROUTINE query=nullptr;
+    const auto module=FindRemoteModuleBase(pid,L"PenumbraVR.BlackPlague.Probe.dll");
+    DWORD actual=0;
+    if (!module || !ResolveRemoteExport(pid,probe,module,"PenumbraVR_QueryMonitorMirror",query,error) ||
+        !CallRemote(process,query,nullptr,actual,error)) return false;
+    if (actual!=(mirror ? 1U : 2U)) {
+        error=L"VR started, but monitor mirror readback differs from saved settings; inspect the log";
+        return false;
+    }
+    std::wcout << L"Monitor mirror verified in game: " << (mirror ? L"on" : L"off") << L'\n';
+    return true;
 }
 
 int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path& probe,
@@ -789,6 +802,8 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
         return 5;
     }
     if (check_only) {
+        std::wcout << L"VR settings: " << settings << L"; monitor mirror "
+                   << (mirror ? L"on" : L"off") << L'\n';
         std::wcout << L"VR launch preflight passed for " << game
                    << L". No game or SteamVR process was started.\n";
         return 0;

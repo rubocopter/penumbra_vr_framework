@@ -1,4 +1,5 @@
 #include "vr_native_intents.hpp"
+#include "vr_update_timing.hpp"
 #include "legacy_input_abi.hpp"
 #include "iat_hook.hpp"
 #include <cmath>
@@ -24,6 +25,18 @@ __declspec(noinline) bool __fastcall Bridge(void* input, void*, Legacy name) {
 }
 }
 int main() {
+    VrUpdateTiming clock;
+    static_cast<void>(clock.Update(0.01F,0,true));
+    VrUpdateTimingSample measured;
+    for (std::uint64_t tick=1;tick<=200;++tick) measured=clock.Update(0.01F,tick*10,true);
+    if (!measured.ready || std::abs(measured.ratio-1)>0.00001 || measured.ticks!=200) return 17;
+    for (std::uint64_t tick=201;tick<=400;++tick) measured=clock.Update(0.02F,tick*10,true);
+    if (!measured.ready || std::abs(measured.ratio-2)>0.00001) return 18;
+    if (clock.Update(0.01F,6000,true).ready || clock.Update(0.01F,6010,false).ready ||
+        clock.Update(0.01F,6020,true).ready) return 19;
+    if (!PlanQuickLight(false,false).toggle_glow || PlanQuickLight(false,false).toggle_flashlight ||
+        !PlanQuickLight(true,false).toggle_glow || !PlanQuickLight(true,false).toggle_flashlight ||
+        PlanQuickLight(false,true).toggle_glow || !PlanQuickLight(false,true).toggle_flashlight) return 15;
     VrNativeIntents intents;
     VrInputState state;
     state.interact = {true, true, true, false};
@@ -36,6 +49,17 @@ int main() {
         !intents.Query(A::interact,Q::held) || !intents.Query(A::interact,Q::held) ||
         intents.Move(0.5F,false) != 1.0F || intents.Move(-0.5F,true) != 0) return 1;
     state.interact = {false,false,false,true};
+    state.move = {true,1,1};
+    intents.Begin(state,VrInputContext::gameplay,0.7F);
+    if (std::abs(std::hypot(intents.Move(0,true),intents.Move(0,false))-1)>0.00001F) return 16;
+    state.move = {true, 0, 1};
+    intents.Begin(state, VrInputContext::gameplay, 1.570796327F);
+    if (std::abs(intents.Move(0,true)-1) > 0.00001F ||
+        std::abs(intents.Move(0.25F,false)-0.25F) > 0.00001F) return 12;
+    intents.Begin(state, VrInputContext::gameplay, -1.570796327F);
+    if (std::abs(intents.Move(0,true)+1) > 0.00001F) return 13;
+    intents.Begin(state, VrInputContext::gameplay, std::numeric_limits<float>::quiet_NaN());
+    if (intents.Move(0.25F,false)!=0.25F) return 14;
     intents.Begin(state, VrInputContext::gameplay);
     if (!intents.Query(A::interact,Q::released) || intents.Query(A::interact,Q::released) ||
         intents.Query(A::interact,Q::held)) return 2;

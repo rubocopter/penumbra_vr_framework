@@ -106,6 +106,7 @@ std::atomic<bool> g_recenter_requested{false};
 SRWLOCK g_world_tracking_lock = SRWLOCK_INIT;
 runtime::VrMatrix44 g_world_game_view;
 runtime::VrMatrix34 g_world_anchor;
+float g_world_movement_yaw = 0;
 std::uint64_t g_world_tracking_time = 0;
 void InvalidateWorldTracking() {
     AcquireSRWLockExclusive(&g_world_tracking_lock);
@@ -596,6 +597,12 @@ void __fastcall HookedUpdateRenderList(
         AcquireSRWLockExclusive(&g_world_tracking_lock);
         g_world_game_view = camera_snapshot.view;
         g_world_anchor = g_stereo_tracking_anchor;
+        // Express horizontal HMD forward in the native camera's horizontal
+        // basis. Pitch/roll must not steer the walking direction.
+        const float gx = -camera_snapshot.view.values[8], gz = -camera_snapshot.view.values[10];
+        const float hx = -head_view.values[8], hz = -head_view.values[10];
+        if (std::hypot(gx, gz) > 0.001F && std::hypot(hx, hz) > 0.001F)
+            g_world_movement_yaw = std::atan2(-hx * gz + hz * gx, hx * gx + hz * gz);
         // The world camera currently uses rotation-only head tracking. Keep
         // hands relative to the current physical head, not its old recenter
         // position, so leaning cannot detach the palms from the rendered head.
@@ -622,7 +629,7 @@ void __fastcall HookedUpdateRenderList(
         runtime::PlanStereoWorldRendering(
             frame_time,
             persistent_stereo,
-            g_stereo_monitor_mirror.load(std::memory_order_acquire));
+            false); // Mirror now copies an eye at swap, not a third native world pass.
 
     std::uint32_t completed_eye_passes = 0;
     for (std::size_t eye_index = 0; eye_index < g_stereo_eyes.size(); ++eye_index) {
@@ -1288,6 +1295,15 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     ActiveStereoFrame active;
     if (!TrackedStereoPresentationActive() || g_stereo_cancel.load(std::memory_order_acquire)) return;
     if (world_rendered) {
+        if (TrackedStereoMonitorMirrorEnabled()) {
+            std::array<std::uint32_t,2> textures{}; std::string error;
+            if (!GetPersistentEyeColorTextures(textures,error) ||
+                !graphics::DrawMonitorMirror(textures[0],error)) {
+                AcquireSRWLockExclusive(&g_telemetry_lock);
+                strncpy_s(g_telemetry.stereo_error.data(),g_telemetry.stereo_error.size(),error.c_str(),_TRUNCATE);
+                ReleaseSRWLockExclusive(&g_telemetry_lock);
+            }
+        }
         g_menu_anchor_valid = false;
         AcquireSRWLockExclusive(&g_menu_pointer_lock);
         g_menu_pointer_aspect = 0;
@@ -1351,6 +1367,13 @@ bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv)
 }
 void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::memory_order_release); }
 
+bool TrackedMovementYaw(float& yaw) noexcept {
+    AcquireSRWLockShared(&g_world_tracking_lock);
+    yaw = g_world_movement_yaw;
+    const auto time = g_world_tracking_time;
+    ReleaseSRWLockShared(&g_world_tracking_lock);
+    return time != 0 && GetTickCount64() - time <= 250 && std::isfinite(yaw);
+}
 bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
     std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {
     pose = {}; velocity = {}; angular = {};

@@ -1,5 +1,6 @@
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
+#include "vr_hand_pose.hpp"
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -7,6 +8,7 @@
 #include <array>
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 
 namespace penumbra_vr::graphics {
 namespace {
@@ -39,11 +41,15 @@ struct State {
         glDisable(0x8620); // GL_VERTEX_PROGRAM_ARB (supported by mapped HPL build)
         glDisable(0x8804); // GL_FRAGMENT_PROGRAM_ARB
         GLint units = 0;
+        const auto* extensions=reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+        const bool rectangle=extensions && (std::strstr(extensions,"GL_ARB_texture_rectangle") ||
+            std::strstr(extensions,"GL_EXT_texture_rectangle") || std::strstr(extensions,"GL_NV_texture_rectangle"));
         glGetIntegerv(0x84E2, &units); // GL_MAX_TEXTURE_UNITS
         for (GLint unit = 0; unit < units; ++unit) {
             active(kTexture0 + static_cast<GLenum>(unit));
             glDisable(GL_TEXTURE_1D); glDisable(GL_TEXTURE_2D);
             glDisable(0x806F); glDisable(0x8513); // 3D / cube
+            if (rectangle) glDisable(0x84F5); // Rectangle takes precedence over 2D in fixed-function rendering.
             glDisable(GL_TEXTURE_GEN_S); glDisable(GL_TEXTURE_GEN_T);
             glDisable(GL_TEXTURE_GEN_R); glDisable(GL_TEXTURE_GEN_Q);
         }
@@ -100,6 +106,37 @@ bool Rigid(const runtime::VrMatrix44& pose) {
 }
 }
 
+bool DrawMonitorMirror(unsigned int texture, std::string& error) noexcept {
+    error.clear();
+    if (!wglGetCurrentContext() || !texture || !glIsTexture(texture)) {
+        error="Mirror requires a current context and an eye texture"; return false;
+    }
+    GLint framebuffer=0; glGetIntegerv(kFramebufferBinding,&framebuffer);
+    if (framebuffer!=0) { error="Mirror requires the desktop framebuffer"; return false; }
+    State state;
+    if (!state.valid) { error="Mirror requires GL multitexture/program APIs"; return false; }
+    glBindTexture(GL_TEXTURE_2D,texture);
+    GLint width=0,height=0; std::array<GLint,4> viewport{};
+    glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_WIDTH,&width);
+    glGetTexLevelParameteriv(GL_TEXTURE_2D,0,GL_TEXTURE_HEIGHT,&height);
+    glGetIntegerv(GL_VIEWPORT,viewport.data());
+    if (width<=0 || height<=0 || viewport[2]<=0 || viewport[3]<=0) {
+        error="Mirror dimensions are invalid"; return false;
+    }
+    const float fit=std::min(static_cast<float>(viewport[2])/width,static_cast<float>(viewport[3])/height);
+    const float x=width*fit/viewport[2], y=height*fit/viewport[3];
+    glDrawBuffer(GL_BACK); glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT);
+    glMatrixMode(GL_PROJECTION); glLoadIdentity();
+    glMatrixMode(GL_MODELVIEW); glLoadIdentity();
+    glEnable(GL_TEXTURE_2D); glColor4f(1,1,1,1);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0,0); glVertex2f(-x,-y);
+    glTexCoord2f(1,0); glVertex2f(x,-y);
+    glTexCoord2f(1,1); glVertex2f(x,y);
+    glTexCoord2f(0,1); glVertex2f(-x,y);
+    glEnd();
+    return true;
+}
 bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
     const runtime::VrMatrix44& view, const runtime::VrMatrix44& projection, std::string& error) noexcept {
     error.clear();
@@ -123,18 +160,27 @@ bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
         Box(0.041F,0.014F,0.047F);
         glPushMatrix(); glTranslatef(0,0,0.063F);
         glColor3f(0.15F,0.14F,0.12F); Box(0.031F,0.019F,0.022F); glPopMatrix();
+        const auto articulation=runtime::ArticulateVrHand(hand.curl,index==0);
+        constexpr std::array<std::array<float,3>,5> lengths{{
+            {0.025F,0.027F,0.022F},{0.037F,0.026F,0.020F},{0.041F,0.028F,0.021F},
+            {0.038F,0.026F,0.020F},{0.030F,0.020F,0.017F}}};
+        const float side=index==0 ? 1.0F : -1.0F;
         for (std::size_t finger=0;finger<5;++finger) {
-            const float curl=std::isfinite(hand.curl[finger]) ? std::clamp(hand.curl[finger],0.0F,1.0F) : 0;
             glPushMatrix();
             if (finger==0) {
-                const float side=index==0 ? 1.0F : -1.0F;
-                glTranslatef(side*0.036F,-0.003F,0.004F); glRotatef(-side*48,0,1,0);
+                glTranslatef(side*0.036F,-0.003F,0.004F);
+                glRotatef(articulation.thumb_yaw_degrees,0,1,0);
             } else {
-                glTranslatef((static_cast<float>(finger)-2.5F)*0.020F,0,-0.046F);
+                // Mirror digit placement too: the index must neighbour the
+                // thumb on BOTH hands, not just on the right hand.
+                glTranslatef(-side*(static_cast<float>(finger)-2.5F)*0.020F,0,-0.046F);
+                glRotatef(articulation.fingers[finger].spread_degrees,0,1,0);
             }
-            const float segment=finger==0 ? 0.022F : finger==4 ? 0.020F : 0.026F;
             for (int joint=0;joint<3;++joint) {
-                glRotatef(-curl*70,1,0,0); glTranslatef(0,0,-segment*0.5F);
+                const auto j=static_cast<std::size_t>(joint);
+                const float segment=lengths[finger][j];
+                glRotatef(-articulation.fingers[finger].flexion_degrees[j],1,0,0);
+                glTranslatef(0,0,-segment*0.5F);
                 const float shade=0.36F-static_cast<float>(joint)*0.025F;
                 glColor3f(shade,shade*0.90F,shade*0.76F);
                 Box(0.0075F,0.009F,segment*0.46F);

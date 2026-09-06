@@ -7,6 +7,10 @@ namespace penumbra_vr::backends::black_plague {
 namespace {
 runtime::VrControllerFrame test_frame;
 int test_joints=0, test_leaves=0, test_native_updates=0;
+bool test_ui=false;
+bool __cdecl NativeEqual(const void* value,const char* expected) {
+    return std::strcmp(Read<const char*>(value,0),expected)==0;
+}
 template<class T> void Put(void* object, std::size_t offset, const T& value) {
     std::memcpy(static_cast<std::uint8_t*>(object)+offset,&value,sizeof(value));
 }
@@ -41,7 +45,7 @@ void Jump(std::uintptr_t rva,void* target) {
 }
 runtime::VrControllerFrame ReadNativeControllerFrame() noexcept { return test_frame; }
 void NativeControllerHaptic(runtime::VrHand,bool) noexcept {}
-bool NativeInputUiActive() noexcept { return false; }
+bool NativeInputUiActive() noexcept { return test_ui; }
 bool ControllerWorldPose(const runtime::VrHmdPose& hand, Matrix& pose, Vec& velocity, Vec& angular) noexcept {
     if (!hand.device_connected || !hand.pose_valid) return false;
     pose=runtime::ExpandMatrix(hand.device_to_absolute); velocity=hand.velocity; angular=hand.angular_velocity; return true;
@@ -67,10 +71,17 @@ int RunSpatialTest() {
     hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
     hand.velocity={2,0,0}; hand.angular_velocity={0,2,0};
     auto begin=[&] {
-        g_enabled.store(true); Put(player.data(),0x2BC,6);
+        g_enabled.store(true); Put(player.data(),0x2BC,0);
         test_frame.input.state.interact.pressed=true; test_frame.input.state.interact.just_pressed=true;
         HookedEnter(state.data(),nullptr,nullptr);
+        Put(player.data(),0x2BC,6); // Native ChangeState commits only after Enter.
+        ServiceSpatialInteraction(player.data(),false);
     };
+    begin();
+    if (g_held.load() || Read<float>(body.data(),0x42C)!=3) return 15;
+    // Synthetic tests may exercise the adapter, but production must retain
+    // native grabs until all player collision filters are implemented.
+    g_player_collision_filter_ready.store(true);
     begin();
     if (!g_held.load() || Read<float>(body.data(),0x42C)!=20) return 2;
     HookedGrabUpdate(state.data(),nullptr,0);
@@ -101,6 +112,45 @@ int RunSpatialTest() {
     if (RemoveSpatialInteraction(error) || error.empty()) return 11;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || !RemoveSpatialInteraction(error)) return 12;
+    // A rejected/uncommitted transition must not acquire a stale body.
+    g_enabled.store(true); Put(player.data(),0x2BC,0);
+    HookedEnter(state.data(),nullptr,nullptr);
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load() || g_pending_state) return 13;
+    // Leaving during Enter cancels the pending acquisition.
+    HookedEnter(state.data(),nullptr,nullptr);
+    HookedLeave(state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,6);
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load() || g_pending_state) return 14;
+    std::array<std::uint8_t,0x150> hands{},model{};
+    Put(hands.data(),0x74,2); Put(hands.data(),0x6C,model.data());
+    Put(model.data(),0x118,body.data());
+    Put(model.data(),4,static_cast<const char*>("Flashlight"));
+    Put(g_image,0x272138,reinterpret_cast<void*>(&NativeEqual));
+    auto& left=test_frame.hands[0].grip;
+    left=hand; left.device_to_absolute={{1,0,0,2,0,1,0,3,0,0,1,4}};
+    g_updating_hands=hands.data();
+    Matrix native=runtime::IdentityMatrix();
+    HookedToolMatrix(body.data(),nullptr,&native);
+    auto attached=Read<Matrix>(body.data(),0x34);
+    if (attached.values[3]!=2 || attached.values[7]!=3 ||
+        std::abs(attached.values[11]-4.016669F)>0.00001F || attached.values[9]!=1) return 16;
+    Put(model.data(),4,static_cast<const char*>("Glowstick"));
+    HookedToolMatrix(body.data(),nullptr,&native);
+    attached=Read<Matrix>(body.data(),0x34);
+    if (std::abs(attached.values[7]-3.00504F)>0.00001F ||
+        std::abs(attached.values[11]-3.940278F)>0.00001F) return 17;
+    left.pose_valid=false;
+    HookedToolMatrix(body.data(),nullptr,&native);
+    if (Read<Matrix>(body.data(),0x34).values!=native.values) return 18;
+    left.pose_valid=true; test_ui=true;
+    HookedToolMatrix(body.data(),nullptr,&native);
+    if (Read<Matrix>(body.data(),0x34).values!=native.values) return 19;
+    test_ui=false; Put(model.data(),4,static_cast<const char*>("Hammer"));
+    HookedToolMatrix(body.data(),nullptr,&native);
+    if (Read<Matrix>(body.data(),0x34).values!=native.values) return 20;
+    g_updating_hands=nullptr;
     VirtualFree(g_image,0,MEM_RELEASE); g_image=nullptr;
     return 0;
 }

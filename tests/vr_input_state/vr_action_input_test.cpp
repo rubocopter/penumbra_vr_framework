@@ -64,23 +64,24 @@ int main() {
     fake = {};
     if (!reader.Initialize(fake, "C:/vr/actions.json", error) || fake.handles.size() != 50 ||
         reader.Initialize(fake, "C:/vr/actions.json", error) || error.empty()) return 3;
-    if (!update() || fake.active.size() != 3 ||
-        fake.active[1].set != fake.handles.at("/actions/gameplay") ||
-        fake.active[2].restricted_source != fake.handles.at("/user/hand/left")) return 4;
+    if (!update() || fake.active.size() != 2 ||
+        fake.active[1].set != fake.handles.at("/actions/gameplay")) return 4;
     fake.Press("/actions/offhand/in/interact");
     fake.Press("/actions/gameplay/in/inventory");
     fake.axes[fake.handles.at("/actions/gameplay/in/move")] = {true, 1, 0};
-    if (!update() || !frame.input.state.interact.just_pressed || frame.interact_source != VrHand::left ||
+    if (!update() || frame.input.state.interact.pressed || frame.interact_source != VrHand::right ||
         !frame.input.state.inventory.just_pressed || frame.input.state.move.x != 1) return 5;
     fake.Press("/actions/offhand/in/interact", false);
     fake.Press("/actions/gameplay/in/interact");
-    if (!update() || frame.interact_source != VrHand::left ||
-        frame.input.state.interact.just_pressed || !frame.input.state.interact.pressed) return 18;
+    if (!update() || frame.interact_source != VrHand::right ||
+        !frame.input.state.interact.just_pressed || !frame.input.state.interact.pressed) return 18;
     fake.buttons[fake.handles.at("/actions/offhand/in/interact")] = MakeVrButtonState(true,false,true);
-    if (!update() || frame.input.state.interact.pressed || !frame.input.state.interact.just_released) return 19;
+    if (!update() || !frame.input.state.interact.pressed || frame.input.state.interact.just_released) return 19;
     fake.buttons.erase(fake.handles.at("/actions/gameplay/in/interact"));
     fake.Press("/actions/offhand/in/interact");
-    if (!update() || !frame.input.state.interact.just_pressed) return 20;
+    if (!update() || frame.input.state.interact.pressed || !frame.input.state.interact.just_released) return 20;
+    fake.Press("/actions/gameplay/in/interact");
+    if (!update() || !frame.input.state.interact.just_pressed) return 21;
     fake.pose_valid = false;
     if (!update() || frame.input.state.interact.pressed || !frame.input.state.interact.just_released ||
         !frame.input.state.inventory.pressed) return 6;

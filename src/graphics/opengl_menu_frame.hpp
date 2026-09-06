@@ -3,6 +3,8 @@
 #include <string>
 
 namespace penumbra_vr::graphics {
+// Final desktop presentation of an already rendered eye; preserves GL state.
+[[nodiscard]] bool DrawMonitorMirror(unsigned int texture, std::string& error) noexcept;
 // A transient desktop capture, owned by the render thread and shared by both
 // eye passes. Destruction must happen before leaving the current GL context.
 class OpenGlMenuFrame final {

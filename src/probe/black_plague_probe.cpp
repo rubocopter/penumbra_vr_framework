@@ -83,6 +83,16 @@ std::string WideToUtf8(const std::wstring& value) {
 }
 
 void OnFrame(std::uint64_t frame_number) noexcept {
+    if (frame_number%300==0) {
+        const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu",
+            static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
+            static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs));
+    }
+    const auto timing=penumbra_vr::backends::black_plague::ConsumeNativeUpdateTiming();
+    if (timing.ready) penumbra_vr::probe::WriteLog(
+        "native_update_timing ticks=%llu simulation_seconds=%.4f wall_seconds=%.4f ratio=%.4f (diagnostic only)",
+        static_cast<unsigned long long>(timing.ticks),timing.simulated_seconds,timing.wall_seconds,timing.ratio);
     // The main menu has no RenderWorld calls. Service allocation requests here
     // too so startup does not require a loaded map. Do not double-count frames.
     penumbra_vr::backends::black_plague::ProcessEyeTargetRequestsOnRenderThread(false);
@@ -696,8 +706,15 @@ extern "C" DWORD WINAPI PenumbraVR_EnableMonitorMirror(void*) {
     }
     penumbra_vr::backends::black_plague::SetTrackedStereoMonitorMirror(true);
     penumbra_vr::probe::WriteLog(
-        "VR monitor mirror enabled; continuous stereo will retain the original world pass");
+        "VR monitor mirror enabled; desktop will display the left eye at swap");
     return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_QueryMonitorMirror(void*) {
+    if (InterlockedCompareExchange(&g_state,2,2)!=2) return 0;
+    const bool enabled=penumbra_vr::backends::black_plague::TrackedStereoMonitorMirrorEnabled();
+    penumbra_vr::probe::WriteLog("VR monitor mirror readback: %s",enabled ? "enabled" : "disabled");
+    return enabled ? 1 : 2;
 }
 
 extern "C" DWORD WINAPI PenumbraVR_DisableMonitorMirror(void*) {

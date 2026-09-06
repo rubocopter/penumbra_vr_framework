@@ -81,6 +81,7 @@ pvr_enable_warnings(pvr_spatial_audio)
 add_library(pvr_vr_math STATIC
     src/runtime/vr_math.cpp
     src/runtime/vr_grab_pose.cpp
+    src/runtime/vr_hand_pose.cpp
 )
 target_include_directories(pvr_vr_math PUBLIC src/runtime)
 pvr_enable_warnings(pvr_vr_math)
@@ -249,7 +250,7 @@ pvr_enable_warnings(pvr_probe_launcher)
 if(BUILD_TESTING)
     add_executable(pvr_spatial_interaction_test tests/vr_input_state/spatial_interaction_test.cpp)
     target_include_directories(pvr_spatial_interaction_test PRIVATE src/hooks src/backends/black_plague src/adapters/hpl1 src/graphics)
-    target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook)
+    target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook pvr_rel32_call_hook)
     pvr_enable_warnings(pvr_spatial_interaction_test)
     add_test(NAME spatial_interaction COMMAND pvr_spatial_interaction_test)
     add_executable(pvr_vr_grab_pose_test tests/vr_math/vr_grab_pose_test.cpp)
@@ -364,6 +365,10 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_vr_action_input_test PRIVATE pvr_vr_action_input)
     pvr_enable_warnings(pvr_vr_action_input_test)
     add_test(NAME vr_action_input COMMAND pvr_vr_action_input_test)
+    add_executable(pvr_vr_hand_pose_test tests/vr_input_state/vr_hand_pose_test.cpp)
+    target_link_libraries(pvr_vr_hand_pose_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_vr_hand_pose_test)
+    add_test(NAME vr_hand_pose COMMAND pvr_vr_hand_pose_test)
 
     add_executable(pvr_vr_settings_test
         tests/vr_settings/vr_settings_test.cpp

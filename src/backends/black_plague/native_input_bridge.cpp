@@ -17,6 +17,8 @@
 
 namespace penumbra_vr::backends::black_plague {
 namespace {
+runtime::VrUpdateTiming g_update_timing;
+runtime::VrUpdateTimingSample g_timing_sample;
 using A = runtime::NativeVrAction;
 using Q = runtime::NativeVrQuery;
 struct Entry { std::uintptr_t site; A action; Q query = Q::pressed; };
@@ -117,6 +119,16 @@ bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
         // native edge bookkeeping, even when VR has a matching pressed button.
         const bool native = reinterpret_cast<Query>(g_image + Target(entry.query))(input, name);
         const bool vr = g_intents && g_intents->Query(entry.action, entry.query);
+        if (vr && !native && entry.action == A::light && g_input_player) {
+            auto* glow = Read<void*>(g_input_player,0x29C);
+            auto* flashlight = Read<void*>(g_input_player,0x290);
+            if (!glow || !flashlight) return native;
+            const auto plan = runtime::PlanQuickLight(Read<bool>(glow,0),Read<bool>(flashlight,4));
+            if (plan.toggle_glow)
+                reinterpret_cast<void(__thiscall*)(void*)>(g_image+0x9BD80)(g_input_player);
+            // The native handler executes StartFlashLightButton on true.
+            return plan.toggle_flashlight;
+        }
         if (vr && entry.action == A::interact && entry.query == Q::pressed)
             RefreshVrSelectionBeforeInteract(g_input_player);
         return native || vr;
@@ -165,6 +177,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         g_frame = frame;
     }
     const float turn = g_turn.Update(frame.input.state.turn, !ui && frame.focused);
+    const auto timing=g_update_timing.Update(dt,GetTickCount64(),!ui && frame.focused);
+    if (timing.ready) g_timing_sample=timing;
     ReleaseSRWLockExclusive(&g_session_lock);
     g_pointer_valid = ui && frame.focused && TrackedMenuPointer(frame.hands[1].aim, g_pointer_uv);
     if (frame.input.state.recenter.just_pressed) RequestTrackedRecenter();
@@ -175,7 +189,9 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         frame.input.state.ui_drag.just_pressed = false;
     }
     runtime::VrNativeIntents intents;
-    intents.Begin(frame.input.state, context);
+    float movement_yaw = 0;
+    if (!ui && !TrackedMovementYaw(movement_yaw)) frame.input.state.move = {};
+    intents.Begin(frame.input.state, context, movement_yaw);
     auto* previous = g_intents;
     auto* previous_player = g_input_player;
     g_input_player = Read<void*>(handler, 0x38);
@@ -200,6 +216,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
 }
 }
 
+runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept {
+    AcquireSRWLockExclusive(&g_session_lock);
+    const auto result=g_timing_sample; g_timing_sample={};
+    ReleaseSRWLockExclusive(&g_session_lock);
+    return result;
+}
 bool InstallNativeInputBridge(std::string& error) noexcept {
     error.clear();
     if (g_update_hook.installed()) return true;
@@ -229,6 +251,12 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         }
     }
     // Validate direct yaw entry too, before publishing any input hook.
+    for (const auto& light : {std::array<std::uintptr_t,2>{0x513D,0x9BCD0},{0x5165,0x9BD80}}) {
+        std::array<std::uint8_t,5> actual{};
+        if (!ReadBytes(g_image+light[0],actual.data(),actual.size()) || actual!=CallBytes(light[0],light[1])) {
+            error="Native light button call mismatch"; return false;
+        }
+    }
     constexpr std::array<std::uint8_t, 9> yaw{0x56,0x8B,0xF1,0x8B,0x8E,0xC4,0x02,0,0};
     std::array<std::uint8_t, 9> actual_yaw{};
     if (!ReadBytes(g_image + 0x9CD00, actual_yaw.data(), actual_yaw.size()) || actual_yaw != yaw) {

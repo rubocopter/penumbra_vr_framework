@@ -54,7 +54,7 @@ bool OpenLog(std::wstring& path, std::wstring& error) noexcept {
 }
 
 void WriteLog(const char* format, ...) noexcept {
-    char message[1024]{};
+    char message[4096]{}; // Full frame telemetry must not lose its trailing diagnostics.
     va_list arguments;
     va_start(arguments, format);
     _vsnprintf_s(message, sizeof(message), _TRUNCATE, format, arguments);
@@ -62,7 +62,7 @@ void WriteLog(const char* format, ...) noexcept {
 
     SYSTEMTIME time{};
     GetLocalTime(&time);
-    char line[1200]{};
+    char line[4352]{};
     _snprintf_s(
         line,
         sizeof(line),

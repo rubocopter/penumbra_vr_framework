@@ -88,10 +88,12 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
     if (!focused) { release(); return true; }
     const std::size_t dominant = handedness == VrHand::left ? 0U : 1U;
     const auto& handles = contexts_[dominant];
-    const std::array<VrActiveSet, 3> sets{{{global_, 0},
-        {context == VrInputContext::gameplay ? handles.set : handles.ui_set, 0},
-        {offhand_, sources_[1 - dominant]}}};
-    if (!backend.Activate(std::span(sets.data(), context == VrInputContext::gameplay ? 3U : 2U), error)) {
+    // One interaction owner for the selected handedness. Activating the shared
+    // offhand set also binds the dominant trigger on some controller profiles.
+    // Keep both tracked hands/skeletons, but do not activate mixed ownership.
+    const std::array<VrActiveSet, 2> sets{{{global_, 0},
+        {context == VrInputContext::gameplay ? handles.set : handles.ui_set, 0}}};
+    if (!backend.Activate(sets, error)) {
         release(); return false;
     }
     for (std::size_t i = 0; i < 2; ++i) {
@@ -110,19 +112,9 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
         ok = backend.Analog(handles.move, raw.move, error) && backend.Analog(handles.turn, raw.turn, error);
         for (std::size_t j = 0; ok && j < kGameMembers.size(); ++j)
             ok = backend.Digital(handles.gameplay[j], raw.*kGameMembers[j], error);
-        VrButtonState off;
-        if (ok) ok = backend.Digital(offhand_interact_, off, error);
         if (ok) {
             const bool held = router_.state().interact.pressed;
-            if (!held) {
-                if (off.just_pressed) router_.SetInteractSourceHand(OppositeHand(handedness));
-                else if (raw.interact.just_pressed || !focused_) router_.SetInteractSourceHand(handedness);
-            }
-            const bool active = raw.interact.active || off.active;
-            // Ownership lasts until THAT hand releases. OR-ing both grips can
-            // transfer ownership mid-hold and mask the release of the grabber.
-            if (router_.interact_source_hand() != handedness) raw.interact = off;
-            raw.interact.active = active;
+            router_.SetInteractSourceHand(handedness);
             raw.interact.just_pressed = raw.interact.just_pressed && !held;
             raw.interact.just_released = held && !raw.interact.pressed;
         }
