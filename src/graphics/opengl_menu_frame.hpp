@@ -15,7 +15,10 @@ public:
     OpenGlMenuFrame& operator=(const OpenGlMenuFrame&) = delete;
     [[nodiscard]] bool Capture(std::string& error) noexcept;
     [[nodiscard]] bool Draw(const runtime::VrMatrix44& view,
-                            const runtime::VrMatrix44& projection, std::string& error) const noexcept;
+                            const runtime::VrMatrix44& projection,
+                            float distance,
+                            float scale,
+                            std::string& error) const noexcept;
 private:
     unsigned int texture_ = 0;
     void* context_ = nullptr;

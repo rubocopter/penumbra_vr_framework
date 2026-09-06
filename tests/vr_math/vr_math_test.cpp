@@ -409,13 +409,24 @@ using penumbra_vr::runtime::VrMatrix44;
 int main() {
     std::array<float, 2> uv{};
     const auto menu_anchor = Translation(0, 1.6F, 0);
-    if (!penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, menu_anchor, 4.0F / 3.0F, uv) ||
+    if (!penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, menu_anchor, 4.0F / 3.0F, 2.0F, 2.4F, uv) ||
         std::abs(uv[0] - 0.5F) > 0.00001F || std::abs(uv[1] - 0.5F) > 0.00001F ||
-        !penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, Translation(0.6F,1.9F,0), 4.0F / 3.0F, uv) ||
+        !penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, Translation(0.6F,1.9F,0), 4.0F / 3.0F,
+            2.0F, 2.4F, uv) ||
         std::abs(uv[0] - 0.75F) > 0.00001F || std::abs(uv[1] - (1.0F / 3.0F)) > 0.00001F ||
-        penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, Translation(5,1.6F,0), 1, uv) ||
-        penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, menu_anchor, 0, uv) ||
-        penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, PitchDegrees(180), 1, uv)) {
+        penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, Translation(5,1.6F,0), 1, 2, 2.4F, uv) ||
+        penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, menu_anchor, 0, 2, 2.4F, uv) ||
+        penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, menu_anchor, 1, 0, 2.4F, uv) ||
+        penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, PitchDegrees(180), 1, 2, 2.4F, uv) ||
+        !penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, Translation(0.6F,1.9F,0), 4.0F / 3.0F,
+            1.5F, 2.4F, uv)) {
         std::cerr << "Menu controller-ray intersection failed\n"; return 2;
     }
     if (!TestRigidInverse() || !TestProjection() ||

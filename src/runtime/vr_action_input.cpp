@@ -107,6 +107,7 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
         } else hand.finger_curl = {};
     }
     VrInputState raw;
+    router_.SetInteractSourceHand(handedness);
     bool ok = backend.Digital(recenter_, raw.recenter, error);
     if (ok && context == VrInputContext::gameplay) {
         ok = backend.Analog(handles.move, raw.move, error) && backend.Analog(handles.turn, raw.turn, error);
@@ -114,7 +115,6 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
             ok = backend.Digital(handles.gameplay[j], raw.*kGameMembers[j], error);
         if (ok) {
             const bool held = router_.state().interact.pressed;
-            router_.SetInteractSourceHand(handedness);
             raw.interact.just_pressed = raw.interact.just_pressed && !held;
             raw.interact.just_released = held && !raw.interact.pressed;
         }

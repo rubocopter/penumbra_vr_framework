@@ -232,10 +232,17 @@ bool OpenGlMenuFrame::Capture(std::string& error) noexcept {
     return true;
 }
 bool OpenGlMenuFrame::Draw(const runtime::VrMatrix44& view,
-                          const runtime::VrMatrix44& projection, std::string& error) const noexcept {
+                          const runtime::VrMatrix44& projection,
+                          float distance,
+                          float scale,
+                          std::string& error) const noexcept {
     error.clear();
     if (!texture_ || context_ != wglGetCurrentContext()) {
         error = "Menu draw requires a captured texture in its owning context"; return false;
+    }
+    if (!std::isfinite(distance) || distance <= 0.0F ||
+        !std::isfinite(scale) || scale <= 0.0F) {
+        error = "Menu draw requires positive finite geometry"; return false;
     }
     State state;
     if (!state.valid) { error = "Menu draw requires GL multitexture/program APIs"; return false; }
@@ -245,12 +252,12 @@ bool OpenGlMenuFrame::Draw(const runtime::VrMatrix44& view,
     glMatrixMode(GL_PROJECTION); glLoadMatrixf(gl_projection.data());
     glMatrixMode(GL_MODELVIEW); glLoadMatrixf(gl_view.data());
     glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, texture_);
-    const float half_width = 1.2F, half_height = half_width / aspect_;
+    const float half_width = 1.2F * scale, half_height = half_width / aspect_;
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0); glVertex3f(-half_width, -half_height, -2);
-    glTexCoord2f(1, 0); glVertex3f( half_width, -half_height, -2);
-    glTexCoord2f(1, 1); glVertex3f( half_width,  half_height, -2);
-    glTexCoord2f(0, 1); glVertex3f(-half_width,  half_height, -2);
+    glTexCoord2f(0, 0); glVertex3f(-half_width, -half_height, -distance);
+    glTexCoord2f(1, 0); glVertex3f( half_width, -half_height, -distance);
+    glTexCoord2f(1, 1); glVertex3f( half_width,  half_height, -distance);
+    glTexCoord2f(0, 1); glVertex3f(-half_width,  half_height, -distance);
     glEnd();
     return true;
 }

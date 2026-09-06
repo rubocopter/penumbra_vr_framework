@@ -106,7 +106,9 @@ void __fastcall HookedToolMatrix(void* entity, void*, const Matrix* native_matri
             const bool glow=equal(name,"Glowstick");
             Matrix palm; Vec velocity{},angular{};
             if (!flashlight && !glow) break;
-            if (!HandPose(runtime::VrHand::left,false,palm,velocity,angular)) { ++g_invalid_tool_pose; break; }
+            const auto tool_hand=ReadNativeControllerFrame().interact_source==runtime::VrHand::left ?
+                runtime::VrHand::right : runtime::VrHand::left;
+            if (!HandPose(tool_hand,false,palm,velocity,angular)) { ++g_invalid_tool_pose; break; }
             // Native models point along -Y. Rotate +90 degrees around X so the
             // flashlight beam points along the controller's -Z. These sockets
             // use the installed model nodes, not Rework's different DAE files.

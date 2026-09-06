@@ -48,6 +48,7 @@ public:
         VrControllerFrame& frame, std::string& error);
     [[nodiscard]] bool TriggerHaptic(VrActionBackend& backend, VrHand hand,
         float duration, float frequency, float amplitude, std::string& error);
+    void SetMoveDeadZone(float dead_zone) noexcept { router_.SetMoveDeadZone(dead_zone); }
     void Reset() noexcept;
     [[nodiscard]] bool initialized() const noexcept { return initialized_; }
 private:

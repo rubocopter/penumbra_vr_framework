@@ -102,6 +102,10 @@ runtime::VrMatrix34 g_menu_anchor{};
 SRWLOCK g_menu_pointer_lock = SRWLOCK_INIT;
 runtime::VrMatrix34 g_menu_pointer_anchor{};
 float g_menu_pointer_aspect = 0;
+float g_menu_pointer_distance = runtime::vr_setting_limits::kUiDistance.default_value;
+float g_menu_pointer_width = 2.4F * runtime::vr_setting_limits::kUiScale.default_value;
+std::atomic<float> g_menu_distance{runtime::vr_setting_limits::kUiDistance.default_value};
+std::atomic<float> g_menu_scale{runtime::vr_setting_limits::kUiScale.default_value};
 std::atomic<bool> g_recenter_requested{false};
 SRWLOCK g_world_tracking_lock = SRWLOCK_INIT;
 runtime::VrMatrix44 g_world_game_view;
@@ -1290,6 +1294,13 @@ bool TrackedStereoPresentationActive() noexcept {
              StereoMatrixState::processing);
 }
 
+void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
+    runtime::VrSettings settings = source;
+    runtime::NormalizeVrSettings(settings);
+    g_menu_distance.store(settings.ui_distance, std::memory_order_release);
+    g_menu_scale.store(settings.ui_scale, std::memory_order_release);
+}
+
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     if (!TrackedStereoPresentationActive()) return;
     ActiveStereoFrame active;
@@ -1318,11 +1329,15 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     if (!session->WaitForHmdPose(pose, error) || !pose.device_connected || !pose.pose_valid) return;
     if (g_recenter_requested.exchange(false, std::memory_order_acq_rel)) g_menu_anchor_valid = false;
     if (!g_menu_anchor_valid) { g_menu_anchor = pose.device_to_absolute; g_menu_anchor_valid = true; }
+    const float menu_distance = g_menu_distance.load(std::memory_order_acquire);
+    const float menu_scale = g_menu_scale.load(std::memory_order_acquire);
     std::array<GLint, 4> viewport{};
     glGetIntegerv(GL_VIEWPORT, viewport.data());
     AcquireSRWLockExclusive(&g_menu_pointer_lock);
     g_menu_pointer_anchor = g_menu_anchor;
     g_menu_pointer_aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 0;
+    g_menu_pointer_distance = menu_distance;
+    g_menu_pointer_width = 2.4F * menu_scale;
     ReleaseSRWLockExclusive(&g_menu_pointer_lock);
     runtime::VrMatrix44 head_view;
     bool success = runtime::ComposeYawRecenteredTrackedHeadView(runtime::IdentityMatrix(),
@@ -1335,7 +1350,8 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
         graphics::OpenGlEyeBinding binding;
         if (success) success = BeginPersistentEyeTarget(i == 0 ? graphics::Eye::left : graphics::Eye::right,
                                                        binding, error);
-        if (success) success = menu.Draw(view, g_stereo_projections[i], error);
+        if (success) success = menu.Draw(
+            view, g_stereo_projections[i], menu_distance, menu_scale, error);
         if (binding.active) {
             std::string restore_error;
             if (!EndPersistentEyeTarget(binding, restore_error)) { success = false; error += restore_error; }
@@ -1362,8 +1378,11 @@ bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv)
     AcquireSRWLockShared(&g_menu_pointer_lock);
     const auto anchor = g_menu_pointer_anchor;
     const float aspect = g_menu_pointer_aspect;
+    const float distance = g_menu_pointer_distance;
+    const float width = g_menu_pointer_width;
     ReleaseSRWLockShared(&g_menu_pointer_lock);
-    return runtime::ProjectAimOnMenu(anchor, aim.device_to_absolute, aspect, uv);
+    return runtime::ProjectAimOnMenu(
+        anchor, aim.device_to_absolute, aspect, distance, width, uv);
 }
 void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::memory_order_release); }
 

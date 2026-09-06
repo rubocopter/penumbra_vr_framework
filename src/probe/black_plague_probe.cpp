@@ -8,6 +8,7 @@
 #include "spatial_interaction.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_math.hpp"
+#include "vr_settings_store.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -21,6 +22,7 @@ volatile LONG g_state = 0;
 volatile LONG g_presentation_state = 0;
 HINSTANCE g_instance = nullptr;
 penumbra_vr::runtime::OpenVrSession g_openvr_session;
+penumbra_vr::runtime::VrSettings g_vr_settings;
 
 std::wstring OpenVrLoaderPath() {
     std::wstring path(32768, L'\0');
@@ -320,10 +322,9 @@ enum class StereoExperiment : std::uint8_t {
     bool success = g_openvr_session.ReadEyeConfiguration(eyes, error);
     penumbra_vr::runtime::VrRenderTargetSize selected;
     if (success) {
-        constexpr float kDefaultRenderScale = 1.0F;
         success = CreateAdaptiveEyeTargets(
             g_openvr_session.recommended_render_target_size(),
-            kDefaultRenderScale,
+            g_vr_settings.render_scale,
             selected,
             error);
     }
@@ -547,6 +548,31 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         InterlockedExchange(&g_state, 0);
         return 0;
     }
+
+    std::wstring settings_error;
+    const auto settings_path =
+        penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
+    if (settings_path.empty() || !penumbra_vr::launcher::LoadVrInputSettings(
+            settings_path, g_vr_settings, settings_error)) {
+        penumbra_vr::probe::WriteLog("VR input settings fallback to defaults: %s",
+            WideToUtf8(settings_error).c_str());
+        g_vr_settings = {};
+    }
+    penumbra_vr::backends::black_plague::ConfigureNativeInputBridge(g_vr_settings);
+    penumbra_vr::backends::black_plague::ConfigureTrackedPresentation(g_vr_settings);
+    penumbra_vr::probe::WriteLog(
+        "VR input profile handedness=%s move_speed=%.3f move_dead_zone=%.3f turn_mode=%.*s snap_angle=%.1f smooth_speed=%.1f turn_dead_zone=%.3f",
+        g_vr_settings.handedness == penumbra_vr::runtime::VrHandedness::left ?
+            "left" : "right",
+        g_vr_settings.move_speed, g_vr_settings.move_dead_zone,
+        static_cast<int>(penumbra_vr::runtime::ToConfigValue(g_vr_settings.turn_mode).size()),
+        penumbra_vr::runtime::ToConfigValue(g_vr_settings.turn_mode).data(),
+        g_vr_settings.snap_turn_angle, g_vr_settings.smooth_turn_speed,
+        g_vr_settings.turn_dead_zone);
+    penumbra_vr::probe::WriteLog(
+        "VR presentation profile render_scale=%.2f ui_distance=%.2f ui_scale=%.2f",
+        g_vr_settings.render_scale, g_vr_settings.ui_distance,
+        g_vr_settings.ui_scale);
 
     std::string hook_error;
     if (!penumbra_vr::hooks::InstallOpenGlMatrixTelemetry(hook_error)) {

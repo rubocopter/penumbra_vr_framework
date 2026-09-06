@@ -153,6 +153,13 @@ int RunSpatialTest() {
     attached=Read<Matrix>(body.data(),0x34);
     if (std::abs(attached.values[7]-3.00504F)>0.00001F ||
         std::abs(attached.values[11]-3.940278F)>0.00001F) return 17;
+    test_frame.interact_source=runtime::VrHand::left;
+    hand.device_to_absolute={{1,0,0,7,0,1,0,8,0,0,1,9}};
+    HookedToolMatrix(body.data(),nullptr,&native);
+    attached=Read<Matrix>(body.data(),0x34);
+    if (attached.values[3]!=7 || std::abs(attached.values[7]-8.00504F)>0.00001F ||
+        std::abs(attached.values[11]-8.940278F)>0.00001F) return 23;
+    test_frame.interact_source=runtime::VrHand::right;
     left.pose_valid=false;
     HookedToolMatrix(body.data(),nullptr,&native);
     if (Read<Matrix>(body.data(),0x34).values!=native.values) return 18;

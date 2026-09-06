@@ -218,6 +218,7 @@ target_link_libraries(
         pvr_opengl_telemetry
         pvr_openvr_session
         pvr_render_target_policy
+        pvr_vr_settings_store
         pvr_black_plague_backend_probe)
 set_target_properties(pvr_black_plague_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.BlackPlague.Probe"

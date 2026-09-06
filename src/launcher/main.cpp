@@ -753,11 +753,17 @@ bool FindRunningGame(const std::filesystem::path& path, DWORD& pid, std::wstring
 bool StartRemoteVr(HANDLE process, DWORD pid, const std::filesystem::path& probe,
                    std::wstring& error) {
     const auto settings = penumbra_vr::launcher::DefaultVrSettingsPath(error);
-    bool mirror = false;
-    if (settings.empty() || !penumbra_vr::launcher::LoadMonitorMirrorSetting(settings, mirror, error))
+    penumbra_vr::runtime::VrSettings profile;
+    if (settings.empty() || !penumbra_vr::launcher::LoadVrInputSettings(settings,profile,error))
         return false;
+    const bool mirror=profile.monitor_mirror;
     std::wcout << L"VR settings: " << settings << L"; monitor mirror "
-               << (mirror ? L"on" : L"off") << L'\n' << std::flush;
+               << (mirror ? L"on" : L"off") << L"; hand "
+               << (profile.handedness==penumbra_vr::runtime::VrHandedness::left ? L"left" : L"right")
+               << L"; move " << profile.move_speed
+               << L"; render " << profile.render_scale
+               << L"; UI " << profile.ui_distance << L"m x" << profile.ui_scale
+               << L'\n' << std::flush;
     if (!InvokeRemotePresentationAction(process, pid, probe,
         mirror ? "PenumbraVR_EnableMonitorMirror" : "PenumbraVR_DisableMonitorMirror",
         L"Could not apply the saved mirror setting", error) ||
@@ -796,14 +802,19 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
     }
     // Reading preferences is part of preflight; do not open Steam if corrupt.
     const auto settings = penumbra_vr::launcher::DefaultVrSettingsPath(error);
-    bool mirror = false;
-    if (settings.empty() || !penumbra_vr::launcher::LoadMonitorMirrorSetting(settings, mirror, error)) {
+    penumbra_vr::runtime::VrSettings profile;
+    if (settings.empty() || !penumbra_vr::launcher::LoadVrInputSettings(settings,profile,error)) {
         std::wcerr << error << L'\n';
         return 5;
     }
     if (check_only) {
         std::wcout << L"VR settings: " << settings << L"; monitor mirror "
-                   << (mirror ? L"on" : L"off") << L'\n';
+                   << (profile.monitor_mirror ? L"on" : L"off") << L"; hand "
+                   << (profile.handedness==penumbra_vr::runtime::VrHandedness::left ? L"left" : L"right")
+                   << L"; move " << profile.move_speed
+                   << L"; render " << profile.render_scale
+                   << L"; UI " << profile.ui_distance << L"m x" << profile.ui_scale
+                   << L'\n';
         std::wcout << L"VR launch preflight passed for " << game
                    << L". No game or SteamVR process was started.\n";
         return 0;

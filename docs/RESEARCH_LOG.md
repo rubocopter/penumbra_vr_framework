@@ -24,6 +24,23 @@ tool/light attachment and full Rework hand assets are not finished. See
 Earlier dated entries below describe historical milestones, not physical
 validation of these newly implemented systems.
 
+### 2026-09-06 — Persistent Black Plague input and comfort profile
+
+- The probe now loads normalized handedness, analog move scale/dead-zone and
+  turn mode/angle/speed/dead-zone from the framework INI before installing the
+  native input hook. Preflight validates the same file.
+- The dominant hand selects the corresponding OpenVR gameplay/UI set, tracked
+  menu pointer and interaction owner. The opposite hand carries the installed
+  glowstick/flashlight transform, matching the Rework ownership model.
+- Snap turn retains neutral re-arming with configurable angle. Smooth turn uses
+  the native update `dt`, a radial dead-zone remap and configured degrees/second;
+  disabled mode emits no yaw input.
+- The local right-handed test profile uses move scale `0.85`; this changes only
+  the controller axis and is not evidence that game timing is corrected.
+- The profile also drives adaptive per-eye `RenderScale` and the menu's
+  `UiDistance`/`UiScale`. Drawing and controller-ray projection share the same
+  geometry so comfort changes cannot introduce pointer drift.
+
 ### 2026-09-06 — Black Plague held-body character collision filter
 
 - Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.

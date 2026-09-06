@@ -19,6 +19,7 @@ namespace penumbra_vr::backends::black_plague {
 namespace {
 runtime::VrUpdateTiming g_update_timing;
 runtime::VrUpdateTimingSample g_timing_sample;
+runtime::VrSettings g_settings;
 using A = runtime::NativeVrAction;
 using Q = runtime::NativeVrQuery;
 struct Entry { std::uintptr_t site; A action; Q query = Q::pressed; };
@@ -172,15 +173,29 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         g_frame = {};
     } else if (g_session) {
         std::string error;
-        static_cast<void>(g_session->ReadControllerInput(context, runtime::VrHand::right,
+        g_session->SetControllerMoveDeadZone(g_settings.move_dead_zone);
+        const auto handedness = g_settings.handedness == runtime::VrHandedness::left ?
+            runtime::VrHand::left : runtime::VrHand::right;
+        static_cast<void>(g_session->ReadControllerInput(context, handedness,
                                                         GetTickCount64(), frame, error));
         g_frame = frame;
     }
-    const float turn = g_turn.Update(frame.input.state.turn, !ui && frame.focused);
+    if (frame.input.state.move.active) {
+        frame.input.state.move.x *= g_settings.move_speed;
+        frame.input.state.move.y *= g_settings.move_speed;
+        g_frame.input.state.move = frame.input.state.move;
+    }
+    const float turn = g_turn.Update(
+        frame.input.state.turn, !ui && frame.focused,
+        g_settings.turn_mode, dt, g_settings.snap_turn_angle, g_settings.smooth_turn_speed,
+        g_settings.turn_dead_zone);
     const auto timing=g_update_timing.Update(dt,GetTickCount64(),!ui && frame.focused);
     if (timing.ready) g_timing_sample=timing;
     ReleaseSRWLockExclusive(&g_session_lock);
-    g_pointer_valid = ui && frame.focused && TrackedMenuPointer(frame.hands[1].aim, g_pointer_uv);
+    const auto pointer_index =
+        frame.interact_source == runtime::VrHand::left ? 0U : 1U;
+    g_pointer_valid = ui && frame.focused &&
+        TrackedMenuPointer(frame.hands[pointer_index].aim, g_pointer_uv);
     if (frame.input.state.recenter.just_pressed) RequestTrackedRecenter();
     if (ui && !g_pointer_valid) {
         frame.input.state.ui_select.pressed = false;
@@ -221,6 +236,12 @@ runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept {
     const auto result=g_timing_sample; g_timing_sample={};
     ReleaseSRWLockExclusive(&g_session_lock);
     return result;
+}
+void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept {
+    runtime::NormalizeVrSettings(settings);
+    if (!g_installed.load(std::memory_order_acquire)) {
+        g_settings = settings;
+    }
 }
 bool InstallNativeInputBridge(std::string& error) noexcept {
     error.clear();

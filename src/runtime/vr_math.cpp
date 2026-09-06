@@ -440,9 +440,12 @@ bool BuildConservativeStereoCullFrustum(
 }
 
 bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
-                      float aspect, std::array<float, 2>& uv) noexcept {
+                      float aspect, float distance, float width,
+                      std::array<float, 2>& uv) noexcept {
     uv = {};
-    if (!std::isfinite(aspect) || aspect <= 0) return false;
+    if (!std::isfinite(aspect) || aspect <= 0 ||
+        !std::isfinite(distance) || distance <= 0 ||
+        !std::isfinite(width) || width <= 0) return false;
     VrMatrix44 view, pose;
     std::string error;
     if (!ComposeYawRecenteredTrackedHeadView(IdentityMatrix(), anchor, aim, 1, view, error) ||
@@ -450,10 +453,10 @@ bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
     const auto& m = pose.values;
     const float dz = -m[10];
     if (dz >= -0.0001F) return false;
-    const float t = (-2.0F - m[11]) / dz;
+    const float t = (-distance - m[11]) / dz;
     if (t < 0 || t > 20) return false;
     const float x = m[3] - t * m[2], y = m[7] - t * m[6];
-    const std::array<float, 2> candidate{x / 2.4F + 0.5F, 0.5F - y * aspect / 2.4F};
+    const std::array<float, 2> candidate{x / width + 0.5F, 0.5F - y * aspect / width};
     if (candidate[0] < 0 || candidate[0] > 1 || candidate[1] < 0 || candidate[1] > 1) return false;
     uv = candidate; return true;
 }

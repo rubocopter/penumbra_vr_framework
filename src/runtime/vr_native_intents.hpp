@@ -29,9 +29,11 @@ private:
 
 class VrSnapTurn final {
 public:
-    // Returns native yaw-input radians (positive stick = turn right). Returning
-    // to the neutral zone is required before another 45-degree step.
-    [[nodiscard]] float Update(const VrAnalogState& axis, bool gameplay) noexcept;
+    // Returns native yaw-input radians. Snap requires a neutral return; smooth
+    // integrates configured angular speed once per native update.
+    [[nodiscard]] float Update(const VrAnalogState& axis, bool gameplay,
+        VrTurnMode mode, float dt, float snap_angle_degrees,
+        float smooth_speed_degrees, float dead_zone) noexcept;
 private:
     bool armed_ = false;
 };

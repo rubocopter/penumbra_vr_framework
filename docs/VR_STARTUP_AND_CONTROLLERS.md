@@ -29,10 +29,13 @@ pero aún no lo certifica en el motor real: la primera prueba debe usar un objet
 pequeño, lentamente y sin lanzamiento ni barras largas.
 
 El stick ahora limita su vector a longitud 1 para evitar sobrevelocidad diagonal.
-Esto no resuelve por sí solo la sensación de salto/tiempo acelerado, aún pendiente.
+El perfil local aplica además `MoveSpeed=0.85` sobre la entrada analógica, sin
+cambiar reloj, gravedad ni física. Esto no resuelve por sí solo una posible
+anomalía temporal; el contador `native_update_timing` sigue siendo la evidencia.
 El launcher imprime ruta efectiva de settings y valor del mirror tanto en
 preflight como al activarlo. La lectura actual comprobada es `on`; el registro
-de la sesión 9156 decía `disabled`. No se considera resuelto el mirror en visor.
+incluye además mano, escala de movimiento, escala de render y geometría UI.
+El mirror sigue pendiente de la próxima validación física.
 
 ## Arrancar sin adjuntar el mod a mano
 
@@ -67,22 +70,24 @@ Comprobación sin abrir el juego ni SteamVR:
    se copian a `build/bin/<config>/vr` en cada compilación. No se sondea por ojo:
    lo hace una vez `cButtonHandler::Update`.
 2. Puente nativo exacto: movimiento analógico combinado con teclado, giro por
-   pasos de 45 grados con retorno a neutro, salto, correr, agacharse, interactuar,
+   pasos configurable o suave integrado por tiempo, salto, correr, agacharse, interactuar,
    examinar, guardar objeto, inventario, libreta, pausa y ciclo de luz rápida
    apagado → glowstick → linterna → apagado, como Rework. El stick sigue el yaw
-   horizontal del HMD; el teclado conserva sus ejes nativos. Tracking obsoleto
+   horizontal del HMD; velocidad/deadzone, modo/ángulo de giro y mano dominante
+   se leen del INI del framework. El teclado conserva sus ejes nativos. Tracking obsoleto
    inhibe movimiento VR. No equivale a cuerpo completo ni room-scale.
    No usa emulación de teclas de Windows. Los nombres de acción conservan su
    ABI antiguo y siempre se ejecuta la consulta original del juego.
 3. Menú inicial, pausa/inventario/libreta: captura del escritorio presentada en
-   ambos ojos como panel de 2,4 metros de ancho a 2 metros, orientado según el
-   yaw al abrirlo. Apuntado derecho en menú principal, inventario y libreta,
+   ambos ojos como panel configurable (2,4 metros de ancho a 1,75 metros con el
+   perfil actual), orientado según el
+   yaw al abrirlo. Apuntado de la mano dominante en menú principal, inventario y libreta,
    coordenadas nativas 800×600, recentrado y prioridad temporal del ratón cuando
    se mueve. Los diálogos especiales conservan sus rutas nativas y aún necesitan
    cobertura en ejecución. Se restauran matrices, texturas, programas GL,
    viewport, scissor y demás estado gráfico tras dibujar el panel.
 4. Adaptador espacial integrado en la DLL y compilación: selección desde aim
-   dominante (derecho en este puente) en el estado normal, refresco antes de pulsar,
+   dominante (derecho por defecto) en el estado normal, refresco antes de pulsar,
    agarre relativo a la palma de cuerpos libres y lanzamiento limitado a 9 m/s.
    Las transiciones originales conservan la gestión de masa/gravedad; el
    adaptador restaura los límites de velocidad que cambia. Un botón de la otra
@@ -122,10 +127,12 @@ tres hitos pedidos por el usuario estén terminados**.
 - `PlayerState_Interact_VR.cpp` es la referencia, pero no se copian offsets de
   Overture. Véase `BLACK_PLAGUE_SPATIAL_NOTES.md` para llamadas verificadas,
   pruebas, límites y el siguiente punto de integración de herramientas.
-- La configuración de este puente es diestra y de giro por pasos. El lector
-  soporta acciones zurdas, pero falta persistir/aplicar esa preferencia al puente.
-  Se desactiva el action set offhand para evitar propiedad mezclada. L2 no
-  interactúa ni selecciona en el perfil PSVR2 diestro; R2 es el gatillo principal.
+- El perfil predeterminado sigue siendo diestro y de giro por pasos, pero la mano,
+  deadzones, escala de movimiento, giro, escala de render y geometría UI ya se
+  persisten/aplican desde
+  `%LOCALAPPDATA%\PenumbraVR\settings.ini`. Se desactiva el action set offhand
+  para evitar propiedad mezclada. En el perfil PSVR2 diestro R2 es interactuar;
+  el perfil zurdo usa L2 y cambia también puntero y mano de herramientas.
 - Tracking corporal posicional y Enhanced visuals GPU no están conectados.
 - Falta validar transiciones mientras se mantiene un botón, la pérdida de
   tracking/foco en una partida real y la convivencia de mandos y teclado al

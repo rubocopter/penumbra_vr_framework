@@ -18,9 +18,10 @@ struct VrCullFrustum {
 };
 
 [[nodiscard]] VrMatrix44 IdentityMatrix() noexcept;
-// Same 2.4 m wide, 2 m distant panel as OpenGlMenuFrame; UV origin is top-left.
+// Projects a controller ray onto the configurable OpenGlMenuFrame panel;
+// UV origin is top-left.
 [[nodiscard]] bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
-    float aspect, std::array<float, 2>& uv) noexcept;
+    float aspect, float distance, float width, std::array<float, 2>& uv) noexcept;
 [[nodiscard]] VrMatrix44 ExpandMatrix(const VrMatrix34& matrix) noexcept;
 [[nodiscard]] VrMatrix44 Multiply(
     const VrMatrix44& left,

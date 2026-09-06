@@ -123,6 +123,10 @@ bool OpenVrSession::TriggerHaptic(VrHand hand, float duration, float frequency,
     return actions_.TriggerHaptic(backend, hand, duration, frequency, amplitude, error);
 }
 
+void OpenVrSession::SetControllerMoveDeadZone(float dead_zone) noexcept {
+    actions_.SetMoveDeadZone(dead_zone);
+}
+
 bool OpenVrSession::controller_input_initialized() const noexcept {
     return initialized() && input_ != nullptr && actions_.initialized();
 }

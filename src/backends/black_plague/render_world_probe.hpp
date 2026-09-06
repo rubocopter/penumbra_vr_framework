@@ -3,6 +3,7 @@
 #include "eye_target_probe.hpp"
 #include "openvr_session.hpp"
 #include "vr_math.hpp"
+#include "vr_settings.hpp"
 
 #include <array>
 #include <cstdint>
@@ -88,6 +89,7 @@ struct RenderWorldFrameTelemetry {
     std::string& error) noexcept;
 [[nodiscard]] bool StopTrackedStereoPresentation(std::string& error) noexcept;
 [[nodiscard]] bool TrackedStereoPresentationActive() noexcept;
+void ConfigureTrackedPresentation(const runtime::VrSettings& settings) noexcept;
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept;
 [[nodiscard]] bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv) noexcept;
 void RequestTrackedRecenter() noexcept;

@@ -139,9 +139,11 @@ adapter from being mistaken for a shared-runtime defect.
   code; see `VR_STARTUP_AND_CONTROLLERS.md` for unvalidated behavior and limits.
 - `src/runtime/vr_settings.*` owns the Rework defaults, limits, enum text
   values and legacy smooth-turn migration, plus framework monitor-mirror state.
-  The render-target and input policies consume its shared limits. The launcher
-  persists the Black Plague mirror flag; storage and per-game application for
-  the remaining settings are pending.
+  Black Plague now loads handedness, move scale/dead-zone, turn mode/angle/speed/
+  dead-zone, menu distance/scale, render scale and mirror from the framework
+  INI. The selected hand drives its gameplay/UI action set and pointer; the
+  opposite hand carries the light tool. Storage/application of height and the
+  remaining settings is pending.
 - `assets/openvr` contains the shared action schema and bindings for PSVR2 Sense,
   Vive, Index, Oculus, Pico and Windows motion controllers. These files are
   consumed by the runtime reader and copied beside the probe on each build.

@@ -72,12 +72,19 @@ int main() {
     intents.Begin(state, VrInputContext::gameplay);
     if (intents.Move(0.25F,true) != 0.25F) return 4;
     VrSnapTurn turn;
-    if (turn.Update({true,1,0},true) != 0 || turn.Update({true,0,0},true) != 0 ||
-        std::abs(turn.Update({true,1,0},true) - 0.785398163F) > 0.00001F ||
-        turn.Update({true,1,0},true) != 0 || turn.Update({true,0,0},false) != 0 ||
-        turn.Update({true,-1,0},true) != 0) return 5;
-    static_cast<void>(turn.Update({true,0,0},true));
-    if (turn.Update({true,-1,0},true) >= 0) return 6;
+    const auto snap=[&](VrAnalogState axis,bool gameplay) {
+        return turn.Update(axis,gameplay,VrTurnMode::snap,0.01F,45,90,0.2F);
+    };
+    if (snap({true,1,0},true) != 0 || snap({true,0,0},true) != 0 ||
+        std::abs(snap({true,1,0},true) - 0.785398163F) > 0.00001F ||
+        snap({true,1,0},true) != 0 || snap({true,0,0},false) != 0 ||
+        snap({true,-1,0},true) != 0) return 5;
+    static_cast<void>(snap({true,0,0},true));
+    if (snap({true,-1,0},true) >= 0) return 6;
+    const float smooth=turn.Update({true,0.6F,0},true,VrTurnMode::smooth,0.02F,45,90,0.2F);
+    if (std::abs(smooth-0.015707963F)>0.00001F ||
+        turn.Update({true,0.1F,0},true,VrTurnMode::smooth,0.02F,45,90,0.2F)!=0 ||
+        turn.Update({true,1,0},true,VrTurnMode::disabled,0.02F,45,90,0.2F)!=0) return 20;
     // Exercise the exact x86 thiscall -> fastcall aggregate forwarding ABI.
     // Repetition also catches incorrect callee stack cleanup in Debug and /O2.
     Fixture fixture;

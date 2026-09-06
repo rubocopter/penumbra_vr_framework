@@ -6,8 +6,8 @@ trilogy. It is a developer baseline, not yet an installer-managed preset. Edit
 live state on exit and can overwrite changes made while it is running.
 
 The game-independent defaults, ranges, enum values and migration behavior live
-in `src/runtime/vr_settings.*`. This document describes the user-facing policy;
-configuration-file storage and game-specific application remain separate work.
+in `src/runtime/vr_settings.*`. Black Plague now consumes the input/comfort
+subset from the framework INI; other settings and games remain separate work.
 
 ## Common baseline
 
@@ -49,13 +49,41 @@ performance preset.
 
 ## Black Plague and Requiem
 
-The binary backends do not yet read a persistent VR section from each game's
-configuration. Black Plague's launcher stores the monitor-mirror preference in
-`%LOCALAPPDATA%\PenumbraVR\settings.ini`; `--vr-mirror-on` and
-`--vr-mirror-off` update it after a successful live change, and `--start-vr`
-applies it automatically. A missing file or key defaults to `false`. Mirroring
-retains a third desktop world pass, so it should be enabled only while needed.
-Requiem is configuration-ready only; its VR backend is not playable yet.
+Black Plague reads this profile from `%LOCALAPPDATA%\PenumbraVR\settings.ini`
+when the probe is attached:
+
+```ini
+[VR]
+MonitorMirror=true
+Handedness=Right
+MoveSpeed=0.85
+MoveDeadZone=0.15
+TurnMode=Snap
+SnapTurnAngle=45
+SmoothTurnSpeed=90
+TurnDeadZone=0.20
+UiDistance=1.75
+UiScale=1.0
+RenderScale=1.0
+```
+
+`Handedness` accepts `Right` or `Left`; it selects the matching action/UI set,
+aim pointer and interaction hand, while flashlight/glowstick use the opposite
+hand. `TurnMode` accepts `Disabled`, `Snap` or `Smooth`. Angles and smooth speed
+are degrees and degrees/second. `MoveSpeed` scales analog input only and remains
+clamped by the native full-stick range; it does not alter physics or game time.
+The current local profile uses `0.85` to retest the reported excessive speed.
+`UiDistance` is the menu distance in metres, `UiScale` changes the physical
+panel size while keeping its aspect ratio, and `RenderScale` scales the OpenVR
+recommended per-eye dimensions before the existing allocation fallback. The
+same menu geometry is used for drawing and controller-ray hit testing.
+
+Missing keys use normalized Rework defaults. Malformed recognized values make
+preflight fail instead of silently starting with a mixed profile. Values outside
+the documented runtime ranges are clamped. Changes take effect on the next probe
+attachment. `--vr-mirror-on` and `--vr-mirror-off` still update only the mirror
+key after a successful live change. Requiem is configuration-ready only; its VR
+backend is not playable yet.
 
 The eventual installer should apply these settings through a reversible,
 per-game preset, preserve unrelated user preferences, and create a backup

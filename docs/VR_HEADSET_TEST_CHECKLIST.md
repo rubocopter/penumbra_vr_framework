@@ -38,7 +38,8 @@ ancladas a la mano y manipulación de joints/puertas siguen incompletas.
    tamaño u orientación incorrectos. No empujes las herramientas contra paredes.
 4. Sin sostener cuerpos, camina recto/diagonal, corre y salta durante unos 20 s.
    Deja otros 10 s quieto. Los registros de temporización ayudarán a distinguir
-   velocidad física de un problema del reloj. Indica si el salto sigue acelerado.
+   velocidad física de un problema del reloj. El perfil usa `MoveSpeed=0.85`;
+   indica si ahora caminar/correr se sienten naturales y si el salto sigue acelerado.
 5. Abre/cierra inventario y dashboard; comprueba que vuelven herramientas y dedos.
 6. Abre/cierra cada mano: el índice debe estar junto al pulgar en ambos lados.
    Comprueba la nueva flexión diferenciada de falanges y del pulgar; indica si
@@ -107,6 +108,14 @@ R1, Cuadrado u Options envían cerrar. El ratón tiene prioridad aproximadamente
   paredes/suelo, no solo la bombilla. Anotar si desaparece en uno o ambos ojos.
 - [ ] **Locomoción:** caminar, parar, correr, saltar y agacharse. Probar cada paso
   de giro con retorno a neutro. Al soltar los controles no debe continuar andando.
+- [ ] **Perfil aplicado:** la consola y el log deben indicar `handedness=right`,
+  `move_speed=0.850`, giro Snap 45°, `render_scale=1.00`, `ui_distance=1.75` y
+  `ui_scale=1.00`. No probar todavía el perfil zurdo dentro
+  de la misma ejecución: el cambio se aplica al volver a adjuntar el probe.
+- [ ] **Panel VR configurable:** menú, inventario y libreta deben verse a una
+  distancia cómoda y el rayo derecho debe coincidir con toda su superficie,
+  incluidas las esquinas. No hace falta cambiar aún los valores: esta pasada
+  comprueba que dibujado y selección usan la misma geometría.
 - [ ] **Manos y selección:** ver ambos guantes provisionales, moverlos por separado
   y seleccionar un objeto con la mano derecha. El rayo y el objeto seleccionado deben
   corresponder; las manos no deben dibujarse por delante de una pared que las tapa.

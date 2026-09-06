@@ -7,6 +7,8 @@
 
 #include <string_view>
 #include <vector>
+#include <cerrno>
+#include <cmath>
 
 namespace penumbra_vr::launcher {
 namespace {
@@ -38,6 +40,37 @@ namespace {
     DWORD error_code) {
     return std::wstring(operation) + L" failed with Win32 error " +
         std::to_wstring(error_code);
+}
+
+[[nodiscard]] std::wstring ReadValue(const std::filesystem::path& path,
+    const wchar_t* key) {
+    wchar_t value[64]{};
+    const DWORD length = GetPrivateProfileStringW(
+        L"VR", key, L"", value,
+        static_cast<DWORD>(std::size(value)), path.c_str());
+    return std::wstring(value, length);
+}
+
+[[nodiscard]] bool ReadFloat(
+    const std::filesystem::path& path,
+    const wchar_t* key,
+    float& value,
+    std::wstring& error) {
+    const auto text = ReadValue(path, key);
+    if (text.empty()) {
+        return true;
+    }
+    wchar_t* end = nullptr;
+    errno = 0;
+    const float parsed = std::wcstof(text.c_str(), &end);
+    if (errno == ERANGE || end != text.c_str() + text.size() ||
+        !std::isfinite(parsed)) {
+        error = std::wstring(L"VR/") + key +
+            L" must be a finite number in " + path.wstring();
+        return false;
+    }
+    value = parsed;
+    return true;
 }
 
 } // namespace
@@ -148,6 +181,56 @@ bool SaveMonitorMirrorSetting(
         error = Win32Error(L"WritePrivateProfileStringW", GetLastError());
         return false;
     }
+    return true;
+}
+
+bool LoadVrInputSettings(
+    const std::filesystem::path& path,
+    runtime::VrSettings& settings,
+    std::wstring& error) {
+    settings = runtime::VrSettings{};
+    error.clear();
+    bool mirror = false;
+    if (!LoadMonitorMirrorSetting(path, mirror, error)) {
+        return false;
+    }
+    settings.monitor_mirror = mirror;
+    if (!ReadFloat(path, L"MoveSpeed", settings.move_speed, error) ||
+        !ReadFloat(path, L"MoveDeadZone", settings.move_dead_zone, error) ||
+        !ReadFloat(path, L"SnapTurnAngle", settings.snap_turn_angle, error) ||
+        !ReadFloat(path, L"SmoothTurnSpeed", settings.smooth_turn_speed, error) ||
+        !ReadFloat(path, L"TurnDeadZone", settings.turn_dead_zone, error) ||
+        !ReadFloat(path, L"UiDistance", settings.ui_distance, error) ||
+        !ReadFloat(path, L"UiScale", settings.ui_scale, error) ||
+        !ReadFloat(path, L"RenderScale", settings.render_scale, error)) {
+        return false;
+    }
+    const auto turn = ReadValue(path, L"TurnMode");
+    if (!turn.empty()) {
+        if (EqualsCaseInsensitive(turn, L"disabled")) {
+            settings.turn_mode = runtime::VrTurnMode::disabled;
+        } else if (EqualsCaseInsensitive(turn, L"snap")) {
+            settings.turn_mode = runtime::VrTurnMode::snap;
+        } else if (EqualsCaseInsensitive(turn, L"smooth")) {
+            settings.turn_mode = runtime::VrTurnMode::smooth;
+        } else {
+            error = L"VR/TurnMode must be Disabled, Snap or Smooth in " +
+                path.wstring();
+            return false;
+        }
+    }
+    const auto hand = ReadValue(path, L"Handedness");
+    if (!hand.empty()) {
+        if (EqualsCaseInsensitive(hand, L"left")) {
+            settings.handedness = runtime::VrHandedness::left;
+        } else if (EqualsCaseInsensitive(hand, L"right")) {
+            settings.handedness = runtime::VrHandedness::right;
+        } else {
+            error = L"VR/Handedness must be Left or Right in " + path.wstring();
+            return false;
+        }
+    }
+    runtime::NormalizeVrSettings(settings);
     return true;
 }
 

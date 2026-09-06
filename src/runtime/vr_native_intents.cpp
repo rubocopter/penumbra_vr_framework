@@ -52,11 +52,37 @@ float VrNativeIntents::Move(float keyboard, bool sideways) const noexcept {
     if (!move_.active || !std::isfinite(amount)) return keyboard;
     return std::clamp(keyboard + amount, -1.0F, 1.0F);
 }
-float VrSnapTurn::Update(const VrAnalogState& axis, bool gameplay) noexcept {
-    if (!gameplay || !axis.active || !std::isfinite(axis.x)) { armed_ = false; return 0; }
-    if (std::abs(axis.x) <= 0.25F) { armed_ = true; return 0; }
-    if (!armed_ || std::abs(axis.x) < 0.65F) return 0;
+float VrSnapTurn::Update(const VrAnalogState& axis, bool gameplay, VrTurnMode mode,
+    float dt, float snap_angle_degrees, float smooth_speed_degrees,
+    float dead_zone) noexcept {
+    constexpr float radians_per_degree = 0.01745329252F;
+    if (!gameplay || mode == VrTurnMode::disabled || !axis.active ||
+        !std::isfinite(axis.x) || !std::isfinite(dt) || dt < 0 || dt > 0.25F ||
+        !std::isfinite(snap_angle_degrees) ||
+        !std::isfinite(smooth_speed_degrees) || !std::isfinite(dead_zone)) {
+        armed_ = false;
+        return 0;
+    }
+    dead_zone = std::clamp(dead_zone, 0.0F, 0.9F);
+    if (mode == VrTurnMode::smooth) {
+        armed_ = false;
+        const float magnitude = std::abs(axis.x);
+        if (magnitude <= dead_zone) {
+            return 0;
+        }
+        const float scaled = (magnitude - dead_zone) / (1 - dead_zone);
+        return std::copysign(scaled, axis.x) *
+            smooth_speed_degrees * radians_per_degree * dt;
+    }
+    if (std::abs(axis.x) <= dead_zone) {
+        armed_ = true;
+        return 0;
+    }
+    const float activation = std::min(1.0F, std::max(0.65F, dead_zone + 0.25F));
+    if (!armed_ || std::abs(axis.x) < activation) {
+        return 0;
+    }
     armed_ = false;
-    return std::copysign(0.785398163F, axis.x);
+    return std::copysign(snap_angle_degrees * radians_per_degree, axis.x);
 }
 }

@@ -373,7 +373,9 @@ int main() {
         for (auto which : {penumbra_vr::graphics::Eye::left, penumbra_vr::graphics::Eye::right}) {
             if (!menu_targets.BeginEye(which, binding, error)) return 29;
             glScissor(1, 2, 3, 4); glEnable(GL_SCISSOR_TEST);
-            if (!menu.Draw(penumbra_vr::runtime::IdentityMatrix(), projection, error) ||
+            if (!menu.Draw(
+                    penumbra_vr::runtime::IdentityMatrix(), projection,
+                    2.0F, 1.0F, error) ||
                 !ScissorEquals({1, 2, 3, 4}, true)) return 30;
             std::array<GLubyte, 4> bottom{}, top{};
             glReadPixels(160, 100, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, bottom.data());

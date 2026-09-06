@@ -14,6 +14,7 @@ bool OpenVrSession::ReadControllerInput(VrInputContext, VrHand, std::uint64_t,
     error = "This build was compiled without an OpenVR SDK";
     return false;
 }
+void OpenVrSession::SetControllerMoveDeadZone(float) noexcept {}
 bool OpenVrSession::TriggerHaptic(VrHand, float, float, float, std::string& error) noexcept {
     error = "This build was compiled without an OpenVR SDK";
     return false;

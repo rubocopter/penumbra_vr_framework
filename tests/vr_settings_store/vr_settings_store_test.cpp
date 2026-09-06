@@ -81,6 +81,26 @@ int main() {
         std::cerr << "An invalid mirror value was accepted\n";
         return 7;
     }
+    if (!WritePrivateProfileStringW(L"VR",L"MonitorMirror",L"true",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"MoveSpeed",L"0.85",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"MoveDeadZone",L"0.20",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"TurnMode",L"Smooth",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"SmoothTurnSpeed",L"75",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"TurnDeadZone",L"0.25",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"UiDistance",L"2.25",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"UiScale",L"1.20",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"RenderScale",L"0.80",settings_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR",L"Handedness",L"Left",settings_path.c_str())) return 9;
+    penumbra_vr::runtime::VrSettings settings;
+    if (!penumbra_vr::launcher::LoadVrInputSettings(settings_path,settings,error) ||
+        !settings.monitor_mirror || settings.move_speed!=0.85F || settings.move_dead_zone!=0.20F ||
+        settings.turn_mode!=penumbra_vr::runtime::VrTurnMode::smooth ||
+        settings.smooth_turn_speed!=75 || settings.turn_dead_zone!=0.25F ||
+        settings.ui_distance!=2.25F || settings.ui_scale!=1.20F ||
+        settings.render_scale!=0.80F ||
+        settings.handedness!=penumbra_vr::runtime::VrHandedness::left) return 10;
+    if (!WritePrivateProfileStringW(L"VR",L"Handedness",L"ambidextrous",settings_path.c_str()) ||
+        penumbra_vr::launcher::LoadVrInputSettings(settings_path,settings,error) || error.empty()) return 11;
 
     std::wstring path_error;
     const std::filesystem::path default_path =
