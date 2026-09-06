@@ -21,6 +21,8 @@ struct OpenGlEyeBinding {
     void* context = nullptr;
     std::int32_t previous_framebuffer = 0;
     std::array<std::int32_t, 4> previous_viewport{};
+    std::array<std::int32_t, 4> previous_scissor{};
+    bool previous_scissor_enabled = false;
     bool active = false;
 };
 

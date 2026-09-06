@@ -11,11 +11,14 @@
 namespace {
 
 constexpr std::size_t kCameraSize = 0x8D3;
+constexpr std::size_t kFovOffset = 0x10;
+constexpr std::size_t kAspectOffset = 0x14;
 constexpr std::size_t kViewOffset = 0x44;
 constexpr std::size_t kProjectionOffset = 0x84;
 constexpr std::size_t kFlagsOffset = 0x8D0;
 
 using penumbra_vr::backends::black_plague::CameraMatrixOverride;
+using penumbra_vr::backends::black_plague::CameraVisibilityOverride;
 using penumbra_vr::backends::black_plague::kCameraLayout;
 using penumbra_vr::runtime::VrMatrix44;
 
@@ -28,6 +31,10 @@ using penumbra_vr::runtime::VrMatrix44;
 }
 
 void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
+    constexpr float kFov = 1.2F;
+    constexpr float kAspect = 1.6F;
+    std::memcpy(camera.data() + kFovOffset, &kFov, sizeof(kFov));
+    std::memcpy(camera.data() + kAspectOffset, &kAspect, sizeof(kAspect));
     const VrMatrix44 view = FilledMatrix(10.0F);
     const VrMatrix44 projection = FilledMatrix(50.0F);
     std::memcpy(camera.data() + kViewOffset, view.values.data(), sizeof(view.values));
@@ -38,6 +45,52 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
     camera[kFlagsOffset] = 1;
     camera[kFlagsOffset + 1] = 1;
     camera[kFlagsOffset + 2] = 1;
+}
+
+[[nodiscard]] bool TestVisibilityOverride() {
+    std::array<std::uint8_t, kCameraSize> camera{};
+    SetOriginalCamera(camera);
+    const auto original = camera;
+    constexpr float kCullFov = 2.0F;
+    constexpr float kCullAspect = 1.4F;
+    std::string error;
+
+    CameraVisibilityOverride override(kCameraLayout);
+    if (!override.Apply(
+            camera.data(),
+            FilledMatrix(100.0F),
+            FilledMatrix(200.0F),
+            kCullFov,
+            kCullAspect,
+            error)) {
+        std::cerr << "Could not apply camera visibility override: " << error << '\n';
+        return false;
+    }
+    float actual_fov = 0.0F;
+    float actual_aspect = 0.0F;
+    std::memcpy(&actual_fov, camera.data() + kFovOffset, sizeof(actual_fov));
+    std::memcpy(
+        &actual_aspect, camera.data() + kAspectOffset, sizeof(actual_aspect));
+    if (actual_fov != kCullFov || actual_aspect != kCullAspect) {
+        std::cerr << "Camera visibility scalars were not written exactly\n";
+        return false;
+    }
+    if (!override.Restore(error) || camera != original || override.active()) {
+        std::cerr << "Camera visibility restore failed: " << error << '\n';
+        return false;
+    }
+
+    if (override.Apply(
+            camera.data(),
+            FilledMatrix(100.0F),
+            FilledMatrix(200.0F),
+            -1.0F,
+            kCullAspect,
+            error) || error.empty()) {
+        std::cerr << "An invalid visibility FOV was accepted\n";
+        return false;
+    }
+    return true;
 }
 
 [[nodiscard]] bool TestExplicitRestore() {
@@ -142,7 +195,8 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
 } // namespace
 
 int main() {
-    if (!TestExplicitRestore() || !TestDestructorRestore() || !TestRejections()) {
+    if (!TestExplicitRestore() || !TestDestructorRestore() ||
+        !TestVisibilityOverride() || !TestRejections()) {
         return 1;
     }
     std::cout << "Camera matrix override tests passed\n";

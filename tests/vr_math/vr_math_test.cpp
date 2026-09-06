@@ -171,6 +171,49 @@ using penumbra_vr::runtime::VrMatrix44;
     return ExpectMatrixValue(eye_view, 0, 3, -0.032F, "Right head-to-eye X");
 }
 
+[[nodiscard]] bool TestConservativeStereoCullFrustum() {
+    std::array<VrEyeConfiguration, 2> eyes{};
+    eyes[0].left_tangent = -1.84177F;
+    eyes[0].right_tangent = 0.947191F;
+    eyes[0].top_tangent = -1.32898F;
+    eyes[0].bottom_tangent = 1.32898F;
+    eyes[1] = eyes[0];
+    eyes[1].left_tangent = -0.947191F;
+    eyes[1].right_tangent = 1.84177F;
+
+    penumbra_vr::runtime::VrCullFrustum frustum;
+    std::string error;
+    if (!penumbra_vr::runtime::BuildConservativeStereoCullFrustum(
+            eyes, 0.0F, frustum, error)) {
+        std::cerr << "Stereo cull frustum failed: " << error << '\n';
+        return false;
+    }
+    const float expected_vertical_fov = 2.0F * std::atan(1.32898F);
+    const float expected_aspect = 1.84177F / 1.32898F;
+    if (!ApproximatelyEqual(frustum.vertical_fov_radians, expected_vertical_fov) ||
+        !ApproximatelyEqual(frustum.aspect, expected_aspect)) {
+        std::cerr << "Stereo cull frustum did not contain both asymmetric eyes\n";
+        return false;
+    }
+
+    penumbra_vr::runtime::VrCullFrustum guarded;
+    constexpr float kFiveDegrees = 0.087266463F;
+    if (!penumbra_vr::runtime::BuildConservativeStereoCullFrustum(
+            eyes, kFiveDegrees, guarded, error) ||
+        guarded.vertical_fov_radians <= frustum.vertical_fov_radians) {
+        std::cerr << "Stereo cull angular guard was not applied\n";
+        return false;
+    }
+
+    eyes[1].right_tangent = std::numeric_limits<float>::quiet_NaN();
+    if (penumbra_vr::runtime::BuildConservativeStereoCullFrustum(
+            eyes, 0.0F, guarded, error) || error.empty()) {
+        std::cerr << "A non-finite stereo cull frustum was accepted\n";
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestRelativeHeadTracking() {
     const VrMatrix44 game_view = penumbra_vr::runtime::IdentityMatrix();
     const VrMatrix34 origin = Translation(0.0F, 0.0F, 0.0F);
@@ -364,7 +407,19 @@ using penumbra_vr::runtime::VrMatrix44;
 } // namespace
 
 int main() {
-    if (!TestRigidInverse() || !TestProjection() || !TestEyeViews() ||
+    std::array<float, 2> uv{};
+    const auto menu_anchor = Translation(0, 1.6F, 0);
+    if (!penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, menu_anchor, 4.0F / 3.0F, uv) ||
+        std::abs(uv[0] - 0.5F) > 0.00001F || std::abs(uv[1] - 0.5F) > 0.00001F ||
+        !penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, Translation(0.6F,1.9F,0), 4.0F / 3.0F, uv) ||
+        std::abs(uv[0] - 0.75F) > 0.00001F || std::abs(uv[1] - (1.0F / 3.0F)) > 0.00001F ||
+        penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, Translation(5,1.6F,0), 1, uv) ||
+        penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, menu_anchor, 0, uv) ||
+        penumbra_vr::runtime::ProjectAimOnMenu(menu_anchor, PitchDegrees(180), 1, uv)) {
+        std::cerr << "Menu controller-ray intersection failed\n"; return 2;
+    }
+    if (!TestRigidInverse() || !TestProjection() ||
+        !TestConservativeStereoCullFrustum() || !TestEyeViews() ||
         !TestRelativeHeadTracking() || !TestYawRecenteredHeadTracking() ||
         !TestInvalidInputs()) {
         return 1;

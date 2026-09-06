@@ -3,6 +3,8 @@ EXPORTS
     PenumbraVR_Shutdown=_PenumbraVR_Shutdown@4
     PenumbraVR_StartPresentation=_PenumbraVR_StartPresentation@4
     PenumbraVR_StopPresentation=_PenumbraVR_StopPresentation@4
+    PenumbraVR_EnableMonitorMirror=_PenumbraVR_EnableMonitorMirror@4
+    PenumbraVR_DisableMonitorMirror=_PenumbraVR_DisableMonitorMirror@4
     PenumbraVR_ValidateEyeTargets=_PenumbraVR_ValidateEyeTargets@4
     PenumbraVR_CreatePersistentEyeTargets=_PenumbraVR_CreatePersistentEyeTargets@4
     PenumbraVR_ValidateWorldDuplication=_PenumbraVR_ValidateWorldDuplication@4

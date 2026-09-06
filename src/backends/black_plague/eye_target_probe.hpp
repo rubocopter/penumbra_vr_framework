@@ -27,7 +27,7 @@ struct EyeTargetProbeTelemetry {
 };
 
 void ResetEyeTargetProbe() noexcept;
-void ProcessEyeTargetRequestsOnRenderThread() noexcept;
+void ProcessEyeTargetRequestsOnRenderThread(bool count_frame = true) noexcept;
 
 [[nodiscard]] bool RequestTransientEyeTargetValidation(
     std::string& error) noexcept;

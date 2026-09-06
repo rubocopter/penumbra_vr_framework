@@ -350,13 +350,112 @@
       "gameRemainedResponsive": true
     },
     "continuousTrackedPresentation": {
-      "status": "implemented-build-verified-awaiting-headset-validation",
+      "status": "confirmed-runtime-and-headset-with-frame-pacing-work",
       "renderScale": 1.0,
       "resolutionSource": "OpenVR recommended per-eye size",
       "allocationFallback": "proportional halving to a 512-pixel minimum dimension",
       "explicitStartStop": true,
       "translationApplied": false,
-      "headsetValidated": false
+      "headsetValidated": true,
+      "runtimeValidation": {
+        "steamVrVersion": "2.17.8",
+        "openVrSdkVersion": "2.15.6",
+        "headset": "PS VR2",
+        "durationSeconds": 120.6,
+        "dimensions": [
+          3400,
+          3468
+        ],
+        "allocationFallbackUsed": false,
+        "submittedStereoFrames": 6847,
+        "observedProbeFrames": 6990,
+        "observedWorldPointers": 3,
+        "validPoseAndAnchorInEverySample": true,
+        "cameraRestoredAfterEveryEye": true,
+        "stereoErrors": 0,
+        "targetsDestroyedOnRenderThread": true,
+        "incomingGlStateRestored": true,
+        "openVrShutdownCompleted": true,
+        "hooksRestored": true,
+        "postDeactivateObservationSeconds": 23,
+        "processExitObserved": true,
+        "newWindowsErrorReportingEvents": 0,
+        "gameRemainedResponsive": true,
+        "probeLogSha256": "A996CE132A461EE439D3A0CD8D6F04F4189F37E602121FF0ACF4289C0C3D01F5",
+        "steamVrCompositor": {
+          "targetRefreshHz": 90,
+          "presents": 10839,
+          "droppedFrames": 2,
+          "reprojectedFrames": 3467,
+          "reprojectedPercent": 31.99,
+          "applicationCpuMs": 16.160,
+          "applicationGpuMs": 14.721
+        },
+        "enhancedVisualsActive": false,
+        "userVisualFeedbackRecorded": true,
+        "keyboardMouseUserValidated": true,
+        "keyboardMouseFeedback": "appeared functional",
+        "visualFeedback": {
+          "overallImage": "generally good",
+          "geometryMissingUntilApproach": true,
+          "headTurnExposedMissingWalls": true,
+          "nearObjectPopping": true,
+          "workingDiagnosis": "render list prepared from the game camera before tracked per-eye matrix overrides",
+          "accepted": false,
+          "resolvedByHmdAwareVisibilityUpdate": true
+        },
+        "hmdAwareVisibilityUpdate": {
+          "status": "confirmed-runtime-and-headset",
+          "sceneCallRva": "0x000EDF84",
+          "rendererTargetRva": "0x0012A8F0",
+          "poseSource": "latest valid tracked pose",
+          "coversBothEyeFrusta": true,
+          "angularGuardDegrees": 5,
+          "cameraTransactionRestores": [
+            "view matrix",
+            "projection matrix",
+            "FOV",
+            "aspect",
+            "dirty flags"
+          ],
+          "fallbackToOriginalUpdateOnFailure": true,
+          "runtimeValidated": true,
+          "visualEffectValidated": true,
+          "runtimeSession": {
+            "durationSeconds": 110.282,
+            "dimensions": [
+              3400,
+              3468
+            ],
+            "submittedStereoFrames": 6570,
+            "eyeTargetFrames": 6571,
+            "observedProbeFrames": 6745,
+            "oneVisibilityUpdateInEveryActiveSample": true,
+            "visibilityFailures": 0,
+            "visibilityCameraRestored": true,
+            "stereoErrors": 0,
+            "targetsDestroyedOnRenderThread": true,
+            "hooksRestored": true,
+            "gameRemainedResponsive": true,
+            "newWindowsErrorReportingEvents": 0,
+            "probeLogSha256": "AC7EECBE3E8C5228709BC1E21695821E816B5895D6B96811AACAFEEF3A03C69E",
+            "steamVrCompositor": {
+              "targetRefreshHz": 90,
+              "presents": 9913,
+              "droppedFrames": 0,
+              "reprojectedFrames": 3286,
+              "reprojectedPercent": 33.15,
+              "applicationCpuMs": 16.442,
+              "applicationGpuMs": 15.723
+            },
+            "userVisualFeedbackRecorded": true,
+            "userReportedEverythingLookedCorrect": true,
+            "missingGeometryReproduced": false,
+            "nearObjectPoppingReproduced": false,
+            "visualCorrectionAccepted": true
+          }
+        }
+      }
     }
   },
   "symbols": {
@@ -404,6 +503,60 @@
         "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
         "matches": 1
       }
+    },
+    "hpl.cScene.UpdateRenderList": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000EDF50",
+      "preferredVirtualAddress": "0x004EDF50",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "float frameTime"
+      ],
+      "objectOffsets": {
+        "drawScene": "0x40",
+        "graphics": "0x20",
+        "currentWorld3D": "0x50",
+        "activeCamera": "0x64",
+        "renderer3DWithinGraphics": "0x18"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "56 8B F1 8A 46 40 84 C0 74 2F 8B 46 64 85 C0 74 28",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      }
+    },
+    "hpl.cRenderer3D.UpdateRenderList": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0012A8F0",
+      "preferredVirtualAddress": "0x0052A8F0",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "cWorld3D* world",
+        "cCamera3D* camera",
+        "float frameTime"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "83 EC 0C 56 8B F1 8B 8E 48 03 00 00 57 E8 AE AF 00 00 8B 86 48 03 00 00",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "owner": "hpl.cScene.UpdateRenderList",
+          "rva": "0x000EDF84",
+          "bytes": "E8 67 C9 03 00",
+          "matchesInText": 1
+        }
+      ],
+      "evidence": [
+        "clears the render list at renderer+0x348",
+        "stores frameTime and camera in the render list",
+        "calls cCamera3D::GetFrustum",
+        "passes the frustum and render list to the world's render container",
+        "compiles the populated render list and returns with ret 0x0C"
+      ]
     },
     "hpl.cRenderer3D.BeginRendering": {
       "status": "confirmed-static-mapping",

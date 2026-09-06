@@ -1,9 +1,11 @@
 #include "penumbra_vr/build_catalog.hpp"
 #include "pe_memory_inspector.hpp"
+#include "vr_settings_store.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <tlhelp32.h>
+#include <shellapi.h>
 
 #include <array>
 #include <cstdint>
@@ -43,7 +45,8 @@ std::wstring LastErrorText(const wchar_t* operation) {
     return std::wstring(operation) + L" failed with Win32 error " + std::to_wstring(GetLastError());
 }
 
-std::uintptr_t FindRemoteModuleBase(DWORD process_id, const wchar_t* module_name) {
+std::uintptr_t FindRemoteModuleBase(DWORD process_id, const wchar_t* module_name,
+    std::filesystem::path* resolved_path = nullptr) {
     Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPMODULE | TH32CS_SNAPMODULE32, process_id));
     if (!snapshot.valid()) {
         return 0;
@@ -57,6 +60,7 @@ std::uintptr_t FindRemoteModuleBase(DWORD process_id, const wchar_t* module_name
 
     do {
         if (_wcsicmp(entry.szModule, module_name) == 0) {
+            if (resolved_path) *resolved_path = entry.szExePath;
             return reinterpret_cast<std::uintptr_t>(entry.modBaseAddr);
         }
     } while (Module32NextW(snapshot.get(), &entry));
@@ -133,12 +137,14 @@ bool WaitForBlackPlagueInitializedCode(
     return false;
 }
 
-bool WaitForThread(HANDLE thread, DWORD& exit_code, std::wstring& error) {
+bool WaitForThread(HANDLE thread, DWORD& exit_code, std::wstring& error, bool* finished = nullptr) {
+    if (finished) *finished = false;
     const DWORD wait = WaitForSingleObject(thread, 15'000);
     if (wait != WAIT_OBJECT_0) {
         error = wait == WAIT_TIMEOUT ? L"Remote call timed out" : LastErrorText(L"WaitForSingleObject");
         return false;
     }
+    if (finished) *finished = true;
     if (!GetExitCodeThread(thread, &exit_code)) {
         error = LastErrorText(L"GetExitCodeThread");
         return false;
@@ -147,11 +153,20 @@ bool WaitForThread(HANDLE thread, DWORD& exit_code, std::wstring& error) {
 }
 
 bool ResolveRemoteExport(
+    DWORD process_id,
     const std::filesystem::path& local_module_path,
     std::uintptr_t remote_module_base,
     const char* export_name,
     LPTHREAD_START_ROUTINE& remote_export,
     std::wstring& error) {
+    std::filesystem::path loaded_path;
+    const auto loaded_base = FindRemoteModuleBase(process_id, local_module_path.filename().c_str(), &loaded_path);
+    std::error_code path_error;
+    if (loaded_base != remote_module_base || loaded_path.empty() ||
+        !std::filesystem::equivalent(loaded_path, local_module_path, path_error) || path_error) {
+        error = L"The loaded probe is from another path/build; restart the game before switching builds";
+        return false;
+    }
     HMODULE local_module = LoadLibraryExW(
         local_module_path.c_str(), nullptr, DONT_RESOLVE_DLL_REFERENCES);
     if (local_module == nullptr) {
@@ -182,14 +197,21 @@ bool ResolveRemoteKernelProcedure(
     const auto local_kernel = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(L"kernel32.dll"));
     const auto local_procedure = reinterpret_cast<std::uintptr_t>(
         GetProcAddress(reinterpret_cast<HMODULE>(local_kernel), procedure_name));
-    const std::uintptr_t remote_kernel = FindRemoteModuleBase(process_id, L"kernel32.dll");
-    if (local_kernel == 0 || local_procedure == 0 || remote_kernel == 0) {
+    HMODULE owner = nullptr;
+    if (!local_procedure || !GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+            GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, reinterpret_cast<LPCWSTR>(local_procedure), &owner)) {
         error = L"Could not resolve a remote kernel32 procedure";
         return false;
     }
-
+    std::array<wchar_t,32768> owner_path{};
+    const DWORD owner_length = GetModuleFileNameW(owner,owner_path.data(),static_cast<DWORD>(owner_path.size()));
+    if (!owner_length || owner_length >= owner_path.size()) { error = L"Could not resolve forwarded export owner"; return false; }
+    const auto remote_owner = FindRemoteModuleBase(process_id,std::filesystem::path(owner_path.data()).filename().c_str());
+    if (!remote_owner) { error = L"The target process has not loaded the export owner"; return false; }
+    // Kernel32 exports can resolve into KernelBase. Relocate relative to the
+    // actual owner, not to whichever DLL was queried with GetProcAddress.
     remote_procedure = reinterpret_cast<LPTHREAD_START_ROUTINE>(
-        remote_kernel + (local_procedure - local_kernel));
+        remote_owner + (local_procedure - reinterpret_cast<std::uintptr_t>(owner)));
     return true;
 }
 
@@ -198,13 +220,15 @@ bool CallRemote(
     LPTHREAD_START_ROUTINE procedure,
     void* parameter,
     DWORD& result,
-    std::wstring& error) {
+    std::wstring& error,
+    bool* finished = nullptr) {
+    if (finished) *finished = true;
     Handle thread(CreateRemoteThread(process, nullptr, 0, procedure, parameter, 0, nullptr));
     if (!thread.valid()) {
         error = LastErrorText(L"CreateRemoteThread");
         return false;
     }
-    return WaitForThread(thread.get(), result, error);
+    return WaitForThread(thread.get(), result, error, finished);
 }
 
 bool InjectAndInitialize(
@@ -241,9 +265,13 @@ bool InjectAndInitialize(
         }
 
         DWORD loaded_base = 0;
+        bool load_finished = false;
         const bool loaded = CallRemote(
-            process, remote_load_library, remote_path, loaded_base, error);
-        release_remote_path();
+            process, remote_load_library, remote_path, loaded_base, error, &load_finished);
+        if (load_finished) release_remote_path();
+        // A timed-out LoadLibrary thread can still read its argument. Keep the
+        // small allocation until process exit instead of causing a remote UAF.
+        else error += L"; the loader argument is retained until game exit";
         if (!loaded || loaded_base == 0) {
             if (loaded) {
                 error = L"The remote LoadLibraryW call returned NULL";
@@ -255,6 +283,7 @@ bool InjectAndInitialize(
 
     LPTHREAD_START_ROUTINE remote_initialize = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path, remote_probe_base, "PenumbraVR_Initialize", remote_initialize, error)) {
         return false;
     }
@@ -284,6 +313,7 @@ bool ShutdownAndDeactivate(
 
     LPTHREAD_START_ROUTINE remote_shutdown = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path, remote_probe, "PenumbraVR_Shutdown", remote_shutdown, error)) {
         return false;
     }
@@ -316,6 +346,7 @@ bool InvokeRemotePresentationAction(
 
     LPTHREAD_START_ROUTINE remote_action = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             export_name,
@@ -349,6 +380,7 @@ bool ValidateRemoteEyeTargets(
 
     LPTHREAD_START_ROUTINE remote_validate = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_ValidateEyeTargets",
@@ -382,6 +414,7 @@ bool CreateRemotePersistentEyeTargets(
 
     LPTHREAD_START_ROUTINE remote_create = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_CreatePersistentEyeTargets",
@@ -415,6 +448,7 @@ bool CreateRemoteOpenVrEyeTargets(
 
     LPTHREAD_START_ROUTINE remote_create = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_CreateOpenVrEyeTargets",
@@ -448,6 +482,7 @@ bool ValidateRemoteWorldDuplication(
 
     LPTHREAD_START_ROUTINE remote_validate = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_ValidateWorldDuplication",
@@ -481,6 +516,7 @@ bool ValidateRemoteStereoMatrices(
 
     LPTHREAD_START_ROUTINE remote_validate = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_ValidateStereoMatrices",
@@ -514,6 +550,7 @@ bool ValidateRemoteStereoSubmission(
 
     LPTHREAD_START_ROUTINE remote_validate = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_ValidateStereoSubmission",
@@ -547,6 +584,7 @@ bool ValidateRemoteTrackedStereoSubmission(
 
     LPTHREAD_START_ROUTINE remote_validate = nullptr;
     if (!ResolveRemoteExport(
+            process_id,
             probe_path,
             remote_probe,
             "PenumbraVR_ValidateTrackedStereoSubmission",
@@ -682,9 +720,139 @@ bool ValidateKnownTarget(
     return true;
 }
 
+// Match the full executable path, never just "penumbra.exe": the three games
+// use that same filename. Refuse ambiguous matches instead of picking a PID.
+bool FindRunningGame(const std::filesystem::path& path, DWORD& pid, std::wstring& error) {
+    pid = 0;
+    Handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0));
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    if (!snapshot.valid() || !Process32FirstW(snapshot.get(), &entry)) {
+        error = LastErrorText(L"Enumerate game processes");
+        return false;
+    }
+    do {
+        if (_wcsicmp(entry.szExeFile, path.filename().c_str()) != 0) continue;
+        Handle candidate(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, entry.th32ProcessID));
+        if (!candidate.valid()) continue;
+        std::wstring image(32768, L'\0');
+        DWORD length = static_cast<DWORD>(image.size());
+        if (!QueryFullProcessImageNameW(candidate.get(), 0, image.data(), &length)) continue;
+        image.resize(length);
+        std::error_code ec;
+        if (!std::filesystem::equivalent(path, image, ec) || ec) continue;
+        if (pid != 0) {
+            error = L"More than one matching game is running; close duplicate instances";
+            return false;
+        }
+        pid = entry.th32ProcessID;
+    } while (Process32NextW(snapshot.get(), &entry));
+    return true;
+}
+
+bool StartRemoteVr(HANDLE process, DWORD pid, const std::filesystem::path& probe,
+                   std::wstring& error) {
+    const auto settings = penumbra_vr::launcher::DefaultVrSettingsPath(error);
+    bool mirror = false;
+    if (settings.empty() || !penumbra_vr::launcher::LoadMonitorMirrorSetting(settings, mirror, error))
+        return false;
+    return InvokeRemotePresentationAction(process, pid, probe,
+        mirror ? "PenumbraVR_EnableMonitorMirror" : "PenumbraVR_DisableMonitorMirror",
+        L"Could not apply the saved mirror setting", error) &&
+        InvokeRemotePresentationAction(process, pid, probe, "PenumbraVR_StartPresentation",
+        L"Could not start VR; inspect %LOCALAPPDATA%\\PenumbraVR\\logs", error);
+}
+
+int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path& probe,
+             bool check_only) {
+    std::error_code ec;
+    const auto game = std::filesystem::canonical(requested, ec);
+    std::wstring error;
+    const penumbra_vr::KnownBuild* build = nullptr;
+    if (ec || !ValidateKnownTarget(game, true, build, error)) {
+        std::wcerr << L"VR launch preflight failed: " << (ec ? ec.message().c_str() : "")
+                   << error << L'\n';
+        return 4;
+    }
+    for (const wchar_t* relative : {L"openvr_api.dll", L"vr/actions.json"}) {
+        const auto dependency = probe.parent_path() / relative;
+        if (!std::filesystem::is_regular_file(dependency, ec) || ec) {
+            std::wcerr << L"Missing VR launch dependency: " << dependency << L'\n';
+            return 5;
+        }
+    }
+    // Reading preferences is part of preflight; do not open Steam if corrupt.
+    const auto settings = penumbra_vr::launcher::DefaultVrSettingsPath(error);
+    bool mirror = false;
+    if (settings.empty() || !penumbra_vr::launcher::LoadMonitorMirrorSetting(settings, mirror, error)) {
+        std::wcerr << error << L'\n';
+        return 5;
+    }
+    if (check_only) {
+        std::wcout << L"VR launch preflight passed for " << game
+                   << L". No game or SteamVR process was started.\n";
+        return 0;
+    }
+    // Prevent two shortcuts from racing to inject/start the same runtime.
+    Handle launch_mutex(CreateMutexW(nullptr, TRUE, L"Local\\PenumbraVR.BlackPlague.Launch"));
+    if (!launch_mutex.valid() || GetLastError() == ERROR_ALREADY_EXISTS) {
+        std::wcerr << L"Another VR launch is already in progress.\n";
+        return 6;
+    }
+    DWORD pid = 0;
+    if (!FindRunningGame(game, pid, error)) {
+        std::wcerr << error << L'\n';
+        return 6;
+    }
+    if (pid == 0) {
+        // The protected Steam build must be started by Steam, not CreateProcess.
+        std::wcout << L"Starting Black Plague through Steam; waiting for the game...\n" << std::flush;
+        const auto opened = reinterpret_cast<INT_PTR>(ShellExecuteW(
+            nullptr, L"open", L"steam://rungameid/22120", nullptr, nullptr, SW_SHOWNORMAL));
+        if (opened <= 32) {
+            std::wcerr << L"Steam launch failed (ShellExecute " << opened << L").\n";
+            return 6;
+        }
+        const auto deadline = GetTickCount64() + 60'000;
+        do {
+            if (!FindRunningGame(game, pid, error)) break;
+            if (pid != 0) break;
+            Sleep(100);
+        } while (GetTickCount64() < deadline);
+        if (pid == 0 || !error.empty()) {
+            std::wcerr << L"Could not find the requested game process. " << error
+                       << L" Check Steam or its game launcher dialog.\n";
+            return 6;
+        }
+    }
+    constexpr DWORD access = PROCESS_QUERY_INFORMATION | PROCESS_QUERY_LIMITED_INFORMATION |
+        PROCESS_VM_READ | PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_CREATE_THREAD | SYNCHRONIZE;
+    Handle process(OpenProcess(access, FALSE, pid));
+    std::filesystem::path running_path;
+    if (!process.valid() || !GetProcessExecutablePath(process.get(), pid, running_path, error) ||
+        !std::filesystem::equivalent(game, running_path, ec) || ec ||
+        !ValidateKnownTarget(running_path, true, build, error)) {
+        std::wcerr << L"Game process verification failed. " << error << L'\n';
+        return 6;
+    }
+    std::wcout << L"Waiting for runtime initialization, then enabling VR...\n" << std::flush;
+    if (!WaitForRemoteModule(process.get(), pid, L"SDL.dll", 15'000, error) ||
+        !WaitForBlackPlagueInitializedCode(process.get(), pid, game, 15'000, error) ||
+        !InjectAndInitialize(process.get(), pid, probe, error) ||
+        !StartRemoteVr(process.get(), pid, probe, error)) {
+        // Never kill an existing game or a user's unsaved session on failure.
+        std::wcerr << L"VR startup failed; the game has been left running. " << error << L'\n';
+        return 8;
+    }
+    std::wcout << L"VR enabled (PID " << pid << L"). Logs: %LOCALAPPDATA%\\PenumbraVR\\logs\n";
+    return 0;
+}
+
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
+    const bool launch_vr = argc == 3 && _wcsicmp(argv[1], L"--launch-vr") == 0;
+    const bool check_vr = argc == 3 && _wcsicmp(argv[1], L"--check-vr") == 0;
     const bool attach = argc == 3 && _wcsicmp(argv[1], L"--attach") == 0;
     const bool detach = argc == 3 && _wcsicmp(argv[1], L"--detach") == 0;
     const bool inspect = argc == 3 && _wcsicmp(argv[1], L"--inspect") == 0;
@@ -705,20 +873,28 @@ int wmain(int argc, wchar_t** argv) {
         _wcsicmp(argv[1], L"--validate-tracked-stereo-submission") == 0;
     const bool start_vr = argc == 3 && _wcsicmp(argv[1], L"--start-vr") == 0;
     const bool stop_vr = argc == 3 && _wcsicmp(argv[1], L"--stop-vr") == 0;
+    const bool vr_mirror_on =
+        argc == 3 && _wcsicmp(argv[1], L"--vr-mirror-on") == 0;
+    const bool vr_mirror_off =
+        argc == 3 && _wcsicmp(argv[1], L"--vr-mirror-off") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
     if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
          !hold_openvr_eye_targets && !validate_world_duplication &&
          !validate_stereo_matrices && !validate_stereo_submission &&
-         !validate_tracked_stereo_submission && !start_vr && !stop_vr && !capture_image &&
-         !inspect_camera && argc != 2) ||
+         !validate_tracked_stereo_submission && !start_vr && !stop_vr &&
+         !vr_mirror_on && !vr_mirror_off && !capture_image && !inspect_camera && !launch_vr && !check_vr &&
+         argc != 2) ||
         ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
           hold_openvr_eye_targets || validate_world_duplication ||
           validate_stereo_matrices || validate_stereo_submission ||
-          validate_tracked_stereo_submission || start_vr || stop_vr) &&
+          validate_tracked_stereo_submission || start_vr || stop_vr ||
+          vr_mirror_on || vr_mirror_off) &&
          argc != 3) ||
         ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --launch-vr <path-to-Black-Plague-Penumbra.exe>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --check-vr <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --attach <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --detach <process-id>\n"
@@ -731,6 +907,8 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-tracked-stereo-submission <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --start-vr <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --stop-vr <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --vr-mirror-on <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --vr-mirror-off <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --inspect-camera <process-id> <address>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --capture-image <process-id> <output-path>\n";
@@ -745,10 +923,13 @@ int wmain(int argc, wchar_t** argv) {
         return 5;
     }
 
+    if (launch_vr || check_vr) return LaunchVr(argv[2], probe_path, check_vr);
+
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
         hold_openvr_eye_targets || validate_world_duplication ||
         validate_stereo_matrices || validate_stereo_submission ||
         validate_tracked_stereo_submission || start_vr || stop_vr ||
+        vr_mirror_on || vr_mirror_off ||
         inspect_camera || capture_image) {
         wchar_t* parse_end = nullptr;
         const unsigned long parsed_pid = wcstoul(argv[2], &parse_end, 10);
@@ -962,6 +1143,30 @@ int wmain(int argc, wchar_t** argv) {
             return 0;
         }
         if (start_vr) {
+            const std::filesystem::path settings_path =
+                penumbra_vr::launcher::DefaultVrSettingsPath(error);
+            if (settings_path.empty()) {
+                std::wcerr << L"VR settings could not be located: " << error << L'\n';
+                return 8;
+            }
+            bool monitor_mirror = false;
+            if (!penumbra_vr::launcher::LoadMonitorMirrorSetting(
+                    settings_path, monitor_mirror, error)) {
+                std::wcerr << L"VR settings could not be loaded: " << error << L'\n';
+                return 8;
+            }
+            if (!InvokeRemotePresentationAction(
+                    process.get(),
+                    parsed_pid,
+                    probe_path,
+                    monitor_mirror
+                        ? "PenumbraVR_EnableMonitorMirror"
+                        : "PenumbraVR_DisableMonitorMirror",
+                    L"The persisted monitor-mirror mode could not be applied",
+                    error)) {
+                std::wcerr << L"VR presentation startup failed: " << error << L'\n';
+                return 8;
+            }
             if (!InvokeRemotePresentationAction(
                     process.get(),
                     parsed_pid,
@@ -974,7 +1179,8 @@ int wmain(int argc, wchar_t** argv) {
             }
             std::wcout << L"Started continuous tracked VR presentation in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
-                       << parsed_pid << L").\n";
+                       << parsed_pid << L", monitor mirror "
+                       << (monitor_mirror ? L"on" : L"off") << L").\n";
             return 0;
         }
         if (stop_vr) {
@@ -991,6 +1197,39 @@ int wmain(int argc, wchar_t** argv) {
             std::wcout << L"Stopped continuous VR presentation in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
                        << parsed_pid << L").\n";
+            return 0;
+        }
+        if (vr_mirror_on || vr_mirror_off) {
+            const std::filesystem::path settings_path =
+                penumbra_vr::launcher::DefaultVrSettingsPath(error);
+            if (settings_path.empty()) {
+                std::wcerr << L"VR monitor-mirror setting could not be located: "
+                           << error << L'\n';
+                return 8;
+            }
+            if (!InvokeRemotePresentationAction(
+                    process.get(),
+                    parsed_pid,
+                    probe_path,
+                    vr_mirror_on
+                        ? "PenumbraVR_EnableMonitorMirror"
+                        : "PenumbraVR_DisableMonitorMirror",
+                    L"VR monitor-mirror mode could not change; inspect the probe log",
+                    error)) {
+                std::wcerr << L"VR monitor-mirror update failed: " << error << L'\n';
+                return 8;
+            }
+            if (!penumbra_vr::launcher::SaveMonitorMirrorSetting(
+                    settings_path, vr_mirror_on, error)) {
+                std::wcerr << L"VR monitor mirror changed in the running game, but "
+                           << L"the setting could not be saved: " << error << L'\n';
+                return 9;
+            }
+            std::wcout << L"VR monitor mirror "
+                       << (vr_mirror_on ? L"enabled" : L"disabled") << L" in "
+                       << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L") and saved to "
+                       << settings_path << L".\n";
             return 0;
         }
         if (detach) {

@@ -4,6 +4,8 @@
 #include "openvr_session.hpp"
 #include "render_target_policy.hpp"
 #include "render_world_probe.hpp"
+#include "native_input_bridge.hpp"
+#include "spatial_interaction.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_math.hpp"
 
@@ -81,8 +83,13 @@ std::string WideToUtf8(const std::wstring& value) {
 }
 
 void OnFrame(std::uint64_t frame_number) noexcept {
+    // The main menu has no RenderWorld calls. Service allocation requests here
+    // too so startup does not require a loaded map. Do not double-count frames.
+    penumbra_vr::backends::black_plague::ProcessEyeTargetRequestsOnRenderThread(false);
     const penumbra_vr::backends::black_plague::RenderWorldFrameTelemetry render_world =
         penumbra_vr::backends::black_plague::ConsumeRenderWorldFrameTelemetry();
+    penumbra_vr::backends::black_plague::PresentTrackedMenuOnRenderThread(render_world.calls != 0 &&
+        !penumbra_vr::backends::black_plague::NativeInputUiActive());
     const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
         penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
     const bool bounded_stereo_activity =
@@ -93,6 +100,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         bounded_stereo_activity ||
         render_world.stereo_failed ||
         !render_world.stereo_camera_restored ||
+        render_world.hmd_visibility_failures != 0 ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
         penumbra_vr::probe::WriteLog(
@@ -100,11 +108,18 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
-            "stereo_frames=%lu stereo_eye_passes=%lu stereo_lifetime_frames=%llu "
+            "stereo_frames=%lu menu_frames=%lu stereo_eye_passes=%lu stereo_lifetime_frames=%llu "
             "stereo_camera_restored=%u "
             "submitted_frames=%lu submitted_pose_valid=%u "
             "tracked_head_frames=%lu tracking_anchor_captured=%u "
-            "persistent_stereo_active=%u stereo_failed=%u stereo_error=%s "
+            "persistent_stereo_active=%u monitor_mirror=%u monitor_world_passes=%lu "
+            "suppressed_monitor_world_passes=%lu eye_owned_frame_time_frames=%lu "
+            "stereo_failed=%u stereo_error=%s "
+            "hmd_visibility_updates=%lu hmd_visibility_failures=%lu "
+            "hmd_visibility_camera_restored=%u hmd_visibility_error=%s "
+            "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
+            "controller_samples=%lu controller_failures=%lu controller_focus=%u "
+            "controller_grips=%u controller_aims=%u controller_move=[%.3f,%.3f] controller_turn=%.3f controller_error=%s "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -130,6 +145,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.eye_targets.height),
             render_world.eye_targets.persistent_frames,
             static_cast<unsigned long>(render_world.stereo_frames),
+            static_cast<unsigned long>(render_world.menu_frames),
             static_cast<unsigned long>(render_world.stereo_eye_passes),
             render_world.stereo_lifetime_frames,
             render_world.stereo_camera_restored ? 1U : 0U,
@@ -138,8 +154,30 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.tracked_head_frames),
             render_world.tracking_anchor_captured ? 1U : 0U,
             render_world.persistent_stereo_active ? 1U : 0U,
+            render_world.monitor_mirror_enabled ? 1U : 0U,
+            static_cast<unsigned long>(render_world.monitor_world_passes),
+            static_cast<unsigned long>(
+                render_world.suppressed_monitor_world_passes),
+            static_cast<unsigned long>(render_world.eye_owned_frame_time_frames),
             render_world.stereo_failed ? 1U : 0U,
             render_world.stereo_error.data(),
+            static_cast<unsigned long>(render_world.hmd_visibility_updates),
+            static_cast<unsigned long>(render_world.hmd_visibility_failures),
+            render_world.hmd_visibility_camera_restored ? 1U : 0U,
+            render_world.hmd_visibility_error.data(),
+            static_cast<unsigned long>(render_world.eye_scissor_remapped),
+            static_cast<unsigned long>(render_world.eye_scissor_bypassed),
+            static_cast<unsigned long>(render_world.controller_samples),
+            static_cast<unsigned long>(render_world.controller_failures),
+            render_world.controller_frame.focused ? 1U : 0U,
+            (render_world.controller_frame.hands[0].grip.pose_valid ? 1U : 0U) |
+                (render_world.controller_frame.hands[1].grip.pose_valid ? 2U : 0U),
+            (render_world.controller_frame.hands[0].aim.pose_valid ? 1U : 0U) |
+                (render_world.controller_frame.hands[1].aim.pose_valid ? 2U : 0U),
+            render_world.controller_frame.input.state.move.x,
+            render_world.controller_frame.input.state.move.y,
+            render_world.controller_frame.input.state.turn.x,
+            render_world.controller_error.data(),
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),
             static_cast<unsigned long>(telemetry.model_view_loads),
@@ -260,6 +298,12 @@ enum class StereoExperiment : std::uint8_t {
         return false;
     }
 
+    const std::wstring manifest_path = loader_path.substr(0, loader_path.find_last_of(L"\\/") + 1) + L"vr\\actions.json";
+    std::string input_error;
+    const bool input_ready = g_openvr_session.InitializeControllerInput(manifest_path, input_error);
+    penumbra_vr::probe::WriteLog("controller_actions_initialized=%u error=%s",
+        input_ready ? 1U : 0U, input_error.c_str());
+
     std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
     bool success = g_openvr_session.ReadEyeConfiguration(eyes, error);
     penumbra_vr::runtime::VrRenderTargetSize selected;
@@ -277,10 +321,15 @@ enum class StereoExperiment : std::uint8_t {
                 g_openvr_session, eyes, 0.05F, error);
     }
     if (success) {
+        if (input_ready) penumbra_vr::backends::black_plague::ConnectNativeInput(&g_openvr_session);
         penumbra_vr::probe::WriteLog(
-            "Persistent tracked VR presentation started at %lux%lu per eye",
+            "Persistent tracked VR presentation started at %lux%lu per eye; monitor mirror %s",
             static_cast<unsigned long>(selected.width),
-            static_cast<unsigned long>(selected.height));
+            static_cast<unsigned long>(selected.height),
+            penumbra_vr::backends::black_plague::
+                    TrackedStereoMonitorMirrorEnabled()
+                ? "enabled"
+                : "disabled");
         return true;
     }
 
@@ -300,9 +349,12 @@ enum class StereoExperiment : std::uint8_t {
 }
 
 [[nodiscard]] bool StopPersistentVrPresentation(std::string& error) noexcept {
+    penumbra_vr::backends::black_plague::ConnectNativeInput(nullptr);
     error.clear();
     bool success = penumbra_vr::backends::black_plague::
         StopTrackedStereoPresentation(error);
+    // Never destroy eye textures or shut down OpenVR while a frame is in flight.
+    if (!success) return false;
     const std::string operation_error = error;
 
     std::string cleanup_error;
@@ -509,6 +561,14 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         return 0;
     }
 
+    const bool native_input_ready = penumbra_vr::backends::black_plague::InstallNativeInputBridge(hook_error);
+    penumbra_vr::probe::WriteLog("Native controller input bridge installed=%u error=%s",
+        native_input_ready ? 1U : 0U, hook_error.c_str());
+    if (native_input_ready) {
+        const bool spatial_ready = penumbra_vr::backends::black_plague::InstallSpatialInteraction(hook_error);
+        penumbra_vr::probe::WriteLog("Spatial interaction installed=%u error=%s",
+            spatial_ready ? 1U : 0U, hook_error.c_str());
+    }
     penumbra_vr::probe::WriteLog(
         "Probe initialized build=%.*s log=%s",
         static_cast<int>(build->id.size()),
@@ -550,6 +610,16 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
     if (!g_openvr_session.Shutdown(error)) {
         penumbra_vr::probe::WriteLog(
             "OpenVR shutdown failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    if (!penumbra_vr::backends::black_plague::RemoveSpatialInteraction(error)) {
+        penumbra_vr::probe::WriteLog("Spatial interaction removal failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    if (!penumbra_vr::backends::black_plague::RemoveNativeInputBridge(error)) {
+        penumbra_vr::probe::WriteLog("Native input bridge removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
@@ -617,6 +687,26 @@ extern "C" DWORD WINAPI PenumbraVR_StopPresentation(void*) {
     }
     penumbra_vr::probe::WriteLog("Persistent tracked VR presentation stopped cleanly");
     InterlockedExchange(&g_presentation_state, 0);
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_EnableMonitorMirror(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    penumbra_vr::backends::black_plague::SetTrackedStereoMonitorMirror(true);
+    penumbra_vr::probe::WriteLog(
+        "VR monitor mirror enabled; continuous stereo will retain the original world pass");
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_DisableMonitorMirror(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    penumbra_vr::backends::black_plague::SetTrackedStereoMonitorMirror(false);
+    penumbra_vr::probe::WriteLog(
+        "VR monitor mirror disabled; continuous stereo will use two world passes");
     return 1;
 }
 

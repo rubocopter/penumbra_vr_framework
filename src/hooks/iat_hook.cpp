@@ -95,6 +95,18 @@ void** FindImport(
 
 } // namespace
 
+bool InstallPointerHook(void** slot, void* expected, void* replacement,
+                        IatHook& hook, std::string& error) noexcept {
+    error.clear();
+    if (!slot || !expected || !replacement || hook.installed() ||
+        reinterpret_cast<std::uintptr_t>(slot) % alignof(void*) != 0) {
+        error = "Invalid or already installed pointer hook"; return false;
+    }
+    if (!ReplacePointer(slot, expected, replacement, error)) return false;
+    hook = {slot, expected, replacement};
+    return true;
+}
+
 bool InstallIatHook(
     const char* imported_module,
     const char* imported_function,

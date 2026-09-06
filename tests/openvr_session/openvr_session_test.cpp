@@ -87,5 +87,16 @@ int wmain(int argc, wchar_t** argv) {
         return 5;
     }
     std::cout << "OpenVR session missing-loader failure path passed\n";
+    penumbra_vr::runtime::VrControllerFrame controller_frame;
+    controller_frame.focused = true;
+    if (session.InitializeControllerInput(L"C:/missing/actions.json", error) || error.empty() ||
+        session.controller_input_initialized() ||
+        session.ReadControllerInput(penumbra_vr::runtime::VrInputContext::gameplay,
+            penumbra_vr::runtime::VrHand::right, 0, controller_frame, error) ||
+        controller_frame.focused || error.empty() ||
+        session.TriggerHaptic(penumbra_vr::runtime::VrHand::left, 0.02F, 100, 0.5F, error)) {
+        std::cerr << "Controller input did not reject an uninitialized session\n";
+        return 6;
+    }
     return 0;
 }

@@ -12,7 +12,15 @@ struct VrMatrix44 {
     std::array<float, 16> values{};
 };
 
+struct VrCullFrustum {
+    float vertical_fov_radians = 0.0F;
+    float aspect = 0.0F;
+};
+
 [[nodiscard]] VrMatrix44 IdentityMatrix() noexcept;
+// Same 2.4 m wide, 2 m distant panel as OpenGlMenuFrame; UV origin is top-left.
+[[nodiscard]] bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
+    float aspect, std::array<float, 2>& uv) noexcept;
 [[nodiscard]] VrMatrix44 ExpandMatrix(const VrMatrix34& matrix) noexcept;
 [[nodiscard]] VrMatrix44 Multiply(
     const VrMatrix44& left,
@@ -59,6 +67,15 @@ struct VrMatrix44 {
     const VrEyeConfiguration& eye,
     float near_clip,
     VrMatrix44& projection,
+    std::string& error) noexcept;
+
+// Produces one symmetric frustum containing both asymmetric eye frusta. A
+// small angular guard can cover the pose age between visibility preparation
+// and rendering without changing either submitted eye projection.
+[[nodiscard]] bool BuildConservativeStereoCullFrustum(
+    const std::array<VrEyeConfiguration, 2>& eyes,
+    float angular_guard_radians,
+    VrCullFrustum& frustum,
     std::string& error) noexcept;
 
 } // namespace penumbra_vr::runtime

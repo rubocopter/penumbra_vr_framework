@@ -10,6 +10,8 @@
 namespace penumbra_vr::adapters::hpl1 {
 
 struct CameraLayout {
+    std::size_t fov_offset = 0;
+    std::size_t aspect_offset = 0;
     std::size_t view_matrix_offset = 0;
     std::size_t projection_matrix_offset = 0;
     std::size_t flags_offset = 0;
@@ -50,6 +52,31 @@ private:
     CameraLayout layout_{};
     void* camera_ = nullptr;
     CameraMatrixSnapshot snapshot_{};
+};
+
+class CameraVisibilityOverride final {
+public:
+    explicit CameraVisibilityOverride(CameraLayout layout) noexcept;
+    ~CameraVisibilityOverride() noexcept;
+    CameraVisibilityOverride(const CameraVisibilityOverride&) = delete;
+    CameraVisibilityOverride& operator=(const CameraVisibilityOverride&) = delete;
+
+    [[nodiscard]] bool Apply(
+        void* camera,
+        const runtime::VrMatrix44& view,
+        const runtime::VrMatrix44& projection,
+        float vertical_fov_radians,
+        float aspect,
+        std::string& error) noexcept;
+    [[nodiscard]] bool Restore(std::string& error) noexcept;
+    [[nodiscard]] bool active() const noexcept;
+
+private:
+    CameraLayout layout_{};
+    CameraMatrixOverride matrix_override_;
+    void* camera_ = nullptr;
+    float original_fov_ = 0.0F;
+    float original_aspect_ = 0.0F;
 };
 
 [[nodiscard]] bool CameraMatchesSnapshot(

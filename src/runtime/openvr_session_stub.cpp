@@ -4,6 +4,22 @@ namespace penumbra_vr::runtime {
 
 OpenVrSession::~OpenVrSession() noexcept = default;
 
+bool OpenVrSession::InitializeControllerInput(const std::wstring&, std::string& error) noexcept {
+    error = "This build was compiled without an OpenVR SDK";
+    return false;
+}
+bool OpenVrSession::ReadControllerInput(VrInputContext, VrHand, std::uint64_t,
+    VrControllerFrame& frame, std::string& error) noexcept {
+    frame = {};
+    error = "This build was compiled without an OpenVR SDK";
+    return false;
+}
+bool OpenVrSession::TriggerHaptic(VrHand, float, float, float, std::string& error) noexcept {
+    error = "This build was compiled without an OpenVR SDK";
+    return false;
+}
+bool OpenVrSession::controller_input_initialized() const noexcept { return false; }
+
 bool OpenVrSession::Initialize(
     const std::wstring&,
     std::string& error) noexcept {

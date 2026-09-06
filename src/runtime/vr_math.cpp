@@ -1,5 +1,6 @@
 #include "vr_math.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 
@@ -9,6 +10,7 @@ namespace {
 constexpr float kMinimumSpan = 1.0e-6F;
 constexpr float kRigidTolerance = 2.0e-3F;
 constexpr float kMinimumHorizontalForwardLength = 0.1F;
+constexpr float kMaximumCullHalfAngle = 1.483529864F; // 85 degrees.
 
 [[nodiscard]] constexpr std::size_t Index(
     std::size_t row,
@@ -373,6 +375,87 @@ bool BuildHplInfiniteProjection(
     projection.values[11] = -2.0F * near_clip;
     projection.values[14] = -1.0F;
     return true;
+}
+
+bool BuildConservativeStereoCullFrustum(
+    const std::array<VrEyeConfiguration, 2>& eyes,
+    float angular_guard_radians,
+    VrCullFrustum& frustum,
+    std::string& error) noexcept {
+    error.clear();
+    frustum = {};
+    if (!std::isfinite(angular_guard_radians) || angular_guard_radians < 0.0F) {
+        error = "The stereo cull angular guard must be finite and non-negative";
+        return false;
+    }
+
+    float horizontal_tangent = 0.0F;
+    float vertical_tangent = 0.0F;
+    for (const VrEyeConfiguration& eye : eyes) {
+        if (!std::isfinite(eye.left_tangent) ||
+            !std::isfinite(eye.right_tangent) ||
+            !std::isfinite(eye.top_tangent) ||
+            !std::isfinite(eye.bottom_tangent)) {
+            error = "A stereo cull projection tangent is non-finite";
+            return false;
+        }
+        if (eye.right_tangent - eye.left_tangent <= kMinimumSpan ||
+            eye.bottom_tangent - eye.top_tangent <= kMinimumSpan) {
+            error = "A stereo cull eye does not form a positive frustum";
+            return false;
+        }
+        horizontal_tangent = std::max(
+            horizontal_tangent,
+            std::max(std::fabs(eye.left_tangent), std::fabs(eye.right_tangent)));
+        vertical_tangent = std::max(
+            vertical_tangent,
+            std::max(std::fabs(eye.top_tangent), std::fabs(eye.bottom_tangent)));
+    }
+    if (horizontal_tangent <= kMinimumSpan || vertical_tangent <= kMinimumSpan) {
+        error = "The stereo cull frustum has no positive angular extent";
+        return false;
+    }
+
+    const float horizontal_half_angle =
+        std::atan(horizontal_tangent) + angular_guard_radians;
+    const float vertical_half_angle =
+        std::atan(vertical_tangent) + angular_guard_radians;
+    if (horizontal_half_angle >= kMaximumCullHalfAngle ||
+        vertical_half_angle >= kMaximumCullHalfAngle) {
+        error = "The guarded stereo cull frustum is too wide";
+        return false;
+    }
+
+    const float guarded_horizontal_tangent = std::tan(horizontal_half_angle);
+    const float guarded_vertical_tangent = std::tan(vertical_half_angle);
+    frustum.vertical_fov_radians = vertical_half_angle * 2.0F;
+    frustum.aspect = guarded_horizontal_tangent / guarded_vertical_tangent;
+    if (!std::isfinite(frustum.vertical_fov_radians) ||
+        !std::isfinite(frustum.aspect) || frustum.aspect <= 0.0F) {
+        frustum = {};
+        error = "The guarded stereo cull frustum is invalid";
+        return false;
+    }
+    return true;
+}
+
+bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
+                      float aspect, std::array<float, 2>& uv) noexcept {
+    uv = {};
+    if (!std::isfinite(aspect) || aspect <= 0) return false;
+    VrMatrix44 view, pose;
+    std::string error;
+    if (!ComposeYawRecenteredTrackedHeadView(IdentityMatrix(), anchor, aim, 1, view, error) ||
+        !InvertRigidTransform(CollapseRigidMatrix(view), pose, error)) return false;
+    const auto& m = pose.values;
+    const float dz = -m[10];
+    if (dz >= -0.0001F) return false;
+    const float t = (-2.0F - m[11]) / dz;
+    if (t < 0 || t > 20) return false;
+    const float x = m[3] - t * m[2], y = m[7] - t * m[6];
+    const std::array<float, 2> candidate{x / 2.4F + 0.5F, 0.5F - y * aspect / 2.4F};
+    if (candidate[0] < 0 || candidate[0] > 1 || candidate[1] < 0 || candidate[1] > 1) return false;
+    uv = candidate; return true;
 }
 
 } // namespace penumbra_vr::runtime

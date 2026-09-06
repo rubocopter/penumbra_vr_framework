@@ -266,7 +266,7 @@ void ResetEyeTargetProbe() noexcept {
     ReleaseSRWLockExclusive(&g_event_lock);
 }
 
-void ProcessEyeTargetRequestsOnRenderThread() noexcept {
+void ProcessEyeTargetRequestsOnRenderThread(bool count_frame) noexcept {
     RequestState expected = RequestState::pending;
     if (g_request_state.compare_exchange_strong(
             expected, RequestState::processing, std::memory_order_acq_rel)) {
@@ -280,7 +280,7 @@ void ProcessEyeTargetRequestsOnRenderThread() noexcept {
         std::string error;
 
         if (wglGetCurrentContext() == nullptr) {
-            error = "No current OpenGL context at RenderWorld";
+            error = "No current OpenGL context at render-thread boundary";
         } else {
             switch (kind) {
                 case RequestKind::persistent_create:
@@ -316,7 +316,7 @@ void ProcessEyeTargetRequestsOnRenderThread() noexcept {
             std::memory_order_release);
     }
 
-    if (g_persistent_active.load(std::memory_order_acquire)) {
+    if (count_frame && g_persistent_active.load(std::memory_order_acquire)) {
         g_persistent_frames.fetch_add(1, std::memory_order_acq_rel);
     }
 }

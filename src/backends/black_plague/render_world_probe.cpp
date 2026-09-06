@@ -1,7 +1,13 @@
 #include "render_world_probe.hpp"
 
 #include "camera_matrix_override.hpp"
+#include "opengl_eye_scissor.hpp"
+#include "opengl_menu_frame.hpp"
+#include "opengl_tracked_hands.hpp"
+#include "native_input_bridge.hpp"
+#include "vr_grab_pose.hpp"
 #include "rel32_call_hook.hpp"
+#include "stereo_render_policy.hpp"
 #include "vr_math.hpp"
 
 #define NOMINMAX
@@ -10,6 +16,7 @@
 #include <GL/gl.h>
 
 #include <array>
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstring>
@@ -20,13 +27,24 @@ namespace {
 
 constexpr std::uintptr_t kRenderWorldRva = 0x0012CB10;
 constexpr std::uintptr_t kRenderWorldCallSiteRva = 0x000EE010;
+constexpr std::uintptr_t kUpdateRenderListRva = 0x0012A8F0;
+constexpr std::uintptr_t kUpdateRenderListCallSiteRva = 0x000EDF84;
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
 constexpr GLenum kGlMaxRenderbufferSize = 0x84E8;
-constexpr std::array<std::uint8_t, 5> kExpectedCall{
+constexpr std::array<std::uint8_t, 5> kExpectedRenderWorldCall{
     0xE8, 0xFB, 0xEA, 0x03, 0x00,
 };
+constexpr std::array<std::uint8_t, 5> kExpectedUpdateRenderListCall{
+    0xE8, 0x67, 0xC9, 0x03, 0x00,
+};
+constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
+using UpdateRenderList = void(__thiscall*)(
+    void* renderer,
+    void* world,
+    void* camera,
+    float frame_time);
 
 enum class DuplicationState : std::uint8_t {
     idle,
@@ -47,8 +65,16 @@ enum class StereoMatrixState : std::uint8_t {
     failed,
 };
 
+struct StereoProcessingResult {
+    bool completed = false;
+    bool frame_time_consumed_by_eye = false;
+    bool suppress_original_world = false;
+};
+
 hooks::Rel32CallHook g_hook;
+hooks::Rel32CallHook g_visibility_hook;
 std::atomic<void*> g_original_target{nullptr};
+std::atomic<void*> g_original_visibility_target{nullptr};
 std::atomic<std::uint32_t> g_active_calls{0};
 std::atomic<DuplicationState> g_duplication_state{DuplicationState::idle};
 std::atomic<std::uint32_t> g_duplication_requested_frames{0};
@@ -60,6 +86,7 @@ std::atomic<std::uint32_t> g_stereo_requested_frames{0};
 std::atomic<std::uint32_t> g_stereo_completed_frames{0};
 std::atomic<bool> g_stereo_cancel{false};
 std::atomic<bool> g_stereo_persistent{false};
+std::atomic<bool> g_stereo_monitor_mirror{false};
 std::atomic<std::uint32_t> g_stereo_frame_calls{0};
 std::array<runtime::VrEyeConfiguration, 2> g_stereo_eyes{};
 std::array<runtime::VrMatrix44, 2> g_stereo_projections{};
@@ -68,6 +95,23 @@ std::atomic<runtime::OpenVrSession*> g_stereo_session{nullptr};
 bool g_stereo_track_head_rotation = false;
 bool g_stereo_tracking_anchor_valid = false;
 runtime::VrMatrix34 g_stereo_tracking_anchor{};
+bool g_stereo_latest_pose_valid = false;
+runtime::VrMatrix34 g_stereo_latest_pose{};
+bool g_menu_anchor_valid = false;
+runtime::VrMatrix34 g_menu_anchor{};
+SRWLOCK g_menu_pointer_lock = SRWLOCK_INIT;
+runtime::VrMatrix34 g_menu_pointer_anchor{};
+float g_menu_pointer_aspect = 0;
+std::atomic<bool> g_recenter_requested{false};
+SRWLOCK g_world_tracking_lock = SRWLOCK_INIT;
+runtime::VrMatrix44 g_world_game_view;
+runtime::VrMatrix34 g_world_anchor;
+std::uint64_t g_world_tracking_time = 0;
+void InvalidateWorldTracking() {
+    AcquireSRWLockExclusive(&g_world_tracking_lock);
+    g_world_tracking_time = 0;
+    ReleaseSRWLockExclusive(&g_world_tracking_lock);
+}
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
 std::atomic<bool> g_capabilities_initialized{false};
@@ -242,6 +286,125 @@ public:
     }
 };
 
+void RecordHmdVisibilityFailure(
+    const std::string& error,
+    bool camera_restored) noexcept {
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    ++g_telemetry.hmd_visibility_failures;
+    g_telemetry.hmd_visibility_camera_restored = camera_restored;
+    strncpy_s(
+        g_telemetry.hmd_visibility_error.data(),
+        g_telemetry.hmd_visibility_error.size(),
+        error.c_str(),
+        _TRUNCATE);
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
+void __fastcall HookedUpdateRenderList(
+    void* renderer,
+    void*,
+    void* world,
+    void* camera,
+    float frame_time) noexcept {
+    ActiveCall active_call;
+    const auto original = reinterpret_cast<UpdateRenderList>(
+        g_original_visibility_target.load(std::memory_order_acquire));
+    if (original == nullptr) {
+        return;
+    }
+
+    const auto visibility_active = []() noexcept {
+        return g_stereo_persistent.load(std::memory_order_acquire) &&
+            g_stereo_track_head_rotation &&
+            g_stereo_tracking_anchor_valid &&
+            g_stereo_latest_pose_valid &&
+            g_stereo_state.load(std::memory_order_acquire) ==
+                StereoMatrixState::processing;
+    };
+    if (!visibility_active()) {
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    ActiveStereoFrame active_stereo_frame;
+    if (!visibility_active()) {
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    CameraMatrixSnapshot camera_snapshot;
+    std::string error;
+    if (!adapters::hpl1::CaptureCameraMatrices(
+            camera, kCameraLayout, camera_snapshot, error) ||
+        !LooksLikeMappedGameplayCamera(camera_snapshot)) {
+        if (error.empty()) {
+            error = "The visibility camera does not match the mapped layout";
+        }
+        RecordHmdVisibilityFailure(error, true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    runtime::VrMatrix44 tracked_head_view;
+    constexpr float kRotationOnlyWorldUnitsPerMeter = 0.0F;
+    if (!runtime::ComposeYawRecenteredTrackedHeadView(
+            camera_snapshot.view,
+            g_stereo_tracking_anchor,
+            g_stereo_latest_pose,
+            kRotationOnlyWorldUnitsPerMeter,
+            tracked_head_view,
+            error)) {
+        RecordHmdVisibilityFailure(
+            "Could not compose the HMD visibility view: " + error, true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    runtime::VrCullFrustum cull_frustum;
+    if (!runtime::BuildConservativeStereoCullFrustum(
+            g_stereo_eyes,
+            kVisibilityAngularGuardRadians,
+            cull_frustum,
+            error)) {
+        RecordHmdVisibilityFailure(
+            "Could not build the HMD visibility frustum: " + error, true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    CameraVisibilityOverride visibility_override(kCameraLayout);
+    if (!visibility_override.Apply(
+            camera,
+            tracked_head_view,
+            g_stereo_projections[0],
+            cull_frustum.vertical_fov_radians,
+            cull_frustum.aspect,
+            error)) {
+        RecordHmdVisibilityFailure(
+            "Could not apply the HMD visibility camera: " + error, true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    original(renderer, world, camera, frame_time);
+
+    std::string restore_error;
+    if (!visibility_override.Restore(restore_error)) {
+        const std::string failure =
+            "Could not restore the camera after HMD visibility update: " +
+            restore_error;
+        RecordHmdVisibilityFailure(failure, false);
+        FailStereoMatrixValidation(failure);
+        return;
+    }
+
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    ++g_telemetry.hmd_visibility_updates;
+    g_telemetry.hmd_visibility_camera_restored = true;
+    g_telemetry.hmd_visibility_error = {};
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
 [[nodiscard]] bool RenderStereoEye(
     RenderWorld original,
     void* renderer,
@@ -249,7 +412,10 @@ public:
     void* camera,
     const runtime::VrMatrix44& head_view,
     std::size_t eye_index,
+    float frame_time,
+    bool& world_rendered,
     std::string& error) noexcept {
+    world_rendered = false;
     runtime::VrMatrix44 eye_view;
     if (!runtime::ComposeEyeViewFromHeadView(
             head_view, g_stereo_eyes[eye_index].eye_to_head, eye_view, error)) {
@@ -277,7 +443,34 @@ public:
         return false;
     }
 
-    original(renderer, world, camera, 0.0F);
+    {
+        hooks::ScopedEyeScissor scissor({
+            binding.previous_viewport[2], binding.previous_viewport[3]});
+        original(renderer, world, camera, frame_time);
+        world_rendered = true;
+        AcquireSRWLockExclusive(&g_telemetry_lock);
+        g_telemetry.eye_scissor_remapped += scissor.remapped();
+        g_telemetry.eye_scissor_bypassed += scissor.bypassed();
+        ReleaseSRWLockExclusive(&g_telemetry_lock);
+    }
+
+    if (g_stereo_persistent.load(std::memory_order_acquire)) {
+        const auto frame=ReadNativeControllerFrame();
+        std::array<graphics::TrackedHandVisual,2> hands{};
+        if (frame.focused) for (std::size_t i=0;i<hands.size();++i) {
+            auto& hand=hands[i];
+            std::array<float,3> velocity{},angular{};
+            hand.visible=ControllerWorldPose(frame.hands[i].grip,hand.palm,velocity,angular);
+            hand.ray=ControllerWorldPose(frame.hands[i].aim,hand.aim,velocity,angular) &&
+                i==(frame.interact_source==runtime::VrHand::left ? 0U : 1U);
+            if (frame.hands[i].skeleton_valid) hand.curl=frame.hands[i].finger_curl;
+            else hand.curl.fill(frame.input.state.interact.pressed && hand.ray ? 0.8F : 0.1F);
+        }
+        // Hands are optional decoration: never interrupt the world/compositor
+        // if the fixed-function compatibility path is unavailable.
+        std::string hand_error;
+        static_cast<void>(graphics::DrawTrackedHands(hands,eye_view,g_stereo_projections[eye_index],hand_error));
+    }
 
     std::string camera_error;
     const bool camera_restored = camera_override.Restore(camera_error);
@@ -301,11 +494,19 @@ public:
     return true;
 }
 
-void ProcessControlledStereoMatrices(
+[[nodiscard]] StereoProcessingResult ProcessControlledStereoMatrices(
     RenderWorld original,
     void* renderer,
     void* world,
-    void* camera) noexcept {
+    void* camera,
+    float frame_time) noexcept {
+    StereoProcessingResult result;
+    // Let the game draw its UI over one desktop world pass, then present that
+    // complete menu as a tracked panel at SwapBuffers (inventory/pause included).
+    if (g_stereo_persistent.load(std::memory_order_acquire) && NativeInputUiActive()) {
+        InvalidateWorldTracking();
+        return result;
+    }
     StereoMatrixState state = g_stereo_state.load(std::memory_order_acquire);
     if (state == StereoMatrixState::pending) {
         StereoMatrixState expected = StereoMatrixState::pending;
@@ -313,28 +514,28 @@ void ProcessControlledStereoMatrices(
                 expected,
                 StereoMatrixState::processing,
                 std::memory_order_acq_rel)) {
-            return;
+            return result;
         }
         state = StereoMatrixState::processing;
     }
     if (state != StereoMatrixState::processing) {
-        return;
+        return result;
     }
     ActiveStereoFrame active_stereo_frame;
     if (g_stereo_state.load(std::memory_order_acquire) !=
         StereoMatrixState::processing) {
-        return;
+        return result;
     }
     if (g_stereo_cancel.load(std::memory_order_acquire)) {
         if (g_stereo_persistent.load(std::memory_order_acquire)) {
-            return;
+            return result;
         }
         FailStereoMatrixValidation("Controlled stereo-matrix validation was cancelled");
-        return;
+        return result;
     }
     if (original == nullptr) {
         FailStereoMatrixValidation("The original RenderWorld target is unavailable");
-        return;
+        return result;
     }
 
     runtime::OpenVrSession* session =
@@ -345,12 +546,16 @@ void ProcessControlledStereoMatrices(
         if (!session->WaitForHmdPose(pose, error)) {
             FailStereoMatrixValidation(
                 "Could not acquire the compositor frame pose: " + error);
-            return;
+            return result;
         }
         if (!pose.device_connected || !pose.pose_valid) {
+            InvalidateWorldTracking();
+            // SteamVR may start before the user puts on the headset. Persistent
+            // presentation waits for tracking to return; bounded diagnostics fail.
+            if (g_stereo_persistent.load(std::memory_order_acquire)) return result;
             FailStereoMatrixValidation(
                 "The compositor frame did not contain a valid connected HMD pose");
-            return;
+            return result;
         }
     }
 
@@ -358,16 +563,18 @@ void ProcessControlledStereoMatrices(
     if (!adapters::hpl1::CaptureCameraMatrices(
             camera, kCameraLayout, camera_snapshot, error)) {
         FailStereoMatrixValidation("Could not capture the HPL camera: " + error);
-        return;
+        return result;
     }
     if (!LooksLikeMappedGameplayCamera(camera_snapshot)) {
         FailStereoMatrixValidation(
             "The active camera does not match the mapped infinite-perspective layout");
-        return;
+        return result;
     }
 
     runtime::VrMatrix44 head_view = camera_snapshot.view;
     if (g_stereo_track_head_rotation) {
+        if (g_recenter_requested.exchange(false, std::memory_order_acq_rel))
+            g_stereo_tracking_anchor_valid = false;
         if (!g_stereo_tracking_anchor_valid) {
             g_stereo_tracking_anchor = pose.device_to_absolute;
             g_stereo_tracking_anchor_valid = true;
@@ -382,12 +589,44 @@ void ProcessControlledStereoMatrices(
                 error)) {
             FailStereoMatrixValidation(
                 "Could not compose the yaw-recentered HMD rotation: " + error);
-            return;
+            return result;
         }
+        g_stereo_latest_pose = pose.device_to_absolute;
+        g_stereo_latest_pose_valid = true;
+        AcquireSRWLockExclusive(&g_world_tracking_lock);
+        g_world_game_view = camera_snapshot.view;
+        g_world_anchor = g_stereo_tracking_anchor;
+        // The world camera currently uses rotation-only head tracking. Keep
+        // hands relative to the current physical head, not its old recenter
+        // position, so leaning cannot detach the palms from the rendered head.
+        for (const auto index : {3U,7U,11U})
+            g_world_anchor.values[index] = pose.device_to_absolute.values[index];
+        g_world_tracking_time = GetTickCount64();
+        ReleaseSRWLockExclusive(&g_world_tracking_lock);
     }
+
+    // Read the snapshot sampled once by ButtonHandler::Update. Never consume
+    // OpenVR button edges a second time from rendering or from another eye.
+    if (session != nullptr && session->controller_input_initialized() &&
+        g_stereo_persistent.load(std::memory_order_acquire)) {
+        const auto controllers = ReadNativeControllerFrame();
+        AcquireSRWLockExclusive(&g_telemetry_lock);
+        ++g_telemetry.controller_samples;
+        g_telemetry.controller_frame = controllers;
+        g_telemetry.controller_error = {};
+        ReleaseSRWLockExclusive(&g_telemetry_lock);
+    }
+    const bool persistent_stereo =
+        g_stereo_persistent.load(std::memory_order_acquire);
+    const runtime::StereoRenderPlan render_plan =
+        runtime::PlanStereoWorldRendering(
+            frame_time,
+            persistent_stereo,
+            g_stereo_monitor_mirror.load(std::memory_order_acquire));
 
     std::uint32_t completed_eye_passes = 0;
     for (std::size_t eye_index = 0; eye_index < g_stereo_eyes.size(); ++eye_index) {
+        bool world_rendered = false;
         if (!RenderStereoEye(
                 original,
                 renderer,
@@ -395,9 +634,18 @@ void ProcessControlledStereoMatrices(
                 camera,
                 head_view,
                 eye_index,
+                render_plan.eye_frame_times[eye_index],
+                world_rendered,
                 error)) {
+            if (world_rendered && eye_index == 0 &&
+                render_plan.frame_time_owned_by_first_eye) {
+                result.frame_time_consumed_by_eye = true;
+            }
             FailStereoMatrixValidation("Controlled stereo eye pass failed: " + error);
-            return;
+            return result;
+        }
+        if (eye_index == 0 && render_plan.frame_time_owned_by_first_eye) {
+            result.frame_time_consumed_by_eye = true;
         }
         ++completed_eye_passes;
     }
@@ -407,7 +655,7 @@ void ProcessControlledStereoMatrices(
         RecordStereoCameraRestorationFailure();
         FailStereoMatrixValidation(
             "The camera bytes changed after the controlled stereo pair");
-        return;
+        return result;
     }
 
     if (session != nullptr) {
@@ -415,12 +663,12 @@ void ProcessControlledStereoMatrices(
         if (!GetPersistentEyeColorTextures(color_textures, error)) {
             FailStereoMatrixValidation(
                 "Could not obtain the rendered eye textures: " + error);
-            return;
+            return result;
         }
         if (!session->SubmitOpenGlEyeTextures(color_textures, error)) {
             FailStereoMatrixValidation(
                 "Could not submit the rendered stereo pair: " + error);
-            return;
+            return result;
         }
         glFlush();
     }
@@ -437,16 +685,18 @@ void ProcessControlledStereoMatrices(
         g_telemetry.tracking_anchor_captured = g_stereo_tracking_anchor_valid;
     }
     g_telemetry.stereo_camera_restored = true;
-    g_telemetry.persistent_stereo_active =
-        g_stereo_persistent.load(std::memory_order_acquire);
+    g_telemetry.persistent_stereo_active = persistent_stereo;
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 
     const std::uint32_t completed =
         g_stereo_completed_frames.fetch_add(1, std::memory_order_acq_rel) + 1;
-    if (!g_stereo_persistent.load(std::memory_order_acquire) &&
+    if (!persistent_stereo &&
         completed >= g_stereo_requested_frames.load(std::memory_order_acquire)) {
         g_stereo_state.store(StereoMatrixState::passed, std::memory_order_release);
     }
+    result.completed = true;
+    result.suppress_original_world = !render_plan.render_monitor_world;
+    return result;
 }
 
 void ProcessControlledWorldDuplication(
@@ -540,19 +790,37 @@ void __fastcall HookedRenderWorld(
     const auto original = reinterpret_cast<RenderWorld>(
         g_original_target.load(std::memory_order_acquire));
     if (original != nullptr) {
-        ProcessControlledStereoMatrices(
-            original, renderer, world, camera);
+        const StereoProcessingResult stereo = ProcessControlledStereoMatrices(
+            original, renderer, world, camera, frame_time);
         ProcessControlledWorldDuplication(
             original, renderer, world, camera);
-        original(renderer, world, camera, frame_time);
+        if (stereo.completed && stereo.suppress_original_world) {
+            AcquireSRWLockExclusive(&g_telemetry_lock);
+            ++g_telemetry.suppressed_monitor_world_passes;
+            ++g_telemetry.eye_owned_frame_time_frames;
+            ReleaseSRWLockExclusive(&g_telemetry_lock);
+        } else {
+            const float original_frame_time =
+                stereo.frame_time_consumed_by_eye ? 0.0F : frame_time;
+            original(renderer, world, camera, original_frame_time);
+            AcquireSRWLockExclusive(&g_telemetry_lock);
+            ++g_telemetry.monitor_world_passes;
+            if (stereo.frame_time_consumed_by_eye) {
+                ++g_telemetry.eye_owned_frame_time_frames;
+            }
+            ReleaseSRWLockExclusive(&g_telemetry_lock);
+        }
     }
 }
 
-[[nodiscard]] void* DecodeExpectedTarget(std::uint8_t* instruction) noexcept {
+[[nodiscard]] void* DecodeExpectedTarget(
+    std::uint8_t* instruction,
+    const std::array<std::uint8_t, 5>& expected_call) noexcept {
     std::int32_t displacement = 0;
-    std::memcpy(&displacement, kExpectedCall.data() + 1, sizeof(displacement));
+    std::memcpy(
+        &displacement, expected_call.data() + 1, sizeof(displacement));
     const std::intptr_t next_instruction =
-        reinterpret_cast<std::intptr_t>(instruction + kExpectedCall.size());
+        reinterpret_cast<std::intptr_t>(instruction + expected_call.size());
     return reinterpret_cast<void*>(next_instruction + displacement);
 }
 
@@ -560,7 +828,7 @@ void __fastcall HookedRenderWorld(
 
 bool InstallRenderWorldProbe(std::string& error) noexcept {
     error.clear();
-    if (g_hook.installed()) {
+    if (g_hook.installed() || g_visibility_hook.installed()) {
         error = "The Black Plague RenderWorld probe is already installed";
         return false;
     }
@@ -572,8 +840,19 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     }
     std::uint8_t* call_site = image + kRenderWorldCallSiteRva;
     void* expected_target = image + kRenderWorldRva;
-    if (DecodeExpectedTarget(call_site) != expected_target) {
+    if (DecodeExpectedTarget(call_site, kExpectedRenderWorldCall) !=
+        expected_target) {
         error = "The manifest call displacement does not target RenderWorld";
+        return false;
+    }
+    std::uint8_t* visibility_call_site =
+        image + kUpdateRenderListCallSiteRva;
+    void* expected_visibility_target = image + kUpdateRenderListRva;
+    if (DecodeExpectedTarget(
+            visibility_call_site, kExpectedUpdateRenderListCall) !=
+        expected_visibility_target) {
+        error =
+            "The manifest call displacement does not target UpdateRenderList";
         return false;
     }
 
@@ -598,22 +877,50 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_track_head_rotation = false;
     g_stereo_tracking_anchor_valid = false;
     g_stereo_tracking_anchor = {};
+    g_stereo_latest_pose_valid = false;
+    g_stereo_latest_pose = {};
     g_stereo_requested_frames.store(0, std::memory_order_release);
     g_stereo_completed_frames.store(0, std::memory_order_release);
     g_stereo_cancel.store(false, std::memory_order_release);
     g_stereo_persistent.store(false, std::memory_order_release);
+    g_stereo_monitor_mirror.store(false, std::memory_order_release);
     g_stereo_frame_calls.store(0, std::memory_order_release);
     g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
     ResetEyeTargetProbe();
     g_original_target.store(expected_target, std::memory_order_release);
+    g_original_visibility_target.store(
+        expected_visibility_target, std::memory_order_release);
 
     if (!hooks::InstallRel32CallHook(
             call_site,
-            kExpectedCall,
+            kExpectedRenderWorldCall,
             reinterpret_cast<void*>(&HookedRenderWorld),
             g_hook,
             error)) {
         g_original_target.store(nullptr, std::memory_order_release);
+        g_original_visibility_target.store(nullptr, std::memory_order_release);
+        return false;
+    }
+    if (!hooks::InstallRel32CallHook(
+            visibility_call_site,
+            kExpectedUpdateRenderListCall,
+            reinterpret_cast<void*>(&HookedUpdateRenderList),
+            g_visibility_hook,
+            error)) {
+        std::string rollback_error;
+        if (!hooks::RemoveRel32CallHook(g_hook, rollback_error) &&
+            !rollback_error.empty()) {
+            error += "; RenderWorld hook rollback also failed: " + rollback_error;
+        }
+        g_original_target.store(nullptr, std::memory_order_release);
+        g_original_visibility_target.store(nullptr, std::memory_order_release);
+        return false;
+    }
+    if (!hooks::InstallOpenGlEyeScissor(error)) {
+        std::string rollback_error;
+        if (!RemoveRenderWorldProbe(rollback_error)) {
+            error += "; render hook rollback also failed: " + rollback_error;
+        }
         return false;
     }
     return true;
@@ -629,14 +936,27 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         error = "A controlled stereo-matrix request is still active";
         return false;
     }
-    if (!hooks::RemoveRel32CallHook(g_hook, error)) {
+    std::string visibility_error;
+    const bool visibility_removed =
+        hooks::RemoveRel32CallHook(g_visibility_hook, visibility_error);
+    std::string render_error;
+    const bool render_removed = hooks::RemoveRel32CallHook(g_hook, render_error);
+    if (!visibility_removed || !render_removed) {
+        error = !visibility_removed
+            ? "Could not remove the UpdateRenderList hook: " + visibility_error
+            : "Could not remove the RenderWorld hook: " + render_error;
+        if (!visibility_removed && !render_removed) {
+            error += "; RenderWorld hook removal also failed: " + render_error;
+        }
         return false;
     }
 
     constexpr DWORD kQuiescenceTimeoutMilliseconds = 2000;
     for (DWORD elapsed = 0; elapsed < kQuiescenceTimeoutMilliseconds; ++elapsed) {
         if (g_active_calls.load(std::memory_order_acquire) == 0) {
-            return true;
+            g_original_target.store(nullptr, std::memory_order_release);
+            g_original_visibility_target.store(nullptr, std::memory_order_release);
+            return hooks::RemoveOpenGlEyeScissor(error);
         }
         Sleep(1);
     }
@@ -842,11 +1162,15 @@ bool ValidateControlledTrackedStereoSubmission(
     g_stereo_track_head_rotation = true;
     g_stereo_tracking_anchor_valid = false;
     g_stereo_tracking_anchor = {};
+    g_stereo_latest_pose_valid = false;
+    g_stereo_latest_pose = {};
     const bool result = ValidateControlledStereoMatrices(
         eyes, near_clip, frames, error);
     g_stereo_track_head_rotation = false;
     g_stereo_tracking_anchor_valid = false;
     g_stereo_tracking_anchor = {};
+    g_stereo_latest_pose_valid = false;
+    g_stereo_latest_pose = {};
     g_stereo_session.store(nullptr, std::memory_order_release);
     return result;
 }
@@ -912,13 +1236,17 @@ bool StartTrackedStereoPresentation(
     g_stereo_track_head_rotation = true;
     g_stereo_tracking_anchor_valid = false;
     g_stereo_tracking_anchor = {};
+    g_stereo_latest_pose_valid = false;
+    g_stereo_latest_pose = {};
     g_stereo_persistent.store(true, std::memory_order_release);
+    g_menu_anchor_valid = false;
     g_stereo_state.store(StereoMatrixState::pending, std::memory_order_release);
     return true;
 }
 
 bool StopTrackedStereoPresentation(std::string& error) noexcept {
     error.clear();
+    InvalidateWorldTracking();
     if (!g_stereo_persistent.load(std::memory_order_acquire)) {
         return true;
     }
@@ -933,6 +1261,8 @@ bool StopTrackedStereoPresentation(std::string& error) noexcept {
             g_stereo_track_head_rotation = false;
             g_stereo_tracking_anchor_valid = false;
             g_stereo_tracking_anchor = {};
+            g_stereo_latest_pose_valid = false;
+            g_stereo_latest_pose = {};
             g_stereo_persistent.store(false, std::memory_order_release);
             g_stereo_cancel.store(false, std::memory_order_release);
             g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
@@ -953,6 +1283,96 @@ bool TrackedStereoPresentationActive() noexcept {
              StereoMatrixState::processing);
 }
 
+void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
+    if (!TrackedStereoPresentationActive()) return;
+    ActiveStereoFrame active;
+    if (!TrackedStereoPresentationActive() || g_stereo_cancel.load(std::memory_order_acquire)) return;
+    if (world_rendered) {
+        g_menu_anchor_valid = false;
+        AcquireSRWLockExclusive(&g_menu_pointer_lock);
+        g_menu_pointer_aspect = 0;
+        ReleaseSRWLockExclusive(&g_menu_pointer_lock);
+        return;
+    }
+    InvalidateWorldTracking();
+    auto* session = g_stereo_session.load(std::memory_order_acquire);
+    if (!session) return;
+    runtime::VrHmdPose pose;
+    std::string error;
+    if (!session->WaitForHmdPose(pose, error) || !pose.device_connected || !pose.pose_valid) return;
+    if (g_recenter_requested.exchange(false, std::memory_order_acq_rel)) g_menu_anchor_valid = false;
+    if (!g_menu_anchor_valid) { g_menu_anchor = pose.device_to_absolute; g_menu_anchor_valid = true; }
+    std::array<GLint, 4> viewport{};
+    glGetIntegerv(GL_VIEWPORT, viewport.data());
+    AcquireSRWLockExclusive(&g_menu_pointer_lock);
+    g_menu_pointer_anchor = g_menu_anchor;
+    g_menu_pointer_aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 0;
+    ReleaseSRWLockExclusive(&g_menu_pointer_lock);
+    runtime::VrMatrix44 head_view;
+    bool success = runtime::ComposeYawRecenteredTrackedHeadView(runtime::IdentityMatrix(),
+        g_menu_anchor, pose.device_to_absolute, 1.0F, head_view, error);
+    graphics::OpenGlMenuFrame menu;
+    if (success) success = menu.Capture(error);
+    for (std::size_t i = 0; success && i < 2; ++i) {
+        runtime::VrMatrix44 view;
+        success = runtime::ComposeEyeViewFromHeadView(head_view, g_stereo_eyes[i].eye_to_head, view, error);
+        graphics::OpenGlEyeBinding binding;
+        if (success) success = BeginPersistentEyeTarget(i == 0 ? graphics::Eye::left : graphics::Eye::right,
+                                                       binding, error);
+        if (success) success = menu.Draw(view, g_stereo_projections[i], error);
+        if (binding.active) {
+            std::string restore_error;
+            if (!EndPersistentEyeTarget(binding, restore_error)) { success = false; error += restore_error; }
+        }
+    }
+    std::array<std::uint32_t, 2> textures{};
+    if (success) success = GetPersistentEyeColorTextures(textures, error) &&
+                           session->SubmitOpenGlEyeTextures(textures, error);
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    if (success) {
+        ++g_telemetry.menu_frames;
+        ++g_telemetry.compositor_submitted_frames;
+        g_telemetry.compositor_hmd_pose_valid = true;
+    } else {
+        g_telemetry.stereo_failed = true;
+        strncpy_s(g_telemetry.stereo_error.data(), g_telemetry.stereo_error.size(), error.c_str(), _TRUNCATE);
+    }
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
+bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv) noexcept {
+    uv = {};
+    if (!aim.pose_valid || !aim.device_connected) return false;
+    AcquireSRWLockShared(&g_menu_pointer_lock);
+    const auto anchor = g_menu_pointer_anchor;
+    const float aspect = g_menu_pointer_aspect;
+    ReleaseSRWLockShared(&g_menu_pointer_lock);
+    return runtime::ProjectAimOnMenu(anchor, aim.device_to_absolute, aspect, uv);
+}
+void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::memory_order_release); }
+
+bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
+    std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {
+    pose = {}; velocity = {}; angular = {};
+    if (!TrackedStereoPresentationActive() || NativeInputUiActive()) return false;
+    AcquireSRWLockShared(&g_world_tracking_lock);
+    const auto view = g_world_game_view;
+    const auto anchor = g_world_anchor;
+    const auto time = g_world_tracking_time;
+    ReleaseSRWLockShared(&g_world_tracking_lock);
+    if (!time || GetTickCount64() - time > 250) return false;
+    std::string error;
+    return runtime::ControllerPoseInGame(view, anchor, controller, pose, velocity, angular, error);
+}
+
+void SetTrackedStereoMonitorMirror(bool enabled) noexcept {
+    g_stereo_monitor_mirror.store(enabled, std::memory_order_release);
+}
+
+bool TrackedStereoMonitorMirrorEnabled() noexcept {
+    return g_stereo_monitor_mirror.load(std::memory_order_acquire);
+}
+
 RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {
     AcquireSRWLockExclusive(&g_telemetry_lock);
     RenderWorldFrameTelemetry result = g_telemetry;
@@ -960,6 +1380,7 @@ RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     result.eye_targets = ConsumeEyeTargetProbeTelemetry();
     result.persistent_stereo_active = TrackedStereoPresentationActive();
+    result.monitor_mirror_enabled = TrackedStereoMonitorMirrorEnabled();
     result.stereo_lifetime_frames =
         g_stereo_completed_frames.load(std::memory_order_acquire);
     return result;

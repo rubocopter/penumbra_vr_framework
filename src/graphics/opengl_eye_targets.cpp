@@ -396,6 +396,11 @@ bool OpenGlEyeTargets::BeginEye(
         previous_viewport[2], previous_viewport[3],
     };
     binding.active = true;
+    glGetIntegerv(GL_SCISSOR_BOX, binding.previous_scissor.data());
+    binding.previous_scissor_enabled = glIsEnabled(GL_SCISSOR_TEST) == GL_TRUE;
+    // A leftover desktop/light rectangle must not clip this eye's clear.
+    glDisable(GL_SCISSOR_TEST);
+    glScissor(0, 0, static_cast<GLsizei>(width_), static_cast<GLsizei>(height_));
     return true;
 }
 
@@ -424,6 +429,13 @@ bool OpenGlEyeTargets::EndEye(
         binding.previous_viewport[1],
         binding.previous_viewport[2],
         binding.previous_viewport[3]);
+    glScissor(binding.previous_scissor[0], binding.previous_scissor[1],
+        binding.previous_scissor[2], binding.previous_scissor[3]);
+    if (binding.previous_scissor_enabled) {
+        glEnable(GL_SCISSOR_TEST);
+    } else {
+        glDisable(GL_SCISSOR_TEST);
+    }
     binding = {};
     return true;
 }

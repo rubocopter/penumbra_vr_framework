@@ -14,6 +14,11 @@ struct IatHook {
 
 using PublishIatOriginal = void (*)(void* original) noexcept;
 
+// Also usable for exact-build vtable slots. A mismatched pointer is never
+// replaced; caller must publish any trampoline/original before installation.
+[[nodiscard]] bool InstallPointerHook(void** slot, void* expected, void* replacement,
+    IatHook& hook, std::string& error) noexcept;
+
 [[nodiscard]] bool InstallIatHook(
     const char* imported_module,
     const char* imported_function,

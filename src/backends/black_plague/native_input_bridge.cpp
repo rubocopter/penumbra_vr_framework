@@ -1,0 +1,313 @@
+#include "native_input_bridge.hpp"
+#include "iat_hook.hpp"
+#include "rel32_call_hook.hpp"
+#include "vr_native_intents.hpp"
+#include "legacy_input_abi.hpp"
+#include "render_world_probe.hpp"
+#include "spatial_interaction.hpp"
+#define NOMINMAX
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <intrin.h>
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <cmath>
+#include <cstring>
+
+namespace penumbra_vr::backends::black_plague {
+namespace {
+using A = runtime::NativeVrAction;
+using Q = runtime::NativeVrQuery;
+struct Entry { std::uintptr_t site; A action; Q query = Q::pressed; };
+// Exact initialized FD316F... image. Each entry is a decoded E8 instruction
+// inside cButtonHandler::Update; do not extend by scanning arbitrary byte hits.
+constexpr Entry kQueries[] = {
+    {0x3DEC,A::pause},{0x3EA0,A::pause},{0x3FC9,A::pause},{0x4065,A::pause},
+    {0x40E7,A::pause},{0x42C4,A::pause},{0x449D,A::pause},{0x47C9,A::pause},
+    {0x4838,A::pause},{0x4992,A::pause},{0x49FF,A::pause},{0x4B4C,A::pause},
+    {0x4CC4,A::pause},{0x500F,A::pause},
+    {0x3E1A,A::select},{0x3ECE,A::select},{0x3F57,A::select},{0x3FF7,A::select},
+    {0x40A5,A::select},{0x41C6,A::select},{0x43A3,A::select},{0x46B5,A::select},
+    {0x48C6,A::select},{0x4A5B,A::select},{0x4B7A,A::select},{0x4CF2,A::select},
+    {0x41F6,A::select},{0x43D3,A::select},{0x46DE,A::select},{0x48F6,A::select},
+    {0x4A8B,A::select},{0x4BAA,A::select},{0x4D22,A::select},
+    {0x4212,A::select,Q::released},{0x43EF,A::select,Q::released},
+    {0x46FA,A::select,Q::released},{0x4912,A::select,Q::released},
+    {0x4AA7,A::select,Q::released},{0x4D73,A::select,Q::released},
+    {0x3E4A,A::back},{0x3EFE,A::back},{0x3F29,A::back},{0x3F87,A::back},
+    {0x4027,A::back},{0x4085,A::back},{0x4115,A::back},{0x42F2,A::back},
+    {0x4619,A::back},{0x487A,A::back},{0x4A2D,A::back},{0x4DA3,A::back},
+    {0x4145,A::back},{0x4322,A::back},{0x4642,A::back},{0x48AA,A::back},{0x4DD3,A::back},
+    {0x4161,A::back,Q::released},{0x433E,A::back,Q::released},
+    {0x465E,A::back,Q::released},{0x4DEF,A::back,Q::released},
+    {0x5096,A::inventory},{0x50BE,A::notebook},{0x5131,A::light},
+    {0x5299,A::jump},{0x52C1,A::jump,Q::held},{0x56E9,A::jump,Q::held},
+    {0x52EB,A::sprint},{0x5313,A::sprint,Q::released},
+    {0x533B,A::crouch},{0x536A,A::crouch,Q::released},{0x537E,A::crouch,Q::held},
+    {0x542A,A::interact},{0x546E,A::interact,Q::released},
+    {0x5496,A::examine},{0x54BE,A::examine,Q::released},{0x54E6,A::holster}
+};
+constexpr std::uintptr_t Target(Q query) {
+    return query == Q::held ? 0xDA470 : query == Q::released ? 0xDA510 : 0xDA5B0;
+}
+std::array<std::uint8_t, 5> CallBytes(std::uintptr_t site, std::uintptr_t target) {
+    std::array<std::uint8_t, 5> bytes{0xE8};
+    const auto displacement = static_cast<std::int32_t>(target - site - 5);
+    std::memcpy(bytes.data() + 1, &displacement, 4); return bytes;
+}
+// MSVC 2003 std::string is passed by value as 28 stack bytes. Never construct
+// or destroy it with the framework's modern CRT: the original query owns it.
+using LegacyString = adapters::hpl1::LegacyInputString;
+using Query = adapters::hpl1::LegacyInputQuery;
+using Update = void(__thiscall*)(void*, float);
+using Move = void(__thiscall*)(void*, float, float);
+using Yaw = void(__thiscall*)(void*, float);
+std::uint8_t* g_image = nullptr;
+hooks::IatHook g_update_hook;
+std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
+std::array<hooks::Rel32CallHook, 2> g_move_hooks;
+struct PointerEntry { std::uintptr_t site, target, cursor; };
+constexpr PointerEntry kPointers[]{{0x4477,0x797B0,0xA0}, {0x4C70,0x945F0,0x84}, {0x4FF2,0x6C7C0,0xAC}};
+std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks;
+std::atomic<bool> g_ui{true};
+std::atomic<bool> g_installed{false};
+SRWLOCK g_session_lock = SRWLOCK_INIT;
+runtime::OpenVrSession* g_session = nullptr;
+runtime::VrControllerFrame g_frame;
+runtime::VrInputState g_disconnect_release;
+std::atomic<std::uint64_t> g_release_pending{0};
+std::uint64_t g_release_generation = 0;
+runtime::VrSnapTurn g_turn;
+thread_local runtime::VrNativeIntents* g_intents = nullptr;
+thread_local void* g_input_player = nullptr;
+thread_local bool g_pointer_valid = false;
+thread_local std::array<float, 2> g_pointer_uv{};
+thread_local std::uint64_t g_mouse_override_until = 0;
+
+bool ReadBytes(const void* source, void* dest, std::size_t size) noexcept {
+    if (!source) return false;
+    __try { std::memcpy(dest, source, size); return true; }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
+    T result{};
+    if (object) static_cast<void>(ReadBytes(static_cast<const std::uint8_t*>(object) + offset, &result, sizeof(result)));
+    return result;
+}
+bool UiContext(void* handler) {
+    if (Read<int>(handler, 0x3C) != 1) return true;
+    const auto* init = Read<void*>(handler, 0x2C);
+    const auto* player = Read<void*>(handler, 0x38);
+    if (!init || !player || !Read<bool>(player, 0x1DC)) return true;
+    if (Read<bool>(Read<void*>(player, 0x28C), 0)) return true;
+    // These are the same overlay checks/ordering as the mapped native handler.
+    return Read<int>(Read<void*>(init, 0x1AC), 0x30) != 0 ||
+        Read<bool>(Read<void*>(init, 0x180), 0x2D) ||
+        Read<bool>(Read<void*>(init, 0x17C), 0x31) ||
+        Read<bool>(Read<void*>(init, 0x178), 0x44) ||
+        Read<bool>(Read<void*>(init, 0x164), 0x5C);
+}
+bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
+    const auto return_rva = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) -
+                            reinterpret_cast<std::uintptr_t>(g_image);
+    for (const auto& entry : kQueries) {
+        if (entry.site + 5 != return_rva) continue;
+        // Always execute native query first, including its string destructor and
+        // native edge bookkeeping, even when VR has a matching pressed button.
+        const bool native = reinterpret_cast<Query>(g_image + Target(entry.query))(input, name);
+        const bool vr = g_intents && g_intents->Query(entry.action, entry.query);
+        if (vr && entry.action == A::interact && entry.query == Q::pressed)
+            RefreshVrSelectionBeforeInteract(g_input_player);
+        return native || vr;
+    }
+    return reinterpret_cast<Query>(g_image + Target(Q::pressed))(input, name);
+}
+void __fastcall HookedForward(void* player, void*, float amount, float dt) {
+    reinterpret_cast<Move>(g_image + 0x9CBC0)(player, g_intents ? g_intents->Move(amount, false) : amount, dt);
+}
+void __fastcall HookedSideways(void* player, void*, float amount, float dt) {
+    reinterpret_cast<Move>(g_image + 0x9CC60)(player, g_intents ? g_intents->Move(amount, true) : amount, dt);
+}
+void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* physical_delta) {
+    using Pointer = void(__thiscall*)(void*, const std::array<float, 2>*);
+    const auto return_rva = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) - reinterpret_cast<std::uintptr_t>(g_image);
+    for (const auto& entry : kPointers) {
+        if (entry.site + 5 != return_rva) continue;
+        std::array<float, 2> delta{};
+        if (!ReadBytes(physical_delta, delta.data(), sizeof(delta))) return;
+        const auto now = GetTickCount64();
+        if (std::abs(delta[0]) > 0.01F || std::abs(delta[1]) > 0.01F) g_mouse_override_until = now + 1500;
+        if (g_intents && g_pointer_valid && now >= g_mouse_override_until) {
+            const float x = Read<float>(menu, entry.cursor), y = Read<float>(menu, entry.cursor + 4);
+            if (std::isfinite(x) && std::isfinite(y)) delta = {g_pointer_uv[0] * 800 - x, g_pointer_uv[1] * 600 - y};
+        }
+        reinterpret_cast<Pointer>(g_image + entry.target)(menu, &delta);
+        return;
+    }
+}
+void __fastcall HookedUpdate(void* handler, void*, float dt) {
+    const bool ui = UiContext(handler);
+    const auto context = ui ? runtime::VrInputContext::ui : runtime::VrInputContext::gameplay;
+    g_ui.store(ui, std::memory_order_release);
+    runtime::VrControllerFrame frame;
+    std::uint64_t consumed_release = 0;
+    AcquireSRWLockExclusive(&g_session_lock);
+    if (g_release_pending.load(std::memory_order_acquire)) {
+        consumed_release = g_release_pending.load(std::memory_order_acquire);
+        frame.input.state = g_disconnect_release;
+        g_disconnect_release = {};
+        g_frame = {};
+    } else if (g_session) {
+        std::string error;
+        static_cast<void>(g_session->ReadControllerInput(context, runtime::VrHand::right,
+                                                        GetTickCount64(), frame, error));
+        g_frame = frame;
+    }
+    const float turn = g_turn.Update(frame.input.state.turn, !ui && frame.focused);
+    ReleaseSRWLockExclusive(&g_session_lock);
+    g_pointer_valid = ui && frame.focused && TrackedMenuPointer(frame.hands[1].aim, g_pointer_uv);
+    if (frame.input.state.recenter.just_pressed) RequestTrackedRecenter();
+    if (ui && !g_pointer_valid) {
+        frame.input.state.ui_select.pressed = false;
+        frame.input.state.ui_select.just_pressed = false;
+        frame.input.state.ui_drag.pressed = false;
+        frame.input.state.ui_drag.just_pressed = false;
+    }
+    runtime::VrNativeIntents intents;
+    intents.Begin(frame.input.state, context);
+    auto* previous = g_intents;
+    auto* previous_player = g_input_player;
+    g_input_player = Read<void*>(handler, 0x38);
+    g_intents = &intents;
+    // Release spatial ownership even when a UI context filters gameplay edges.
+    ServiceSpatialInteraction(g_input_player, ui);
+    if (turn != 0) {
+        auto* player = Read<void*>(handler, 0x38);
+        const float sensitivity = Read<float>(player, 0x1E4);
+        if (player && std::isfinite(sensitivity) && sensitivity >= 0.001F && sensitivity <= 100)
+            reinterpret_cast<Yaw>(g_image + 0x9CD00)(player, turn / sensitivity);
+    }
+    reinterpret_cast<Update>(g_image + 0x3BF0)(handler, dt);
+    ServiceSpatialInteraction(g_input_player, UiContext(handler));
+    g_intents = previous;
+    g_input_player = previous_player;
+    if (consumed_release != 0) static_cast<void>(g_release_pending.compare_exchange_strong(
+        consumed_release, 0, std::memory_order_acq_rel));
+    // A button can open an inventory/menu during this update. Publish the new
+    // context before rendering so its desktop UI is visible in the headset.
+    g_ui.store(UiContext(handler), std::memory_order_release);
+}
+}
+
+bool InstallNativeInputBridge(std::string& error) noexcept {
+    error.clear();
+    if (g_update_hook.installed()) return true;
+    g_image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    void* update = nullptr;
+    if (!ReadBytes(g_image + 0x272A84, &update, sizeof(update)) || update != g_image + 0x3BF0) {
+        error = "ButtonHandler Update vtable does not match the exact build"; return false;
+    }
+    for (const auto& entry : kQueries) {
+        const auto expected = CallBytes(entry.site, Target(entry.query));
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + entry.site, actual.data(), actual.size()) || actual != expected) {
+            error = "Native input query mismatch at RVA " + std::to_string(entry.site); return false;
+        }
+    }
+    for (const auto& entry : kPointers) {
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + entry.site, actual.data(), actual.size()) || actual != CallBytes(entry.site, entry.target)) {
+            error = "Native menu pointer call mismatch"; return false;
+        }
+    }
+    constexpr std::array<std::uintptr_t, 2> sites{0x51CD, 0x5227}, targets{0x9CBC0, 0x9CC60};
+    for (std::size_t i = 0; i < sites.size(); ++i) {
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + sites[i], actual.data(), actual.size()) || actual != CallBytes(sites[i], targets[i])) {
+            error = "Native movement call mismatch"; return false;
+        }
+    }
+    // Validate direct yaw entry too, before publishing any input hook.
+    constexpr std::array<std::uint8_t, 9> yaw{0x56,0x8B,0xF1,0x8B,0x8E,0xC4,0x02,0,0};
+    std::array<std::uint8_t, 9> actual_yaw{};
+    if (!ReadBytes(g_image + 0x9CD00, actual_yaw.data(), actual_yaw.size()) || actual_yaw != yaw) {
+        error = "Native yaw entry mismatch"; return false;
+    }
+    bool ok = true;
+    for (std::size_t i = 0; ok && i < std::size(kQueries); ++i) {
+        const auto& entry = kQueries[i];
+        ok = hooks::InstallRel32CallHook(g_image + entry.site, CallBytes(entry.site, Target(entry.query)),
+                                        reinterpret_cast<void*>(&HookedQuery), g_query_hooks[i], error);
+    }
+    const std::array<void*, 2> replacements{reinterpret_cast<void*>(&HookedForward), reinterpret_cast<void*>(&HookedSideways)};
+    for (std::size_t i = 0; ok && i < sites.size(); ++i)
+        ok = hooks::InstallRel32CallHook(g_image + sites[i], CallBytes(sites[i], targets[i]), replacements[i], g_move_hooks[i], error);
+    for (std::size_t i = 0; ok && i < std::size(kPointers); ++i) {
+        const auto& entry = kPointers[i];
+        ok = hooks::InstallRel32CallHook(g_image + entry.site, CallBytes(entry.site, entry.target),
+            reinterpret_cast<void*>(&HookedPointer), g_pointer_hooks[i], error);
+    }
+    if (ok) ok = hooks::InstallPointerHook(reinterpret_cast<void**>(g_image + 0x272A84),
+            g_image + 0x3BF0, reinterpret_cast<void*>(&HookedUpdate), g_update_hook, error);
+    if (!ok) {
+        std::string rollback;
+        if (!RemoveNativeInputBridge(rollback)) error += "; rollback failed: " + rollback;
+    }
+    g_installed.store(ok, std::memory_order_release);
+    return ok;
+}
+bool RemoveNativeInputBridge(std::string& error) noexcept {
+    g_installed.store(false, std::memory_order_release);
+    ConnectNativeInput(nullptr);
+    // Let a running game consume the pending release in its own update thread.
+    // Never invoke player/physics methods from this remote control thread.
+    const auto deadline = GetTickCount64() + 1000;
+    while (g_release_pending.load(std::memory_order_acquire) && GetTickCount64() < deadline) Sleep(1);
+    if (g_release_pending.load(std::memory_order_acquire)) {
+        error = "Waiting for the native update thread to release VR input before detaching";
+        return false;
+    }
+    bool ok = hooks::RemoveIatHook(g_update_hook, error);
+    for (auto& hook : g_query_hooks) {
+        std::string next;
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; error += next; }
+    }
+    for (auto& hook : g_move_hooks) {
+        std::string next;
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; error += next; }
+    }
+    for (auto& hook : g_pointer_hooks) {
+        std::string next;
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; error += next; }
+    }
+    // DLL and original pointers remain resident for callbacks already in flight.
+    return ok;
+}
+void ConnectNativeInput(runtime::OpenVrSession* session) noexcept {
+    AcquireSRWLockExclusive(&g_session_lock);
+    if (!session && g_session) {
+        g_disconnect_release = runtime::MakeReleasedVrInputState(g_frame.input.state);
+        g_release_pending.store(++g_release_generation, std::memory_order_release);
+    }
+    g_session = session; g_frame = {}; g_turn = {};
+    ReleaseSRWLockExclusive(&g_session_lock);
+}
+bool NativeInputUiActive() noexcept {
+    return g_installed.load(std::memory_order_acquire) && g_ui.load(std::memory_order_acquire);
+}
+runtime::VrControllerFrame ReadNativeControllerFrame() noexcept {
+    AcquireSRWLockShared(&g_session_lock);
+    const auto frame = g_frame;
+    ReleaseSRWLockShared(&g_session_lock);
+    return frame;
+}
+void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept {
+    AcquireSRWLockExclusive(&g_session_lock);
+    if (g_session) {
+        std::string error;
+        static_cast<void>(g_session->TriggerHaptic(hand, 0.025F, 110, pickup ? 0.4F : 0.2F, error));
+    }
+    ReleaseSRWLockExclusive(&g_session_lock);
+}
+}

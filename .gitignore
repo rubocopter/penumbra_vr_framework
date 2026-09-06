@@ -36,6 +36,7 @@ CMakeUserPresets.json
 *.til
 
 # Local game material and diagnostics
+/artifacts/
 /local/
 /logs/
 /captures/

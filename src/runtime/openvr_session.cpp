@@ -162,6 +162,8 @@ bool OpenVrSession::Initialize(
 
 bool OpenVrSession::Shutdown(std::string& error) noexcept {
     error.clear();
+    actions_.Reset();
+    input_ = nullptr;
     if (library_ == nullptr) {
         system_ = nullptr;
         compositor_ = nullptr;

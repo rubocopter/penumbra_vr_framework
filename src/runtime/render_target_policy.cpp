@@ -45,7 +45,9 @@ bool BuildRenderTargetCandidates(
     // Match the proven Rework range. Values outside it are normalized here so
     // malformed configuration cannot request a zero-sized or absurd target.
     const double scale = std::clamp(
-        static_cast<double>(policy.scale), 0.5, 2.0);
+        static_cast<double>(policy.scale),
+        static_cast<double>(vr_setting_limits::kRenderScale.minimum),
+        static_cast<double>(vr_setting_limits::kRenderScale.maximum));
     VrRenderTargetSize current;
     if (!ScaleDimension(recommended.width, scale, current.width) ||
         !ScaleDimension(recommended.height, scale, current.height)) {

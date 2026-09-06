@@ -55,9 +55,10 @@ pvr_enable_warnings(pvr_rel32_call_hook)
 
 add_library(pvr_opengl_eye_targets STATIC
     src/graphics/opengl_eye_targets.cpp
+    src/graphics/opengl_menu_frame.cpp
 )
 target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
-target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32)
+target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32 pvr_vr_math)
 pvr_enable_warnings(pvr_opengl_eye_targets)
 
 add_library(pvr_visual_calibration STATIC
@@ -65,6 +66,11 @@ add_library(pvr_visual_calibration STATIC
 )
 target_include_directories(pvr_visual_calibration PUBLIC src/graphics)
 pvr_enable_warnings(pvr_visual_calibration)
+
+add_library(pvr_opengl_eye_scissor STATIC src/hooks/opengl_eye_scissor.cpp)
+target_include_directories(pvr_opengl_eye_scissor PUBLIC src/hooks)
+target_link_libraries(pvr_opengl_eye_scissor PUBLIC pvr_iat_hook opengl32)
+pvr_enable_warnings(pvr_opengl_eye_scissor)
 
 add_library(pvr_spatial_audio STATIC
     src/audio/spatial_audio.cpp
@@ -74,9 +80,46 @@ pvr_enable_warnings(pvr_spatial_audio)
 
 add_library(pvr_vr_math STATIC
     src/runtime/vr_math.cpp
+    src/runtime/vr_grab_pose.cpp
 )
 target_include_directories(pvr_vr_math PUBLIC src/runtime)
 pvr_enable_warnings(pvr_vr_math)
+
+add_library(pvr_stereo_render_policy STATIC
+    src/runtime/stereo_render_policy.cpp
+)
+target_include_directories(pvr_stereo_render_policy PUBLIC src/runtime)
+pvr_enable_warnings(pvr_stereo_render_policy)
+
+add_library(pvr_vr_settings STATIC
+    src/runtime/vr_settings.cpp
+)
+target_include_directories(pvr_vr_settings PUBLIC src/runtime)
+pvr_enable_warnings(pvr_vr_settings)
+
+add_library(pvr_vr_settings_store STATIC
+    src/launcher/vr_settings_store.cpp
+)
+target_include_directories(pvr_vr_settings_store PUBLIC src/launcher)
+target_link_libraries(pvr_vr_settings_store PUBLIC pvr_vr_settings)
+pvr_enable_warnings(pvr_vr_settings_store)
+
+add_library(pvr_vr_input_state STATIC
+    src/runtime/vr_input_state.cpp
+)
+target_include_directories(pvr_vr_input_state PUBLIC src/runtime)
+target_link_libraries(pvr_vr_input_state PUBLIC pvr_vr_settings)
+pvr_enable_warnings(pvr_vr_input_state)
+
+add_library(pvr_vr_action_input STATIC src/runtime/vr_action_input.cpp)
+target_include_directories(pvr_vr_action_input PUBLIC src/runtime)
+target_link_libraries(pvr_vr_action_input PUBLIC pvr_vr_input_state)
+pvr_enable_warnings(pvr_vr_action_input)
+
+add_library(pvr_vr_native_intents STATIC src/runtime/vr_native_intents.cpp)
+target_include_directories(pvr_vr_native_intents PUBLIC src/runtime)
+target_link_libraries(pvr_vr_native_intents PUBLIC pvr_vr_input_state)
+pvr_enable_warnings(pvr_vr_native_intents)
 
 add_library(pvr_hpl1_camera_adapter STATIC
     src/adapters/hpl1/camera_matrix_override.cpp
@@ -91,6 +134,7 @@ add_library(pvr_render_target_policy STATIC
     src/runtime/render_target_policy.cpp
 )
 target_include_directories(pvr_render_target_policy PUBLIC src/runtime)
+target_link_libraries(pvr_render_target_policy PUBLIC pvr_vr_settings)
 pvr_enable_warnings(pvr_render_target_policy)
 
 add_library(pvr_pe_large_address STATIC
@@ -109,6 +153,7 @@ if(PENUMBRA_VR_OPENVR_SDK)
     endif()
     add_library(pvr_openvr_session STATIC
         src/runtime/openvr_session.cpp
+        src/runtime/openvr_controller_input.cpp
     )
     target_include_directories(
         pvr_openvr_session
@@ -123,10 +168,13 @@ else()
     target_compile_definitions(pvr_openvr_session PUBLIC PVR_HAS_OPENVR=0)
 endif()
 pvr_enable_warnings(pvr_openvr_session)
+target_link_libraries(pvr_openvr_session PUBLIC pvr_vr_action_input)
 
 add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
+    src/backends/black_plague/native_input_bridge.cpp
+    src/backends/black_plague/spatial_interaction.cpp
 )
 target_include_directories(
     pvr_black_plague_backend_probe
@@ -137,9 +185,12 @@ target_link_libraries(
     PUBLIC
         pvr_rel32_call_hook
         pvr_opengl_eye_targets
+        pvr_opengl_eye_scissor
         pvr_openvr_session
         pvr_hpl1_camera_adapter
-        pvr_vr_math)
+        pvr_vr_math
+        pvr_stereo_render_policy)
+target_link_libraries(pvr_black_plague_backend_probe PUBLIC pvr_vr_native_intents pvr_iat_hook)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)
 
@@ -171,6 +222,11 @@ set_target_properties(pvr_black_plague_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.BlackPlague.Probe"
 )
 pvr_enable_warnings(pvr_black_plague_probe)
+add_custom_target(pvr_openvr_assets ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets/openvr"
+        "$<TARGET_FILE_DIR:pvr_black_plague_probe>/vr"
+    VERBATIM)
 if(PVR_OPENVR_LOADER)
     add_custom_command(TARGET pvr_black_plague_probe POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -183,13 +239,36 @@ add_executable(pvr_probe_launcher
     src/launcher/main.cpp
     src/launcher/pe_memory_inspector.cpp
 )
-target_link_libraries(pvr_probe_launcher PRIVATE pvr_build_catalog)
+target_link_libraries(
+    pvr_probe_launcher PRIVATE pvr_build_catalog pvr_vr_settings_store shell32)
 set_target_properties(pvr_probe_launcher PROPERTIES
     OUTPUT_NAME "PenumbraVR.ProbeLauncher"
 )
 pvr_enable_warnings(pvr_probe_launcher)
 
 if(BUILD_TESTING)
+    add_executable(pvr_spatial_interaction_test tests/vr_input_state/spatial_interaction_test.cpp)
+    target_include_directories(pvr_spatial_interaction_test PRIVATE src/hooks src/backends/black_plague src/adapters/hpl1 src/graphics)
+    target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook)
+    pvr_enable_warnings(pvr_spatial_interaction_test)
+    add_test(NAME spatial_interaction COMMAND pvr_spatial_interaction_test)
+    add_executable(pvr_vr_grab_pose_test tests/vr_math/vr_grab_pose_test.cpp)
+    target_link_libraries(pvr_vr_grab_pose_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_vr_grab_pose_test)
+    add_test(NAME vr_grab_pose COMMAND pvr_vr_grab_pose_test)
+    add_executable(pvr_vr_native_intents_test tests/vr_input_state/vr_native_intents_test.cpp)
+    target_include_directories(pvr_vr_native_intents_test PRIVATE src/adapters/hpl1)
+    target_link_libraries(pvr_vr_native_intents_test PRIVATE pvr_vr_native_intents pvr_iat_hook)
+    pvr_enable_warnings(pvr_vr_native_intents_test)
+    add_test(NAME vr_native_intents COMMAND pvr_vr_native_intents_test)
+    add_executable(pvr_build_catalog_test
+        tests/build_catalog/build_catalog_test.cpp
+    )
+    target_link_libraries(pvr_build_catalog_test PRIVATE pvr_build_catalog)
+    pvr_enable_warnings(pvr_build_catalog_test)
+
+    add_test(NAME build_catalog COMMAND pvr_build_catalog_test)
+
     add_library(pvr_test_sdl SHARED
         tests/frame_hook/sdl_stub.cpp
         tests/frame_hook/sdl_stub.def
@@ -236,10 +315,17 @@ if(BUILD_TESTING)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/eye_targets"
     )
     target_link_libraries(
-        pvr_opengl_eye_targets_test PRIVATE pvr_opengl_eye_targets)
+        pvr_opengl_eye_targets_test PRIVATE pvr_opengl_eye_targets pvr_opengl_eye_scissor)
     pvr_enable_warnings(pvr_opengl_eye_targets_test)
 
     add_test(NAME opengl_eye_targets COMMAND pvr_opengl_eye_targets_test)
+
+    add_executable(pvr_eye_scissor_math_test tests/opengl_eye_targets/eye_scissor_math_test.cpp)
+    set_target_properties(pvr_eye_scissor_math_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/eye_targets")
+    target_link_libraries(pvr_eye_scissor_math_test PRIVATE pvr_opengl_eye_scissor)
+    pvr_enable_warnings(pvr_eye_scissor_math_test)
+    add_test(NAME eye_scissor_math COMMAND pvr_eye_scissor_math_test)
 
     add_executable(pvr_openvr_session_test
         tests/openvr_session/openvr_session_test.cpp
@@ -256,6 +342,45 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_vr_math_test)
 
     add_test(NAME vr_math COMMAND pvr_vr_math_test)
+
+    add_executable(pvr_stereo_render_policy_test
+        tests/stereo_render_policy/stereo_render_policy_test.cpp
+    )
+    target_link_libraries(
+        pvr_stereo_render_policy_test PRIVATE pvr_stereo_render_policy)
+    pvr_enable_warnings(pvr_stereo_render_policy_test)
+
+    add_test(NAME stereo_render_policy COMMAND pvr_stereo_render_policy_test)
+
+    add_executable(pvr_vr_input_state_test
+        tests/vr_input_state/vr_input_state_test.cpp
+    )
+    target_link_libraries(pvr_vr_input_state_test PRIVATE pvr_vr_input_state)
+    pvr_enable_warnings(pvr_vr_input_state_test)
+
+    add_test(NAME vr_input_state COMMAND pvr_vr_input_state_test)
+
+    add_executable(pvr_vr_action_input_test tests/vr_input_state/vr_action_input_test.cpp)
+    target_link_libraries(pvr_vr_action_input_test PRIVATE pvr_vr_action_input)
+    pvr_enable_warnings(pvr_vr_action_input_test)
+    add_test(NAME vr_action_input COMMAND pvr_vr_action_input_test)
+
+    add_executable(pvr_vr_settings_test
+        tests/vr_settings/vr_settings_test.cpp
+    )
+    target_link_libraries(pvr_vr_settings_test PRIVATE pvr_vr_settings)
+    pvr_enable_warnings(pvr_vr_settings_test)
+
+    add_test(NAME vr_settings COMMAND pvr_vr_settings_test)
+
+    add_executable(pvr_vr_settings_store_test
+        tests/vr_settings_store/vr_settings_store_test.cpp
+    )
+    target_link_libraries(
+        pvr_vr_settings_store_test PRIVATE pvr_vr_settings_store)
+    pvr_enable_warnings(pvr_vr_settings_store_test)
+
+    add_test(NAME vr_settings_store COMMAND pvr_vr_settings_store_test)
 
     add_executable(pvr_render_target_policy_test
         tests/render_target_policy/render_target_policy_test.cpp

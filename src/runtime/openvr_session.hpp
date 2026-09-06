@@ -1,5 +1,8 @@
 #pragma once
 
+#include "vr_action_input.hpp"
+#include "vr_tracking_types.hpp"
+
 #include <array>
 #include <cstdint>
 #include <string>
@@ -11,25 +14,12 @@ struct VrRenderTargetSize {
     std::uint32_t height = 0;
 };
 
-struct VrMatrix34 {
-    std::array<float, 12> values{};
-};
-
 struct VrEyeConfiguration {
     float left_tangent = 0.0F;
     float right_tangent = 0.0F;
     float top_tangent = 0.0F;
     float bottom_tangent = 0.0F;
     VrMatrix34 eye_to_head;
-};
-
-struct VrHmdPose {
-    VrMatrix34 device_to_absolute;
-    std::array<float, 3> velocity{};
-    std::array<float, 3> angular_velocity{};
-    std::uint32_t tracking_result = 0;
-    bool pose_valid = false;
-    bool device_connected = false;
 };
 
 class OpenVrSession final {
@@ -43,6 +33,16 @@ public:
         const std::wstring& loader_path,
         std::string& error) noexcept;
     [[nodiscard]] bool Shutdown(std::string& error) noexcept;
+
+    [[nodiscard]] bool InitializeControllerInput(
+        const std::wstring& manifest_path, std::string& error) noexcept;
+    [[nodiscard]] bool ReadControllerInput(
+        VrInputContext context, VrHand handedness, std::uint64_t now_ms,
+        VrControllerFrame& frame, std::string& error) noexcept;
+    [[nodiscard]] bool TriggerHaptic(
+        VrHand hand, float duration, float frequency, float amplitude,
+        std::string& error) noexcept;
+    [[nodiscard]] bool controller_input_initialized() const noexcept;
 
     [[nodiscard]] bool ReadEyeConfiguration(
         std::array<VrEyeConfiguration, 2>& eyes,
@@ -62,6 +62,8 @@ private:
     void* system_ = nullptr;
     void* compositor_ = nullptr;
     void* shutdown_ = nullptr;
+    void* input_ = nullptr;
+    VrActionInput actions_;
     VrRenderTargetSize recommended_size_{};
 };
 

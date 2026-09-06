@@ -32,6 +32,16 @@ namespace {
         layout.view_updated_flag_index != layout.projection_updated_flag_index;
 }
 
+[[nodiscard]] bool HasVisibilityScalars(const CameraLayout& layout) noexcept {
+    return layout.fov_offset != layout.aspect_offset &&
+        layout.fov_offset != layout.view_matrix_offset &&
+        layout.fov_offset != layout.projection_matrix_offset &&
+        layout.fov_offset != layout.flags_offset &&
+        layout.aspect_offset != layout.view_matrix_offset &&
+        layout.aspect_offset != layout.projection_matrix_offset &&
+        layout.aspect_offset != layout.flags_offset;
+}
+
 void Capture(
     const void* camera,
     const CameraLayout& layout,
@@ -144,6 +154,86 @@ bool CameraMatrixOverride::active() const noexcept {
 
 const CameraMatrixSnapshot& CameraMatrixOverride::snapshot() const noexcept {
     return snapshot_;
+}
+
+CameraVisibilityOverride::CameraVisibilityOverride(CameraLayout layout) noexcept
+    : layout_(layout), matrix_override_(layout) {}
+
+CameraVisibilityOverride::~CameraVisibilityOverride() noexcept {
+    std::string ignored_error;
+    static_cast<void>(Restore(ignored_error));
+}
+
+bool CameraVisibilityOverride::Apply(
+    void* camera,
+    const runtime::VrMatrix44& view,
+    const runtime::VrMatrix44& projection,
+    float vertical_fov_radians,
+    float aspect,
+    std::string& error) noexcept {
+    error.clear();
+    if (active()) {
+        error = "A camera visibility override is already active";
+        return false;
+    }
+    if (camera == nullptr) {
+        error = "The HPL1 camera pointer is null";
+        return false;
+    }
+    if (!HasVisibilityScalars(layout_)) {
+        error = "The selected HPL1 visibility layout is invalid";
+        return false;
+    }
+    if (!std::isfinite(vertical_fov_radians) ||
+        !std::isfinite(aspect) ||
+        vertical_fov_radians <= 0.0F || aspect <= 0.0F) {
+        error = "The visibility FOV and aspect must be finite and positive";
+        return false;
+    }
+
+    std::uint8_t* bytes = Bytes(camera);
+    std::memcpy(&original_fov_, bytes + layout_.fov_offset, sizeof(float));
+    std::memcpy(&original_aspect_, bytes + layout_.aspect_offset, sizeof(float));
+    if (!matrix_override_.Apply(camera, view, projection, error)) {
+        return false;
+    }
+    std::memcpy(
+        bytes + layout_.fov_offset, &vertical_fov_radians, sizeof(float));
+    std::memcpy(bytes + layout_.aspect_offset, &aspect, sizeof(float));
+    camera_ = camera;
+    return true;
+}
+
+bool CameraVisibilityOverride::Restore(std::string& error) noexcept {
+    error.clear();
+    if (!active()) {
+        return true;
+    }
+
+    void* camera = camera_;
+    std::uint8_t* bytes = Bytes(camera);
+    std::memcpy(bytes + layout_.fov_offset, &original_fov_, sizeof(float));
+    std::memcpy(bytes + layout_.aspect_offset, &original_aspect_, sizeof(float));
+    camera_ = nullptr;
+
+    std::string matrix_error;
+    const bool matrix_restored = matrix_override_.Restore(matrix_error);
+    const bool scalars_restored =
+        std::memcmp(
+            bytes + layout_.fov_offset, &original_fov_, sizeof(float)) == 0 &&
+        std::memcmp(
+            bytes + layout_.aspect_offset, &original_aspect_, sizeof(float)) == 0;
+    if (!matrix_restored || !scalars_restored) {
+        error = !matrix_restored
+            ? "Could not restore the HPL camera matrices: " + matrix_error
+            : "Could not restore the HPL camera visibility scalars";
+        return false;
+    }
+    return true;
+}
+
+bool CameraVisibilityOverride::active() const noexcept {
+    return camera_ != nullptr;
 }
 
 bool CaptureCameraMatrices(
