@@ -18,15 +18,15 @@ izquierda (sockets provisionales); limpieza de textura rectangular GL antes de
 dibujar mirror/menús/manos; lectura de vuelta del mirror desde el proceso tras
 arrancar con BAT. El registro añade `native_update_timing` (ratio tiempo simulado
 /real del ButtonHandler, no del solver Newton), contadores de herramientas y
-agarres bloqueados. Se amplía el buffer de log para evitar truncar diagnósticos.
+agarres rechazados por seguridad. Se amplía el buffer de log para evitar truncar diagnósticos.
 No se modifica la velocidad de simulación, gravedad ni duración del salto.
 
-El usuario reportó salida del mapa al caminar con una barra agarrada. Se bloquea
-la adquisición cinemática en producción hasta integrar el filtro objeto/jugador
-de Rework en consultas de mundo, rayos de personaje y contactos Newton. R2 y la
-selección permanecen, pero el objeto usa temporalmente el agarre nativo. Los tests
-sintéticos habilitan explícitamente la ruta para comprobarla: no la certifican
-como segura en el motor real. No probar lanzamientos VR de esta versión.
+El usuario reportó salida del mapa al caminar con una barra agarrada. La ruta se
+bloqueó y solo se ha reactivado tras mapear el indicador nativo +3C8 que excluye
+el cuerpo sujeto de consultas de personaje, rayos y contactos Newton. Se guarda
+y restaura su valor original al soltar. La regresión cubre ambos valores iniciales,
+pero aún no lo certifica en el motor real: la primera prueba debe usar un objeto
+pequeño, lentamente y sin lanzamiento ni barras largas.
 
 El stick ahora limita su vector a longitud 1 para evitar sobrevelocidad diagonal.
 Esto no resuelve por sí solo la sensación de salto/tiempo acelerado, aún pendiente.
@@ -90,6 +90,9 @@ Comprobación sin abrir el juego ni SteamVR:
    Pérdida de tracking/foco, UI o salto de pose sueltan sin impulso de lanzamiento.
    Se emiten pulsos hápticos cortos al coger/soltar. Son rutas verificadas con
    dobles de las funciones nativas, no una simulación del motor Newton real.
+   Mientras se sostiene el cuerpo, su `CollideCharacter` nativo se desactiva para
+   impedir que empuje al jugador y se restaura exactamente al soltar. La instalación
+   exige firmas de constructor, mundo, rayo y las dos ramas de contacto Newton.
    Corregido el orden de Enter: el juego publica el estado Grab después de
    regresar de Enter. La adquisición espera al estado confirmado; antes podía
    quedar en el agarre nativo de escritorio. Regresión añadida con ese orden.
@@ -110,8 +113,8 @@ tres hitos pedidos por el usuario estén terminados**.
 
 - El tercer hito original sigue parcial: puertas/palancas y cuerpos con joints
   o padres conservan el comportamiento nativo. Falta la colisión de palmas,
-  la exclusión de colisión cuerpo/jugador durante el agarre, las mallas HPL de
-  Rework y calibrar físicamente las herramientas/luces ancladas. Durante un agarre espacial
+  validar físicamente la exclusión conservadora cuerpo/character, las mallas HPL
+  de Rework y calibrar físicamente las herramientas/luces ancladas. Durante un agarre espacial
   todavía no se actualiza el rayo secundario de examinar como hace Rework.
 - `PlayerState_Interact_VR.cpp` es la referencia, pero no se copian offsets de
   Overture. Véase `BLACK_PLAGUE_SPATIAL_NOTES.md` para llamadas verificadas,
@@ -133,20 +136,21 @@ en `E:\penumbra_vr_rework`.
 
 ## Evidencia reproducible
 
-Resultado de esta tanda: **21/21 tests en Release, 21/21 en Debug y 21/21
+Resultado de esta tanda: **22/22 tests en Release, 22/22 en Debug y 22/22
 en Release sin SDK OpenVR**, además del verificador binario y de metadatos.
 
-El workflow de GitHub compila Debug/Release sin SDK y ejecuta 20 pruebas por
+El workflow de GitHub compila Debug/Release sin SDK y ejecuta 21 pruebas por
 configuración: excluye explícitamente `opengl_eye_targets`, que requiere el
 driver WGL con FBO/programas y se verifica localmente. El resultado de CI es
-independiente de los 21/21 locales; ninguno certifica una prueba con visor.
+independiente de los 22/22 locales; ninguno certifica una prueba con visor.
 
 - CTest incluye `vr_action_input`, `vr_native_intents` y `vr_math` con foco,
   poses, límites, liberación, consumo único de edges, giro, rayo del menú y ABI
   x86. El test OpenGL comprueba píxeles de ambos ojos y restauración de estado.
 - `spatial_interaction` ejecuta el adaptador real contra una imagen sintética y
   funciones nativas dobles: restauración de límites/masa/gravedad, lanzamiento,
-  foco/tracking/UI, cero tiempo, salto de pose, joints y retirada segura.
+  foco/tracking/UI, cero tiempo, salto de pose, joints, retirada segura y
+  restauración de `CollideCharacter` para cuerpos originalmente true/false.
   `vr_grab_pose` cubre transformaciones y límites; OpenGL comprueba además píxeles
   de manos y que no atraviesen una profundidad más cercana.
 - `tools/Test-BlackPlagueInputMap.ps1 -ImagePath <captura-inicializada>` contrasta

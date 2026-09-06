@@ -11,10 +11,10 @@ executed in this batch. The launcher checks the loaded probe path and relocates
 forwarded Windows exports through their actual owner. No new game/SteamVR
 session was started, and the separate Overture Rework repository is unchanged.
 
-All 21 tests pass locally in Release, Debug and SDK-less Release. The capture
+All 22 tests pass locally in Release, Debug and SDK-less Release. The capture
 verifier checks native input and spatial boundaries without modifying a process.
 Proprietary captures, dependencies and build outputs are excluded from Git.
-Hosted CI runs the 20 non-WGL-driver tests per configuration; that result is
+Hosted CI runs the 21 non-WGL-driver tests per configuration; that result is
 separate from local GPU tests and from headset validation.
 
 The third gameplay gate remains partial: palm collision, articulated mechanisms,
@@ -23,6 +23,28 @@ tool/light attachment and full Rework hand assets are not finished. See
 `BLACK_PLAGUE_SPATIAL_NOTES.md` for exact RVAs and the next integration boundary.
 Earlier dated entries below describe historical milestones, not physical
 validation of these newly implemented systems.
+
+### 2026-09-06 — Black Plague held-body character collision filter
+
+- Game/build SHA-256: `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`.
+- Question: can a palm-tracked free body be prevented from resolving contacts
+  against the player and launching the character out of the map?
+- Evidence: `iPhysicsBody` initializes byte `+0x3C8` to true at RVA `0xCD877`.
+  The character-aware world query reads it at `0xD4952`, the character ray
+  callback at `0xD4E0E`, and the registered Newton begin-contact callback in
+  both body orderings at `0x19D2D0` and `0x19D2E4`.
+- Registration evidence: `NewtonMaterialSetCollisionCallback` receives begin
+  callback RVA `0x19D250` at `0x19DAA8`; that callback obtains both HPL bodies
+  through `NewtonBodyGetUserData` before applying the field checks.
+- Implementation: snapshot `+0x3C8`, set false only for an acquired free body,
+  then restore the snapshot after native Grab Leave. Installation remains
+  fail-closed unless every instruction signature matches.
+- Negative test: a synthetic body whose map-authored value starts false remains
+  false after release; a true value is restored true. Parented and jointed
+  bodies remain excluded from palm tracking.
+- Result: exact-build boundary confirmed and code-tested; cautious headset/game
+  validation remains required. The binary has no separate Rework-era
+  `CollidePlayer`, so this temporarily filters all characters.
 
 ## Entry template
 

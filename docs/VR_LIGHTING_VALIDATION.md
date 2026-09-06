@@ -69,7 +69,7 @@ stencil/sombras de esa luz. No dar la incidencia por cerrada solo por compilar.
 ## Verificación realizada sin juego ni visor
 
 La tanda inicial de iluminación pasó 17/17 pruebas. La batería completa a
-2026-09-06 pasa 21/21 en OpenVR Release, OpenVR Debug y Release sin OpenVR, con avisos
+2026-09-06 pasa 22/22 en OpenVR Release, OpenVR Debug y Release sin OpenVR, con avisos
 tratados como errores. Las pruebas de OpenGL real verifican instalación y
 retirada del hook, lectura de píxeles dentro/fuera del recorte, exclusión de
 otros destinos, ámbitos anidados y restauración del estado. La prueba matemática

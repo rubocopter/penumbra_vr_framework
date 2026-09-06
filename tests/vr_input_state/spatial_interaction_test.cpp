@@ -65,6 +65,7 @@ int RunSpatialTest() {
     Put(state.data(),0x10,player.data()); Put(state.data(),0x20,body.data());
     Put(body.data(),0,g_image+0x292C08); Put(body.data(),0x34,runtime::IdentityMatrix());
     Put(body.data(),0x42C,3.0F); Put(body.data(),0x430,4.0F);
+    Put(body.data(),0x3C8,true);
     test_frame.focused=true;
     auto& hand=test_frame.hands[1].grip;
     hand.pose_valid=true; hand.device_connected=true;
@@ -79,11 +80,11 @@ int RunSpatialTest() {
     };
     begin();
     if (g_held.load() || Read<float>(body.data(),0x42C)!=3) return 15;
-    // Synthetic tests may exercise the adapter, but production must retain
-    // native grabs until all player collision filters are implemented.
+    // Exercise acquisition after the exact-build installation gate has proved
+    // the native collision field and all of its required consumers.
     g_player_collision_filter_ready.store(true);
     begin();
-    if (!g_held.load() || Read<float>(body.data(),0x42C)!=20) return 2;
+    if (!g_held.load() || Read<float>(body.data(),0x42C)!=20 || Read<bool>(body.data(),0x3C8)) return 2;
     HookedGrabUpdate(state.data(),nullptr,0);
     if (!g_held.load() || test_leaves) return 3;
     hand.device_to_absolute.values[3]=0.2F;
@@ -93,7 +94,14 @@ int RunSpatialTest() {
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || test_leaves!=1 || Read<float>(body.data(),0x42C)!=3 ||
         Read<float>(body.data(),0x430)!=4 || Read<float>(body.data(),0x434)!=10 ||
-        !Read<bool>(body.data(),0x428) || Read<Vec>(body.data(),0x450)!=Vec{2.5F,0,0}) return 5;
+        !Read<bool>(body.data(),0x428) || !Read<bool>(body.data(),0x3C8) ||
+        Read<Vec>(body.data(),0x450)!=Vec{2.5F,0,0}) return 5;
+    // Bodies authored not to collide with characters must retain that policy.
+    Put(body.data(),0x3C8,false); begin();
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load() || Read<bool>(body.data(),0x3C8)) return 21;
+    Put(body.data(),0x3C8,true);
     begin(); hand.pose_valid=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 6;

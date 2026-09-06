@@ -34,10 +34,9 @@ struct CallbackScope {
     ~CallbackScope() { g_callbacks.fetch_sub(1, std::memory_order_acq_rel); }
 };
 std::atomic<bool> g_held{false};
-// Rework filters the held body in character rays, world collision queries and
-// Newton contacts. This exact-build port does not yet implement those filters.
-// Never teleport a collidable body into the player: it can propel them off-map.
-// No user opt-in until the complete native collision boundary is verified.
+// HPL's per-body CollideCharacter flag is consumed by world collision queries,
+// character rays and Newton's character/body contact filtering. Never move a
+// tracked body until the exact-build field and its consumers have been proved.
 std::atomic<bool> g_player_collision_filter_ready{false};
 void* g_pending_state = nullptr; // Input thread only; never dereferenced without current-state identity.
 struct Hold {
@@ -47,12 +46,18 @@ struct Hold {
     runtime::VrGrabPose pose;
     float max_linear = 0, max_angular = 0;
     Vec previous_palm{};
+    bool collide_character = true;
     bool discard_momentum = false;
 } g_hold;
 
 bool Copy(const void* source, void* dest, std::size_t size) noexcept {
     if (!source) return false;
     __try { std::memcpy(dest,source,size); return true; }
+    __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+bool Store(void* destination, const void* source, std::size_t size) noexcept {
+    if (!destination || !source) return false;
+    __try { std::memcpy(destination,source,size); return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 template<class T> T Read(const void* object, std::uintptr_t offset) {
@@ -166,10 +171,13 @@ void AcquirePendingGrab(void* state) {
         !std::isfinite(mass) || mass<=0) return;
     Hold hold; hold.state=state; hold.body=body; hold.hand=frame.interact_source;
     hold.max_linear=max_linear; hold.max_angular=max_angular;
+    hold.collide_character=Read<bool>(body,0x3C8);
     const auto local_contact=Read<Vec>(state,0x14);
     std::string error;
     if (!hold.pose.Begin(palm,body_pose,local_contact,Read<bool>(state,0xE1),error)) return;
     hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
+    const bool no_character_collision=false;
+    if (!Store(static_cast<std::uint8_t*>(body)+0x3C8,&no_character_collision,sizeof(no_character_collision))) return;
     g_hold=hold;
     SetFloat(body,0x19C360,20); SetFloat(body,0x19C380,30);
     g_held.store(true,std::memory_order_release);
@@ -188,6 +196,8 @@ void __fastcall HookedLeave(void* state, void*, void* next) {
     }
     reinterpret_cast<Transition>(g_image+0xAA4C0)(state,next);
     if (owned && BodyMatches(hold.body)) {
+        static_cast<void>(Store(static_cast<std::uint8_t*>(hold.body)+0x3C8,
+            &hold.collide_character,sizeof(hold.collide_character)));
         SetFloat(hold.body,0x19C360,hold.max_linear); SetFloat(hold.body,0x19C380,hold.max_angular);
         SetVelocity(hold.body,0x19C2A0,runtime::LimitTrackedVelocity(velocity,1.25F,9));
         SetVelocity(hold.body,0x19C2C0,runtime::LimitTrackedVelocity(angular,0.5F,6));
@@ -230,6 +240,7 @@ SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
 bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();
     if (g_enabled.load(std::memory_order_acquire)) return true;
+    g_player_collision_filter_ready.store(false,std::memory_order_release);
     g_image=reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
     constexpr std::array<std::uintptr_t,5> slots{0x291BE8,0x27D0D4,0x27D12C,0x27D130,0x27CB70};
     constexpr std::array<std::uintptr_t,5> targets{0x189E30,0xABA90,0xAC900,0xAA4C0,0xA3DE0};
@@ -261,6 +272,26 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
     if (!Copy(g_image+0xAD84F,actual_ray.data(),actual_ray.size()) || actual_ray!=ray_call) {
         error="Normal-state ray call mismatch"; return false;
     }
+    // iPhysicsBody defaults CollideCharacter (+3C8) to true. The same byte is
+    // consulted by the character-aware world query and character-body ray.
+    constexpr std::array<std::uint8_t,7> collision_default{0xC6,0x85,0xC8,0x03,0,0,1};
+    constexpr std::array<std::uint8_t,6> collision_world{0x8A,0x86,0xC8,0x03,0,0};
+    constexpr std::array<std::uint8_t,6> collision_ray{0x8A,0x90,0xC8,0x03,0,0};
+    constexpr std::array<std::uint8_t,6> collision_contact_a{0x8A,0x90,0xC8,0x03,0,0};
+    constexpr std::array<std::uint8_t,6> collision_contact_b{0x8A,0x91,0xC8,0x03,0,0};
+    std::array<std::uint8_t,7> actual_collision{};
+    if (!Copy(g_image+0xCD877,actual_collision.data(),collision_default.size()) ||
+        std::memcmp(actual_collision.data(),collision_default.data(),collision_default.size())!=0 ||
+        !Copy(g_image+0xD4952,actual_collision.data(),collision_world.size()) ||
+        std::memcmp(actual_collision.data(),collision_world.data(),collision_world.size())!=0 ||
+        !Copy(g_image+0xD4E0E,actual_collision.data(),collision_ray.size()) ||
+        std::memcmp(actual_collision.data(),collision_ray.data(),collision_ray.size())!=0 ||
+        !Copy(g_image+0x19D2D0,actual_collision.data(),collision_contact_a.size()) ||
+        std::memcmp(actual_collision.data(),collision_contact_a.data(),collision_contact_a.size())!=0 ||
+        !Copy(g_image+0x19D2E4,actual_collision.data(),collision_contact_b.size()) ||
+        std::memcmp(actual_collision.data(),collision_contact_b.data(),collision_contact_b.size())!=0) {
+        error="CollideCharacter field mismatch"; return false;
+    }
     const std::array<void*,5> replacements{reinterpret_cast<void*>(&HookedRay),reinterpret_cast<void*>(&HookedGrabUpdate),
         reinterpret_cast<void*>(&HookedEnter),reinterpret_cast<void*>(&HookedLeave),reinterpret_cast<void*>(&HookedHandsUpdate)};
     for (std::size_t i=0;i<slots.size();++i) {
@@ -275,12 +306,14 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         if (!rollback.empty()) error+="; "+rollback;
         return false;
     }
+    g_player_collision_filter_ready.store(true,std::memory_order_release);
     g_enabled.store(true,std::memory_order_release);
     return true;
 }
 bool RemoveSpatialInteraction(std::string& error) noexcept {
     error.clear();
     g_enabled.store(false,std::memory_order_release);
+    g_player_collision_filter_ready.store(false,std::memory_order_release);
     const auto deadline=GetTickCount64()+1000;
     while (g_callbacks.load(std::memory_order_acquire) && GetTickCount64()<deadline) Sleep(1);
     if (g_callbacks.load(std::memory_order_acquire)) { error="Spatial callbacks are still active"; return false; }

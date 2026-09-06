@@ -24,6 +24,7 @@ Un fallo deja el comportamiento nativo y se registra; no invalida el estéreo.
 | Body velocities | 19C2A0 / 19C2C0 | Velocidad lineal / angular, slots +34 / +3C de vtable 292C08 |
 | Body maximum velocities | 19C360 / 19C380 | Slots +54 / +5C; campos 42C / 430 restaurados al soltar |
 | Body gravity | 19C590 | Slot +BC; la transición nativa conserva/restaura el estado previo |
+| Body CollideCharacter | campo +3C8 | Constructor CD877; mundo D4952; rayo D4E0E; contactos Newton 19D2D0/19D2E4 |
 
 Player: estado +2BC (Normal=0, Grab=6), vector de estados +2C4.
 Grab state: player +10, contacto +14/+18/+1C, cuerpo +20, pick-at-point +E1.
@@ -32,16 +33,20 @@ la matriz del cuerpo y transformar el punto seleccionado.
 Body: vtable 292C08, matriz local +34, padre nodo +10, padre entidad +330,
 masa Newton +434. Se rechazan padres, joints y masa no positiva/no finita.
 
-**Tras el incidente de la barra, la adquisición cinemática está bloqueada en
-producción.** El seguimiento se conserva en tests sintéticos, pero necesita
-filtros completos de colisión antes de volver a habilitarlo.
+Tras el incidente de la barra, la adquisición cinemática vuelve a estar habilitada
+solo después de validar el filtro nativo `CollideCharacter`. Al adquirir, se guarda
+el byte +3C8, se pone a falso durante el seguimiento y se restaura su valor exacto
+al salir del estado Grab. Así, el cuerpo sujeto queda fuera de las consultas de
+personaje y de ambas orientaciones del callback de contacto Newton; evita que la
+teleportación controlada por la palma impulse al cuerpo del jugador. La prueba
+sintética cubre restauración tanto de `true` como de un `false` definido por mapa.
 
-No se escribe un supuesto campo CollidePlayer: ese añadido de Rework no está
-mapeado en Black Plague. La ausencia de esa exclusión y de colisión de palmas es
-una limitación real del prototipo. Los cuerpos libres siguen la palma con
-SetMatrix nativo; no se garantiza resolución de contactos ni ausencia de
-penetración. Puertas, palancas y estados Push/Move conservan su mecánica nativa.
-El rayo secundario de examinar durante Grab sigue pendiente.
+Black Plague no contiene el `CollidePlayer` añadido posteriormente en el Rework:
+el filtro disponible afecta a cualquier character, no solo al jugador. Es una
+protección conservadora durante el agarre y todavía necesita prueba en el motor
+real. Tampoco existe colisión de palmas. Los cuerpos libres siguen la palma con
+SetMatrix nativo; puertas, palancas y estados Push/Move conservan su mecánica
+nativa. El rayo secundario de examinar durante Grab sigue pendiente.
 
 El adaptador tiene un contador de callbacks activos y se niega a retirar hooks
 mientras queda un cuerpo propio. Solo el hilo de actualización del juego puede
@@ -94,7 +99,7 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 
 ## Verificación y límites
 
-21 tests pasan en Release, Debug y Release sin SDK OpenVR. El test espacial
+22 tests pasan en Release, Debug y Release sin SDK OpenVR. El test espacial
 ejecuta el código del adaptador en una imagen sintética con trampolines a dobles
 nativos; no prueba Newton ni el juego real. El test OpenGL usa el driver WGL,
 verifica píxeles de guantes y oclusión/restauración de estado en ambos ojos.

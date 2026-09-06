@@ -1,16 +1,17 @@
 # Prueba con PSVR2 Sense — Black Plague
 
-Preparación inicial: 2026-09-06, código fef5d40. Release recompilado, 21/21 tests
-correctos, preflight del ejecutable admitido correcto y archivos `vr` idénticos
-a los del repositorio. El juego y SteamVR no se iniciaron durante la preparación.
+Preparación inicial: 2026-09-06, código fef5d40. El checkpoint actual recompila
+con 22/22 tests; la preparación inicial también dejó correctos el preflight del
+ejecutable admitido y los archivos `vr` respecto al repositorio. El juego y
+SteamVR no se iniciaron durante la preparación.
 Esto prepara una prueba experimental; no certifica jugabilidad completa.
 
 ## Seguimiento tras la primera prueba
 
-**Actualización tras la segunda prueba:** no ejecutar las pruebas de lanzamiento
-ni esperar agarre a la palma. Se ha deshabilitado la adquisición cinemática por
-el incidente de la barra que expulsó al jugador del mapa; queda el agarre nativo.
-Reactivación pendiente de filtros completos de colisión objeto/jugador.
+**Actualización tras la segunda prueba:** el agarre a la palma vuelve a estar
+habilitado con exclusión temporal de colisión body/character verificada contra
+la imagen exacta. Por el incidente de la barra, la primera prueba queda limitada
+a un objeto pequeño, movimientos lentos y sin lanzamiento.
 
 El usuario confirmó BAT, recentrado, menús/inventario/libreta, dedos, movimiento,
 giro, correr/agacharse y luces estables en la zona probada. Reportó mirror negro
@@ -47,9 +48,9 @@ Resultado recibido: el glowstick siguió la mano, pero quedó dentro de ella; no
 ajustar hasta tener la mano final. Los dedos se percibieron parecidos a la versión
 anterior. Estas observaciones quedan como referencia para la próxima iteración.
 
-No hacer pruebas de lanzamiento ni repetir el incidente de la barra: el agarre
-cinemático continúa desactivado. Esta prueba valida una tanda parcial, no los
-tres juegos ni los mecanismos articulados.
+No hacer pruebas de lanzamiento ni repetir el incidente de la barra en esta
+primera validación. Esta prueba valida una tanda parcial, no los tres juegos ni
+los mecanismos articulados.
 
 1. Conecta el visor y enciende ambos Sense. Para la primera pasada, comprueba
    primero que SteamVR ve los tres dispositivos; así aislamos fallos del mod.
@@ -109,12 +110,13 @@ R1, Cuadrado u Options envían cerrar. El ratón tiene prioridad aproximadamente
   y seleccionar un objeto con la mano derecha. El rayo y el objeto seleccionado deben
   corresponder; las manos no deben dibujarse por delante de una pared que las tapa.
   Dedos simplificados sin skeleton son una limitación conocida.
-- [ ] **Agarrar/soltar:** un objeto pequeño y libre con R2; L2 no debe apropiárselo.
-  Mover despacio, rotar y soltar. Debe seguir la palma y volver a caer con gravedad;
-  comprobar vibración corta al coger y soltar. No usar puertas/palancas para esto.
-- [ ] **Lanzamiento y propiedad:** lanzar suavemente en una zona despejada. Probar
-  pulsar la otra mano mientras sostienes el objeto: no debe cambiar de mano ni
-  quedar pegado al soltar el gatillo de la mano que lo agarró.
+- [ ] **Agarrar/soltar — prueba de seguridad prioritaria:** un objeto pequeño y
+  libre con R2; L2 no debe apropiárselo. Mover la mano despacio sin caminar,
+  después dar un paso corto con stick y soltar. Debe seguir la palma y caer con
+  gravedad sin acelerar ni desplazar al jugador. Si hay cualquier tirón, soltar
+  inmediatamente y no continuar. No usar barras, puertas ni palancas.
+- [ ] **Propiedad:** sin lanzar, pulsar la otra mano mientras se sostiene el objeto:
+  no debe cambiar de mano ni quedar pegado al soltar el gatillo propietario.
 - [ ] **Inventario, libreta y pausa:** abrir/cerrar varias veces desde partida,
   apuntar y seleccionar. Verificar que vuelve el mundo y no quedan acciones
   pulsadas. Abrir pausa mientras sujetas un objeto: debe soltar sin lanzarlo.
@@ -134,9 +136,9 @@ R1, Cuadrado u Options envían cerrar. El ratón tiene prioridad aproximadamente
 
 ## No esperar todavía
 
-Herramientas/linterna ancladas a la palma, puertas/palancas manipuladas
-espacialmente, colisión física de manos, exclusión de colisión del objeto con el
-jugador, room-scale, modelos de manos completos de Rework y Enhanced visuals GPU.
+Puertas/palancas manipuladas espacialmente, colisión física de manos, filtro
+exclusivo del jugador (el binario usa el más amplio `CollideCharacter`), room-scale,
+modelos de manos completos de Rework y Enhanced visuals GPU.
 Durante el agarre espacial, el rayo secundario de examinar tampoco está portado.
 No confundir estas limitaciones con regresiones de esta tanda.
 

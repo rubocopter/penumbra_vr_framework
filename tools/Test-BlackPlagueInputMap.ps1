@@ -59,4 +59,9 @@ Assert-Bytes 0xAD84F @(0xFF,0x57,0x68)
 Assert-Bytes 0xACBF0 @(0x89,0x4E,0x14) # native local contact x store
 Assert-Bytes 0xACBF6 @(0x89,0x56,0x18) # y
 Assert-Bytes 0xACBFF @(0x89,0x46,0x1C) # z
-Write-Output 'Verified 12 spatial/HUD method slots, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries and local contact stores.'
+Assert-Bytes 0xCD877 @(0xC6,0x85,0xC8,0x03,0,0,1) # body CollideCharacter default
+Assert-Bytes 0xD4952 @(0x8A,0x86,0xC8,0x03,0,0) # character-aware world query
+Assert-Bytes 0xD4E0E @(0x8A,0x90,0xC8,0x03,0,0) # character body ray filter
+Assert-Bytes 0x19D2D0 @(0x8A,0x90,0xC8,0x03,0,0) # Newton contact: body 2 vs character 1
+Assert-Bytes 0x19D2E4 @(0x8A,0x91,0xC8,0x03,0,0) # Newton contact: body 1 vs character 2
+Write-Output 'Verified 12 spatial/HUD method slots, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
