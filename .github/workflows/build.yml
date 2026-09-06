@@ -1,0 +1,41 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows-x86:
+    name: Windows x86 (without OpenVR SDK)
+    runs-on: windows-2022
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Validate manifests and OpenVR assets
+        shell: pwsh
+        run: ./tools/Test-PenumbraVrMetadata.ps1
+
+      - name: Configure Visual Studio 2022 Win32
+        shell: pwsh
+        run: cmake --preset vs2022-win32
+
+      - name: Build and test Debug
+        shell: pwsh
+        run: |
+          cmake --build --preset debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # The real-driver WGL/FBO pixel test is validated locally, separately
+          # from this SDK-less CI job. Do not imply it ran on the hosted runner.
+          ctest --preset debug --output-on-failure -E '^opengl_eye_targets$'
+
+      - name: Build and test Release
+        shell: pwsh
+        run: |
+          cmake --build --preset release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --preset release --output-on-failure -E '^opengl_eye_targets$'
