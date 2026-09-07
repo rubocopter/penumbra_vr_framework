@@ -7,6 +7,12 @@ features validated in a headset.
 
 ### Added
 
+- Initial `pvr_overture_backend` gameplay core with a narrow HPL body/jump
+  adapter boundary, ported from Rework revision `23c890f`.
+- Shared tracking-space, height/seated calibration, room-scale collision
+  reconciliation, fixed-displacement locomotion and interaction-reach policies.
+- Black Plague HMD anchor/current-position, physical-delta and explicit
+  positional-scale telemetry for the pending exact-build body adapter.
 - One-step Black Plague `--launch-vr` / `Start-Black-Plague-VR.cmd` and read-only
   `--check-vr` preflight; Steam launch, exact-path process matching and saved mirror.
 - Real OpenVR action/pose/skeleton/haptic reader, exact-build native input bridge
@@ -27,6 +33,10 @@ features validated in a headset.
 
 ### Fixed
 
+- Generic Black Plague controller picking is capped to Rework's 0.18 m direct
+  physical reach instead of granting all props the native camera-ray distance.
+- Shared snap-turn activation now uses Rework's post-dead-zone 0.65 threshold;
+  smooth and snap turning both require a neutral sample on gameplay entry.
 - Interact ownership remains with the grabbing hand until it releases; a second
   controller press no longer transfers ownership or masks release.
 - Launcher export relocation now uses the actual owner of forwarded Windows
@@ -82,8 +92,8 @@ features validated in a headset.
 
 - The current OpenVR and no-OpenVR configurations compile under MSVC with
   warnings treated as errors.
-- Sixteen host-independent tests pass in OpenVR Release, OpenVR Debug and the
-  no-OpenVR Release configuration.
+- Twenty-four host-independent tests pass in OpenVR Release, OpenVR Debug and
+  the no-OpenVR Release configuration.
 - Static presentation and yaw-aligned rotational tracking passed their bounded
   `512x512` headset sessions.
 - Continuous presentation completed a 120.6-second PS VR2 runtime session at

@@ -72,10 +72,12 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Import the shared OpenVR action manifest and controller bindings as data
 - [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
-- [ ] Keep Overture's existing build and tests green during extraction
-- [ ] Introduce a minimal backend contract derived from both integrations
+- [x] Keep Overture's existing build and tests green during extraction
+- [x] Port Rework's tracking space, room-scale rejection and locomotion policy
+- [x] Introduce the initial narrow Overture body/jump backend contract
+- [ ] Link the source HPL adapter into Overture and validate it in the headset
 - [x] Add host-independent tests for transforms, actions and settings
-- [ ] Preserve copyright, license and provenance information
+- [x] Preserve copyright, license and provenance for extracted components
 
 Exit criterion: Overture and the Black Plague MVP consume the same tested runtime behavior without sharing game-specific addresses or layouts.
 
@@ -84,6 +86,7 @@ Exit criterion: Overture and the Black Plague MVP consume the same tested runtim
 - [x] Connect OpenVR action polling to the imported manifest and bindings
 - [x] Code-test native intents, tracked menus and provisional depth-tested gloves
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
+- [x] Limit the generic prop-pick fallback to Rework's 0.18 m physical reach
 - [ ] Complete palm collision, jointed mechanisms and tool/light attachment
 - [ ] room-scale body/head relationship
 - [ ] hands, grabbing and interactions

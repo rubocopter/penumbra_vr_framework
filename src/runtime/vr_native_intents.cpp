@@ -64,22 +64,22 @@ float VrSnapTurn::Update(const VrAnalogState& axis, bool gameplay, VrTurnMode mo
         return 0;
     }
     dead_zone = std::clamp(dead_zone, 0.0F, 0.9F);
-    if (mode == VrTurnMode::smooth) {
-        armed_ = false;
-        const float magnitude = std::abs(axis.x);
-        if (magnitude <= dead_zone) {
-            return 0;
-        }
-        const float scaled = (magnitude - dead_zone) / (1 - dead_zone);
-        return std::copysign(scaled, axis.x) *
-            smooth_speed_degrees * radians_per_degree * dt;
-    }
-    if (std::abs(axis.x) <= dead_zone) {
+    const float magnitude = std::abs(axis.x);
+    if (magnitude <= dead_zone) {
         armed_ = true;
         return 0;
     }
-    const float activation = std::min(1.0F, std::max(0.65F, dead_zone + 0.25F));
-    if (!armed_ || std::abs(axis.x) < activation) {
+    const float scaled = std::min(1.0F,
+        (magnitude - dead_zone) / (1.0F - dead_zone));
+    if (!armed_) {
+        return 0;
+    }
+    if (mode == VrTurnMode::smooth) {
+        return std::copysign(scaled, axis.x) *
+            smooth_speed_degrees * radians_per_degree * dt;
+    }
+    // Rework applies its 0.65 snap threshold after dead-zone rescaling.
+    if (scaled < 0.65F) {
         return 0;
     }
     armed_ = false;

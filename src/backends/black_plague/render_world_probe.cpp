@@ -38,6 +38,9 @@ constexpr std::array<std::uint8_t, 5> kExpectedUpdateRenderListCall{
     0xE8, 0x67, 0xC9, 0x03, 0x00,
 };
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
+// Positional tracking is deliberately disabled until the exact-build HPL
+// character-body adapter can reconcile requested and collision-resolved motion.
+constexpr float kPositionalWorldUnitsPerMeter = 0.0F;
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
 using UpdateRenderList = void(__thiscall*)(
@@ -351,12 +354,11 @@ void __fastcall HookedUpdateRenderList(
     }
 
     runtime::VrMatrix44 tracked_head_view;
-    constexpr float kRotationOnlyWorldUnitsPerMeter = 0.0F;
     if (!runtime::ComposeYawRecenteredTrackedHeadView(
             camera_snapshot.view,
             g_stereo_tracking_anchor,
             g_stereo_latest_pose,
-            kRotationOnlyWorldUnitsPerMeter,
+            kPositionalWorldUnitsPerMeter,
             tracked_head_view,
             error)) {
         RecordHmdVisibilityFailure(
@@ -584,12 +586,11 @@ void __fastcall HookedUpdateRenderList(
             g_stereo_tracking_anchor = pose.device_to_absolute;
             g_stereo_tracking_anchor_valid = true;
         }
-        constexpr float kRotationOnlyWorldUnitsPerMeter = 0.0F;
         if (!runtime::ComposeYawRecenteredTrackedHeadView(
                 camera_snapshot.view,
                 g_stereo_tracking_anchor,
                 pose.device_to_absolute,
-                kRotationOnlyWorldUnitsPerMeter,
+                kPositionalWorldUnitsPerMeter,
                 head_view,
                 error)) {
             FailStereoMatrixValidation(
@@ -694,6 +695,23 @@ void __fastcall HookedUpdateRenderList(
     if (g_stereo_track_head_rotation) {
         ++g_telemetry.tracked_head_frames;
         g_telemetry.tracking_anchor_captured = g_stereo_tracking_anchor_valid;
+        g_telemetry.hmd_tracking_anchor_m = {
+            g_stereo_tracking_anchor.values[3],
+            g_stereo_tracking_anchor.values[7],
+            g_stereo_tracking_anchor.values[11],
+        };
+        g_telemetry.hmd_tracking_position_m = {
+            pose.device_to_absolute.values[3],
+            pose.device_to_absolute.values[7],
+            pose.device_to_absolute.values[11],
+        };
+        g_telemetry.hmd_horizontal_delta_m = std::hypot(
+            pose.device_to_absolute.values[3] -
+                g_stereo_tracking_anchor.values[3],
+            pose.device_to_absolute.values[11] -
+                g_stereo_tracking_anchor.values[11]);
+        g_telemetry.positional_world_units_per_meter =
+            kPositionalWorldUnitsPerMeter;
     }
     g_telemetry.stereo_camera_restored = true;
     g_telemetry.persistent_stereo_active = persistent_stereo;

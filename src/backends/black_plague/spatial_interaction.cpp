@@ -4,6 +4,7 @@
 #include "native_input_bridge.hpp"
 #include "render_world_probe.hpp"
 #include "vr_grab_pose.hpp"
+#include "vr_interaction_policy.hpp"
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
 #define NOMINMAX
@@ -28,6 +29,7 @@ hooks::Rel32CallHook g_tool_hook;
 thread_local void* g_updating_hands = nullptr;
 std::atomic<std::uint64_t> g_tools_attached{0},g_tools_native{0},g_invalid_tool_pose{0},g_blocked_grabs{0};
 std::atomic<std::uint64_t> g_grabs_acquired{0},g_grabs_released{0},g_guarded_releases{0},g_collision_restore_failures{0};
+std::atomic<std::uint64_t> g_contact_rays{0};
 std::atomic<bool> g_enabled{false};
 std::atomic<unsigned> g_callbacks{0};
 struct CallbackScope {
@@ -137,11 +139,20 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
         Matrix pose; Vec velocity{},angular{},from{},to{};
         if (Copy(origin,from.data(),sizeof(from)) && Copy(end,to.data(),sizeof(to)) &&
             HandPose(frame.interact_source,true,pose,velocity,angular)) {
-            const float length = std::hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
-            if (std::isfinite(length) && length > 0 && length <= 20) {
+            const float native_length = std::hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
+            if (std::isfinite(native_length) && native_length > 0 && native_length <= 20) {
+                // Rework uses palm overlap for props and reserves long-range
+                // aim assistance for classified inventory items. Until the
+                // binary backend maps that entity classifier, keep this ray
+                // inside Rework's collision-to-raw-palm reach instead of
+                // granting every prop the native 1.9 m camera reach.
+                const float length =
+                    runtime::vr_interaction_policy::ClampPhysicalInteractionReach(
+                        native_length);
                 for (std::size_t row=0;row<3;++row) {
                     from[row]=pose.values[row*4+3]; to[row]=from[row]-pose.values[row*4+2]*length;
                 }
+                ++g_contact_rays;
                 reinterpret_cast<Ray>(g_image+0x189E30)(world,callback,&from,&to,distance,normal,point,prefilter);
                 return;
             }
@@ -245,7 +256,8 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
 SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
     return {g_tools_attached.exchange(0),g_tools_native.exchange(0),g_invalid_tool_pose.exchange(0),
         g_blocked_grabs.exchange(0),g_grabs_acquired.exchange(0),g_grabs_released.exchange(0),
-        g_guarded_releases.exchange(0),g_collision_restore_failures.exchange(0)};
+        g_guarded_releases.exchange(0),g_collision_restore_failures.exchange(0),
+        g_contact_rays.exchange(0)};
 }
 bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();

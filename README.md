@@ -12,7 +12,15 @@ Internally, each game is allowed to use the integration method it actually needs
 
 ## Status
 
-**Pre-alpha: Black Plague bootstrap and render-path research.**
+**Pre-alpha: common runtime, initial Overture backend and Black Plague research backend.**
+
+The framework now builds a host-tested Overture backend core derived from
+Rework revision `23c890f`. It owns the proven tracking-space, calibrated-height,
+seated-mode, room-scale collision reconciliation and fixed-displacement
+locomotion sequence while a narrow adapter owns HPL body collision and jump
+calls. It is not yet linked into or deployed with the Overture executable, so
+this is an architectural/behavioral integration milestone rather than a new
+playable Overture package. See [the migration audit](docs/OVERTURE_BACKEND_MIGRATION.md).
 
 This repository contains an experimental Black Plague binary integration, not a released playable mod or installer. Native stereo, yaw-aligned rotation tracking, keyboard/mouse input and conservative HMD-aware visibility have been validated in the headset at `3400x3468` per eye. Both the two-eye schedule and optional third monitor pass have executed with correct live telemetry. After disabling the legacy frame cap, the 2026-09-05 session produced sampled intervals of about 90 submissions per second; compositor reprojection and representative-scene frame pacing still need measurement. Deactivation restores hooks but deliberately keeps the research DLL resident until game exit.
 

@@ -43,6 +43,10 @@ not yet headset-validated. A runtime-owned settings model now
 centralizes the Rework defaults, ranges, enum values and migration behavior;
 the launcher persists the Black Plague monitor-mirror preference, while full
 configuration storage and application remain adapter/backend responsibilities.
+The runtime now also owns Rework's complete tracking-space boundary and its
+room-scale/locomotion constants: world scale 1.0, calibrated height composition,
+world yaw, 0.05 m physical body steps, collision rejection and the 1.5/2.25 m/s
+walk/run policy.
 
 The runtime must not own game RVAs, binary signatures, HPL object layouts or
 assumptions about a specific player class. Those belong to a backend and, where
@@ -76,8 +80,16 @@ A backend translates runtime concepts into one game's implementation:
 
 The backend API will be frozen only after the Black Plague proof of concept reveals the real data and lifecycle requirements. Defining a large speculative interface first would merely encode guesses.
 
-The first backend-owned code lives under `src/backends/black_plague`. It validates
-and intercepts the exact-build `RenderWorld` call site, performs reversible
+Backend-owned code now lives under both `src/backends/overture` and
+`src/backends/black_plague`. `pvr_overture_backend` is the first source-game
+backend core: it consumes the common tracking, settings and input types, runs
+the Rework-equivalent player/body sequence once per player update, and exposes
+only collision/body/jump operations through a narrow HPL adapter. Its behavior
+is host-tested, but the adapter is not yet linked into the Rework executable or
+validated in the headset.
+
+The Black Plague backend validates and intercepts the exact-build `RenderWorld`
+call site, performs reversible
 per-eye camera overrides, renders to shared eye targets and can submit a
 continuous rotation-tracked stereo stream. This remains a research backend: the
 continuous path has completed a two-minute full-resolution runtime session and
@@ -87,7 +99,9 @@ overrides. The new conservative HMD-aware update has removed those observed
 artifacts in a follow-up headset run. Frame-pacing work remains open; positional
 tracking and a production installer are still absent. Native controller intents,
 tracked UI panels, provisional hands and free-body interaction are implemented;
-palm collision, articulated mechanisms and tool/light attachment remain pending.
+palm collision and articulated mechanisms remain pending. The controller pick
+fallback is now limited to Rework's 0.18 m collision-to-raw-palm reach; the
+separate magnetic inventory-item path still requires a safe entity classifier.
 Continuous stereo now defaults to two world passes, with game time advanced on
 the first eye; an optional mirror retains a third desktop pass. This Rework-derived
 schedule has host coverage and live pass-count telemetry; comprehensive visual
@@ -118,9 +132,15 @@ installer/bootstrap. Whether the product bootstrap is loaded by a launcher, an
 SDL proxy, or another mechanism remains an open decision. Multiple simultaneous
 SDL/OpenAL/OpenGL proxy layers are not a design goal.
 
-## Rendering milestone
+## Validation milestone
 
-The first architectural proof is not a set of compiling classes. It is Black Plague rendering a stable stereo scene to OpenVR with head tracking while retaining keyboard and mouse controls. Required research begins with:
+The original architectural proof was Black Plague rendering a stable stereo
+scene to OpenVR with head tracking while retaining keyboard and mouse controls.
+The next framework proof is behavioral equivalence: the source Overture adapter
+must run the common backend in-game, after which the same tracking and movement
+policies can be validated against both Overture and Black Plague.
+
+The completed Black Plague render-path research established:
 
 1. process entry and module layout
 2. main frame/swap boundary
@@ -129,12 +149,14 @@ The first architectural proof is not a set of compiling classes. It is Black Pla
 5. HUD/UI draw ordering
 6. safe per-eye render-target handling
 
-Only after that milestone should interaction and installer APIs be generalized.
+Those boundaries remain backend-specific; interaction and installer APIs are
+generalized only after equivalent behavior is demonstrated in a real host.
 
-The demonstrated Overture implementation is used as a behavioral and testing
-reference rather than copied as a monolithic game layer. The component-by-
-component boundary and extraction order are tracked in
-[`docs/REWORK_PORTING_PLAN.md`](docs/REWORK_PORTING_PLAN.md).
+The demonstrated Overture implementation remains the behavioral reference and
+is not copied as a monolithic game layer. The component-by-component boundary
+is tracked in [`docs/REWORK_PORTING_PLAN.md`](docs/REWORK_PORTING_PLAN.md), and
+the exact comparison behind the first backend is recorded in
+[`docs/OVERTURE_BACKEND_MIGRATION.md`](docs/OVERTURE_BACKEND_MIGRATION.md).
 
 ## Installer responsibilities
 

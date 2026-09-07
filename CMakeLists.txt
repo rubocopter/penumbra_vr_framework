@@ -82,6 +82,9 @@ add_library(pvr_vr_math STATIC
     src/runtime/vr_math.cpp
     src/runtime/vr_grab_pose.cpp
     src/runtime/vr_hand_pose.cpp
+    src/runtime/vr_interaction_policy.cpp
+    src/runtime/vr_locomotion.cpp
+    src/runtime/vr_tracking_space.cpp
 )
 target_include_directories(pvr_vr_math PUBLIC src/runtime)
 pvr_enable_warnings(pvr_vr_math)
@@ -121,6 +124,17 @@ add_library(pvr_vr_native_intents STATIC src/runtime/vr_native_intents.cpp)
 target_include_directories(pvr_vr_native_intents PUBLIC src/runtime)
 target_link_libraries(pvr_vr_native_intents PUBLIC pvr_vr_input_state)
 pvr_enable_warnings(pvr_vr_native_intents)
+
+add_library(pvr_overture_backend STATIC
+    src/backends/overture/overture_backend.cpp
+)
+target_include_directories(
+    pvr_overture_backend
+    PUBLIC src/backends/overture src/runtime)
+target_link_libraries(
+    pvr_overture_backend
+    PUBLIC pvr_vr_math pvr_vr_native_intents pvr_vr_settings)
+pvr_enable_warnings(pvr_overture_backend)
 
 add_library(pvr_hpl1_camera_adapter STATIC
     src/adapters/hpl1/camera_matrix_override.cpp
@@ -344,6 +358,20 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_vr_math_test)
 
     add_test(NAME vr_math COMMAND pvr_vr_math_test)
+
+    add_executable(pvr_vr_tracking_space_test
+        tests/vr_tracking_space/vr_tracking_space_test.cpp
+    )
+    target_link_libraries(pvr_vr_tracking_space_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_vr_tracking_space_test)
+    add_test(NAME vr_tracking_space COMMAND pvr_vr_tracking_space_test)
+
+    add_executable(pvr_overture_backend_test
+        tests/overture_backend/overture_backend_test.cpp
+    )
+    target_link_libraries(pvr_overture_backend_test PRIVATE pvr_overture_backend)
+    pvr_enable_warnings(pvr_overture_backend_test)
+    add_test(NAME overture_backend COMMAND pvr_overture_backend_test)
 
     add_executable(pvr_stereo_render_policy_test
         tests/stereo_render_policy/stereo_render_policy_test.cpp

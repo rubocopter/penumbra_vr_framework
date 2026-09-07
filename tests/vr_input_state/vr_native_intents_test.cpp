@@ -81,6 +81,8 @@ int main() {
         snap({true,-1,0},true) != 0) return 5;
     static_cast<void>(snap({true,0,0},true));
     if (snap({true,-1,0},true) >= 0) return 6;
+    if (turn.Update({true,0.6F,0},true,VrTurnMode::smooth,0.02F,45,90,0.2F)!=0) return 21;
+    static_cast<void>(turn.Update({true,0.1F,0},true,VrTurnMode::smooth,0.02F,45,90,0.2F));
     const float smooth=turn.Update({true,0.6F,0},true,VrTurnMode::smooth,0.02F,45,90,0.2F);
     if (std::abs(smooth-0.015707963F)>0.00001F ||
         turn.Update({true,0.1F,0},true,VrTurnMode::smooth,0.02F,45,90,0.2F)!=0 ||

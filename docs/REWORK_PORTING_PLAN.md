@@ -112,6 +112,15 @@ adapter from being mistaken for a shared-runtime defect.
 
 ## Extracted so far
 
+- `src/runtime/vr_tracking_space.*`, `src/runtime/vr_locomotion.*`,
+  `src/runtime/vr_interaction_policy.*` and
+  `src/backends/overture/*` port Rework's complete tracking-space boundary,
+  seated calibration, room-scale body-step/rejection algorithm and fixed
+  1.5/2.25 m/s locomotion behind a narrow HPL body adapter. The backend core is
+  code-tested; source-game linkage, deployment and headset equivalence remain
+  separate pending gates. The exact Black Plague comparison is in
+  `docs/OVERTURE_BACKEND_MIGRATION.md`.
+
 - `src/runtime/render_target_policy.*` preserves the Rework scale range,
   default scale and allocation fallback without depending on HPL types.
 - `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4

@@ -45,6 +45,10 @@ struct RenderWorldFrameTelemetry {
     bool compositor_hmd_pose_valid = false;
     std::uint32_t tracked_head_frames = 0;
     bool tracking_anchor_captured = false;
+    std::array<float, 3> hmd_tracking_anchor_m{};
+    std::array<float, 3> hmd_tracking_position_m{};
+    float hmd_horizontal_delta_m = 0.0F;
+    float positional_world_units_per_meter = 0.0F;
     bool persistent_stereo_active = false;
     bool monitor_mirror_enabled = false;
     std::uint32_t monitor_world_passes = 0;

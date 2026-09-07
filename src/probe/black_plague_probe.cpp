@@ -87,11 +87,12 @@ std::string WideToUtf8(const std::wstring& value) {
 void OnFrame(std::uint64_t frame_number) noexcept {
     if (frame_number%300==0) {
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
-        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu guarded_releases=%llu collision_restore_failures=%llu",
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu contact_reach_m=0.180",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
             static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs),
             static_cast<unsigned long long>(spatial.grabs_acquired),static_cast<unsigned long long>(spatial.grabs_released),
-            static_cast<unsigned long long>(spatial.guarded_releases),static_cast<unsigned long long>(spatial.collision_restore_failures));
+            static_cast<unsigned long long>(spatial.guarded_releases),static_cast<unsigned long long>(spatial.collision_restore_failures),
+            static_cast<unsigned long long>(spatial.contact_rays));
     }
     const auto timing=penumbra_vr::backends::black_plague::ConsumeNativeUpdateTiming();
     if (timing.ready) penumbra_vr::probe::WriteLog(
@@ -126,6 +127,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "stereo_camera_restored=%u "
             "submitted_frames=%lu submitted_pose_valid=%u "
             "tracked_head_frames=%lu tracking_anchor_captured=%u "
+            "hmd_anchor_m=[%.4f,%.4f,%.4f] hmd_position_m=[%.4f,%.4f,%.4f] "
+            "hmd_horizontal_delta_m=%.4f positional_world_units_per_meter=%.3f "
             "persistent_stereo_active=%u monitor_mirror=%u monitor_world_passes=%lu "
             "suppressed_monitor_world_passes=%lu eye_owned_frame_time_frames=%lu "
             "stereo_failed=%u stereo_error=%s "
@@ -167,6 +170,14 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.compositor_hmd_pose_valid ? 1U : 0U,
             static_cast<unsigned long>(render_world.tracked_head_frames),
             render_world.tracking_anchor_captured ? 1U : 0U,
+            render_world.hmd_tracking_anchor_m[0],
+            render_world.hmd_tracking_anchor_m[1],
+            render_world.hmd_tracking_anchor_m[2],
+            render_world.hmd_tracking_position_m[0],
+            render_world.hmd_tracking_position_m[1],
+            render_world.hmd_tracking_position_m[2],
+            render_world.hmd_horizontal_delta_m,
+            render_world.positional_world_units_per_meter,
             render_world.persistent_stereo_active ? 1U : 0U,
             render_world.monitor_mirror_enabled ? 1U : 0U,
             static_cast<unsigned long>(render_world.monitor_world_passes),
