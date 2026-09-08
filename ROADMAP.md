@@ -1,6 +1,6 @@
 # Roadmap
 
-Roadmap states are evidence-based. A directory or compiling stub does not make a feature complete.
+Roadmap states are evidence-based. A directory, compiling stub, host test, or code path does not make a feature complete. Headset validation is tracked separately from implementation.
 
 ## Phase 0 — Repository baseline
 
@@ -22,7 +22,7 @@ Exit criterion: a clean repository in which every implemented feature is testabl
 - [x] Complete three attach/frame/detach cycles in one live process
 - [ ] Run repeated launch/play/exit cycles without crashes
 
-Exit criterion: one whitelisted Black Plague research hash loads the probe, emits frame telemetry and deactivates cleanly. Hook restoration now meets this criterion with the DLL intentionally resident until process exit; longer user-driven sessions remain deliberately unchecked.
+Exit criterion: one whitelisted Black Plague research hash loads the probe, emits frame telemetry and deactivates cleanly. Hook restoration meets the current research requirement; longer user-driven sessions remain deliberately unchecked.
 
 ## Phase 2 — Black Plague visual MVP
 
@@ -52,9 +52,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Implement a conservative HMD-aware render-list update
 - [x] Live-validate HMD-relative portal/frustum visibility correction
 - [x] Confirm continuous visual behavior in the headset
-- [x] Implement the Rework-derived optional monitor mirror and default two-pass schedule
-- [x] Live-validate the two-pass path and runtime monitor-mirror toggle telemetry
-- [x] Implement and host-test eye-resolution light scissoring and GL-state isolation
+- [ ] Implement a reliable desktop monitor mirror
 - [ ] Headset-validate medium-distance lamp lighting and scissor-hook performance
 - [ ] Achieve acceptable frame pacing at the headset's target refresh rate
 - [ ] Apply positional tracking with game/body calibration
@@ -64,7 +62,9 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Host-test tracked menu panels and controller-ray projection
 - [ ] Live-validate direct VR startup and menu/gameplay transitions
 
-Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus.
+**Current milestone note:** the mirror is intentionally out of the active gameplay path. Existing mirror code/commands must not be treated as a supported feature until the headset/desktop behavior is reliable. Positional tracking remains disabled until the exact Black Plague body/capsule and collision path are mapped.
+
+Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus, with frame pacing and positional tracking explicitly validated before claiming a complete visual MVP.
 
 ## Phase 3 — Shared runtime extraction
 
@@ -79,7 +79,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Add host-independent tests for transforms, actions and settings
 - [x] Preserve copyright, license and provenance for extracted components
 
-Exit criterion: Overture and the Black Plague MVP consume the same tested runtime behavior without sharing game-specific addresses or layouts.
+Exit criterion: the shared runtime contains the proven, game-neutral behavior required by at least the current Overture integration milestone, while each game-specific body/render/input boundary remains explicit. Overture source linkage and headset equivalence are still separate validation gates.
 
 ## Phase 4 — Black Plague gameplay VR
 
@@ -88,13 +88,15 @@ Exit criterion: Overture and the Black Plague MVP consume the same tested runtim
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's 0.18 m physical reach
 - [ ] Complete palm collision, jointed mechanisms and tool/light attachment
-- [ ] room-scale body/head relationship
-- [ ] hands, grabbing and interactions
+- [ ] Map and validate the exact-build Black Plague body/capsule path for room-scale motion
+- [ ] Port Rework-equivalent locomotion speed, sprint and jump behavior through the BP body adapter
+- [ ] Resolve head/body spatial reconciliation and physical movement without speculative camera translation
+- [ ] Validate long-body interaction and mechanism-specific states
 - [ ] inventory, notes, menus, HUD and subtitles
 - [ ] comfort settings and haptics
 - [ ] representative chapter-level validation
 
-Exit criterion: a documented playable alpha for an exact Black Plague build.
+Exit criterion: a documented playable alpha for an exact Black Plague build with physical interaction, body/room-scale movement and representative headset validation.
 
 ## Phase 5 — Requiem backend
 
