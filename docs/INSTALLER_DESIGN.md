@@ -86,10 +86,12 @@ bindings, configuration schema and shared runtime. Each exact-build manifest
 selects one backend and its bootstrap method. A backend must never be chosen by
 probing arbitrary addresses in an unknown process.
 
-The action files under `assets/openvr` are imported as the shared controller
-schema, including PSVR2 Sense, but are not currently registered or consumed by
-the runtime. They become an installer payload only after the action-input layer
-has been implemented and tested.
+The action files under `assets/openvr` are now consumed by the framework's
+runtime input path: the shared action manifest/bindings are copied into the
+build output, real OpenVR action polling is implemented, and Black Plague's
+native intent bridge consumes the resulting logical actions. This does **not**
+mean they are installer-managed yet. Production deployment, registration,
+versioning and rollback of these files remain installer work.
 
 ## Work still required
 
@@ -98,5 +100,6 @@ has been implemented and tested.
 - implement the transactional filesystem layer and installation record;
 - add known original/transformed hash pairs to build manifests;
 - package per-build backends and shared runtime assets;
+- define the exact ownership/versioning rules for deployed OpenVR action files;
 - test install, repair, upgrade and rollback on clean game copies;
 - design a recovery flow for missing backups and externally modified files.
