@@ -7,7 +7,8 @@ live state on exit and can overwrite changes made while it is running.
 
 The game-independent defaults, ranges, enum values and migration behavior live
 in `src/runtime/vr_settings.*`. Black Plague now consumes the input/comfort
-subset from the framework INI; other settings and games remain separate work.
+subset from the framework INI; Overture and Requiem remain separate integration
+work at this stage.
 
 ## Common baseline
 
@@ -47,7 +48,7 @@ Locomotion mode, turn mode, handedness, player height, UI distance and UI scale
 are comfort or calibration choices and should not be overwritten by a generic
 performance preset.
 
-## Black Plague and Requiem
+## Black Plague framework profile
 
 Black Plague reads this profile from `%LOCALAPPDATA%\PenumbraVR\settings.ini`
 when the probe is attached:
@@ -82,8 +83,13 @@ Missing keys use normalized Rework defaults. Malformed recognized values make
 preflight fail instead of silently starting with a mixed profile. Values outside
 the documented runtime ranges are clamped. Changes take effect on the next probe
 attachment. `--vr-mirror-on` and `--vr-mirror-off` still update only the mirror
-key after a successful live change. Requiem is configuration-ready only; its VR
-backend is not playable yet.
+key after a successful live change.
+
+## Requiem
+
+Requiem is configuration-ready only. The shared settings model and schema can be
+used as the backend develops, but there is no playable Requiem VR backend yet.
+Do not treat the Black Plague profile above as evidence of Requiem support.
 
 The eventual installer should apply these settings through a reversible,
 per-game preset, preserve unrelated user preferences, and create a backup
