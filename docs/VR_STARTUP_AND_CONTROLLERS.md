@@ -1,47 +1,57 @@
 # Arranque VR y estado de los mandos
 
-Actualizado: 2026-09-06. Backend **Black Plague FD316F…** únicamente.
-La prueba del usuario confirmó arranque BAT, menús, inventario/libreta, dedos,
-giro, correr/agacharse y ausencia del fallo de luces en la zona probada.
-Las correcciones posteriores descritas aquí todavía necesitan visor.
+Actualizado: 2026-09-08. Backend **Black Plague FD316F…** únicamente.
 
-La prueba posterior de herramientas confirmó que el glowstick sigue la mano
-izquierda. Su socket provisional lo deja dentro de la mano; se aplaza el ajuste
-visual hasta integrar las manos definitivas, para no calibrarlo dos veces. El
-usuario percibió el movimiento de dedos parecido al anterior: la política nueva
-queda validada por tests matemáticos, pero no como mejora visual apreciable.
+La prueba de visor del 2026-09-06 confirmó el arranque mediante BAT, recentrado,
+menús, inventario/libreta, dedos, movimiento, giro, correr/agacharse y luces
+estables en la zona probada. También dejó problemas concretos que no deben
+considerarse resueltos: mirror negro/con artefactos, rumbo inicialmente
+desacoplado del HMD, interacción en la mano izquierda cuando no correspondía,
+agarres nativos y glowstick sin anclaje espacial correcto.
 
-### Aviso tras la segunda prueba (2026-09-06)
+Las correcciones posteriores se han incorporado en código y requieren una nueva
+prueba de visor para certificarlas. El glowstick ya siguió la mano en la tanda
+posterior, pero el socket provisional lo dejó dentro de la mano; el ajuste visual
+se aplaza hasta integrar las manos definitivas para no calibrarlo dos veces.
+Los cambios de dedos pasan las pruebas matemáticas, pero no se consideran una
+mejora visual validada hasta una nueva prueba.
 
-Tanda posterior lista para prueba acotada: glowstick/linterna anclados a la mano
-izquierda (sockets provisionales); limpieza de textura rectangular GL antes de
-dibujar mirror/menús/manos; lectura de vuelta del mirror desde el proceso tras
-arrancar con BAT. El registro añade `native_update_timing` (ratio tiempo simulado
-/real del ButtonHandler, no del solver Newton), contadores de herramientas y
-agarres rechazados por seguridad. Se amplía el buffer de log para evitar truncar diagnósticos.
-No se modifica la velocidad de simulación, gravedad ni duración del salto.
+### Estado actual tras la prueba
+
+- **Validado en visor:** BAT, recentrado, menús/inventario/libreta, dedos,
+  locomoción básica, giro, correr/agacharse y estabilidad de luces en la zona
+  probada.
+- **Pendiente de nueva prueba:** mirror desde el ojo izquierdo, propiedad diestra
+  y L2/R2, movimiento relativo al HMD, adquisición de agarre tras confirmar el
+  estado nativo, ciclo L1 Rework y anclaje de herramientas.
+- **Deliberadamente no terminado:** room-scale, colisión de palmas, puertas/
+  palancas/joints, modelos HPL de Rework y Enhanced visuals GPU.
+
+La tanda posterior añadió `native_update_timing`, contadores de herramientas y
+agarres rechazados por seguridad, además de ampliar el buffer de log. No se
+modifican velocidad de simulación, gravedad ni duración del salto para ocultar
+un posible problema temporal.
 
 El usuario reportó salida del mapa al caminar con una barra agarrada. La ruta se
 bloqueó y solo se ha reactivado tras mapear el indicador nativo +3C8 que excluye
 el cuerpo sujeto de consultas de personaje, rayos y contactos Newton. Se guarda
 y restaura su valor original al soltar. La regresión cubre ambos valores iniciales,
-pero aún no lo certifica en el motor real: la primera prueba debe usar un objeto
+pero la ruta debe seguir certificándose en el motor real: usar primero un objeto
 pequeño, lentamente y sin lanzamiento ni barras largas.
 
-El stick ahora limita su vector a longitud 1 para evitar sobrevelocidad diagonal.
-El perfil local aplica además `MoveSpeed=0.85` sobre la entrada analógica, sin
-cambiar reloj, gravedad ni física. Esto no resuelve por sí solo una posible
-anomalía temporal; el contador `native_update_timing` sigue siendo la evidencia.
-El launcher imprime ruta efectiva de settings y valor del mirror tanto en
-preflight como al activarlo. La lectura actual comprobada es `on`; el registro
-incluye además mano, escala de movimiento, escala de render y geometría UI.
-El mirror sigue pendiente de la próxima validación física.
+El stick limita su vector a longitud 1 para evitar sobrevelocidad diagonal. El
+perfil local aplica además `MoveSpeed=0.85` sobre la entrada analógica, sin cambiar
+reloj, gravedad ni física. El contador `native_update_timing` sigue siendo la
+evidencia para separar velocidad física de una anomalía temporal.
+
+El launcher imprime la ruta efectiva de settings y el valor del mirror tanto en
+preflight como al activarlo. El mirror continúa pendiente de certificación física.
 
 ## Arrancar sin adjuntar el mod a mano
 
-Desde `E:\penumbra_vr`, doble clic en `Start-Black-Plague-VR.cmd`.
-Usa el ejecutable Release y la instalación Steam habitual. También admite la
-ruta del ejecutable como primer argumento si Steam está en otra biblioteca.
+Desde la carpeta de instalación del framework, ejecuta `Start-Black-Plague-VR.cmd`.
+Usa el ejecutable Release y la instalación Steam habitual. También admite la ruta
+del ejecutable como primer argumento si Steam está en otra biblioteca.
 
 El lanzador comprueba el hash admitido y los archivos VR, abre Black Plague
 mediante Steam (appid 22120), espera la inicialización del ejecutable protegido,
@@ -70,22 +80,22 @@ Comprobación sin abrir el juego ni SteamVR:
    se copian a `build/bin/<config>/vr` en cada compilación. No se sondea por ojo:
    lo hace una vez `cButtonHandler::Update`.
 2. Puente nativo exacto: movimiento analógico combinado con teclado, giro por
-   pasos configurable o suave integrado por tiempo, salto, correr, agacharse, interactuar,
-   examinar, guardar objeto, inventario, libreta, pausa y ciclo de luz rápida
-   apagado → glowstick → linterna → apagado, como Rework. El stick sigue el yaw
-   horizontal del HMD; velocidad/deadzone, modo/ángulo de giro y mano dominante
-   se leen del INI del framework. El teclado conserva sus ejes nativos. Tracking obsoleto
-   inhibe movimiento VR. No equivale a cuerpo completo ni room-scale.
-   No usa emulación de teclas de Windows. Los nombres de acción conservan su
-   ABI antiguo y siempre se ejecuta la consulta original del juego.
+   pasos configurable o suave integrado por tiempo, salto, correr, agacharse,
+   interactuar, examinar, guardar objeto, inventario, libreta, pausa y ciclo de
+   luz rápido apagado → glowstick → linterna → apagado, como Rework. El stick
+   sigue el yaw horizontal del HMD; velocidad/deadzone, modo/ángulo de giro y
+   mano dominante se leen del INI del framework. El teclado conserva sus ejes
+   nativos. Tracking obsoleto inhibe movimiento VR. No equivale a cuerpo completo
+   ni room-scale. No usa emulación de teclas de Windows. Los nombres de acción
+   conservan su ABI antiguo y siempre se ejecuta la consulta original del juego.
 3. Menú inicial, pausa/inventario/libreta: captura del escritorio presentada en
    ambos ojos como panel configurable (2,4 metros de ancho a 1,75 metros con el
-   perfil actual), orientado según el
-   yaw al abrirlo. Apuntado de la mano dominante en menú principal, inventario y libreta,
-   coordenadas nativas 800×600, recentrado y prioridad temporal del ratón cuando
-   se mueve. Los diálogos especiales conservan sus rutas nativas y aún necesitan
-   cobertura en ejecución. Se restauran matrices, texturas, programas GL,
-   viewport, scissor y demás estado gráfico tras dibujar el panel.
+   perfil actual), orientado según el yaw al abrirlo. Apuntado de la mano dominante
+   en menú principal, inventario y libreta, coordenadas nativas 800×600,
+   recentrado y prioridad temporal del ratón cuando se mueve. Los diálogos
+   especiales conservan sus rutas nativas y aún necesitan cobertura en ejecución.
+   Se restauran matrices, texturas, programas GL, viewport, scissor y demás estado
+   gráfico tras dibujar el panel.
 4. Adaptador espacial integrado en la DLL y compilación: selección desde aim
    dominante (derecho por defecto) en el estado normal, refresco antes de pulsar,
    agarre relativo a la palma de cuerpos libres y lanzamiento limitado a 9 m/s.
@@ -113,26 +123,28 @@ Comprobación sin abrir el juego ni SteamVR:
    antes del swap, conservando proporción y bandas negras. No renderiza un tercer
    mundo nativo. Los menús conservan la captura/presentación nativa del escritorio.
    Prueba WGL de píxeles, orientación, bandas y restauración de viewport/scissor.
+   La implementación existe, pero sigue siendo experimental hasta la nueva
+   validación física.
 
 La numeración anterior describe módulos implementados, **no certifica que los
-tres hitos pedidos por el usuario estén terminados**.
+hitos de gameplay estén terminados**.
 
 ## Lo que NO está terminado
 
 - El tercer hito original sigue parcial: puertas/palancas y cuerpos con joints
   o padres conservan el comportamiento nativo. Falta la colisión de palmas,
   validar físicamente la exclusión conservadora cuerpo/character, las mallas HPL
-  de Rework y calibrar físicamente las herramientas/luces ancladas. Durante un agarre espacial
-  todavía no se actualiza el rayo secundario de examinar como hace Rework.
+  de Rework y calibrar físicamente las herramientas/luces ancladas. Durante un
+  agarre espacial todavía no se actualiza el rayo secundario de examinar como hace Rework.
 - `PlayerState_Interact_VR.cpp` es la referencia, pero no se copian offsets de
   Overture. Véase `BLACK_PLAGUE_SPATIAL_NOTES.md` para llamadas verificadas,
   pruebas, límites y el siguiente punto de integración de herramientas.
 - El perfil predeterminado sigue siendo diestro y de giro por pasos, pero la mano,
   deadzones, escala de movimiento, giro, escala de render y geometría UI ya se
-  persisten/aplican desde
-  `%LOCALAPPDATA%\PenumbraVR\settings.ini`. Se desactiva el action set offhand
-  para evitar propiedad mezclada. En el perfil PSVR2 diestro R2 es interactuar;
-  el perfil zurdo usa L2 y cambia también puntero y mano de herramientas.
+  persisten/aplican desde `%LOCALAPPDATA%\PenumbraVR\settings.ini`. Se desactiva
+  el action set offhand para evitar propiedad mezclada. En el perfil PSVR2 diestro
+  R2 es interactuar; el perfil zurdo usa L2 y cambia también puntero y mano de
+  herramientas.
 - Tracking corporal posicional y Enhanced visuals GPU no están conectados.
 - Falta validar transiciones mientras se mantiene un botón, la pérdida de
   tracking/foco en una partida real y la convivencia de mandos y teclado al
@@ -140,14 +152,20 @@ tres hitos pedidos por el usuario estén terminados**.
 - La iluminación pasó la zona probada por el usuario; falta cobertura en otras zonas.
 
 A petición del usuario se prepara una prueba experimental de lo incorporado,
-sin marcar los tres hitos como completos. Véase la
-[lista para el visor](VR_HEADSET_TEST_CHECKLIST.md). Rework permanece intacto
-en `E:\penumbra_vr_rework`.
+sin marcar los hitos como completos. Véase la
+[lista para el visor](VR_HEADSET_TEST_CHECKLIST.md). Rework permanece intacto.
 
 ## Evidencia reproducible
 
-Resultado de esta tanda: **22/22 tests en Release, 22/22 en Debug y 22/22
-en Release sin SDK OpenVR**, además del verificador binario y de metadatos.
+La preparación técnica de la tanda posterior obtuvo **22/22 tests en Release,
+22/22 en Debug y 22/22 en Release sin SDK OpenVR**, además del verificador binario
+y de metadatos. Estas cifras son pruebas host/locales y no sustituyen la prueba
+con visor.
+
+La prueba de visor del 2026-09-06 es la evidencia independiente de los elementos
+marcados como validados arriba. Las correcciones posteriores descritas en este
+documento deben tener una nueva sesión de visor antes de cambiar su estado a
+validado.
 
 El workflow de GitHub compila Debug/Release sin SDK y ejecuta 21 pruebas por
 configuración: excluye explícitamente `opengl_eye_targets`, que requiere el
@@ -162,14 +180,12 @@ independiente de los 22/22 locales; ninguno certifica una prueba con visor.
   foco/tracking/UI, cero tiempo, salto de pose, joints, retirada segura y
   restauración de `CollideCharacter` para cuerpos originalmente true/false.
   `vr_grab_pose` cubre transformaciones, límites y filtrado robusto de lanzamiento;
-  OpenGL comprueba además píxeles
-  de manos y que no atraviesen una profundidad más cercana.
+  OpenGL comprueba además píxeles de manos y que no atraviesen una profundidad más cercana.
 - `tools/Test-BlackPlagueInputMap.ps1 -ImagePath <captura-inicializada>` contrasta
   los bytes de 76 consultas, 2 movimientos, 3 cursores y la vtable de Update.
   También contrasta 11 slots espaciales, las entradas SetMatrix/GetJointNum,
   la llamada de picking y las escrituras del contacto local de agarre.
   La captura local es `artifacts/black-plague-22000-live.bin`, imagen virtual con
   base 0x00400000; **no** usar los offsets como posiciones en el PE de disco.
-- Solo `--check-vr` se ejecutó contra la instalación en esta tanda. El juego y
-  SteamVR estaban cerrados; no se afirma haber probado arranque, controles o
-  manos en el visor.
+- `--check-vr` se usa como preflight sin juego/SteamVR; la evidencia de visor del
+  2026-09-06 es la que respalda los estados de validación indicados arriba.
