@@ -1,6 +1,6 @@
 # Codex handoff — Penumbra VR Framework
 
-This file is the operational handoff for future coding sessions. Read it before changing runtime, backend, interaction, tracking or deployment code.
+This file is the operational handoff for future coding sessions. Read it before changing runtime, backend, interaction, tracking or deployment code. `AGENTS.md` is the root engineering contract; `DEBUG_HANDOFF.md` records known problem boundaries and failed symptom-level approaches.
 
 ## Non-negotiable source of truth
 
@@ -21,7 +21,7 @@ A new algorithm requires an explicit technical reason: no Rework equivalent, inc
 
 ## Current checkpoint
 
-The Framework is **pre-alpha**.
+The Framework is **pre-alpha**. The latest repository checkpoint is documented by the commits at the tip of `main`; do not assume a clean local working tree without checking it.
 
 ### Overture
 
@@ -112,15 +112,16 @@ When a behavior is reported as a regression, compare:
 
 **REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION**.
 
-Do not patch symptoms first.
+Do not patch symptoms first. For the known recurring issues, read `DEBUG_HANDOFF.md` before changing movement timing, body collision, held-object collision, mechanism grabbing or tool grip placement.
 
 ## Immediate next session
 
-1. Inspect the exact Rework implementation and current Framework Overture backend side-by-side.
-2. Link `OvertureBodyAdapter` into the real Overture executable without duplicating runtime logic.
-3. Build/deploy a test package and validate tracking, height, recenter, movement, sprint, crouch/jump and room-scale rejection in the headset.
-4. Record any behavioral difference against Rework before changing constants.
-5. Only after Overture equivalence is established, resume Black Plague body/capsule mapping.
+1. Read `AGENTS.md`, `CODEX_HANDOFF.md` and `DEBUG_HANDOFF.md`.
+2. Inspect the exact Rework implementation and current Framework Overture backend side-by-side.
+3. Link `OvertureBodyAdapter` into the real Overture executable without duplicating runtime logic.
+4. Build/deploy a test package and validate tracking, height, recenter, movement, sprint, crouch/jump and room-scale rejection in the headset.
+5. Record any behavioral difference against Rework before changing constants.
+6. Only after Overture equivalence is established, resume Black Plague body/capsule mapping.
 
 ## Black Plague investigation order
 
@@ -165,6 +166,8 @@ Update the smallest relevant set among:
 - `README.md` — public/current status;
 - `ROADMAP.md` — milestone state;
 - `CHANGELOG.md` — implemented/validated changes;
+- `CODEX_HANDOFF.md` — current operational checkpoint;
+- `DEBUG_HANDOFF.md` — repeated defects, evidence and next diagnostic step;
 - `docs/REWORK_PORTING_PLAN.md` — extraction/porting boundary;
 - `docs/OVERTURE_BACKEND_MIGRATION.md` — exact Rework-to-Framework comparison;
 - `docs/VR_STARTUP_AND_CONTROLLERS.md` — real headset state and controls;
