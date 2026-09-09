@@ -4,19 +4,25 @@ Objetivo del usuario (2026-09-06): Overture, Black Plague y Requiem deben sentir
 como una continuación, con Rework como referencia y mejoras compartidas. Esto
 es un criterio de aceptación, no una afirmación de paridad actual.
 
-## Comportamiento compartido
+## Comportamiento compartido objetivo
 
-- Mismo perfil diestro, selección R2 y ciclo L1 apagado/glowstick/linterna.
-- Mismos umbrales de stick, rumbo relativo al HMD, recentrado y giro.
+- Mismo perfil diestro por defecto, selección R2 y ciclo L1 apagado/glowstick/linterna,
+  cuando el juego disponga de esas acciones.
+- Mismos umbrales de stick, rumbo relativo al HMD, recentrado y giro, salvo una
+  diferencia demostrada por la implementación nativa del juego.
 - Agarre consistente con la palma visible, liberación sin transferencia de mano,
   momento de lanzamiento limitado y ausencia de autopropulsión del jugador.
-- Menús, inventario y libreta con reglas coherentes de foco y cierre.
-- Mirror con preferencia persistida observable y misma orientación que el visor.
+- Menús, inventario y libreta con reglas coherentes de foco y cierre cuando estén
+  implementados en el backend.
+- Mirror con una preferencia común de usuario cuando el backend disponga de un
+  camino de mirror fiable y validado. El mirror actual de Black Plague es
+  experimental y no forma parte de la aceptación vigente.
 - Mantener el seguimiento de dedos que el usuario valoró positivamente.
 
-Conservar diferencias narrativas, objetos disponibles y reglas propias de cada
-juego. No uniformar velocidades modificando arbitrariamente física o gravedad:
-primero medir tiempo de simulación, distancia recorrida y duración del salto.
+Conservar diferencias narrativas, objetos disponibles, recursos visuales y reglas
+propias de cada juego. No uniformar velocidades modificando arbitrariamente física
+o gravedad: primero medir tiempo de simulación, distancia recorrida y duración del
+salto.
 
 ## Orden de integración
 
