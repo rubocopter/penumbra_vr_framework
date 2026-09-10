@@ -85,8 +85,13 @@ Backend-owned code now lives under both `src/backends/overture` and
 backend core: it consumes the common tracking, settings and input types, runs
 the Rework-equivalent player/body sequence once per player update, and exposes
 only collision/body/jump operations through a narrow HPL adapter. Its behavior
-is host-tested, but the adapter is not yet linked into the Rework executable or
-validated in the headset.
+is host-tested and the adapter is linked into the Framework-owned Overture
+source host at `products/overture`. The exact autonomous Release artifact has
+completed an initial functional headset/controller pass without an evident
+Rework regression; exhaustive feature and hardware coverage remains separate.
+That product host owns the minimum coherent Penumbra/HPL/OAL source, Win32
+dependencies, required resources and package tooling. Rework `23c890f` is not
+part of its build graph.
 
 The Black Plague backend validates and intercepts the exact-build `RenderWorld`
 call site, performs reversible
@@ -136,9 +141,10 @@ SDL/OpenAL/OpenGL proxy layers are not a design goal.
 
 The original architectural proof was Black Plague rendering a stable stereo
 scene to OpenVR with head tracking while retaining keyboard and mouse controls.
-The next framework proof is behavioral equivalence: the source Overture adapter
-must run the common backend in-game, after which the same tracking and movement
-policies can be validated against both Overture and Black Plague.
+That Overture proof has now reached an initial functional in-headset validation.
+The next framework proof is the separate Black Plague exact-build body adapter:
+map the native body/capsule and accepted collision displacement before enabling
+positional tracking or routing the shared locomotion policy through it.
 
 The completed Black Plague render-path research established:
 
@@ -152,10 +158,13 @@ The completed Black Plague render-path research established:
 Those boundaries remain backend-specific; interaction and installer APIs are
 generalized only after equivalent behavior is demonstrated in a real host.
 
-The demonstrated Overture implementation remains the behavioral reference and
-is not copied as a monolithic game layer. The component-by-component boundary
-is tracked in [`docs/REWORK_PORTING_PLAN.md`](docs/REWORK_PORTING_PLAN.md), and
-the exact comparison behind the first backend is recorded in
+The demonstrated Rework implementation remains the behavioral reference, while
+the scoped source host needed to build the Overture product is now owned here.
+Historical, generated and unrelated Rework material was not imported. The
+component boundary is tracked in
+[`products/overture/SOURCE_PROVENANCE.md`](products/overture/SOURCE_PROVENANCE.md)
+and [`docs/REWORK_PORTING_PLAN.md`](docs/REWORK_PORTING_PLAN.md); the exact
+comparison behind the first backend is recorded in
 [`docs/OVERTURE_BACKEND_MIGRATION.md`](docs/OVERTURE_BACKEND_MIGRATION.md).
 
 ## Installer responsibilities

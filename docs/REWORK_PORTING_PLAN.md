@@ -80,8 +80,13 @@ movement and jump calls.
 
 The extracted locomotion policy preserves Rework's 1.5 m/s normal speed, 2.25 m/s
 sprint speed, 0.05 m physical step and accepted/rejected displacement
-reconciliation. This is a code-tested backend core, not yet a linked/deployed or
-headset-validated Overture integration.
+reconciliation. `src/adapters/overture_source` now supplies the concrete HPL
+boundary and is compiled into `Penumbra_vr.exe` by the Framework-owned source
+host at `products/overture`. Debug/Release build inputs and the Release package
+are self-contained in this repository; Rework `23c890f` is reference-only.
+The exact autonomous Release artifact has also passed an initial functional
+SteamVR/headset/controller test without an evident Rework regression. Exhaustive
+item-by-item equivalence and broader hardware coverage remain separate evidence.
 
 The corresponding Black Plague movement problem remains a binary-adapter task:
 feeding its native acceleration/cap system cannot be made Rework-equivalent by
@@ -119,20 +124,20 @@ validated.
 
 ## Extraction order
 
-### Current priority: finish the Overture adapter boundary, then return to BP body/interaction
+### Current priority: Black Plague body/collision boundary
 
-1. Link the source HPL `OvertureBodyAdapter` into the real Overture executable.
-2. Validate tracking, movement, room-scale rejection and jump behavior in the
-   headset against the proven Rework behavior.
-3. Map the exact Black Plague body/capsule and collision-resolution boundary;
+1. Preserve the completed Overture source host and its initially headset-validated
+   Release hash; return to it only for a concrete regression or explicit broader
+   validation pass.
+2. Map the exact Black Plague body/capsule and collision-resolution boundary;
    add telemetry before enabling positional HMD translation.
-4. Route Black Plague locomotion through a measured body displacement adapter,
+3. Route Black Plague locomotion through a measured body displacement adapter,
    preserving the shared Rework locomotion policy rather than its native speed caps.
-5. Complete palm collision, jointed mechanisms and tool/light attachment.
-6. Validate the long-object and glowstick behavior with the definitive per-game
+4. Complete palm collision, jointed mechanisms and tool/light attachment.
+5. Validate the long-object and glowstick behavior with the definitive per-game
    geometry/state adapters.
-7. Continue inventory, notes, subtitles and room-anchored UI validation.
-8. Repeat only exact-build binary research for Requiem where evidence does not
+6. Continue inventory, notes, subtitles and room-anchored UI validation.
+7. Repeat only exact-build binary research for Requiem where evidence does not
    transfer from Black Plague.
 
 This order proves each boundary in isolation and keeps a failure in a game
@@ -144,9 +149,10 @@ adapter from being mistaken for a shared-runtime defect.
   `src/runtime/vr_interaction_policy.*` and `src/backends/overture/*` port Rework's
   complete tracking-space boundary, seated calibration, room-scale body-step/
   rejection algorithm and fixed 1.5/2.25 m/s locomotion behind a narrow HPL body
-  adapter. The backend core is code-tested; source-game linkage, deployment and
-  headset equivalence remain separate pending gates. The exact Black Plague
-  comparison is in `docs/OVERTURE_BACKEND_MIGRATION.md`.
+  adapter. The real source-game linkage, Framework-owned source host and Release
+  package are complete, and the exact autonomous artifact has an initial
+  functional headset validation. Exhaustive Overture coverage remains separate.
+  The exact Black Plague comparison is in `docs/OVERTURE_BACKEND_MIGRATION.md`.
 
 - `src/runtime/render_target_policy.*` preserves the Rework scale range,
   default scale and allocation fallback without depending on HPL types.
@@ -172,4 +178,6 @@ adapter from being mistaken for a shared-runtime defect.
 - `src/runtime/vr_settings.*` owns the Rework defaults, limits, enum text values
   and legacy smooth-turn migration, plus framework monitor-mirror state.
 - `assets/openvr` contains the shared action schema and bindings for PSVR2 Sense,
-  Vive, Index, Oculus, Pico and Windows motion controllers.
+  Vive, Index, Oculus, Pico and Windows motion controllers;
+  `assets/openvr/overture` preserves the exact Overture product mappings used
+  by its package.

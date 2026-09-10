@@ -14,7 +14,7 @@ Internally, each game is allowed to use the integration method it actually needs
 
 **Pre-alpha: common runtime, initial Overture backend and Black Plague research backend.**
 
-The framework now builds a host-tested Overture backend core derived from Rework revision `23c890f`. It ports the proven tracking-space, calibrated-height, seated/standing, world-yaw, room-scale collision-reconciliation and fixed-displacement locomotion behavior into game-neutral runtime modules, while a narrow Overture adapter owns HPL body collision and jump calls. This backend core is not yet linked into or deployed with the Overture executable and has not yet been headset-validated. It is therefore an architectural/behavioral integration milestone, not a new playable Overture package. See [the migration audit](docs/OVERTURE_BACKEND_MIGRATION.md).
+The framework now owns the complete source/build host needed for Overture under `products/overture`. That host compiles the source-level HPL adapter, `pvr_overture_backend` and shared runtime into the real `Penumbra_vr.exe`; `rubocopter/penumbra_vr_rework@23c890f` is no longer in the build or packaging graph. The adapter owns `cPlayer`/`iCharacterBody`, feet/body queries, native collision updates and jump calls; tracking, calibrated height, seated/standing, yaw/recenter, room-scale reconciliation and fixed-displacement locomotion remain in the runtime/backend. The autonomous Release artifact with SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` has been deployed through the packaged installer and exercised with SteamVR, a real headset and controllers. The first functional pass felt equivalent to the proven Rework build and exposed no evident regression, but it was not an exhaustive feature/hardware test and does not make this a supported release. See [the migration audit](docs/OVERTURE_BACKEND_MIGRATION.md).
 
 The Black Plague integration remains experimental. Native stereo, yaw-aligned rotation tracking, keyboard/mouse input and conservative HMD-aware visibility have been validated in the headset at `3400x3468` per eye. The continuous stereo lifecycle and two-eye schedule have also been exercised in the headset. The optional desktop mirror path exists in code, but it is **not currently a supported or validated feature** and is intentionally excluded from the next gameplay milestones because it has continued to produce problems. Acceptable frame pacing at the target refresh rate also remains open.
 
@@ -24,7 +24,7 @@ For one-step Black Plague startup use `Start-Black-Plague-VR.cmd`, which launche
 
 The current Black Plague interaction work also uses the Rework direct physical reach policy of `0.18 m` for the generic prop-pick fallback instead of the native camera-ray distance. The exact-build body/capsule mapping required for room-scale positional translation is not yet established, so positional HMD movement remains disabled rather than being approximated with an unverified collider.
 
-The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). It is the behavioral reference for this project. The rule for the common runtime is to port **proven behavior** from Rework and adapt only the game-specific boundaries; the Overture game layer is not copied wholesale.
+The existing, playable Overture implementation remains in [rubocopter/penumbra_vr_rework](https://github.com/rubocopter/penumbra_vr_rework). Revision `23c890f` is the immutable behavioral/source reference, not a checkout required to build this repository. The Framework contains only the coherent Overture/HPL source host, dependencies, assets and tooling needed by the product; historical, generated and unrelated Rework material was deliberately excluded. The exact migration boundary is recorded in [`products/overture/SOURCE_PROVENANCE.md`](products/overture/SOURCE_PROVENANCE.md).
 
 ## Identity and lineage
 
@@ -49,7 +49,7 @@ Frictional Games and Valve in [THIRD_PARTY.md](THIRD_PARTY.md).
 - **Prefer porting proven Rework behavior over reimplementing it from scratch.**
 - Require evidence for every signature, RVA, structure offset, and calling convention.
 - Do not mark a backend supported until it reaches an in-headset milestone.
-- Preserve upstream attribution and licenses when code is eventually imported.
+- Preserve upstream attribution and licenses for imported or adapted code and assets.
 
 ## Intended components
 
@@ -57,19 +57,21 @@ Frictional Games and Valve in [THIRD_PARTY.md](THIRD_PARTY.md).
 Penumbra VR
 ├── runtime                 OpenVR, tracking, actions, configuration and logging
 ├── adapters/hpl1           Reusable HPL1 behavior with no exact-build addresses
+├── adapters/overture_source Source-level cPlayer/HPL boundary
 ├── backends
-│   ├── overture_source     Source-level HPL1/Overture integration
+│   ├── overture            Overture sequencing over the shared runtime
 │   ├── black_plague_binary Version-specific binary integration
 │   └── requiem_binary      Version-specific binary integration
+├── products/overture       Overture/HPL source host, Win32 deps and package scripts
 ├── launcher/bootstrap      Host identification and backend loading
 ├── deployment/installer    Detection, backup, deployment and rollback
-├── assets/openvr           OpenVR action manifest and controller bindings
+├── assets/openvr           Shared bindings plus Overture-specific overlay
 ├── manifests               Exact-build identity and binary-research evidence
 ├── tools                   Build fingerprinting and research utilities
 └── tests                   Host-independent verification
 ```
 
-These are architectural boundaries, not claims that the components already exist. Directories and build targets will be added when their first working implementation is ready.
+These are architectural boundaries; some later-game and installer components remain incomplete as described in the roadmap.
 
 ## Build and current probe
 
@@ -96,11 +98,32 @@ compiled catalogue, and the semantic references in the OpenVR action/binding
 data. CI runs this check and both Debug and Release tests without the external
 OpenVR SDK.
 
-OpenVR support is optional at configure time. Point `PENUMBRA_VR_OPENVR_SDK` at an unpacked SDK containing `headers/openvr.h` and `bin/win32/openvr_api.dll`; the SDK remains external to this repository:
+Build and package the complete Overture product from this repository with:
+
+```powershell
+.\tools\Build-OvertureProduct.ps1 -Configuration Release -Full -Package
+```
+
+This produces `products/overture/build/bin/Release/Penumbra_vr.exe` and the
+deployable tree under `products/overture/build/package/Release/PenumbraVR`.
+The command does not require a Rework checkout. It requires Visual Studio 2022
+with the x86 C++ toolchain; all product source, Win32 link/runtime dependencies,
+OpenVR assets and packaging inputs are owned by this repository.
+
+The generated Overture package is an **overlay for a valid retail installation**,
+not a standalone game directory. Do not test it by running `Penumbra_vr.exe`
+inside the package folder. Run the packaged `Install-PenumbraVR.bat`, which
+detects or accepts the retail installation, backs up replaced files and deploys
+the overlay into its `redist` tree; then start SteamVR and launch Overture through
+Steam. The current deployment path is reversible but is not the future unified
+production installer.
+
+OpenVR support remains optional for the root CMake targets. The Overture product
+owns its pinned OpenVR 2.15.6 SDK snapshot, which can also configure those targets:
 
 ```powershell
 cmake --preset vs2022-win32 `
-  -DPENUMBRA_VR_OPENVR_SDK=C:\path\to\openvr-2.15.6
+  -DPENUMBRA_VR_OPENVR_SDK=.\products\overture\dependencies\openvr-2.15.6
 ```
 
 For Black Plague, use the developer launcher/probe described in
@@ -120,4 +143,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md), [ROADMAP.md](ROADMAP.md), [CHANGELOG.md]
 
 ## Licensing
 
-Penumbra VR is licensed under the GNU General Public License version 3 or any later version; see [COPYING](COPYING). This matches the HPL1/Overture codebase and permits the intended, attributed reuse of Penumbra VR Rework. OpenVR remains under Valve's BSD-style license and is consumed as an external SDK dependency. See [THIRD_PARTY.md](THIRD_PARTY.md) for component-level provenance.
+Penumbra VR is licensed under the GNU General Public License version 3 or any later version; see [COPYING](COPYING). Imported HPL1/Overture source retains its notices, assets and shaders retain their separate terms, and OpenVR remains under Valve's BSD-style license. See [THIRD_PARTY.md](THIRD_PARTY.md) and [`products/overture/SOURCE_PROVENANCE.md`](products/overture/SOURCE_PROVENANCE.md) for component-level provenance.

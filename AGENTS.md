@@ -47,14 +47,20 @@ Do not patch a visible symptom until the difference and likely boundary are iden
 
 ## Current priority
 
-Finish the Overture adapter first:
+The autonomous Overture source/build/package integration is complete. The exact
+Framework Release executable with SHA-256
+`D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` has passed
+an initial functional SteamVR/headset/controller test without an evident Rework
+regression. Do not reopen that migration or retune its behavior without a
+specific regression and the `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION`
+comparison.
 
-1. link `OvertureBodyAdapter` into the real Overture executable;
-2. build/deploy a test Overture package;
-3. validate tracking space, calibrated height, seated/standing, recenter/yaw, locomotion, sprint, jump and room-scale rejection against Rework;
-4. record any measured difference before changing constants.
+The next development priority is Black Plague body/capsule research:
 
-Only after that return to Black Plague body/capsule research.
+1. map the exact native player/body and capsule representation;
+2. identify its movement/update and collision-resolution boundary;
+3. instrument requested/accepted displacement, body/feet position and head/body divergence;
+4. only then adapt the shared Rework displacement policy and enable positional HMD translation.
 
 ## Black Plague constraints
 

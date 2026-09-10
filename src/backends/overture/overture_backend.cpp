@@ -198,7 +198,9 @@ bool OvertureBackend::UpdatePlayer(
             result.requested_room_scale_distance = HorizontalLength(request);
             if (result.requested_room_scale_distance > 0.0F) {
                 const std::array<float, 3> body_after = body.MoveBodyBy(
-                    request, BodyMoveKind::room_scale_static_only);
+                    request,
+                    frame.delta_seconds,
+                    BodyMoveKind::room_scale_static_only);
                 if (!FinitePosition(body_after)) {
                     error = "The Overture body adapter returned a non-finite room-scale result";
                     return false;
@@ -238,7 +240,9 @@ bool OvertureBackend::UpdatePlayer(
         if (result.locomotion_distance > 0.0F) {
             const std::array<float, 3> body_before = body_position;
             const std::array<float, 3> body_after = body.MoveBodyBy(
-                movement, BodyMoveKind::stick_locomotion);
+                movement,
+                frame.delta_seconds,
+                BodyMoveKind::stick_locomotion);
             if (!FinitePosition(body_after)) {
                 error = "The Overture body adapter returned a non-finite locomotion result";
                 return false;

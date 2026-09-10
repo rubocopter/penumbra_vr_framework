@@ -1,0 +1,167 @@
+[CmdletBinding()]
+param(
+    [ValidateSet('Debug', 'Release')]
+    [string]$Configuration = 'Release',
+
+    [switch]$Package,
+
+    [switch]$Deploy,
+
+    [string]$InstallRoot,
+
+    [switch]$NoSteamLauncher,
+
+    # Force the conservative full rebuild even when no header or project input
+    # changed since the last successful build.
+    [switch]$Full
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$repositoryRoot = Split-Path -Parent $PSScriptRoot
+$frameworkRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot '..\..'))
+& (Join-Path $PSScriptRoot 'check-project.ps1')
+& (Join-Path $PSScriptRoot 'check-vr-shaders.ps1')
+& (Join-Path $PSScriptRoot 'test-vr-visuals.ps1')
+& (Join-Path $PSScriptRoot 'check-texture-selection.ps1')
+& (Join-Path $PSScriptRoot 'check-texture-decoder.ps1')
+& (Join-Path $frameworkRoot 'tools\Test-PenumbraVrMetadata.ps1')
+
+# Bindings are generated from scripts/generate-bindings.ps1; fail before
+# building when the JSON files on disk drifted from that spec.
+& (Join-Path $PSScriptRoot 'generate-bindings.ps1') -Check | Out-Null
+
+# Fingerprint of every input that can change class layouts or compile flags:
+# headers across the tree plus the project files themselves. Source bodies
+# (.cpp) are deliberately excluded because reusing their object files is safe
+# as long as the headers they saw did not change.
+function Get-BuildInputFingerprint([string]$RepositoryRoot, [string]$FrameworkRoot) {
+    $excludedRoots = @('.git', '.vs', 'build')
+    $productInputFiles = Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp', '*.vcxproj' |
+        Where-Object {
+            $firstSegment = $_.FullName.Substring($RepositoryRoot.Length + 1).Split('\')[0]
+            $firstSegment -notin $excludedRoots
+        }
+    $frameworkInputFiles = @(
+        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\runtime') -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp'
+        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\backends\overture') -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp'
+        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\adapters\overture_source') -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp', '*.props'
+    )
+    $inputFiles = @($productInputFiles) + @($frameworkInputFiles) | Sort-Object FullName
+
+    $fingerprintInput = $inputFiles | ForEach-Object {
+        '{0}|{1}' -f $_.FullName, $_.LastWriteTimeUtc.Ticks
+    }
+    $joinedInput = $fingerprintInput -join "`n"
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hashBytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($joinedInput))
+        return [System.BitConverter]::ToString($hashBytes).Replace('-', '').ToLowerInvariant()
+    } finally {
+        $sha256.Dispose()
+    }
+}
+
+$vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (-not (Test-Path -LiteralPath $vswherePath)) {
+    throw 'Visual Studio Installer was not found. Install Visual Studio 2022 Build Tools with the Desktop development with C++ workload.'
+}
+
+$msbuildPath = & $vswherePath `
+    -latest `
+    -products '*' `
+    -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+    -find 'MSBuild\**\Bin\MSBuild.exe' |
+    Select-Object -First 1
+
+if (-not $msbuildPath) {
+    throw 'MSBuild with the Visual C++ x86/x64 tools was not found. Install the Desktop development with C++ workload.'
+}
+
+$solutionPath = Join-Path $repositoryRoot 'PenumbraVR.sln'
+$executablePath = Join-Path $repositoryRoot "build\bin\$Configuration\Penumbra_vr.exe"
+$stampPath = Join-Path $repositoryRoot "build\.rebuild-guard-$Configuration"
+
+# The legacy project does not reliably invalidate every dependent .obj after
+# class layouts change through headers, which can mix an old allocation size
+# with a new constructor and corrupt the heap. A full rebuild is therefore
+# mandatory whenever any header or project file changed since the last
+# successful build; otherwise the existing objects already agree with the
+# current headers and an incremental build is safe.
+$fingerprint = Get-BuildInputFingerprint -RepositoryRoot $repositoryRoot -FrameworkRoot $frameworkRoot
+$storedFingerprint = $null
+if (Test-Path -LiteralPath $stampPath) {
+    $storedFingerprint = (Get-Content -Raw -LiteralPath $stampPath).Trim()
+}
+$canBuildIncrementally = -not $Full -and
+    (Test-Path -LiteralPath $executablePath) -and
+    ($storedFingerprint -eq $fingerprint)
+$buildTarget = if ($canBuildIncrementally) { '/t:Build' } else { '/t:Rebuild' }
+
+$msbuildArguments = @(
+    $solutionPath,
+    '/m',
+    '/nr:false',
+    $buildTarget,
+    "/p:Configuration=$Configuration",
+    '/p:Platform=Win32',
+    '/p:PreferredToolArchitecture=x64',
+    '/nologo',
+    '/verbosity:minimal'
+)
+
+$modeLabel = if ($canBuildIncrementally) { 'incremental, header inputs unchanged' } else { 'full rebuild, header or project inputs changed' }
+Write-Host "Building Penumbra VR ($Configuration|Win32): $modeLabel"
+$buildStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+& $msbuildPath $msbuildArguments
+if ($LASTEXITCODE -ne 0) {
+    throw "MSBuild failed with exit code $LASTEXITCODE"
+}
+$buildStopwatch.Stop()
+Write-Host ('Build finished in {0:mm\:ss} ({1}).' -f $buildStopwatch.Elapsed, $buildTarget)
+
+# Record the fingerprint only after a successful build so a failed or
+# interrupted rebuild falls back to the conservative full path next time.
+$stampDirectory = Split-Path -Parent $stampPath
+if (-not (Test-Path -LiteralPath $stampDirectory)) {
+    New-Item -ItemType Directory -Path $stampDirectory -Force | Out-Null
+}
+Set-Content -LiteralPath $stampPath -Value $fingerprint -Encoding ascii
+
+$peBytes = [System.IO.File]::ReadAllBytes($executablePath)
+$peHeaderOffset = [System.BitConverter]::ToInt32($peBytes, 0x3c)
+$characteristics = [System.BitConverter]::ToUInt16($peBytes, $peHeaderOffset + 22)
+if (($characteristics -band 0x20) -eq 0) {
+    throw "Built executable is missing IMAGE_FILE_LARGE_ADDRESS_AWARE: $executablePath"
+}
+Write-Host 'Verified Large Address Aware in the executable PE header.' -ForegroundColor Green
+
+# Unit tests: the pure VR math (tracking space, dead zones) must pass before
+# anything else is allowed to proceed.
+$testProjectPath = Join-Path $repositoryRoot 'tests\VRTrackingTest\VRTrackingTest.vcxproj'
+$testExecutablePath = Join-Path $repositoryRoot "build\bin\$Configuration\tests\VRTrackingTest.exe"
+& $msbuildPath $testProjectPath "/p:Configuration=$Configuration" '/p:Platform=Win32' -nologo -verbosity:minimal
+if ($LASTEXITCODE -ne 0) {
+    throw "Unit test project failed to build with exit code $LASTEXITCODE"
+}
+& $testExecutablePath
+if ($LASTEXITCODE -ne 0) {
+    throw "Unit tests failed with exit code $LASTEXITCODE"
+}
+Write-Host 'Unit tests passed.' -ForegroundColor Green
+
+if ($Package -or $Deploy) {
+    & (Join-Path $PSScriptRoot 'package.ps1') -Configuration $Configuration
+}
+
+if ($Deploy) {
+    $deployArguments = @{
+        Configuration = $Configuration
+        SteamLauncher = -not $NoSteamLauncher
+    }
+    if ($InstallRoot) {
+        $deployArguments.InstallRoot = $InstallRoot
+    }
+    & (Join-Path $PSScriptRoot 'deploy.ps1') @deployArguments
+}

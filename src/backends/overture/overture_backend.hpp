@@ -28,6 +28,7 @@ public:
     // update without static-only mode. displacement already includes dt.
     [[nodiscard]] virtual std::array<float, 3> MoveBodyBy(
         const std::array<float, 3>& displacement,
+        float delta_seconds,
         BodyMoveKind kind) noexcept = 0;
     virtual void StartJump() noexcept = 0;
     virtual void SetJumpHeld(bool held) noexcept = 0;

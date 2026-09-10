@@ -75,11 +75,15 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Keep Overture's existing build and tests green during extraction
 - [x] Port Rework's tracking space, room-scale rejection and locomotion policy
 - [x] Introduce the initial narrow Overture body/jump backend contract
-- [ ] Link the source HPL adapter into Overture and validate it in the headset
+- [x] Link the source HPL adapter into the real Overture executable and build a test package
+- [x] Migrate the minimal Overture/HPL source host, dependencies and packaging into the Framework
+- [x] Remove the Rework working tree from the Overture compile/package dependency graph
+- [x] Deploy the autonomous Release overlay and complete an initial functional SteamVR/headset/controller pass without an evident Rework regression
+- [ ] Validate tracking, height, recenter, locomotion, jump and room-scale rejection in the headset
 - [x] Add host-independent tests for transforms, actions and settings
 - [x] Preserve copyright, license and provenance for extracted components
 
-Exit criterion: the shared runtime contains the proven, game-neutral behavior required by at least the current Overture integration milestone, while each game-specific body/render/input boundary remains explicit. Overture source linkage and headset equivalence are still separate validation gates.
+Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current Overture integration milestone, while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete, and the exact autonomous Release artifact has passed an initial functional headset test. Exhaustive item-by-item equivalence and broader hardware coverage remain separate from this completed integration milestone.
 
 ## Phase 4 — Black Plague gameplay VR
 

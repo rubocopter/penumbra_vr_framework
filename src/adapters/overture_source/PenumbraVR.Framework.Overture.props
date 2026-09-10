@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <PenumbraVRFrameworkRoot>$([MSBuild]::NormalizeDirectory('$(MSBuildThisFileDirectory)..\..\..'))</PenumbraVRFrameworkRoot>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(PenumbraVRFrameworkRoot)src\adapters\overture_source;$(PenumbraVRFrameworkRoot)src\backends\overture;$(PenumbraVRFrameworkRoot)src\runtime;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\adapters\overture_source\overture_source_integration.cpp" Link="PenumbraVRFramework\overture_source_integration.cpp" />
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\backends\overture\overture_backend.cpp" Link="PenumbraVRFramework\overture_backend.cpp" />
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\runtime\vr_locomotion.cpp" Link="PenumbraVRFramework\vr_locomotion.cpp" />
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\runtime\vr_native_intents.cpp" Link="PenumbraVRFramework\vr_native_intents.cpp" />
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\runtime\vr_math.cpp" Link="PenumbraVRFramework\vr_math.cpp" />
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\runtime\vr_settings.cpp" Link="PenumbraVRFramework\vr_settings.cpp" />
+    <ClCompile Include="$(PenumbraVRFrameworkRoot)src\runtime\vr_tracking_space.cpp" Link="PenumbraVRFramework\vr_tracking_space.cpp" />
+  </ItemGroup>
+</Project>

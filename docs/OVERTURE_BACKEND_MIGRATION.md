@@ -1,13 +1,18 @@
 # Overture backend migration and Black Plague comparison
 
-Reference revision: `E:\penumbra_vr_rework`, Git commit `23c890f` (`v0.1.0`).
+Reference revision: `rubocopter/penumbra_vr_rework`, Git commit `23c890f` (`v0.1.0`).
 
 This document records the evidence used for the first Overture backend in the
 framework. `pvr_overture_backend` is a functional, host-tested gameplay core:
 it consumes shared input/settings/tracking, drives room-scale and stick motion,
-and delegates HPL collision and jump calls through `OvertureBodyAdapter`. It is
-not yet linked into the Rework game executable, deployed to the installed game,
-or headset-validated. Those three states must not be conflated.
+and delegates HPL collision and jump calls through `OvertureBodyAdapter`.
+`src/adapters/overture_source` implements that interface with real Overture/HPL
+types and is linked into a Win32 `Penumbra_vr.exe` from the Framework-owned
+source host under `products/overture`. A Release test package exists; it has not
+only been built independently, but has since been deployed and exercised with
+SteamVR, a real headset and controllers. The first functional pass showed no
+evident regression against the previously tested Rework behavior. That evidence
+does not constitute an exhaustive feature or hardware validation.
 
 ## Evidence inspected before the port
 
@@ -173,13 +178,125 @@ so copying Rework's numbers blindly would mix two geometries. A shared grip
 profile type and a BP-specific measured grip point are the next safe change;
 the mirror remains outside this milestone.
 
+## Real Overture source integration (2026-09-10)
+
+### REWORK
+
+`cButtonHandler::Update` reads `cVRInputState`, handles yaw/recenter/play mode
+and produces `vr_moveVec`. `cPlayer::Update` owns the room-scale/body sequence,
+calls `iCharacterBody::Update(afTimeStep)`, reconciles rejected collision motion,
+consumes stick movement once and updates the tracking player pose. The updater
+registers `cButtonHandler` globally and in `Default`, while `cPlayer` runs only
+in `Default`.
+
+### FRAMEWORK
+
+`OvertureBackend` already owned the equivalent tracking, turn, seated/standing,
+room-scale and locomotion policy behind `OvertureBodyAdapter`, but the adapter
+had no implementation using real `cPlayer`/`iCharacterBody` objects and its move
+method did not receive the HPL update timestep.
+
+### DIFFERENCE
+
+The host-tested backend could not call the real collision solver or jump path,
+and the Rework executable still contained a second inline copy of the same VR
+policy. A direct input call also has to account for HPL's double handler
+registration in `Default` without suppressing the single global call in menus.
+
+### CAUSE
+
+`iCharacterBody::Update` is an Overture/HPL call that requires the current
+simulation timestep. The updater registration and real body lifetime are also
+game-specific facts; they do not belong in the shared runtime.
+
+### SOLUTION
+
+- `OvertureBodyAdapter::MoveBodyBy` now receives `delta_seconds`; the backend
+  forwards the already validated player-frame timestep without changing its
+  displacement policy.
+- `HplOvertureBodyAdapter` maps body position, feet height, `vr_velocity`,
+  `vr_stepstaticonly`, `iCharacterBody::Update`, `Jump` and
+  `SetJumpButtonDown` directly to the proven Rework types and calls.
+- `OvertureSourceIntegration` converts only the existing HPL input, settings and
+  matrix types, synchronizes the runtime tracking state back to `cVRTracking`,
+  resets at the real player/world lifecycle boundaries, and suppresses only the
+  duplicate `Default` input invocation that precedes the same player update.
+- Rework's inline movement/turn/play-mode copy is removed from the consumer;
+  HPL-specific crouch, player-state gating, footsteps, entity interaction and
+  rendering remain owned by Overture.
+- The constants and sequencing remain unchanged: 0.05 m physical step, 0.002 m
+  rejection epsilon, 0.8 m head/body rebase, 1.5 m/s normal, 2.25 m/s sprint and
+  0.5 m/s constrained movement.
+
+## Framework-owned source host (2026-09-10)
+
+The first linked checkpoint used the Rework working tree as the consumer of the
+Framework adapter. That proved the real boundary but left Rework structurally in
+the build graph. The production-development boundary is now inverted:
+
+```text
+products/overture/PenumbraOverture + HPL1Engine + OALWrapper
+    -> src/adapters/overture_source
+    -> src/backends/overture
+    -> src/runtime
+```
+
+The Framework now owns the three Win32 projects, their required Overture/HPL/OAL
+source, pinned headers/libraries/runtime DLLs, the necessary data and shader
+overlays, the legacy tracking test, and all validation/build/package scripts.
+The exact product bindings are a deliberate overlay at `assets/openvr/overture`
+because the shared Framework bindings are not byte-equivalent to the proven
+Overture mappings. Projects and scripts calculate paths from their location and
+reject references to `penumbra_vr_rework` or the former sibling-checkout bridge.
+
+Generated build/package output, repository history/CI, HPL tools and samples,
+non-Windows dependencies, obsolete project variants, and unrelated authoring
+utilities were not migrated. The detailed source-controlled/generated split,
+license files and exclusions are recorded in
+`products/overture/SOURCE_PROVENANCE.md`.
+
+No behavior or constant was changed for this ownership migration. The only
+build-compatibility adjustment is `MinimalRebuild=false` in the Overture game
+project's Debug compiler settings because legacy `/Gm` is incompatible with the
+adapter's required `/std:c++20` on current MSVC.
+
 ## Validation gates
 
-- Framework Debug and Release builds pass with all 24 CTest tests on 2026-09-07.
-- Rework's full Release build pipeline also passes unchanged on 2026-09-07:
-  project checks, 16 offline shaders, 8,752 visual-reference checks and all 289
-  `VRTrackingTest` checks.
-- “Backend core tested”, “linked into Overture”, “deployed”, and “validated in
-  headset” are reported separately.
+- Framework Debug and Release build with all targets, including the Black Plague
+  probe, and all 24 CTest tests pass in both configurations on 2026-09-10. The focused Overture test also
+  verifies that the real-adapter boundary receives the exact frame timestep.
+- The Framework-owned Overture Release/Win32 rebuild passes: project
+  checks, 16 offline shaders, 8,752 visual-reference checks, 231 texture/decode
+  checks, Large Address Aware verification and all 289 `VRTrackingTest` checks.
+- The Overture Debug/Win32 full rebuild also passes Large Address Aware
+  verification and all 289 `VRTrackingTest` checks after the scoped `/Gm`
+  compatibility correction.
+- The packaged executable is
+  `E:\penumbra_vr\products\overture\build\package\Release\PenumbraVR\Penumbra_vr.exe`,
+  3,302,912 bytes, SHA-256
+  `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`.
+- On 2026-09-10 the user deployed the package through its included
+  `Install-PenumbraVR.bat` onto a valid retail Overture installation and ran it
+  with SteamVR, a real headset and controllers. The installed/tested executable
+  hash matched the Framework package exactly:
+  `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`.
+  The user reported behavior perceived as equivalent to the previously tested
+  Rework build and no evident regression during this first functional pass.
+- “Backend core tested”, “linked into Overture”, “startup live-tested”,
+  “deployed”, and “validated in headset” are reported separately. Current state:
+  implemented, linked and host-tested from the standalone Framework source host;
+  deployed and headset-validated for an initial functional integration pass; not
+  exhaustively validated across every feature/controller/scenario and not supported.
 - Black Plague positional tracking stays off until body/capsule logging proves
   the exact-build adapter and collision rejection in representative scenes.
+
+## Remaining exhaustive headset coverage
+
+The autonomous integration milestone no longer needs another deployment proof.
+If Overture validation is expanded later, record each item explicitly rather
+than inferring it from the successful first pass: tracking orientation and scale;
+calibrated height; standing and seated baselines; recenter and both turn modes;
+head-relative walk, sprint and constrained movement; jump edge/hold behavior;
+physical 0.05 m body following; rejected room-scale motion at walls/doors;
+head/body rebase; menus and return to gameplay; and additional controller
+families. Record any measured difference before changing a constant.

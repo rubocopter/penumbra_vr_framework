@@ -262,6 +262,20 @@ set_target_properties(pvr_probe_launcher PROPERTIES
 )
 pvr_enable_warnings(pvr_probe_launcher)
 
+find_program(PVR_POWERSHELL_EXECUTABLE NAMES pwsh powershell REQUIRED)
+add_custom_target(pvr_overture_product
+    COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/tools/Build-OvertureProduct.ps1"
+        -Configuration "$<CONFIG>"
+    USES_TERMINAL
+    VERBATIM)
+add_custom_target(pvr_overture_package
+    COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+        -File "${CMAKE_SOURCE_DIR}/tools/Build-OvertureProduct.ps1"
+        -Configuration "$<CONFIG>" -Package
+    USES_TERMINAL
+    VERBATIM)
+
 if(BUILD_TESTING)
     add_executable(pvr_spatial_interaction_test tests/vr_input_state/spatial_interaction_test.cpp)
     target_include_directories(pvr_spatial_interaction_test PRIVATE src/hooks src/backends/black_plague src/adapters/hpl1 src/graphics)

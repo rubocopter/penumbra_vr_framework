@@ -25,7 +25,7 @@ The Framework is **pre-alpha**. The latest repository checkpoint is documented b
 
 ### Overture
 
-`pvr_overture_backend` contains a host-tested first backend core derived from Rework:
+`pvr_overture_backend` contains a first backend core derived from Rework, now host-tested and functionally validated in a headset through the autonomous Framework product:
 
 - tracking space and calibrated height;
 - seated/standing composition;
@@ -35,9 +35,15 @@ The Framework is **pre-alpha**. The latest repository checkpoint is documented b
 - locomotion policy of `1.5 m/s` walk and `2.25 m/s` sprint;
 - shared interaction reach of `0.18 m`.
 
-`OvertureBodyAdapter` is intentionally the game-specific boundary for HPL body position, feet height, collision movement and jump.
+`OvertureBodyAdapter` remains the game-specific boundary for HPL body position, feet height, collision movement and jump. `src/adapters/overture_source` implements that boundary against the real Overture `cPlayer`/`iCharacterBody` types. The Framework-owned consumer in `products/overture` replaces its inline tracking/movement block with the backend call, retains HPL-specific crouch and footstep ownership, and compiles the Framework sources into `Penumbra_vr.exe` through the supplied MSBuild props file.
 
-**Current gate:** link this adapter into the real Overture executable, deploy a test build, and headset-validate behavior against Rework. Do not treat the host-tested backend as a playable Overture replacement yet.
+The minimal coherent Overture/HPL source host, Win32 dependencies, required resources, validators and package scripts now live under `products/overture`; exact Overture bindings live under `assets/openvr/overture`. Neither build nor package reads the Rework checkout. Debug and Release Win32 builds succeed from the Framework. The tested Release package is at `products/overture/build/package/Release/PenumbraVR`; its 3,302,912-byte executable has SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`.
+
+On 2026-09-10 the user deployed that exact package with its included `Install-PenumbraVR.bat` over a valid retail Overture installation, then ran it with SteamVR, a real headset and controllers. The deployed executable hash matched the autonomous Framework artifact above. The first functional headset pass showed perceived behavior equivalent to the previously tested Rework build, with no evident regression reported. This validates the autonomous build/deployment/integration path in a headset; it does **not** prove exhaustive coverage of every tracking, calibration, comfort, locomotion, collision, interaction, visual or hardware case, and it is not yet a `supported` release claim.
+
+Validation on 2026-09-10: the standalone Overture Release pipeline passed all shader, 8,752 visual, 231 texture/decode, metadata, LAA, package and 289 legacy tracking-test checks; the full Debug build also passed its 289 checks after disabling legacy `/Gm` only for the C++20 game project. Root Debug and Release builds include `PenumbraVR.BlackPlague.Probe.dll`, and all 24 CTest tests pass in each configuration. The evaluated Release MSBuild project and all build/package inputs contain no positive Rework checkout path; `git diff --check` passes.
+
+**Milestone state:** autonomous Overture source/build/package integration is complete and has an initial functional headset validation. Preserve the tested hash and behavior. Any future exhaustive Overture checklist or regression report remains a separate evidence gate; do not reopen the source-host migration or mark the product supported without that evidence.
 
 ### Black Plague
 
@@ -117,11 +123,11 @@ Do not patch symptoms first. For the known recurring issues, read `DEBUG_HANDOFF
 ## Immediate next session
 
 1. Read `AGENTS.md`, `CODEX_HANDOFF.md` and `DEBUG_HANDOFF.md`.
-2. Inspect the exact Rework implementation and current Framework Overture backend side-by-side.
-3. Link `OvertureBodyAdapter` into the real Overture executable without duplicating runtime logic.
-4. Build/deploy a test package and validate tracking, height, recenter, movement, sprint, crouch/jump and room-scale rejection in the headset.
-5. Record any behavioral difference against Rework before changing constants.
-6. Only after Overture equivalence is established, resume Black Plague body/capsule mapping.
+2. Do not repeat the completed Overture source-host migration. Preserve the tested Release executable hash and use Rework `23c890f` only when a concrete behavioral comparison is needed.
+3. Resume Black Plague exact-build research at the real player body/capsule/collision-resolution boundary.
+4. Add telemetry for requested/accepted displacement, body/feet position and head/body divergence before enabling positional HMD translation.
+5. Only after that boundary is measured, route the shared Rework displacement policy through a Black Plague body adapter.
+6. Keep mirror, Requiem, production installer work and speculative movement/collider changes out of this milestone.
 
 ## Black Plague investigation order
 
@@ -157,7 +163,8 @@ For interaction, prioritize:
 - Original Overture mod: `veryjos/penumbra_vr`
 - Proven Rework reference: `rubocopter/penumbra_vr_rework` revision `23c890f`
 - Windows/x86 target for current binary research
-- OpenVR SDK is an external optional dependency
+- OpenVR is optional for root CMake targets; the Overture product pins its required OpenVR 2.15.6 Win32 SDK under `products/overture/dependencies`
+- Rework `23c890f` is reference-only and may be reset without affecting Framework builds
 
 ## Required documentation after meaningful changes
 

@@ -6,6 +6,7 @@
 /packages/
 /dependencies/
 /_deps/
+/products/overture/build/
 
 # CMake and Visual Studio
 CMakeUserPresets.json
@@ -23,6 +24,11 @@ CMakeUserPresets.json
 *.lib
 *.obj
 *.pdb
+
+# The Overture source host vendors only the Win32 link/runtime inputs needed
+# for a clean product build. These exceptions are intentional source inputs.
+!/products/overture/dependencies/**/*.dll
+!/products/overture/dependencies/**/*.lib
 
 # Reverse-engineering databases (export notes/signatures as text or JSON instead)
 *.bak

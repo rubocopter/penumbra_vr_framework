@@ -16,3 +16,12 @@
 *.exe binary
 *.lib binary
 *.png binary
+
+# Overture is imported as an evidence-preserving source/resource snapshot.
+# Keep its inherited whitespace intact; Framework-owned code, scripts and docs
+# remain under Git's default whitespace diagnostics.
+products/overture/PenumbraOverture/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+products/overture/HPL1Engine/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+products/overture/OALWrapper/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+products/overture/dependencies/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab
+products/overture/data/** whitespace=-blank-at-eol,-blank-at-eof,-space-before-tab

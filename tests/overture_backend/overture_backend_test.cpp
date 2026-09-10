@@ -33,7 +33,9 @@ public:
     }
     [[nodiscard]] std::array<float, 3> MoveBodyBy(
         const std::array<float, 3>& displacement,
+        float delta_seconds,
         BodyMoveKind kind) noexcept override {
+        last_delta_seconds = delta_seconds;
         if (kind == BodyMoveKind::room_scale_static_only) {
             ++physical_moves;
             if (block_physical) {
@@ -55,6 +57,7 @@ public:
     int physical_moves = 0;
     int stick_moves = 0;
     int jumps = 0;
+    float last_delta_seconds = 0.0F;
     bool block_physical = false;
     bool jump_held = false;
 };
@@ -99,6 +102,7 @@ int main() {
     if (body.physical_moves != 1 || body.stick_moves != 1 || body.jumps != 1 ||
         !body.jump_held || !Near(result.requested_room_scale_distance, 0.05F) ||
         !Near(result.rejected_room_scale_distance, 0.05F) ||
+        !Near(body.last_delta_seconds, 0.10F) ||
         !Near(body.position[2], -0.15F) ||
         !Near(result.head_anchor[0], 0.05F) ||
         !Near(result.head_anchor[2], -0.15F)) {
