@@ -12,6 +12,12 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Overture-specific OpenVR binding overlay under `assets/openvr/overture`; shared bindings remain available to the other backends.
 - Shared tracking-space, height/seated calibration, world-yaw, room-scale collision reconciliation, fixed-displacement locomotion and interaction-reach policies.
 - Black Plague HMD anchor/current-position, physical-delta and explicit positional-scale telemetry for the pending exact-build body adapter.
+- Exact-build Black Plague player/character-body/native-shape/movement/collision
+  mapping plus read-only telemetry for body/feet position, physics timestep,
+  requested displacement, immediate solver output, final accepted displacement
+  and unapplied HMD/body divergence. The probe is live-tested for the mapped
+  body/collision and native jump pipeline; positional translation is still
+  disabled.
 - One-step Black Plague `--launch-vr` / `Start-Black-Plague-VR.cmd` and read-only `--check-vr` preflight.
 - Real OpenVR action/pose/skeleton/haptic reader, exact-build native input bridge and tracked desktop-menu panels with right-controller UI pointing. These paths remain headset-validation work unless explicitly marked otherwise.
 - Provisional depth-tested procedural gloves, controller-directed native picking and palm-relative free-body grab/throw adapter. Native physics transitions are preserved; joints, palm collisions and tool/light attachment remain pending.
@@ -30,14 +36,18 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 - `pvr_overture_backend` now ports the proven Rework tracking-space, room-scale rejection/reconciliation and 1.5/2.25 m/s locomotion policy behind an Overture-specific HPL body/jump adapter. That adapter is linked into a real `Penumbra_vr.exe` from the Framework-owned source host. The exact autonomous Release artifact has been deployed and functionally exercised in a headset; exhaustive equivalence remains a separate evidence gate.
 - The migration audit records the explicit REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION comparison and is the authoritative reference for what was ported versus what still requires a game-specific adapter.
-- Black Plague positional HMD translation remains disabled. The framework does not currently have a verified Black Plague head/body collider; the next step is exact-build body/capsule mapping and collision-resolution telemetry rather than speculative camera movement.
+- Black Plague positional HMD translation remains disabled. The exact native
+  character-body and collision boundary is mapped and live-characterized;
+  implementation of the narrow displacement adapter remains the next step.
 - The desktop monitor mirror is intentionally not a current supported feature. Existing code/commands remain experimental and must not be counted as a validated gameplay capability.
 - Rework revision `23c890f` remains the immutable behavioral baseline. Its working tree and the earlier consumer-side integration delta are no longer build or packaging dependencies and may be reset without affecting the Framework product.
 
 ### Validated
 
 - The current OpenVR and no-OpenVR configurations compile under MSVC with warnings treated as errors.
-- Twenty-four host-independent tests pass in OpenVR Release, OpenVR Debug and the no-OpenVR Release configuration for the current Overture integration milestone.
+- Twenty-five host-independent tests pass in OpenVR Release, OpenVR Debug and
+  the no-OpenVR Release configuration, including the exact-build BP
+  body/collision observation test.
 - The Framework-owned Overture Release pipeline passes: project checks, 16 shader compilations, 8,752 CPU visual checks, 231 texture selection/decode checks, 289 `VRTrackingTest` checks, Large Address Aware verification and package validation.
 - The Framework-owned Overture Debug full rebuild also passes Large Address Aware verification and all 289 `VRTrackingTest` checks; only the game project disables legacy `/Gm` to coexist with C++20.
 - The user deployed the autonomous Release overlay with `Install-PenumbraVR.bat` and ran the exact packaged executable (SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`) with SteamVR, a real headset and controllers. The first functional pass felt equivalent to the previously tested Rework behavior and exposed no evident regression. This is initial headset validation, not exhaustive feature/hardware coverage or a supported-release claim.

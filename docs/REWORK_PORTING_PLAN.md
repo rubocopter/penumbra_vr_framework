@@ -90,8 +90,19 @@ item-by-item equivalence and broader hardware coverage remain separate evidence.
 
 The corresponding Black Plague movement problem remains a binary-adapter task:
 feeding its native acceleration/cap system cannot be made Rework-equivalent by
-simply multiplying input. The next BP movement step is to map the exact native
-body/collision boundary and route the shared displacement policy through it.
+simply multiplying input. Its exact player link, character-body tick and first
+horizontal collision-resolution call are now live-characterized by a read-only
+requested/solver/final displacement probe. The next gate is routing the shared
+horizontal policy through a narrow BP adapter.
+
+Black Plague also supplies positive evidence back toward the Framework. Its
+current `VrHandArticulation` policy preserves five independent curls, distinct
+phalange curves, finger spread and thumb opposition without the Overture rig's
+forced-pose assumptions. The user currently identifies that response as better.
+Keep this game-neutral output as the future shared baseline; Overture's bind
+axes, bone lookup, measured deadzone, optional smoothing and handle-radius hold
+pose remain a mesh/profile adapter concern. Do not regress BP to the Overture
+rig merely because Overture is the historical behavior source.
 
 ## Black Plague gameplay priority
 
@@ -112,9 +123,11 @@ with a measured Black Plague socket.
 
 The reported head/world displacement issue is not currently attributable to a
 Framework head collider. Positional HMD translation is disabled in Black Plague
-(`0.0` scale), and the Framework does not yet own a verified BP head/body capsule.
-The next safe step is exact-build body/capsule mapping plus collision-resolution
-telemetry, followed by controlled headset validation. Do not enable speculative
+(`0.0` scale). Static evidence now identifies `cPlayer+0x274` as the native
+`iCharacterBody`, its active HPL physics body/size/position fields, the normal
+physics tick and the solver call. The HPL representation is sphere-or-cylinder
+by dimensions, not a separate Framework capsule; the actual player shape and
+telemetry values are live-characterized. Do not enable speculative
 camera translation as a substitute.
 
 The desktop mirror is intentionally outside the current gameplay milestone.

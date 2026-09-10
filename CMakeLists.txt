@@ -186,6 +186,8 @@ pvr_enable_warnings(pvr_openvr_session)
 target_link_libraries(pvr_openvr_session PUBLIC pvr_vr_action_input)
 
 add_library(pvr_black_plague_backend_probe STATIC
+    src/backends/black_plague/body_collision_probe.cpp
+    src/backends/black_plague/movement_ownership_probe.cpp
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
     src/backends/black_plague/native_input_bridge.cpp
@@ -277,6 +279,15 @@ add_custom_target(pvr_overture_package
     VERBATIM)
 
 if(BUILD_TESTING)
+    add_executable(pvr_body_collision_probe_test
+        tests/black_plague_body/body_collision_probe_test.cpp)
+    target_include_directories(pvr_body_collision_probe_test PRIVATE
+        src/hooks src/backends/black_plague src/runtime)
+    target_link_libraries(pvr_body_collision_probe_test PRIVATE
+        pvr_rel32_call_hook)
+    pvr_enable_warnings(pvr_body_collision_probe_test)
+    add_test(NAME body_collision_probe COMMAND pvr_body_collision_probe_test)
+
     add_executable(pvr_spatial_interaction_test tests/vr_input_state/spatial_interaction_test.cpp)
     target_include_directories(pvr_spatial_interaction_test PRIVATE src/hooks src/backends/black_plague src/adapters/hpl1 src/graphics)
     target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook pvr_rel32_call_hook)

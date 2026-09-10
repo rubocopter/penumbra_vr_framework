@@ -5,6 +5,8 @@
 #include "render_target_policy.hpp"
 #include "render_world_probe.hpp"
 #include "native_input_bridge.hpp"
+#include "body_collision_probe.hpp"
+#include "movement_ownership_probe.hpp"
 #include "spatial_interaction.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_math.hpp"
@@ -111,8 +113,11 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         !render_world.persistent_stereo_active &&
         (render_world.stereo_eye_passes != 0 ||
          render_world.compositor_submitted_frames != 0);
+    const bool jump_burst_complete =
+        penumbra_vr::backends::black_plague::IsBodyJumpBurstComplete();
     if (frame_number <= 10 || frame_number % 300 == 0 ||
         bounded_stereo_activity ||
+        jump_burst_complete ||
         render_world.stereo_failed ||
         !render_world.stereo_camera_restored ||
         render_world.hmd_visibility_failures != 0 ||
@@ -210,6 +215,99 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(telemetry.dropped_model_view_matrices),
             static_cast<unsigned long>(telemetry.texture_loads),
             static_cast<unsigned long>(telemetry.ortho_calls));
+        const auto body =
+            penumbra_vr::backends::black_plague::ConsumeBodyCollisionTelemetry();
+        if (body.valid) {
+            const float head_body_x = render_world.hmd_tracking_position_m[0] -
+                render_world.hmd_tracking_anchor_m[0];
+            const float head_body_z = render_world.hmd_tracking_position_m[2] -
+                render_world.hmd_tracking_anchor_m[2];
+            penumbra_vr::probe::WriteLog(
+                "body_collision updates=%llu horizontal_collision_requests=%llu "
+                "player=%p character_body=%p physics_body=%p physics_world=%p "
+                "dt=%.6f character_size=[%.4f,%.4f,%.4f] "
+                "native_shape=%s shape_radius=%.4f "
+                "body_before=[%.4f,%.4f,%.4f] body_after=[%.4f,%.4f,%.4f] "
+                "feet_before=[%.4f,%.4f,%.4f] feet_after=[%.4f,%.4f,%.4f] "
+                "collision_sample_valid=%u requested_delta=[%.5f,%.5f,%.5f] "
+                "solver_delta=[%.5f,%.5f,%.5f] accepted_delta=[%.5f,%.5f,%.5f] "
+                "unapplied_hmd_body_divergence_m=[%.5f,%.5f] "
+                "unapplied_hmd_body_divergence_horizontal_m=%.5f "
+                "positional_translation_enabled=0",
+                static_cast<unsigned long long>(body.character_updates),
+                static_cast<unsigned long long>(
+                    body.horizontal_collision_requests),
+                reinterpret_cast<void*>(body.player),
+                reinterpret_cast<void*>(body.character_body),
+                reinterpret_cast<void*>(body.physics_body),
+                reinterpret_cast<void*>(body.physics_world),
+                body.delta_seconds,
+                body.character_size[0], body.character_size[1],
+                body.character_size[2],
+                body.native_shape_is_cylinder ? "cylinder" : "sphere",
+                body.shape_radius,
+                body.body_position_before[0], body.body_position_before[1],
+                body.body_position_before[2], body.body_position_after[0],
+                body.body_position_after[1], body.body_position_after[2],
+                body.feet_position_before[0], body.feet_position_before[1],
+                body.feet_position_before[2], body.feet_position_after[0],
+                body.feet_position_after[1], body.feet_position_after[2],
+                body.collision_sample_valid ? 1U : 0U,
+                body.requested_displacement[0],
+                body.requested_displacement[1],
+                body.requested_displacement[2],
+                body.collision_resolved_displacement[0],
+                body.collision_resolved_displacement[1],
+                body.collision_resolved_displacement[2],
+                body.accepted_displacement[0],
+                body.accepted_displacement[1],
+                body.accepted_displacement[2],
+                head_body_x, head_body_z,
+                render_world.hmd_horizontal_delta_m);
+        }
+        if (jump_burst_complete) {
+            const auto burst =
+                penumbra_vr::backends::black_plague::ConsumeBodyJumpBurstTelemetry();
+            penumbra_vr::probe::WriteLog(
+                "body_jump_burst samples=%llu sequence_range=[%llu,%llu]",
+                static_cast<unsigned long long>(burst.count),
+                static_cast<unsigned long long>(burst.samples[0].body_update_sequence),
+                static_cast<unsigned long long>(burst.samples[burst.count - 1].body_update_sequence));
+            for (std::size_t index = 0; index < burst.count; ++index) {
+                const auto& sample = burst.samples[index];
+                const auto& body_sample = sample.body;
+                const float vertical_speed_from_accepted_delta =
+                    body_sample.delta_seconds > 0.0F
+                    ? body_sample.accepted_displacement[1] / body_sample.delta_seconds
+                    : 0.0F;
+                penumbra_vr::probe::WriteLog(
+                    "body_jump_tick sequence=%llu dt=%.6f player=%p body=%p "
+                    "body=[%.5f,%.5f,%.5f] feet=[%.5f,%.5f,%.5f] "
+                    "requested=[%.5f,%.5f,%.5f] solver=[%.5f,%.5f,%.5f] accepted=[%.5f,%.5f,%.5f] "
+                    "vertical_speed_from_accepted_delta=%.5f player_268=%ld player_26c=%u "
+                    "jump=[down_1fc=%u count_200=%.6f max_204=%.6f] move_state=[index_2d0=%ld object=%p]",
+                    static_cast<unsigned long long>(sample.body_update_sequence),
+                    body_sample.delta_seconds,
+                    reinterpret_cast<void*>(body_sample.player),
+                    reinterpret_cast<void*>(body_sample.character_body),
+                    body_sample.body_position_after[0], body_sample.body_position_after[1], body_sample.body_position_after[2],
+                    body_sample.feet_position_after[0], body_sample.feet_position_after[1], body_sample.feet_position_after[2],
+                    body_sample.requested_displacement[0], body_sample.requested_displacement[1], body_sample.requested_displacement[2],
+                    body_sample.collision_resolved_displacement[0], body_sample.collision_resolved_displacement[1], body_sample.collision_resolved_displacement[2],
+                    body_sample.accepted_displacement[0], body_sample.accepted_displacement[1], body_sample.accepted_displacement[2],
+                    vertical_speed_from_accepted_delta,
+                    static_cast<long>(sample.player_268),
+                    static_cast<unsigned int>(sample.player_26c),
+                    static_cast<unsigned int>(sample.jump_button_down_1fc),
+                    sample.jump_count_200, sample.max_jump_count_204,
+                    static_cast<long>(sample.move_state_index_2d0),
+                    reinterpret_cast<void*>(sample.move_state));
+            }
+        }
+        const auto ownership = penumbra_vr::backends::black_plague::ConsumeMovementOwnershipTelemetry();
+        if (ownership.valid) penumbra_vr::probe::WriteLog(
+            "movement_ownership sequence=%llu jump=%llu hold=%llu sprint=[%llu,%llu] crouch=[pressed=%llu release_or_not_held=%llu] gravity_disabled_sync=[camera=%llu entity=%llu] player=%p body=%p character_camera=%p",
+            static_cast<unsigned long long>(ownership.sequence), static_cast<unsigned long long>(ownership.jump), static_cast<unsigned long long>(ownership.jump_hold), static_cast<unsigned long long>(ownership.sprint_start), static_cast<unsigned long long>(ownership.sprint_stop), static_cast<unsigned long long>(ownership.crouch_pressed), static_cast<unsigned long long>(ownership.crouch_release_or_not_held), static_cast<unsigned long long>(ownership.gravity_disabled_camera_sync), static_cast<unsigned long long>(ownership.gravity_disabled_entity_sync), reinterpret_cast<void*>(ownership.player), reinterpret_cast<void*>(ownership.body), reinterpret_cast<void*>(ownership.camera));
         if (telemetry.has_projection) {
             const auto& m = telemetry.last_projection;
             penumbra_vr::probe::WriteLog(
@@ -614,6 +712,16 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     penumbra_vr::probe::WriteLog("Native controller input bridge installed=%u error=%s",
         native_input_ready ? 1U : 0U, hook_error.c_str());
     if (native_input_ready) {
+        const bool body_probe_ready =
+            penumbra_vr::backends::black_plague::InstallBodyCollisionProbe(
+                hook_error);
+        penumbra_vr::probe::WriteLog(
+            "Body/collision telemetry installed=%u error=%s",
+            body_probe_ready ? 1U : 0U, hook_error.c_str());
+        const bool ownership_probe_ready =
+            penumbra_vr::backends::black_plague::InstallMovementOwnershipProbe(hook_error);
+        penumbra_vr::probe::WriteLog("Movement ownership telemetry installed=%u error=%s",
+            ownership_probe_ready ? 1U : 0U, hook_error.c_str());
         const bool spatial_ready = penumbra_vr::backends::black_plague::InstallSpatialInteraction(hook_error);
         penumbra_vr::probe::WriteLog("Spatial interaction installed=%u error=%s",
             spatial_ready ? 1U : 0U, hook_error.c_str());
@@ -664,6 +772,17 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
     }
     if (!penumbra_vr::backends::black_plague::RemoveSpatialInteraction(error)) {
         penumbra_vr::probe::WriteLog("Spatial interaction removal failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    if (!penumbra_vr::backends::black_plague::RemoveMovementOwnershipProbe(error)) {
+        penumbra_vr::probe::WriteLog("Movement ownership telemetry removal failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    if (!penumbra_vr::backends::black_plague::RemoveBodyCollisionProbe(error)) {
+        penumbra_vr::probe::WriteLog(
+            "Body/collision telemetry removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }

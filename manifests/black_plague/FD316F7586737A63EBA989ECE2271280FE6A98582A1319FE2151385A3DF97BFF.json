@@ -640,6 +640,208 @@
         "returns with ret 0x0C",
         "has one direct caller in the source-matching cScene::Render flow"
       ]
+    },
+    "game.cPlayer.MoveForward": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0009CBC0",
+      "preferredVirtualAddress": "0x0049CBC0",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "float amount",
+        "float frameTime"
+      ],
+      "objectOffsets": {
+        "characterBody": "0x274"
+      },
+      "evidence": [
+        "loads cPlayer+0x274 as iCharacterBody",
+        "forwards direction 0, amount and frameTime to hpl.iCharacterBody.Move",
+        "is the direct target already used by the exact-build native input bridge"
+      ]
+    },
+    "hpl.iCharacterBody.Move": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D4F50",
+      "preferredVirtualAddress": "0x004D4F50",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "eCharDir direction",
+        "float amount",
+        "float frameTime"
+      ],
+      "objectOffsets": {
+        "positiveMoveSpeed": "0x60 + direction*4",
+        "negativeMoveSpeed": "0x68 + direction*4",
+        "moveSpeed": "0x70 + direction*4",
+        "moveAcceleration": "0x78 + direction*4",
+        "moving": "0x88 + direction"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "D9 44 24 08 56 8B F1 57 8B 7C 24 0C D8 4C BE 78 D8 4C 24 14 D8 44 BE 70 D9 5C BE 70 C6 84 37 88",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "evidence": [
+        "updates native acceleration and move-speed state rather than applying displacement directly",
+        "clamps against the native positive and negative directional speed limits",
+        "returns with ret 0x0C"
+      ]
+    },
+    "hpl.iPhysicsWorld.Update": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D45B0",
+      "preferredVirtualAddress": "0x004D45B0",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "float frameTime"
+      ],
+      "objectOffsets": {
+        "characterBodies": "0x20"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "53 56 8B F1 8B 46 58 57 33 FF 3B C7 74 09 50 E8 34 A7 11 00 83 C4 04 89 7E 58 89 7E 5C 89 7E 60",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "owner": "hpl.iPhysicsWorld.Update character-body loop",
+          "rva": "0x000D460A",
+          "bytes": "E8 F1 27 00 00",
+          "target": "hpl.iCharacterBody.Update",
+          "matchesInText": 1
+        }
+      ],
+      "evidence": [
+        "iterates the character-body list at world+0x20",
+        "passes the physics-world frameTime to every character body",
+        "matches the released HPL1 iPhysicsWorld::Update ordering"
+      ]
+    },
+    "hpl.iCharacterBody.Update": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D6E00",
+      "preferredVirtualAddress": "0x004D6E00",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "float frameTime"
+      ],
+      "objectOffsets": {
+        "active": "0x30",
+        "collideCharacter": "0x31",
+        "testCollision": "0x32",
+        "gravityActive": "0x33",
+        "position": "0x48",
+        "lastPosition": "0x54",
+        "size": "0xC4",
+        "activePhysicsBody": "0x23C",
+        "physicsWorld": "0x240"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "rva": "0x000D6E15",
+        "bytes": "81 EC D4 05 00 00 53 55 56 8B F1 8A 46 30 33 DB 84 C0 57 0F 84 95 12 00",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "evidence": [
+        "copies position+0x48 to lastPosition+0x54 at the start of an active update",
+        "integrates directional movement with the supplied frameTime",
+        "requests horizontal collision resolution before native step, gravity and attachment phases",
+        "matches the released pre-Rework HPL1 character-body algorithm and layout"
+      ]
+    },
+    "hpl.iPhysicsWorld.CheckShapeWorldCollision": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D4830",
+      "preferredVirtualAddress": "0x004D4830",
+      "callingConvention": "thiscall",
+      "returnValue": "bool",
+      "stackArguments": [
+        "cVector3f* resolvedPosition",
+        "iCollideShape* shape",
+        "const cMatrixf* requestedTransform",
+        "iPhysicsBody* skipBody",
+        "bool skipStatic",
+        "bool isCharacter",
+        "iPhysicsWorldCollisionCallback* callback",
+        "bool collideCharacter",
+        "bool debug"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "rva": "0x000D4845",
+        "bytes": "81 EC D0 02 00 00 53 55 33 DB 56 57 8B F9 89 5C 24 34 89 5C 24 38 89 5C",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "owner": "hpl.iCharacterBody.Update initial horizontal resolution",
+          "rva": "0x000D7312",
+          "bytes": "E8 19 D5 FF FF",
+          "matchesInText": 1
+        }
+      ],
+      "evidence": [
+        "the caller builds a translation matrix from the requested character position",
+        "the output vector is compared with that requested position before native step handling",
+        "the binary exposes the pre-Rework nine-argument collision contract; no Overture CollidePlayer or IsPlayer extension is assumed"
+      ]
+    },
+    "hpl.iCharacterBody.nativeShapeRepresentation": {
+      "status": "confirmed-static-mapping",
+      "constructorRva": "0x000D63A0",
+      "preferredVirtualAddress": "0x004D63A0",
+      "objectOffsets": {
+        "size": "0xC4",
+        "activePhysicsBody": "0x23C",
+        "physicsWorld": "0x240",
+        "physicsBodyCharacterFlag": "0x3C7",
+        "physicsBodyCharacterBackPointer": "0x34C"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "rva": "0x000D63B5",
+        "bytes": "83 EC 44 53 55 56 8B E9 57 89 6C 24 10 E8 69 A3 06 00 8D 7D 10 33 DB 8B",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "evidence": [
+        "radius is max(size.x,size.z)/2",
+        "non-spherical characters use the physics-world CreateCylinderShape vtable slot with a pi/2 Z-axis offset",
+        "the created zero-mass gravity-disabled physics body is marked as a character and linked back to iCharacterBody",
+        "this is a native vertical cylinder, not a guessed head collider or a capsule substitute"
+      ]
+    },
+    "game.cPlayer.movementOwnershipProbeCalls": {
+      "status": "confirmed-initialized-image",
+      "callingConvention": "thiscall targets; held jump has one bool stack argument",
+      "jumpBurstObservedFields": {
+        "playerEligibilityFields": ["0x268", "0x26C"],
+        "jumpHoldFields": { "buttonDown": "0x1FC", "count": "0x200", "thresholdReference": "0x204" },
+        "moveState": { "index": "0x2D0", "vector": "0x2D8" },
+        "note": "+0x200 is not clamped by +0x204: live held input advances it beyond 0.3; release resets it to +0x204. +0x268 is the 25-tick ground-grace counter; +0x26C remains an unclassified alternate eligibility flag."
+      },
+      "directCallSites": [
+        { "concern": "jump", "rva": "0x000052A5", "bytes": "E8 F6 7B 09 00", "targetRva": "0x0009CEA0", "targetSignature": "56 8B F1 8B 8E C4 02 00 00 8B 86 BC 02 00 00 8D" },
+        { "concern": "jump_hold", "prefixRva": "0x000052CD", "prefixBytes": "6A 01", "rva": "0x000052CF", "bytes": "E8 BC 55 09 00", "targetRva": "0x0009A890", "targetSignature": "8A 44 24 04 84 C0 56 8B F1 88 86 FC 01 00 00 74" },
+        { "concern": "sprint_start", "rva": "0x000052F7", "bytes": "E8 44 7C 09 00", "targetRva": "0x0009CF40", "targetSignature": "8A 81 6C 02 00 00 84 C0 75 16 8B 81 BC 02 00 00" },
+        { "concern": "sprint_stop", "rva": "0x0000531F", "bytes": "E8 4C 7C 09 00", "targetRva": "0x0009CF70", "targetSignature": "8A 81 6C 02 00 00 84 C0 75 16 8B 81 BC 02 00 00" },
+        { "concern": "crouch_pressed", "rva": "0x00005347", "bytes": "E8 54 7C 09 00", "targetRva": "0x0009CFA0", "targetSignature": "8A 81 6C 02 00 00 84 C0 75 16 8B 81 BC 02 00 00" },
+        { "concern": "crouch_release_or_not_held", "rva": "0x0000538A", "bytes": "E8 41 7C 09 00", "targetRva": "0x0009CFD0", "targetSignature": "8A 81 6C 02 00 00 84 C0 75 16 8B 81 BC 02 00 00" },
+        { "concern": "gravity_disabled_camera_sync", "rva": "0x000D790C", "bytes": "E8 EF E5 FF FF", "targetRva": "0x000D5F00", "targetSignature": "83 EC 28 56 8B F1 8B 86 10 01 00 00 85 C0 0F 84" },
+        { "concern": "gravity_disabled_entity_sync", "rva": "0x000D7913", "bytes": "E8 08 E8 FF FF", "targetRva": "0x000D6120", "targetSignature": "81 EC 9C 00 00 00 53 8B D9 8B 83 30 01 00 00 85" }
+      ],
+      "evidence": [
+        "decoded from artifacts/black-plague-22000-live.bin after initialized-memory capture",
+        "0x52CD is a push instruction, not a direct call; treating it as an E8 callsite causes the required fail-closed rejection",
+        "the native input bridge owns adjacent query sites, not these eight action calls",
+        "0x5347 is the pressed branch; 0x538A is reached for released/not-held handling and both can occur for a toggle crouch press",
+        "0xD790C/0xD7913 are the gravity-disabled branch only; gravity-active player bodies instead reach the later unconditional synchronization calls"
+      ]
     }
   }
 }

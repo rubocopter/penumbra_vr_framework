@@ -5,6 +5,146 @@ Base virtual 0x00400000. Los números siguientes son RVAs, nunca offsets del PE
 protegido en disco. Captura local: `artifacts/black-plague-22000-live.bin`.
 Rework de referencia: 23c890f7dbd06b939be9951d282e6e948d9a6623, sin modificar.
 
+## Player/body/movement/collision: mapa estático e instrumentación
+
+El límite nativo se ha localizado en la captura inicializada, sin copiar RVAs
+de Overture y sin habilitar traslación posicional:
+
+```text
+cButtonHandler::Update -> cPlayer (+0x38 en el handler)
+                       -> iCharacterBody* en cPlayer+0x274
+cPlayer::MoveForward/MoveSideways (9CBC0/9CC60)
+                       -> iCharacterBody::Move (D4F50)
+iPhysicsWorld::Update (D45B0), lista +0x20
+                       -> call D460A -> iCharacterBody::Update (D6E00)
+iCharacterBody::Update -> posición deseada
+                       -> call D7312 -> CheckShapeWorldCollision (D4830)
+                       -> step/gravedad/attachments -> posición final aceptada
+```
+
+`Move` no acepta todavía un desplazamiento: integra `amount * acceleration *
+frameTime` en los campos de velocidad direccional `+0x70/+0x74`, usa
+aceleración `+0x78/+0x7C`, flags `+0x88/+0x89` y límites nativos
+`+0x60..+0x6C`. El timestep físico relevante es el que `iPhysicsWorld::Update`
+pasa una vez a cada character body en el callsite `D460A`; el contador previo de
+`ButtonHandler` no era ese límite.
+
+El `iCharacterBody` guarda posición actual en `+0x48`, posición anterior en
+`+0x54`, tamaño activo en `+0xC4`, `iPhysicsBody*` activo en `+0x23C` y
+`iPhysicsWorld*` en `+0x240`. `GetFeetPosition` (D50E0) devuelve la posición del
+cuerpo menos media altura de la shape. El constructor D63A0 calcula radio como
+`max(size.x,size.z)/2`; sólo usa esfera cuando el diámetro coincide con la
+altura dentro de 0,01 y, en otro caso, crea un cilindro rotado 90 grados en Z.
+La shape del jugador concreto se clasificará en el log por su tamaño activo.
+No hay una cápsula separada ni un collider de cabeza del Framework.
+
+`body_collision_probe.cpp` instala dos hooks de observación exact-build. El
+primero envuelve únicamente el callsite `D460A`; el segundo envuelve únicamente
+la primera resolución horizontal `D7312`. Por tick del player correlaciona:
+
+- player, character body, physics body y physics world;
+- tamaño/radio/tipo de shape, posición de cuerpo y pies antes/después;
+- timestep de física;
+- desplazamiento solicitado al solver, salida inmediata del solver y
+  desplazamiento final aceptado tras step/gravedad;
+- offset físico HMD/ancla, registrado como divergencia todavía no aplicada.
+
+Las firmas estables y ambos `E8` se comprueban antes de tocar memoria. Una
+imagen distinta conserva el comportamiento nativo. La prueba sintética cubre
+aceptación parcial, fase vertical posterior, offsets, timestep, desmontaje y
+rechazo cerrado de bytes desconocidos. La sesión manual del 2026-09-10
+(`black-plague-probe-30896.log`) confirmó en vivo player/body/world estable,
+cilindro `0.70 x 1.65 m` (radio `0.35 m`), `dt=1/60`, movimiento libre y tres
+rechazos reales frente a geometría. La divergencia HMD/cuerpo no aplicada fue
+0--0.436 m (mediana 0.105 m), incluido lean físico. Estado: `implemented ->
+host-tested -> live-tested`; no implica validación de room-scale. La traslación
+posicional continúa forzada a cero.
+`tools/Test-BlackPlagueInputMap.ps1` verifica además estos callsites, entradas y
+firmas directamente contra la captura inicializada, sin modificar procesos.
+
+La siguiente prueba pendiente queda limitada al salto: tras el dispatch nativo
+`5299 -> 9CEA0`, la misma sonda `D460A` captura 240 body updates para relacionar
+take-off, impulso, hold, apex, caída y aterrizaje con los campos crudos ya
+confirmados. Cámara/head-bob, footstep-bob, room-scale y multiplicadores quedan
+fuera de esta medición.
+
+### Comparación concreta con Overture
+
+Las primitivas neutrales de tracking/locomoción en `src/runtime` y la
+orquestación probada de `OvertureBackend` siguen siendo la candidata correcta:
+escala 1 unidad/m, pasos físicos de 0,05 m, epsilon de rechazo 0,002 m, rebase
+a 0,8 m, 1,5/2,25 m/s y reconciliación del head anchor. Su adapter de fuente puede escribir `vr_velocity`, activar
+`vr_stepstaticonly`, llamar `iCharacterBody::Update(dt)` y leer la posición
+resuelta. BP conserva el character body HPL base, pero no posee esos dos campos
+añadidos por Rework ni los argumentos `CollidePlayer/IsPlayer` de su solver.
+
+Por tanto, posición de cuerpo/pies, timestep y resultado aceptado encajan ya en
+el contrato conceptual estrecho de una futura `BlackPlagueBodyAdapter`. La
+política de Overture debe extraerse mecánicamente al runtime cuando el adapter
+pueda devolver desplazamiento aceptado: no debe quedar una segunda política BP.
+Aún faltan inyección, static-only, jump/crouch y propietarios de bob; conectar
+la política ahora podría duplicar `iCharacterBody::Update`. No se debe emular
+`vr_velocity` escribiendo offsets inexistentes ni llamar dos veces a `Update`
+sin demostrar su secuencia.
+
+### Ownership del movimiento plano: mapa estático pendiente de sonda live
+
+| Concern | Black Plague owner/evidence | Relación con `D6E00` | Estado |
+|---|---|---|---|
+| Intento plano | `cButtonHandler::Update`: `51CD/5227 -> cPlayer::MoveForward/MoveSideways` (`9CBC0/9CC60`) | Antes | Mapeado |
+| Aceleración/objetivo | `cPlayer` comprueba state/ground y llama `iCharacterBody::Move(D4F50)`; éste suma `amount * acc * dt` en `+70..+7C`, marca `+88/+89` y limita por `+60..+6C` | Consumido por `D6E00` | Mapeado |
+| Deceleración y velocidad final | `D6E00` consume flags, aplica deacc y convierte los campos de velocidad en request horizontal antes de `D7312` | Dentro, antes de colisión | Mapeado |
+| Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan en el move-state virtual (`+30/+34`) | Antes | Semántica/state concreta pendiente |
+| Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` escribe `+1FC` y acumula `+200` mientras se mantiene | La fuerza/estado vertical se publica antes de `D6E00`; éste resuelve horizontal primero y vertical después | Live-characterized: impulso efectivo inicial ~5.53 m/s, apex ~0.95 m, landing nativo y 3→0 |
+| Crouch | queries `533B/536A` llegan a wrappers `9CFA0/9CFD0`, que delegan en move-state (`+38/+3C`) | Antes | Shape/state/transición pendientes |
+| Colisión/step/gravedad | `D6E00`, primer solver `D7312`, fases posteriores de step/gravedad | Dentro | Live-tested para el límite |
+| Cámara corporal | calls `D790C -> D5F00` y `D7913 -> D6120` después de resolución; por estructura corresponden a composición de cámara y entidad | Después | Requiere lectura live de cámara/offset |
+| Head/footstep bob | No hay evidencia que permita atribuirlo aún a `iCharacterBody`, `cPlayer` o una animación visual | Posiblemente posterior | Pendiente |
+
+PID 29672 cerró el burst de salto: `+204=0.3` es umbral para la lógica de hold,
+no máximo de `+200`; el contador alcanzó 2.233332 y al soltar volvió a 0.3.
+`+268` es el contador de gracia de suelo 25→0→25; `+26C` permanece sin nombre
+semántico. Los valores verticales derivados describen cinemática efectiva del
+estado y no se reinterpretan como constantes de gravedad.
+
+La primera instalación live de la sonda de ownership (PID 25776) falló cerrada
+y no produjo telemetría accionable: `52CD` se había registrado erróneamente
+como CALL, pero la captura exact-build demuestra `6A 01`; el CALL real es
+`52CF -> 9A890`. Los otros siete pares son `52A5->9CEA0`,
+`52F7->9CF40`, `531F->9CF70`, `5347->9CFA0`, `538A->9CFD0`,
+`D790C->D5F00` y `D7913->D6120`. No solapan los hooks existentes: el bridge
+de entrada posee las consultas vecinas (`5299`, `52C1`, `52EB`, etc.), no estos
+despachos. La corrección valida los ocho CALLs y firmas de targets antes de
+parchear y refresca punteros en cada callback; queda `implemented`, no
+`live-tested`. El cambio observado de body/world coincidió con una transición
+gameplay→menú→gameplay; es compatible con recreación o carga de nivel, pero su
+causa no está demostrada.
+
+Esto descarta un adapter que llame directamente `D6E00`: el tick nativo
+`D460A` lo invocaría de nuevo y consumiría otra vez deacc, step/gravedad y/o
+acumuladores. La operación futura segura debe publicar una petición antes de
+ese único tick y leer su posición aceptada después; no llamar `Update` desde el
+Framework. La sonda siguiente debe enganchar de forma reversible los cinco
+callsites de acciones, `D790C/D7913` y el límite de render para registrar orden,
+state, tamaño del body y transform final de cámara, sin cambiar argumentos ni
+resultados.
+
+### Articulación de dedos: BP no debe degradarse
+
+La comparación confirma dos capas distintas. BP ya usa la política neutral
+`runtime::ArticulateVrHand`: cinco curls independientes, tres curvas por dedo,
+distal progresiva, separación lateral y oposición del pulgar, con respuesta
+instantánea. Es la conducta que el usuario identifica actualmente como mejor y
+debe conservarse como candidata común.
+
+Overture contiene integración valiosa pero ligada a su rig: índices/ejes y
+bind poses de huesos, deadzone medida para su dispositivo, suavizado de 70 ms,
+poses forzadas según radio del asa y callback posterior a animación. El límite
+futuro pequeño es mantener `VrHandArticulation`/curls independientes en runtime
+y dejar en un perfil/adapter de malla los ejes, deadzone/suavizado opcionales y
+poses de agarre. Overture debería adaptarse a esa salida común cuando exista
+una segunda malla real; BP no debe copiar ahora la pose rígida de Overture.
+
 ## Rutas integradas
 
 `spatial_interaction.cpp` se compila y se instala después del puente de entrada.
@@ -108,7 +248,8 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 
 ## Verificación y límites
 
-22 tests pasan en Release, Debug y Release sin SDK OpenVR. El test espacial
+Los 25 tests pasan en Release, Debug y Release sin SDK OpenVR. El test corporal
+ejecuta la sonda exact-build sobre una imagen sintética y el test espacial
 ejecuta el código del adaptador en una imagen sintética con trampolines a dobles
 nativos; no prueba Newton ni el juego real. El test OpenGL usa el driver WGL,
 verifica píxeles de guantes y oclusión/restauración de estado en ambos ojos.

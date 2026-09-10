@@ -10,6 +10,10 @@ void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept;
 void ConnectNativeInput(runtime::OpenVrSession* session) noexcept;
 [[nodiscard]] bool NativeInputUiActive() noexcept;
 [[nodiscard]] runtime::VrControllerFrame ReadNativeControllerFrame() noexcept;
+// Last cPlayer observed at the exact-build ButtonHandler boundary. Consumers
+// may compare it with native object links, but must not call game methods from
+// a non-game thread.
+[[nodiscard]] void* NativePlayerPointer() noexcept;
 void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept;
 [[nodiscard]] runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept;
 }

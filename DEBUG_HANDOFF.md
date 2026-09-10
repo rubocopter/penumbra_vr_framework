@@ -11,7 +11,19 @@ The user previously reported world displacement / apparent collision behavior wh
 ### Established facts
 
 - Framework positional HMD translation is currently disabled (`0.0`).
-- The framework does not currently own a verified Black Plague head/body capsule.
+- Static initialized-image evidence now maps `cPlayer+0x274` to the native
+  `iCharacterBody`, position `+0x48`, size `+0xC4`, active physics body
+  `+0x23C` and world `+0x240`.
+- The native HPL constructor selects sphere only when diameter approximately
+  equals height; otherwise it creates a rotated cylinder. There is no separate
+  Framework head collider or verified capsule object.
+- The normal physics boundary is `D460A -> iCharacterBody::Update(D6E00)`;
+  initial horizontal resolution is `D7312 -> CheckShapeWorldCollision(D4830)`.
+- Read-only telemetry now correlates body/feet before/after, requested position,
+  solver output, final accepted displacement, timestep and unapplied HMD offset.
+  It was observed in PID 30896: stable identity, `0.70 x 1.65 m` cylinder,
+  `dt=1/60`, free motion and three real collision-rejection cases. This is
+  `live-tested` for the boundary only.
 - Therefore the observed behavior cannot be explained by a Framework head collider that does not exist.
 - Rework resolves physical head displacement through the native character body, 0.05 m steps, collision acceptance/rejection and head-anchor reconciliation.
 
@@ -23,7 +35,24 @@ The user previously reported world displacement / apparent collision behavior wh
 
 ### Next evidence
 
-Map the exact Black Plague body/player structure, capsule representation, native movement/update boundary and collision-resolution result. Add telemetry for requested displacement, accepted displacement, body/feet position and head/body divergence before enabling translation.
+The live collision checklist is complete. Before enabling translation, identify
+the native owners of camera/head-bob and footstep-bob, acceleration/deceleration,
+jump and crouch; the collision telemetry cannot attribute those effects.
+
+The first ownership attempt (PID 25776) is invalid: it installed the body probe
+but rejected the ownership probe before it changed an instruction. The host hash
+was the expected `FD316F...`; the rejection came from a probe-RVA mistake, not
+from a different executable. `0x52CD` is `push 1`; the held-jump `CALL rel32`
+is `0x52CF -> 0x9A890`. The corrected probe fail-closes only after validating
+all eight calls and target signatures. Do not interpret any action in that log
+as ownership telemetry, and do not retest symptoms until the corrected probe is
+built and deployed. PID 24780 then installed both probes and is valid action/body
+ownership evidence: native sprint begin/end each fired once, jump fired once
+with 172 held updates, and crouch swapped the active body from 1.65 m to 0.95 m
+height while retaining the feet position. Do not infer physical crouch from it.
+`5347` is pressed and `538A` is release/not-held; toggle crouch legitimately
+produces both. The zero `D790C/D7913` counts are expected for the gravity-active
+player path, not proof that camera ownership is absent.
 
 ## 2. Black Plague locomotion speed / timing
 
@@ -33,10 +62,18 @@ VR movement has felt faster than the expected Rework behavior.
 
 ### Established facts
 
+- `cPlayer::MoveForward/MoveSideways` accumulate native speed, while the single
+  `D460A -> D6E00` tick consumes/decelerates it and resolves collision. A BP
+  adapter must not call `D6E00` directly: the normal physics tick would then
+  update the same body twice.
+
 - Rework uses direct displacement policy: 1.5 m/s walk, 2.25 m/s sprint, with fixed 0.05 m physical steps.
 - Black Plague's native movement path uses acceleration/limits around 3.0 / 4.5 m/s.
 - Scaling the analog input changes acceleration/input magnitude; it does not make the native path Rework-equivalent.
-- A timing diagnostic once showed 240 ButtonHandler callbacks for roughly 4 simulated seconds in about 2 wall seconds, but source inspection showed the handler is registered in two updater containers. That metric counts handler callbacks and is not evidence that the whole simulation runs at 2x.
+- A timing diagnostic showed 240 `HookedUpdate` callbacks for roughly 4 simulated seconds in about 2 wall seconds. That metric is specifically the hooked `cButtonHandler::Update` callback, while the body probe observed the normal 60 Hz `D460A` tick; it is not evidence that physics runs at 2x. The exact update-container ownership remains unproven.
+- The real character timestep is now observable at the unique normal
+  physics-world callsite `D460A`; `iCharacterBody::Move(D4F50)` only updates
+  native acceleration/speed state and does not accept a displacement directly.
 
 ### Do not try again
 
@@ -45,7 +82,14 @@ VR movement has felt faster than the expected Rework behavior.
 
 ### Next evidence
 
-Map the unique native player/body update tick and its accepted displacement. Then route Rework's shared displacement policy through a Black Plague body adapter.
+Do not infer equivalence from analog-input scaling. PID 29672 now closes native
+jump characterization: state 3 enters before the next body tick, effective
+initial vertical speed is ~5.53 m/s, apex ~0.95 m, and landing precedes the
+following state `3 -> 0`. `+268` is the 25-tick ground-grace counter, not
+current grounded; `+26C` remains unclassified. `+204` is a Jump hold threshold,
+not a maximum: held `+200` exceeds it and release restores the count to it.
+Keep jump/vertical ownership native when implementing horizontal policy. Camera
+and bob remain separate work, not a blocker for the narrow body adapter.
 
 ## 3. Black Plague held-object collision
 

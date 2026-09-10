@@ -228,6 +228,37 @@ game-specific facts; they do not belong in the shared runtime.
   rejection epsilon, 0.8 m head/body rebase, 1.5 m/s normal, 2.25 m/s sprint and
   0.5 m/s constrained movement.
 
+## Black Plague boundary comparison (2026-09-10)
+
+Static inspection of the allowlisted initialized BP research image identifies the same
+high-level HPL chain but not the Rework extensions. `cPlayer+0x274` is the real
+`iCharacterBody`; `cPlayer::MoveForward/Sideways` feed
+`iCharacterBody::Move(D4F50)`, which updates native acceleration and speed.
+`iPhysicsWorld::Update(D45B0)` calls the body once at `D460A -> D6E00` with its
+physics timestep. That body update submits its requested transform at
+`D7312 -> CheckShapeWorldCollision(D4830)`, then performs native step, gravity
+and attachment work before exposing the final accepted position.
+
+This means the reusable policy is still the Framework's tracking delta, 0.05 m
+step clamp, accepted-distance projection, rejection reconciliation, speed,
+sprint, yaw/recenter and seated/standing logic. The BP adapter must own the
+player/body offsets, HPL sphere-or-cylinder representation, exact x86 ABI,
+injection point, crouch-size state, jump and solver differences. BP has no
+evidence for Overture's added `vr_velocity`, `vr_stepstaticonly`,
+`CollidePlayer` or `IsPlayer` fields/arguments, so none may be copied by layout.
+The new probe measures before/requested/solver/final positions without changing
+movement. Those mappings and jump ownership are live-characterized; adapting a
+narrow BP boundary is the next implementation step.
+
+Finger articulation points in the other direction. BP's existing shared
+`VrHandArticulation` output (independent curls, three joint curves, spread and
+thumb opposition) is currently the better demonstrated response and must not
+be replaced with Overture's mesh-specific animation. Overture's bind-pose bone
+mapping, optional input deadzone/smoothing and radius-dependent hold pose remain
+valuable adapter/profile behavior. A future small boundary should map the BP
+runtime articulation onto each real mesh and let Overture retain only those
+rig-specific details.
+
 ## Framework-owned source host (2026-09-10)
 
 The first linked checkpoint used the Rework working tree as the consumer of the
@@ -262,8 +293,9 @@ adapter's required `/std:c++20` on current MSVC.
 
 ## Validation gates
 
-- Framework Debug and Release build with all targets, including the Black Plague
-  probe, and all 24 CTest tests pass in both configurations on 2026-09-10. The focused Overture test also
+- Framework Debug, Release and no-OpenVR Release build with all targets,
+  including the Black Plague probe, and all 25 CTest tests pass in each current
+  configuration on 2026-09-10. The focused Overture test also
   verifies that the real-adapter boundary receives the exact frame timestep.
 - The Framework-owned Overture Release/Win32 rebuild passes: project
   checks, 16 offline shaders, 8,752 visual-reference checks, 231 texture/decode
@@ -287,8 +319,9 @@ adapter's required `/std:c++20` on current MSVC.
   implemented, linked and host-tested from the standalone Framework source host;
   deployed and headset-validated for an initial functional integration pass; not
   exhaustively validated across every feature/controller/scenario and not supported.
-- Black Plague positional tracking stays off until body/capsule logging proves
-  the exact-build adapter and collision rejection in representative scenes.
+- Black Plague positional tracking stays off. The body/collision and jump
+  boundaries are live-characterized, but room-scale policy awaits the narrow
+  adapter and its separate headset validation.
 
 ## Remaining exhaustive headset coverage
 

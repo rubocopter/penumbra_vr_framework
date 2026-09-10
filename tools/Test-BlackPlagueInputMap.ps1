@@ -12,6 +12,11 @@ function Assert-Call([int]$Site, [int]$Target) {
         throw ('Native call mismatch at RVA 0x{0:X}' -f $Site)
     }
 }
+function Assert-Bytes([int]$At, [byte[]]$Expected) {
+    for ($i = 0; $i -lt $Expected.Length; ++$i) {
+        if ($inputImage[$At + $i] -ne $Expected[$i]) { throw ('Instruction mismatch at RVA 0x{0:X}' -f $At) }
+    }
+}
 $inputQueries = [regex]::Matches($inputSource, '\{0x([0-9A-Fa-f]+),A::[a-z_]+(?:,Q::(held|released))?\}')
 if ($inputQueries.Count -ne 76) { throw 'Review the verifier when changing the native query table.' }
 foreach ($inputMatch in $inputQueries) {
@@ -31,6 +36,29 @@ Assert-Call 0x4C70 0x945F0
 Assert-Call 0x4FF2 0x6C7C0
 if ([BitConverter]::ToUInt32($inputImage, 0x272A84) -ne 0x403BF0) { throw 'Update vtable mismatch.' }
 Write-Output 'Verified 76 query calls, 2 movement calls, 3 menu cursor calls and Update vtable. No process was modified.'
+
+# Movement-ownership observation uses distinct action dispatch calls. In
+# particular, held jump has a one-byte bool argument prepared by "push 1" at
+# 0x52CD; its E8 starts at 0x52CF. Keeping both assertions prevents a caller
+# from accidentally treating the push instruction as the callsite.
+Assert-Bytes 0x52CD @(0x6A,0x01)
+Assert-Call 0x52A5 0x9CEA0
+Assert-Call 0x52CF 0x9A890
+Assert-Call 0x52F7 0x9CF40
+Assert-Call 0x531F 0x9CF70
+Assert-Call 0x5347 0x9CFA0
+Assert-Call 0x538A 0x9CFD0
+Assert-Call 0xD790C 0xD5F00
+Assert-Call 0xD7913 0xD6120
+Assert-Bytes 0x9CEA0 @(0x56,0x8B,0xF1,0x8B,0x8E,0xC4,0x02,0,0)
+Assert-Bytes 0x9A890 @(0x8A,0x44,0x24,0x04,0x84,0xC0,0x56,0x8B,0xF1)
+Assert-Bytes 0x9CF40 @(0x8A,0x81,0x6C,0x02,0,0,0x84,0xC0)
+Assert-Bytes 0x9CF70 @(0x8A,0x81,0x6C,0x02,0,0,0x84,0xC0)
+Assert-Bytes 0x9CFA0 @(0x8A,0x81,0x6C,0x02,0,0,0x84,0xC0)
+Assert-Bytes 0x9CFD0 @(0x8A,0x81,0x6C,0x02,0,0,0x84,0xC0)
+Assert-Bytes 0xD5F00 @(0x83,0xEC,0x28,0x56,0x8B,0xF1,0x8B,0x86)
+Assert-Bytes 0xD6120 @(0x81,0xEC,0x9C,0,0,0,0x53,0x8B)
+Write-Output 'Verified 8 movement-ownership calls, including the held-jump push/call boundary and target signatures. No process was modified.'
 if ($inputImage.Length -lt 0x292CC8) { throw 'Capture is too short for spatial vtables.' }
 $spatialSlots = @{
     0x27CB70 = 0xA3DE0
@@ -42,11 +70,6 @@ $spatialSlots = @{
 foreach ($spatialSlot in $spatialSlots.GetEnumerator()) {
     if ([BitConverter]::ToUInt32($inputImage, $spatialSlot.Key) -ne (0x400000 + $spatialSlot.Value)) {
         throw ('Spatial vtable mismatch at RVA 0x{0:X}' -f $spatialSlot.Key)
-    }
-}
-function Assert-Bytes([int]$At, [byte[]]$Expected) {
-    for ($i = 0; $i -lt $Expected.Length; ++$i) {
-        if ($inputImage[$At + $i] -ne $Expected[$i]) { throw ('Spatial instruction mismatch at RVA 0x{0:X}' -f $At) }
     }
 }
 Assert-Bytes 0xCA120 @(0x56,0x8B,0x74,0x24,0x08,0x57,0x8B,0xC1)
@@ -65,3 +88,12 @@ Assert-Bytes 0xD4E0E @(0x8A,0x90,0xC8,0x03,0,0) # character body ray filter
 Assert-Bytes 0x19D2D0 @(0x8A,0x90,0xC8,0x03,0,0) # Newton contact: body 2 vs character 1
 Assert-Bytes 0x19D2E4 @(0x8A,0x91,0xC8,0x03,0,0) # Newton contact: body 1 vs character 2
 Write-Output 'Verified 12 spatial/HUD method slots, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
+Assert-Call 0xD460A 0xD6E00
+Assert-Call 0xD7312 0xD4830
+Assert-Bytes 0xD45B0 @(0x53,0x56,0x8B,0xF1,0x8B,0x46,0x58,0x57,0x33,0xFF,0x3B,0xC7)
+Assert-Bytes 0xD4F50 @(0xD9,0x44,0x24,0x08,0x56,0x8B,0xF1,0x57,0x8B,0x7C,0x24,0x0C)
+Assert-Bytes 0xD63B5 @(0x83,0xEC,0x44,0x53,0x55,0x56,0x8B,0xE9,0x57,0x89,0x6C,0x24,0x10)
+Assert-Bytes 0xD6E15 @(0x81,0xEC,0xD4,0x05,0,0,0x53,0x55,0x56,0x8B,0xF1,0x8A,0x46,0x30)
+Assert-Bytes 0xD4845 @(0x81,0xEC,0xD0,0x02,0,0,0x53,0x55,0x33,0xDB,0x56,0x57,0x8B,0xF9)
+Assert-Bytes 0xD50E0 @(0x83,0xEC,0x0C,0x56,0x8B,0xF1,0x8B,0x8E,0x3C,0x02,0,0)
+Write-Output 'Verified player character-body Move, construction, feet, physics-world Update and initial collision-resolution boundaries. No process was modified.'

@@ -92,8 +92,10 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's 0.18 m physical reach
 - [ ] Complete palm collision, jointed mechanisms and tool/light attachment
-- [ ] Map and validate the exact-build Black Plague body/capsule path for room-scale motion
-- [ ] Port Rework-equivalent locomotion speed, sprint and jump behavior through the BP body adapter
+- [x] Statically map and host-test telemetry for the exact-build Black Plague player/character-body/native-shape/movement/collision path
+- [x] Live-validate the mapped BP body, active shape, physics timestep and requested/accepted displacement telemetry (PID 30896; room-scale remains disabled)
+- [ ] Complete final player-camera/entity ownership capture; PID 24780 live-validated the corrected action/body probe, while its gravity-disabled camera/entity sites are correctly zero for the active player path
+- [ ] Implement the narrow BP body adapter and first shared horizontal player-policy extraction; native jump is live-characterized and remains a separate native move-state operation
 - [ ] Resolve head/body spatial reconciliation and physical movement without speculative camera translation
 - [ ] Validate long-body interaction and mechanism-specific states
 - [ ] inventory, notes, menus, HUD and subtitles

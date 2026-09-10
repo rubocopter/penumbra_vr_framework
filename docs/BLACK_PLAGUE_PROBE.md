@@ -64,6 +64,99 @@ The launcher deliberately does not invoke `FreeLibrary` after deactivation. A li
 
 ## Verification performed
 
+On 2026-09-10, the read-only body/collision hooks ran during PID 30896 while
+the user performed free locomotion, wall/obstacle contact and physical lean.
+They identified the active player cylinder as `0.70 x 1.65 m` (radius `0.35 m`)
+at `dt=1/60`, and recorded free accepted motion plus native slide, total block
+and partial collision rejection. HMD/body horizontal divergence reached
+`0.436 m` while positional translation stayed disabled. This makes the exact
+body/collision mapping `live-tested`; it does not validate room-scale,
+locomotion replacement, jump, crouch or camera/footstep bob ownership.
+
+## Live-tested action ownership; camera path still pending
+
+The next exact-build read-only capture must correlate six `cButtonHandler`
+action callsites (jump, jump hold, sprint begin/end and crouch pressed/release-or-not-held) with
+the existing `D460A` body tick. It must also observe the conditional
+gravity-disabled calls in `iCharacterBody::Update`, `D790C -> D5F00` and `D7913 -> D6120`, and
+the final render camera. Each wrapper must forward its original arguments and
+return unchanged, validate its exact `E8` bytes/signature first, and publish a
+monotonic sequence only. This is required to attribute state-machine effects
+and camera offsets without changing locomotion, bob, jump or crouch behavior.
+
+PID 25776 did **not** provide this capture. Its host SHA was the supported
+`FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF`, and the
+body/collision probe installed, but the ownership probe rejected its manifest
+before patching any of the eight calls. The fault was local to the probe map:
+the held-jump map used `0x52CD`, whose exact-build bytes are `6A 01` (`push 1`),
+instead of the following `E8` at `0x52CF` targeting `0x9A890`.
+
+The corrected probe first checks all eight direct calls and their 16-byte target
+signatures, then installs all hooks. A mismatch now names the concern and call
+RVA and prints expected/actual five-byte instructions and decoded targets; a
+target-signature mismatch reports both call and target RVAs and both signatures.
+No installed probe owns these eight callsites: the input bridge owns the nearby
+input-query calls (`5299`, `52C1`, `52EB`, `5313`, `533B`, `536A`), while the
+ownership probe observes their later action dispatches. Player/body/camera
+pointers are sampled on every callback rather than retained across a body/world
+replacement. The observed gameplay-to-menu-to-gameplay transition is consistent
+with recreation or level loading, but the log does not establish which.
+PID 24780 is the valid follow-up capture: both probes installed on the same
+allowlisted SHA. It observed sprint begin/end once each, one jump and 172 held
+jump updates, and both crouch calls once for each press/release interval. The
+active body changed from size `0.70 x 1.65 x 0.70`, centre Y `0.8297`, to
+`0.70 x 0.95 x 0.70`, centre Y `0.4797`, with feet Y `0.0047` preserved; its
+active physics-body pointer changed for crouch and returned when standing.
+This is `live-tested` native action/body ownership, not physical crouch or
+room-scale validation.
+
+Static initialized-image decoding corrects two labels: `5347 -> 9CFA0` is the
+pressed dispatch and `538A -> 9CFD0` is release/not-held dispatch. With toggle
+crouch enabled both legitimately occur in one interval; neither count alone is
+a crouch-state transition. `D790C/D7913` run only when body gravity is disabled.
+The gravity-active player branches past them to later unconditional body sync,
+so their zero counts do not identify the final player camera path. The probe now
+refreshes `player -> +274 body -> +110 character camera` on every action
+callback, rather than filling those fields only from the conditional calls.
+
+### Live-characterized native jump body contract
+
+The existing `D460A -> D6E00` observation wrapper accepts a burst request
+only after the observed `5299 -> 9CEA0` dispatch has returned. It retains the
+following 240 player-body updates (approximately four seconds at the proven
+60 Hz cadence) and emits them only once complete. Every retained tick contains
+the body-update sequence, `dt`, player/body pointers, body and feet position,
+existing requested/solver/accepted deltas, and the derived vertical speed from
+accepted delta. It also reads only the already-evidenced raw player fields
+`+268`, `+26C`, `+1FC`, `+200`, `+204`, `+2D0` and its current state-object
+pointer. No presumed native vertical-velocity offset is read and no game memory
+or action behavior changes.
+
+PID 29672 produced the complete 240-tick burst. State index `3` is the
+source-correlated `cPlayerMoveState_Jump`: its `EnterState` vtable slot is
+called by `9AB30` during `9CEA0`'s transition and establishes the vertical
+force before the next `D6E00`. The first body tick accepted `+0.09222 m`
+(`+5.53333 m/s` derived) and the apex reached `~0.95 m` over the `0.82970 m`
+baseline. The known horizontal solver remained zero in Y throughout, proving
+that `D6E00` applies the vertical state pipeline after its horizontal request /
+solver phase rather than through that solver.
+
+`9A890` sets `+1FC`; while held it accumulates `+200` from the native update
+time. It does **not** clamp at `+204`: the capture reaches `2.233332`, and
+release resets `+200` to the `+204` value of `0.300000`. In the Jump state's
+source-correlated `OnUpdate` vtable slot `+8`, `+200 < +204` is the hold-force
+threshold; beyond it the state follows its non-hold upward branch. This matches
+the observed regime change around `0.3`, but the effective per-tick vertical
+changes are not labelled gravity constants.
+
+`+268` is now live-characterized as the 25-tick ground-grace counter: it falls
+25→0 after take-off and resets to 25 on the tick after landing. It is not the
+instantaneous body-grounded flag. `+26C` stayed zero and only acts as an
+alternate branch in `9CEA0`'s eligibility test; its semantic name remains
+unproven. Landing is resolved by `D6E00` at tick 10464; the subsequent move-
+state update observes the landed body and transitions index `3 -> 0`, visible
+at the next body tick. The final camera path remains outside this investigation.
+
 On 2026-09-03, a Release build was attached and detached three times in the same Steam-launched process. Each cycle:
 
 - revalidated the executable hash inside the game
@@ -210,6 +303,11 @@ the [lighting checklist](VR_LIGHTING_VALIDATION.md) remains pending in game.
 As of 2026-09-06, real VR input, native intents, tracked menus, provisional gloves
 and free-body grab/throw are implemented and code-tested, not headset-validated.
 See [startup/controller status](VR_STARTUP_AND_CONTROLLERS.md) and
-[spatial adapter evidence](BLACK_PLAGUE_SPATIAL_NOTES.md). Positional tracking,
+[spatial adapter evidence](BLACK_PLAGUE_SPATIAL_NOTES.md). The exact-build
+player link (`cPlayer+0x274`), native character-body tick (`D460A -> D6E00`),
+active body/size/position fields and initial horizontal collision request
+(`D7312 -> D4830`) are now statically mapped. Read-only telemetry for body/feet,
+requested/solver/final displacement, physics timestep and unapplied HMD/body
+divergence is implemented, host-tested and live-tested in PID 30896. Positional tracking,
 palm collision, articulated mechanisms, tool/light attachment and Enhanced
 visuals renderer hooks remain separate work.

@@ -75,6 +75,7 @@ constexpr PointerEntry kPointers[]{{0x4477,0x797B0,0xA0}, {0x4C70,0x945F0,0x84},
 std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks;
 std::atomic<bool> g_ui{true};
 std::atomic<bool> g_installed{false};
+std::atomic<void*> g_player{nullptr};
 SRWLOCK g_session_lock = SRWLOCK_INIT;
 runtime::OpenVrSession* g_session = nullptr;
 runtime::VrControllerFrame g_frame;
@@ -210,6 +211,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     auto* previous = g_intents;
     auto* previous_player = g_input_player;
     g_input_player = Read<void*>(handler, 0x38);
+    g_player.store(g_input_player, std::memory_order_release);
     g_intents = &intents;
     // Release spatial ownership even when a UI context filters gameplay edges.
     ServiceSpatialInteraction(g_input_player, ui);
@@ -308,6 +310,7 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
 }
 bool RemoveNativeInputBridge(std::string& error) noexcept {
     g_installed.store(false, std::memory_order_release);
+    g_player.store(nullptr, std::memory_order_release);
     ConnectNativeInput(nullptr);
     // Let a running game consume the pending release in its own update thread.
     // Never invoke player/physics methods from this remote control thread.
@@ -350,6 +353,9 @@ runtime::VrControllerFrame ReadNativeControllerFrame() noexcept {
     const auto frame = g_frame;
     ReleaseSRWLockShared(&g_session_lock);
     return frame;
+}
+void* NativePlayerPointer() noexcept {
+    return g_player.load(std::memory_order_acquire);
 }
 void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
