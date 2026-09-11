@@ -28,6 +28,8 @@ Black Plague already has native stereo, rotational HMD tracking and keyboard/mou
 
 The native player-body/collision boundary and the first narrow body adapter are now live-tested. The current milestone is **tracking/body spatial reconciliation** through that boundary before positional room-scale movement is enabled.
 
+The complete Rework-derived VR settings schema is now persisted by the Framework, and the shared 18-row editor policy is host-tested. Black Plague has an explicit capability map for the settings its backend currently applies; a dedicated in-game VR settings page still requires a demonstrated safe native-menu insertion boundary.
+
 ### Requiem
 
 Requiem will reuse the shared runtime and proven architecture, while repeating binary research wherever Black Plague-specific evidence cannot safely transfer.

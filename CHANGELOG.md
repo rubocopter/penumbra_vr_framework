@@ -27,6 +27,9 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- Complete Framework persistence for the shared Rework-derived VR settings schema, plus a host-tested 18-row editor policy matching the Overture menu's ordering, formatting, step sizes, wrapping, clamps and snap/smooth row dependencies.
+- An explicit Black Plague VR-setting capability map exposes only backend-wired editor controls; persisted-but-unwired settings remain unavailable to a future in-game page until their backend application exists.
+- Exact canonical/LAA build variants for the observed Black Plague and Requiem executables. Catalogue/manifests preserve the canonical semantic build identity while fingerprinting the one-bit transformed executable independently.
 - One-shot Black Plague shadow-install telemetry records `disabled`,
   `environment` or transient `mutex` activation, making a live request
   distinguishable from a silent no-tick session. The synthetic default-off,
@@ -79,7 +82,8 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 ### Validated
 
 - The current OpenVR and no-OpenVR configurations compile under MSVC with warnings treated as errors at the validated checkpoints.
-- The full root CMake configuration now registers **twenty-seven** CTest tests. GitHub Actions passes the established Windows x86 Debug and Release host suite while intentionally excluding only the real-driver `opengl_eye_targets` pixel test from the SDK-less hosted runner.
+- The full root CMake configuration now registers **thirty** CTest tests. The established hosted Windows x86 suite still intentionally excludes only the real-driver `opengl_eye_targets` pixel test from the SDK-less runner; newer local tests remain host validation until a subsequent CI run covers them.
+- Local offline validation on 2026-09-11 passed the Release build and all **30/30** root CTest tests, including the real-driver `opengl_eye_targets` test. Metadata validation passed with 6 catalogue entries, 2 exact-build manifests, 42 actions, 6 action sets and 8 controller bindings. A subsequent full autonomous Overture Release regression passed the project, 16-shader, 8,752 visual-reference, 231-texture decode and Large Address Aware gates plus **289 `VRTrackingTest` checks with 0 failures**. No game, SteamVR or headset process was launched for this validation.
 - GitHub Actions run `34616035023` host-validated feature commit `18c63ef` on Windows Server 2022: metadata/OpenVR assets, Visual Studio 2022 Win32 configuration, Debug build/CTest and Release build/CTest all passed.
 - GitHub Actions run `34616820448` repeated the root Windows x86 gate after CI hardening and also passed the new `Overture Release regression` job using `Build-OvertureProduct.ps1 -Configuration Release -Full`.
 - The Framework-owned Overture Release pipeline passes project checks, 16 shader compilations, 8,752 CPU visual checks, 231 texture selection/decode checks, 289 `VRTrackingTest` checks, Large Address Aware verification and package validation. This pipeline has now been revalidated after the shared tracking/body extraction by the dedicated Windows CI job.
@@ -97,7 +101,7 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Runtime-derived per-eye resolution with proportional allocation fallback.
 - Shared HPL1 camera-matrix transaction adapter.
 - Host-independent references and tests for Enhanced visuals v4 calibration and the accepted spatial-audio behavior from Overture VR Rework.
-- Pure, idempotent x86 PE32 Large Address Aware inspection/transformation with unit tests. No installed executable is modified yet.
+- Pure, idempotent x86 PE32 Large Address Aware inspection/transformation with unit tests and exact host-verified Black Plague/Requiem transformed hashes. No installed executable is modified by this work.
 - Shared OpenVR action manifest and controller bindings, including PSVR2 Sense.
 - Exact-build LAA observations for the installed Black Plague and Requiem Steam executables.
 - Unified installer transaction and rollback design.

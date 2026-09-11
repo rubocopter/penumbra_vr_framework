@@ -174,12 +174,13 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 - `src/audio/spatial_audio.*` owns HRTF config text, distance/occlusion low-pass
   behavior and the complete accepted mine-gallery EFX preset, including echo,
   modulation and room-rolloff fields; safe binary audio hook work remains open.
-- `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; transactional deployment remains installer work.
+- `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; the build catalogue/manifests recognize host-verified exact Black Plague/Requiem LAA variants while transactional deployment remains installer work.
 - `src/adapters/hpl1/camera_matrix_override.*` owns the reusable byte-exact camera transaction; exact layouts remain backend-owned.
 - `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit, but the mirror is not supported/validated.
 - `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior.
 - `src/runtime/vr_input_state.*` owns logical actions, dead-zone scaling, context/handedness edge latching, pose-loss releases and action-idle grace.
-- `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state.
+- `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state; `vr_settings_editor.*` owns the demonstrated 18-row edit/format/dependency policy, and `vr_settings_store.*` persists the complete shared schema.
+- Black Plague exposes an explicit backend capability map for the currently wired editor settings. A dedicated in-game settings page remains game-specific work until a safe native-menu insertion boundary is demonstrated.
 - `assets/openvr` contains shared actions/bindings; `assets/openvr/overture` preserves exact Overture product mappings.
 
 ## Validation rule

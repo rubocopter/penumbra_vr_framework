@@ -75,9 +75,17 @@ The transformation must:
 - record and verify both the original and transformed hashes;
 - restore the exact original executable during rollback.
 
-`src/deployment/pe_large_address.*` implements and unit-tests only the pure
-in-memory PE inspection and one-bit transformation. Filesystem transactions,
-known-build gating, backup storage and rollback remain deliberately unimplemented.
+`src/deployment/pe_large_address.*` implements and unit-tests the pure in-memory
+PE inspection and one-bit transformation. The build catalogue and canonical
+Black Plague/Requiem manifests now also record the exact transformed LAA hashes,
+and metadata validation checks each transformed variant against its canonical
+build identity. Offline verification confirmed the transform changes only the
+PE characteristics byte required for `0x010F -> 0x012F` and reproduces the
+catalogued hashes.
+
+Deployment remains deliberately incomplete: the filesystem transaction that
+revalidates a known canonical hash, prepares the transformed copy, backs up the
+original, atomically replaces it and rolls it back has not been implemented.
 
 ## Payload selection
 
@@ -98,7 +106,7 @@ versioning and rollback of these files remain installer work.
 - choose and validate the production bootstrap mechanism;
 - implement installation discovery and manual selection;
 - implement the transactional filesystem layer and installation record;
-- add known original/transformed hash pairs to build manifests;
+- wire the exact canonical/transformed catalogue identities into transactional apply/repair/uninstall;
 - package per-build backends and shared runtime assets;
 - define the exact ownership/versioning rules for deployed OpenVR action files;
 - test install, repair, upgrade and rollback on clean game copies;

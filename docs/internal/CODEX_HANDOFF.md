@@ -195,12 +195,12 @@ the change, and the local exact-build verifier passes. This launcher sequencing
 fix is host-tested only; do not mark the shadow path live-tested until a future
 run confirms mutex activation and periodic shadow telemetry.
 
-The host gate is now green. GitHub Actions run `34616035023` for feature commit
+The host gate was green at that checkpoint. GitHub Actions run `34616035023` for feature commit
 `18c63ef` passed metadata validation, Visual Studio 2022 Win32 configure and the
 established Debug/Release CTest jobs. Run `34616820448` repeated that root gate
-and also passed the new autonomous Overture Release regression job. The full root
-configuration contains 27 CTest tests; hosted CI intentionally excludes only the
-real-driver `opengl_eye_targets` pixel test as documented in the workflow.
+and also passed the new autonomous Overture Release regression job. That root
+configuration contained 27 CTest tests; hosted CI intentionally excluded only
+the real-driver `opengl_eye_targets` pixel test as documented in the workflow.
 
 The missing capability remains a collision-aware physical displacement request
 in metres, distinguishable from native acceleration/locomotion and consumed by
@@ -281,6 +281,40 @@ Long bars and mechanisms must not be fixed by arbitrary springs or rigid palm of
 
 Requiem remains a future exact-build binary backend. Do not assume Black Plague RVAs, layouts, calling conventions or lifecycle boundaries transfer without evidence.
 
+## VR settings/menu extraction
+
+The Framework now persists the complete shared `VrSettings` schema through
+`vr_settings_store.*`, including settings not yet consumed by Black Plague.
+`vr_settings_editor.*` owns the demonstrated Overture Rework 18-row editor
+semantics: row order/labels, formatting, edit increments, enum wrapping, clamps,
+snap/smooth dependent visibility and crouch-depth label behavior.
+
+Black Plague now has an explicit backend capability map. It marks only the
+currently applied editor settings as available: handedness, turn mode and its
+snap/smooth/dead-zone controls, move speed/dead-zone, UI distance/scale and
+render scale. Monitor mirror remains a separate runtime/launcher toggle.
+Play mode, player height, height offset, crouch settings, Enhanced visuals,
+HRTF and subtitle scale are persisted but are not Black Plague functional
+controls yet.
+
+Do not invent a binary menu hook merely to expose this policy. A dedicated
+Black Plague VR Settings page still requires a demonstrated safe native-menu
+insertion boundary. Requiem has no playable backend and no menu integration.
+
+## Large Address Aware exact variants
+
+The pure PE32 one-bit LAA transform is unit-tested, and the build catalogue now
+recognizes exact transformed variants of the canonical Black Plague and Requiem
+builds without creating new semantic build IDs. Offline verification against
+temporary copies of the installed canonical executables changed only file offset
+`0x12E`, `Characteristics 0x010F -> 0x012F`, and reproduced these hashes:
+
+- Black Plague: `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196`
+- Requiem: `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955`
+
+The installed originals were not modified. Transactional filesystem
+backup/apply/verify/rollback remains future installer work.
+
 ## Validation discipline
 
 Keep states distinct:
@@ -289,14 +323,21 @@ Keep states distinct:
 
 Compilation and CTest do not imply live or headset validation.
 
-Current root validation count is 28 CTest tests in the full configured suite,
-including the shared VR panel-policy regression. The hosted SDK-less CI executes
-the established suite with the real-driver `opengl_eye_targets` test excluded.
+Current root validation count is 30 CTest tests in the full configured suite,
+including the shared VR settings editor/store and Black Plague capability-map
+regressions. The hosted SDK-less CI executes the established suite with the
+real-driver `opengl_eye_targets` test excluded.
 Overture retains its 289 historical `VRTrackingTest` checks plus
 shader/visual/texture/LAA gates, now also exercised by the dedicated
-`Overture Release regression` CI job. The latest local offline extraction batch
-passed all 28 root Release tests and the full autonomous Overture Release build
-with 289/289 `VRTrackingTest` checks; no game or SteamVR process was launched.
+`Overture Release regression` CI job. The latest complete local offline result
+on 2026-09-11 passed the full Release build and all **30/30** root CTest tests,
+including the real-driver `opengl_eye_targets` test. Metadata validation also
+passed with 6 catalogue entries, 2 exact-build manifests, 42 actions, 6 action
+sets and 8 controller bindings. `Build-OvertureProduct.ps1 -Configuration
+Release -Full` then passed its project, 16-shader, 8,752 visual-reference,
+231-texture decode, Large Address Aware and `VRTrackingTest` gates; the latter
+reported **289 checks, 0 failures**. These were host-side checks only: no game,
+SteamVR or headset process was launched.
 
 For meaningful changes update the smallest relevant set among:
 

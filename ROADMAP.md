@@ -111,6 +111,9 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Implement/validate physical crouch without assuming Overture stand-clearance semantics
 - [ ] Validate long-body interaction and mechanism-specific states
 - [ ] Inventory, notes, menus, HUD and subtitles
+- [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy
+- [x] Define the Black Plague settings capability map from backend-wired behavior
+- [ ] Integrate a dedicated Black Plague VR settings page after a safe native-menu insertion boundary is demonstrated
 - [ ] Comfort settings and haptics
 - [ ] Representative chapter-level validation
 
@@ -131,7 +134,8 @@ Exit criterion: a documented playable alpha for an exact Requiem build.
 - [ ] Build compatibility report
 - [ ] Transactional backup, install, verify and rollback
 - [x] Implement and unit-test the x86 PE Large Address Aware byte transformation
-- [ ] Gate LAA behind known hashes and a transactional backup/rollback operation
+- [x] Record and recognize exact canonical/LAA hash pairs for Black Plague and Requiem
+- [ ] Apply LAA only through the known-build-gated transactional backup/rollback path
 - [x] Import the shared action manifest and controller bindings
 - [ ] Register and deploy action assets through the installer
 - [ ] Package attribution and licenses

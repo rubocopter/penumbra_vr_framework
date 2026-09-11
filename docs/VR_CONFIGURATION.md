@@ -6,9 +6,10 @@ trilogy. It is a developer baseline, not yet an installer-managed preset. Edit
 live state on exit and can overwrite changes made while it is running.
 
 The game-independent defaults, ranges, enum values and migration behavior live
-in `src/runtime/vr_settings.*`. Black Plague now consumes the input/comfort
-subset from the framework INI; Overture and Requiem remain separate integration
-work at this stage.
+in `src/runtime/vr_settings.*`. The Framework INI now persists the complete
+shared schema. Persistence does not imply backend support: Black Plague applies
+only the settings named by its backend capability map, while Overture keeps its
+source-game integration and Requiem remains separate integration work.
 
 ## Common baseline
 
@@ -55,10 +56,14 @@ when the probe is attached:
 
 ```ini
 [VR]
+SettingsVersion=1
 MonitorMirror=true
 Handedness=Right
+PlayMode=Standing
+PlayerHeight=1.70
 MoveSpeed=0.85
 MoveDeadZone=0.15
+HeightOffset=0.0
 TurnMode=Snap
 SnapTurnAngle=45
 SmoothTurnSpeed=90
@@ -66,6 +71,11 @@ TurnDeadZone=0.20
 UiDistance=1.75
 UiScale=1.0
 RenderScale=1.0
+EnhancedVisuals=false
+CrouchMode=Hybrid
+PhysicalCrouchDepth=0.25
+SubtitleScale=1.35
+HRTF=Auto
 ```
 
 `Handedness` accepts `Right` or `Left`; it selects the matching action/UI set,
@@ -78,6 +88,19 @@ The current local profile uses `0.85` to retest the reported excessive speed.
 panel size while keeping its aspect ratio, and `RenderScale` scales the OpenVR
 recommended per-eye dimensions before the existing allocation fallback. The
 same menu geometry is used for drawing and controller-ray hit testing.
+
+The currently wired Black Plague editor capabilities are `Handedness`,
+`TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`, `TurnDeadZone`, `MoveSpeed`,
+`MoveDeadZone`, `UiDistance`, `UiScale` and `RenderScale`. `MonitorMirror` is a
+separate launcher/runtime toggle. `PlayMode`, `PlayerHeight`, `HeightOffset`,
+`CrouchMode`, `PhysicalCrouchDepth`, `EnhancedVisuals`, `HRTF` and
+`SubtitleScale` are persisted but must not be presented as functional Black
+Plague controls until their backend application exists.
+
+The shared editor policy reproduces the 18 Overture Rework rows, step sizes,
+formatting, enum wrapping, clamps and snap/smooth dependent-row behavior and is
+host-tested. Black Plague does not yet have a demonstrated safe insertion point
+for a dedicated native VR Settings page, so no binary UI hook is invented here.
 
 Missing keys use normalized Rework defaults. Malformed recognized values make
 preflight fail instead of silently starting with a mixed profile. Values outside
