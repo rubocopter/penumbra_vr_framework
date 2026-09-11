@@ -20,6 +20,8 @@ The user previously reported world displacement / collision discomfort while mov
 - The first narrow `BlackPlagueBodyAdapter` is now live-tested. It never calls `D6E00`; it binds to the existing movement/body-update owners and observes accepted displacement after the one native tick.
 - PID 8628 live-observed free movement, total blocking, sliding and body replacement with the adapter active. Native body updates remained ~60 Hz; no second `D6E00` was introduced.
 - `runtime::VrAcceptedBodyMotion` is shared by Overture and Black Plague as the game-neutral accepted-displacement observation.
+- Shared reconciliation planning/rebase, physical-rejection correction and locomotion-anchor carry are implemented in `vr_locomotion.*`; the Black Plague consumer remains shadow-only and default-off.
+- GitHub Actions has host-tested the current shared extraction on Windows x86: root metadata/Debug/Release tests pass, and the autonomous Overture Release regression job also passes.
 
 ### Do not try again
 
@@ -28,12 +30,15 @@ The user previously reported world displacement / collision discomfort while mov
 - Do not tune arbitrary positional multipliers to hide clipping or push-back.
 - Do not add another owner for `MoveForward/MoveSideways` or `D460A`.
 - Do not call `D6E00` from `BlackPlagueBodyAdapter`.
+- Do not treat the shadow physical plan as accepted/rejected movement; it is not injected.
 
 ### Next evidence
 
 The shared reconciliation phases and default-off BP shadow consumer are now
-implemented; portable tests pass. Windows Release builds, the full CTest suite,
-verifiers and historical Overture checks remain pending. See
+**host-tested**. Root Windows x86 metadata/Debug/Release CI and the dedicated
+autonomous Overture Release regression are green. The remaining pre-live gate is
+the local exact-build verification against the supported initialized image / local
+research inputs; hosted CI cannot replace that binary-evidence check. See
 [the current report](TRACKING_BODY_RECONCILIATION.md).
 
 The shadow path plans a physical displacement but does not inject it. Native
@@ -41,11 +46,11 @@ accepted displacement feeds only native anchor carry. Physical rejection remains
 unknown, not zero or total rejection. Do not infer a physical movement capability
 from `MoveForward/MoveSideways`: those calls drive native acceleration state.
 
-After Windows gates pass, capture a shadow-only live run with translation still
-zero, verifying free/block/slide native observations, tracking plans, reset on
-body replacement and single tick ownership. Active room-scale requires a
-separately demonstrated physical displacement boundary. Camera/bob remains
-separate comfort work.
+After the local exact-build gate passes, capture a shadow-only live run with
+translation still zero, verifying free/block/slide native observations, tracking
+plans, reset on recenter/body replacement and single tick ownership. Active
+room-scale still requires a separately demonstrated collision-aware physical
+displacement boundary. Camera/bob remains separate comfort work.
 
 ## 2. Black Plague locomotion speed / timing
 
@@ -67,11 +72,11 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 - Do not declare the issue fixed by changing `MoveSpeed` alone.
 - Do not alter simulation rate or gravity to compensate for perceived speed.
-- Do not combine speed retuning with the first tracking/body reconciliation change unless the milestone explicitly scopes it.
+- Do not combine speed retuning with the first tracking/body reconciliation live gate.
 
 ### Next evidence
 
-Stabilize the shared tracking/body reconciliation path first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
+Complete the shadow-only tracking/body live validation and establish the missing physical displacement boundary first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
 
 ## 3. Black Plague jump
 
@@ -94,7 +99,7 @@ Stabilize the shared tracking/body reconciliation path first. Then compare a del
 
 ### Next evidence
 
-None is required for the first tracking/body reconciliation milestone. Keep native jump ownership intact. VR jump comfort/tuning can be a later isolated change after body reconciliation is stable.
+None is required for the shadow-only tracking/body validation milestone. Keep native jump ownership intact. VR jump comfort/tuning can be a later isolated change after the body path is stable.
 
 ## 4. Black Plague crouch
 

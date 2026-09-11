@@ -53,17 +53,21 @@ Do not patch a visible symptom until the difference and likely boundary are iden
 
 ## Current priority
 
-The autonomous Overture source/build/package integration is complete. The exact Framework Release executable with SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` has passed an initial functional SteamVR/headset/controller test without an evident Rework regression. Do not reopen that migration or retune its behavior without a specific regression and the comparison above.
+The autonomous Overture source/build/package integration is complete. The exact Framework Release executable with SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` has passed an initial functional SteamVR/headset/controller test without an evident Rework regression. The autonomous Overture Release regression is also now a dedicated Windows CI gate and passed after the shared tracking/body extraction. Do not reopen that migration or retune its behavior without a specific regression and the comparison above.
 
 Black Plague body/collision ownership is also no longer an open mapping problem. The exact-build player body, native update sequence, horizontal collision boundary, crouch shape swap and jump ownership are live-characterized. The first narrow `BlackPlagueBodyAdapter` is live-tested on the supported research build. It binds to the existing `NativeInputBridge` movement owner and `BodyCollisionProbe` update owner, never calls `D6E00` itself, dynamically re-resolves the current body and observes accepted displacement through `runtime::VrAcceptedBodyMotion`.
 
-The next gameplay milestone is **tracking/body spatial reconciliation through that live-tested boundary**:
+The shared tracking/body reconciliation phases and default-off Black Plague shadow consumer are now implemented and **host-tested** on Windows x86. Positional HMD translation remains compile-time zero and the shadow path performs no body/camera writes.
+
+The next Black Plague gameplay gate is **shadow-only live validation through the existing live-tested adapter**:
 
 1. preserve the single-owner callsite model;
-2. keep Black Plague positional HMD translation at zero while the reconciliation policy is host-tested;
-3. connect shared tracking/body policy only through measured native intent and accepted displacement;
-4. validate free motion, blocking and sliding before enabling any positional HMD translation;
-5. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
+2. rerun the local exact-build verifier against the supported research inputs before the live capture;
+3. keep Black Plague positional HMD translation at zero and enable only `PVR_BP_RECONCILIATION_SHADOW=1` in the game process;
+4. validate stationary tracking, small physical head deltas, native free motion, blocking/sliding, recenter/body replacement and one ~60 Hz native body tick;
+5. do not interpret the uninjected physical plan as accepted/rejected physical motion;
+6. after shadow validation, active room-scale still requires a separately demonstrated collision-aware physical displacement request in metres, distinct from native analog movement;
+7. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
 
 ## Black Plague constraints
 
@@ -73,7 +77,7 @@ Do not call `iCharacterBody::Update(D6E00)` from the adapter. The native physics
 
 Do not make horizontal VR intent responsible for the native Jump state's vertical pipeline. The live jump burst demonstrates separate ownership.
 
-Do not enable positional HMD translation merely because the adapter is live-tested. The adapter boundary is validated; active tracking/body reconciliation is not.
+Do not enable positional HMD translation merely because the adapter is live-tested or the reconciliation shadow is host-tested. The collision-aware physical displacement request boundary is still missing.
 
 Do not force doors, levers, joints or other mechanism bodies through the free-body grab path; map their native state instead.
 

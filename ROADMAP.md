@@ -62,7 +62,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [ ] Apply positional tracking with game/body calibration
 - [ ] Live-validate direct VR startup and menu/gameplay transitions
 
-**Current milestone note:** native stereo/head rotation and the player/body boundary are no longer the principal unknowns. Positional HMD translation remains disabled until the now-live-tested body adapter is connected to a shared tracking/body reconciliation policy and that policy passes a dedicated host/live/headset gate. The desktop mirror remains outside the active gameplay path.
+**Current milestone note:** native stereo/head rotation and the player/body boundary are no longer the principal unknowns. Shared tracking/body reconciliation planning plus the Black Plague default-off shadow path are implemented and host-tested. Positional HMD translation remains disabled; the next live gate is shadow-only observation, and active room-scale additionally requires a demonstrated collision-aware physical displacement request boundary. The desktop mirror remains outside the active gameplay path.
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus, with frame pacing and positional tracking explicitly validated before claiming a complete visual MVP.
 
@@ -80,11 +80,13 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Remove the Rework working tree from the Overture compile/package dependency graph
 - [x] Deploy the autonomous Release overlay and complete an initial functional SteamVR/headset/controller pass without an evident Rework regression
 - [x] Extract shared accepted-body-motion observation through `runtime::VrAcceptedBodyMotion`
+- [x] Extract and host-test shared tracking/body planning, physical rejection correction and locomotion-anchor carry without changing Overture's intended sequence
+- [x] Add the autonomous Overture Release regression pipeline to Windows CI
 - [ ] Validate tracking, height, recenter, locomotion, jump and room-scale rejection exhaustively in the headset
 - [x] Add host-independent tests for transforms, actions and settings
 - [x] Preserve copyright, license and provenance for extracted components
 
-Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete; Black Plague now exercises the first shared accepted-displacement body contract through a live-tested binary adapter.
+Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete; Black Plague now exercises the shared reconciliation policy in host-tested shadow mode over its live-tested binary body adapter.
 
 ## Phase 4 — Black Plague gameplay VR
 
@@ -97,7 +99,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
 - [x] Live-test the narrow `BlackPlagueBodyAdapter` and shared accepted-displacement observation
-- [ ] Connect shared tracking/body reconciliation through the live-tested adapter while positional HMD translation remains gated — implementation and portable tests complete; Windows host gates pending (see [report](docs/internal/TRACKING_BODY_RECONCILIATION.md))
+- [x] Connect and host-test shared tracking/body reconciliation through the adapter as a default-off shadow path while positional HMD translation remains gated
+- [ ] Rerun the local exact-build verifier and live-validate the shadow-only reconciliation path with translation still zero
 - [ ] Demonstrate a collision-aware physical displacement request mechanism separately from native analog movement before enabling room-scale
 - [ ] Headset-validate positional physical movement, blocking/sliding and head/body reconciliation
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable

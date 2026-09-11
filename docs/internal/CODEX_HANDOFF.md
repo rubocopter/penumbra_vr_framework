@@ -12,7 +12,8 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 - Repository: `rubocopter/penumbra_vr_framework`
 - Default branch: `main`
-- Current integrated checkpoint on GitHub: `b98708c2bc89d06a53407a677919426f4aecedc7` (`feat: add Black Plague body adapter boundary`)
+- Reviewed feature checkpoint: `18c63ef39adb9d3af6df0a6e9f97d0889df5194c` (`feat: add shared tracking body reconciliation shadow`)
+- CI hardening checkpoint: `ea12955f494976ed7e3fb2913a3da6221d7dcff8` (`ci: validate autonomous Overture regression on Windows`)
 - Framework state: pre-alpha
 - Windows/x86 remains the current binary-research target
 - Rework `23c890f` is reference-only; Overture build/package no longer depends on that checkout
@@ -40,6 +41,8 @@ The tested autonomous Release executable is 3,302,912 bytes with SHA-256:
 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`
 
 On 2026-09-10 the user deployed the Framework package over a valid retail installation and completed an initial SteamVR/headset/controller pass. Perceived behavior matched the prior Rework build with no evident regression. This is initial headset validation, not exhaustive equivalence and not a supported-release claim.
+
+After the shared tracking/body extraction, GitHub Actions run `34616820448` re-ran the autonomous Overture Release pipeline from a clean Windows 2022 checkout through `Build-OvertureProduct.ps1 -Configuration Release -Full` and completed successfully. The dedicated CI job is now a regression gate for future shared-runtime changes.
 
 Do not reopen Overture source-host migration unless a concrete regression requires the `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` comparison.
 
@@ -151,13 +154,12 @@ PID 8628 demonstrated:
 
 Overture consumes it without changing its proven room-scale/locomotion behavior. Black Plague currently uses it as observation only.
 
-## Current milestone — tracking/body reconciliation (implementation ready for Windows checks)
+## Current milestone — tracking/body reconciliation shadow is host-tested
 
-The shared stateless phases now live in `vr_locomotion.*`:
+The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
 `CarryHeadAnchorWithLocomotion`. Overture calls them in its existing order.
-A same-compiler 512-frame differential trace matches the checkpoint bit-for-bit;
-portable tracking, Overture, reconciliation/shadow and boundary tests pass.
+A same-compiler 512-frame differential trace matches the checkpoint bit-for-bit.
 
 BP feeds a default-off `BodyReconciliationShadow` directly from the existing
 post-native-tick adapter callback, using raw tracking published at the existing
@@ -166,18 +168,27 @@ in the **game process environment before adapter installation**. Sampling uses
 existing owners, with periodic logs every 300 swap frames. No native physical
 request is injected and positional translation is still compile-time zero.
 
-The missing capability is a collision-aware physical displacement request in
-metres, distinguishable from native acceleration/locomotion and consumed by the
-single native tick. `MoveForward/MoveSideways` does not establish that contract.
-Do not treat native accepted motion as acceptance/rejection of an uninjected
-physical plan, and do not enable positional translation after shadow alone.
+The host gate is now green. GitHub Actions run `34616035023` for feature commit
+`18c63ef` passed metadata validation, Visual Studio 2022 Win32 configure and the
+established Debug/Release CTest jobs. Run `34616820448` repeated that root gate
+and also passed the new autonomous Overture Release regression job. The full root
+configuration contains 27 CTest tests; hosted CI intentionally excludes only the
+real-driver `opengl_eye_targets` pixel test as documented in the workflow.
 
-Windows/x86 Release builds, full CTest, exact-build/metadata verifiers and the
-historical Overture suite could not run in the Linux editing environment. The
-expanded synthetic Windows fan-out test has been written, not executed here.
-This is **not host-complete or ready for a live test yet**. Complete those gates
-before a minimal shadow-only live capture. See
-[the implementation/validation report](TRACKING_BODY_RECONCILIATION.md).
+The missing capability remains a collision-aware physical displacement request
+in metres, distinguishable from native acceleration/locomotion and consumed by
+the single native tick. `MoveForward/MoveSideways` does not establish that
+contract. Do not treat native accepted motion as acceptance/rejection of an
+uninjected physical plan, and do not enable positional translation after shadow
+validation alone.
+
+Before a Black Plague shadow-only live capture, rerun the local exact-build
+verifier against the supported initialized image / local research inputs and use
+a freshly built DLL. Hosted CI cannot substitute for that local binary-evidence
+gate. Once it passes, the next evidence step is a minimal shadow-only live run:
+stationary tracking, small physical head movement, native free/block/slide,
+recenter/body replacement, expected ~60 Hz single tick ownership, and zero
+positional translation throughout.
 
 ## Camera/bob
 
@@ -221,7 +232,7 @@ Keep states distinct:
 
 Compilation and CTest do not imply live or headset validation.
 
-Current root validation count at this checkpoint is 26 CTest tests in the validated Release configuration. Overture retains its 289 historical `VRTrackingTest` checks plus its shader/visual/texture/package gates.
+Current root validation count is 27 CTest tests in the full configured suite. The hosted SDK-less CI executes the established suite with the real-driver `opengl_eye_targets` test excluded. Overture retains its 289 historical `VRTrackingTest` checks plus shader/visual/texture/LAA gates, now also exercised by the dedicated `Overture Release regression` CI job.
 
 For meaningful changes update the smallest relevant set among:
 
