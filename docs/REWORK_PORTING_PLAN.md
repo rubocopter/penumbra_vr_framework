@@ -1,212 +1,170 @@
 # Penumbra VR Rework porting plan
 
-This plan treats `rubocopter/penumbra_vr_rework` revision `23c890f` as the proven
-Overture reference. It is not merely conceptual guidance: when Rework already
-solves a VR behavior, its implementation and observed behavior are the primary
-source of truth for the Framework. The Framework should port that proven logic,
-extracting game-neutral portions and adapting only the game-specific boundaries.
-It must not independently reinvent an existing Rework subsystem without a
-technical reason documented in the migration audit.
+This plan treats `rubocopter/penumbra_vr_rework` revision `23c890f` as the proven Overture reference. When Rework already solves a VR behavior, its implementation and observed behavior are the primary source of truth for the Overture path. The Framework should extract game-neutral policy and adapt only the game-specific mechanism.
 
-Penumbra VR is GPLv3 or later and records each adapted component in
-`THIRD_PARTY.md`.
+Penumbra VR is GPLv3-or-later and records adapted components/provenance in `THIRD_PARTY.md` and the relevant product/source notes.
 
 ## Porting rule
 
-For every demonstrated Rework feature, use this order:
+For every demonstrated Rework feature:
 
-1. locate the exact Rework implementation;
-2. identify its game-specific dependencies;
-3. extract the game-neutral behavior into the shared runtime/interaction layer
-   where appropriate;
-4. provide a narrow per-game adapter for HPL/entity/physics/render details;
-5. preserve the proven behavior and constants unless the target game requires
-   a measured change;
-6. validate the adapted behavior separately from the source implementation.
+1. locate the exact implementation and tests;
+2. identify game-specific dependencies;
+3. extract genuinely game-neutral behavior into shared runtime/interaction policy;
+4. expose the narrowest per-game adapter for HPL/entity/physics/render differences;
+5. preserve proven behavior/constants unless target evidence requires a measured difference;
+6. validate the adapted path independently.
 
-A completely new implementation is justified only when Rework has no equivalent,
-the target game exposes a technically incompatible interface, or evidence shows
-that the Rework implementation cannot safely be adapted. In those cases the
-reason must be recorded before the new implementation replaces the proven path.
+A new algorithm is justified only when Rework has no equivalent, the target exposes an incompatible interface, or evidence shows the original cannot safely be adapted. Record that reason before replacing proven behavior.
+
+## Bidirectional reuse rule
+
+Rework is the historical and behavioral reference for Overture, not a mandate that every shared subsystem copy Overture forever.
+
+When another backend demonstrates a stronger **game-neutral** implementation, preserve the better behavior and move that behavior toward shared runtime policy while keeping game-specific details behind profiles/adapters.
+
+Current example:
+
+- Black Plague finger articulation preserves independent per-finger curls, per-joint curves, spread and thumb opposition and is the better candidate shared articulation output.
+- Overture contributes rig/profile details such as bind poses, bone axes, deadzone/smoothing and handle poses.
+- Future work should adapt Overture to the shared articulation output, not regress Black Plague to Overture's simpler semantics.
 
 ## Portability boundary
 
 | Rework subsystem | Unified destination | Expected reuse | Per-game work still required |
 |---|---|---|---|
-| OpenVR poses, optics and compositor lifecycle | shared runtime | high | backend chooses the frame/render boundary |
-| tracking-to-world, yaw recenter and height policy | shared runtime | high | backend supplies player/body pose and camera view |
+| OpenVR poses, optics and compositor lifecycle | shared runtime | high | backend chooses frame/render boundary |
+| tracking-to-world, yaw recenter and height policy | shared runtime | high | backend supplies body/camera mechanism |
+| accepted body displacement / reconciliation policy | shared runtime | high | backend publishes intent and reports accepted movement through its native body boundary |
 | logical VR input state, action sets and haptics | shared runtime | high | backend maps intents to each game's actions |
-| generated bindings for PS VR2, Index, Touch, Pico, WMR and Vive | shared package | nearly direct | remove or remap unavailable game actions |
-| settings types, limits and defaults | shared runtime | high | backend or installer supplies configuration storage/UI |
-| render scale and per-eye targets | shared runtime | high | backend owns renderer calls and GL-state integration |
-| hand pose validity, aim/grip poses and finger curls | shared runtime | high | backend owns HPL model/bone access |
-| palm dimensions, sweep/refinement and recovery policy | shared interaction layer | high at the algorithm level | backend wraps HPL physics shapes, contacts and skipped bodies |
-| pointer/raycast intent | shared interaction layer | high | backend maps entity queries, focus state and line drawing |
-| held-object pose, throw velocity and haptic events | shared interaction layer | medium/high | backend maps ownership and game entity/body APIs |
-| flashlight and glowstick grip presentation | shared HPL behavior/config | medium/high | verify each game's resource geometry, light entity and inventory state |
-| room-anchored menus, subtitles and cinematics | shared HPL behavior | medium | map each game's draw order and menu state |
-| HRTF, occlusion and environmental reverb | shared audio runtime | medium/high | validate the proxy/hook boundary and world ray queries |
-| Enhanced visuals v4 calibration, final curve and halo math | shared visual runtime and shader package | high | binary games need mapped material/render-stage hooks; GPU path remains opt-in |
-| Large Address Aware requirement | unified installer | direct policy reuse | patch only known x86 PE32 hashes with backup and rollback |
-| backup, hash verification, repair and rollback | unified installer | high | manifests and deployed payload differ by game/build |
-| Overture melee/weapon state machines | Overture backend only | none for current BP/Requiem scope | do not burden the shared API with unused combat concepts |
-| executable addresses, layouts and direct C++ calls | exact-build backend manifests | none | research and validate Black Plague and Requiem independently |
+| generated bindings for PS VR2, Index, Touch, Pico, WMR and Vive | shared package | nearly direct | remove/remap unavailable game actions |
+| settings types, limits and defaults | shared runtime | high | backend/installer supplies storage/UI |
+| render scale and per-eye targets | shared runtime | high | backend owns renderer/GL integration |
+| hand pose validity, aim/grip poses and finger articulation output | shared runtime | high | backend owns model/bone rig profile |
+| palm dimensions, sweep/refinement and recovery policy | shared interaction layer | high at algorithm level | backend wraps HPL physics/contact queries |
+| pointer/raycast intent | shared interaction layer | high | backend maps entity queries/focus/line drawing |
+| held-object pose, throw velocity and haptics | shared interaction layer | medium/high | backend maps ownership/body APIs |
+| flashlight/glowstick grip presentation | shared HPL behavior/config | medium/high | verify resource geometry/light/inventory per game |
+| room-anchored menus, subtitles and cinematics | shared HPL behavior | medium | map draw order/menu state per game |
+| HRTF, occlusion and environmental reverb | shared audio runtime | medium/high | validate proxy/hook/world queries |
+| Enhanced visuals v4 calibration/final curve/halo math | shared visual runtime and shader package | high | binary games still need renderer-stage hooks |
+| Large Address Aware requirement | unified installer | direct policy reuse | patch only known x86 PE32 hashes with backup/rollback |
+| backup, hash verification, repair and rollback | unified installer | high | manifests/payload differ by game/build |
+| Overture melee/weapon state machines | Overture backend only | none for current BP/Requiem scope | do not burden shared API with unused combat concepts |
+| executable addresses, layouts and direct C++ calls | exact-build backend manifests/adapters | none | research BP/Requiem independently |
 
-## Current evidence and installed resources
+## Overture extraction state
 
-The framework adapts Rework's VR-sized light clipping through
-`src/hooks/opengl_eye_scissor.*`: HPL desktop-pixel scissor rectangles are scaled
-only within each stereo eye's destination. The host math and OpenGL pixel tests
-pass; the medium-distance lamp dropout still requires a headset retest. This
-does not port Enhanced visuals or change the original Rework installation.
+The first Overture backend milestone is complete as `pvr_overture_backend`.
 
-Black Plague and Requiem share the installed `redist` tree. It contains both
-`Penumbra.exe` and `Requiem.exe`, plus the same HPL resource families needed by
-the rework: `hud_object_glowstick`, `hud_object_flashlight`, their inventory
-items, light/billboard definitions and Requiem-specific cache/expansion data.
-The current Rework resources are not byte-identical to the installed Black Plague
-resources: the Rework deliberately modifies glowstick and flashlight geometry/configuration.
-These files must therefore be treated as attributed overlays with per-game visual
-validation, not assumed interchangeable because names match.
+Shared/runtime behavior now includes:
 
-## Current extraction: Overture
+- tracking space;
+- seated/standing calibration;
+- world yaw/recenter;
+- room-scale rejection/reconciliation;
+- fixed `0.05 m` physical steps;
+- Rework locomotion policy of `1.5 m/s` walk and `2.25 m/s` sprint;
+- common interaction reach of `0.18 m`;
+- accepted-body-motion observation through `runtime::VrAcceptedBodyMotion`.
 
-The first Overture backend milestone is now implemented as `pvr_overture_backend`.
-It ports the proven Rework tracking-space, seated/standing calibration, world-yaw,
-room-scale rejection/reconciliation and fixed-displacement locomotion sequence
-into shared runtime modules. The Overture backend sequences those policies while
-a narrow `OvertureBodyAdapter` owns HPL body position, feet height, collision
-movement and jump calls.
+`OvertureBodyAdapter` keeps source-game HPL body position, feet height, collision movement and jump calls behind the game boundary.
 
-The extracted locomotion policy preserves Rework's 1.5 m/s normal speed, 2.25 m/s
-sprint speed, 0.05 m physical step and accepted/rejected displacement
-reconciliation. `src/adapters/overture_source` now supplies the concrete HPL
-boundary and is compiled into `Penumbra_vr.exe` by the Framework-owned source
-host at `products/overture`. Debug/Release build inputs and the Release package
-are self-contained in this repository; Rework `23c890f` is reference-only.
-The exact autonomous Release artifact has also passed an initial functional
-SteamVR/headset/controller test without an evident Rework regression. Exhaustive
-item-by-item equivalence and broader hardware coverage remain separate evidence.
+The Framework-owned source host under `products/overture` builds and packages independently of the Rework checkout. The exact autonomous Release artifact has completed an initial SteamVR/headset/controller pass with no evident regression versus the previously tested Rework behavior. Exhaustive feature/hardware equivalence remains a separate evidence gate.
 
-The corresponding Black Plague movement problem remains a binary-adapter task:
-feeding its native acceleration/cap system cannot be made Rework-equivalent by
-simply multiplying input. Its exact player link, character-body tick and first
-horizontal collision-resolution call are now live-characterized by a read-only
-requested/solver/final displacement probe. The first narrow adapter is now
-live-tested for native horizontal publication and post-update accepted
-displacement observation; positional policy remains disabled.
+## Black Plague body boundary state
 
-Black Plague also supplies positive evidence back toward the Framework. Its
-current `VrHandArticulation` policy preserves five independent curls, distinct
-phalange curves, finger spread and thumb opposition without the Overture rig's
-forced-pose assumptions. The user currently identifies that response as better.
-Keep this game-neutral output as the future shared baseline; Overture's bind
-axes, bone lookup, measured deadzone, optional smoothing and handle-radius hold
-pose remain a mesh/profile adapter concern. Do not regress BP to the Overture
-rig merely because Overture is the historical behavior source.
+The original binary movement problem is no longer an unmapped blocker.
 
-## Black Plague gameplay priority
+Live evidence establishes:
 
-The current Black Plague gameplay work is deliberately incremental. Generic
-controller picking is capped to the shared Rework direct physical reach of
-`0.18 m`. Free-body grabbing uses the shared palm-relative pose/release policy,
-while jointed mechanisms remain a separate backend problem.
+- `cPlayer+0x274` → native `iCharacterBody`;
+- standing body `0.70 x 1.65 x 0.70 m`, cylinder radius `0.35 m`;
+- native body tick `D460A -> D6E00` at `1/60`;
+- horizontal request/collision/accepted displacement;
+- free movement, total blocking and sliding/partial acceptance;
+- physical crouch body/shape swap from `1.65 m` to `0.95 m` preserving feet Y;
+- native Jump-state vertical ownership separate from the horizontal request/solver path.
 
-The reported long-object behavior is consistent with the current rigid free-body
-pose model: bars/tables without a jointed/mechanism state remain rigidly attached
-to the palm. This should not be “fixed” by introducing arbitrary spring/offset
-behavior; jointed objects need their native mechanism state mapped.
+The first narrow `BlackPlagueBodyAdapter` is now live-tested.
 
-The reported glowstick pose is also geometry-specific. Rework's exact grip
-numbers have been identified, but Black Plague uses a different DAE, so those
-numbers are not copied blindly. The safe next step is a shared grip-profile type
-with a measured Black Plague socket.
+Ownership is intentionally singular:
 
-The reported head/world displacement issue is not currently attributable to a
-Framework head collider. Positional HMD translation is disabled in Black Plague
-(`0.0` scale). Static evidence now identifies `cPlayer+0x274` as the native
-`iCharacterBody`, its active HPL physics body/size/position fields, the normal
-physics tick and the solver call. The HPL representation is sphere-or-cylinder
-by dimensions, not a separate Framework capsule; the actual player shape and
-telemetry values are live-characterized. Do not enable speculative
-camera translation as a substitute.
+- `NativeInputBridge` owns the movement callsites;
+- `BodyCollisionProbe` owns `D460A -> D6E00`;
+- the body adapter binds to their verified status/fan-out and does not install a competing hook.
 
-The desktop mirror is intentionally outside the current gameplay milestone.
-Existing mirror code may be revisited later by porting the proven Rework mirror
-path, but its current Framework implementation is not considered supported or
-validated.
+The adapter dynamically re-resolves the current body, publishes the existing native horizontal movement call and observes accepted body motion after the original native update. It never invokes `D6E00` itself.
 
-## Extraction order
+`runtime::VrAcceptedBodyMotion` is therefore the first concrete body contract used by both Overture and Black Plague without importing game-specific layouts, speeds or update ownership into shared runtime code.
 
-### Current priority: Black Plague body/collision boundary
+## What is deliberately not shared yet
 
-1. Preserve the completed Overture source host and its initially headset-validated
-   Release hash; return to it only for a concrete regression or explicit broader
-   validation pass.
-2. Map the exact Black Plague body/capsule and collision-resolution boundary;
-   add telemetry before enabling positional HMD translation.
-3. Route Black Plague locomotion through a measured body displacement adapter,
-   preserving the shared Rework locomotion policy rather than its native speed caps.
-4. Complete palm collision, jointed mechanisms and tool/light attachment.
-5. Validate the long-object and glowstick behavior with the definitive per-game
-   geometry/state adapters.
-6. Continue inventory, notes, subtitles and room-anchored UI validation.
-7. Repeat only exact-build binary research for Requiem where evidence does not
-   transfer from Black Plague.
+Do not force these into the first common body contract:
 
-This order proves each boundary in isolation and keeps a failure in a game
-adapter from being mistaken for a shared-runtime defect.
+- Overture `1.5 / 2.25 m/s` speed constants into Black Plague before a dedicated VR locomotion gate;
+- BP native `3.0 / 4.5 m/s` limits into shared policy;
+- Black Plague jump/vertical state;
+- Black Plague crouch transition/stand-clearance mechanism;
+- Overture `vr_velocity` or `vr_stepstaticonly`-style source fields;
+- RVAs, player/body offsets or calling conventions;
+- camera/head-bob ownership;
+- Requiem assumptions.
+
+The first shared contract exists to separate **policy** from **native mechanism**, not to flatten every game difference immediately.
+
+## Current priority — Black Plague tracking/body reconciliation
+
+The body/collision/adaptor mapping milestone is complete enough that more probing should require a concrete contradiction.
+
+Current order:
+
+1. Preserve the completed Overture source host and validated artifact behavior.
+2. Preserve the live-tested single-owner Black Plague body adapter boundary.
+3. Connect a minimal shared tracking/body reconciliation policy to that boundary while keeping Black Plague positional HMD translation at zero during host testing.
+4. Prove the policy still preserves free motion, full block and sliding through accepted displacement and does not introduce a second body update.
+5. Only then enable positional HMD/body translation for a deliberately scoped live/headset test.
+6. After reconciliation is stable, decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
+7. Keep physical crouch and jump comfort/tuning as separate milestones.
+8. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body adapter/reconciliation contract.
+9. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
+10. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
+
+This order proves each boundary in isolation and prevents a game-adapter defect from being mistaken for a shared-runtime defect.
+
+## Black Plague interaction priority
+
+Generic controller picking remains capped to the shared Rework direct physical reach of `0.18 m`. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
+
+Long bars/tables following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
+
+Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The correct direction is shared grip-profile semantics plus measured per-game sockets.
 
 ## Extracted so far
 
-- `src/runtime/vr_tracking_space.*`, `src/runtime/vr_locomotion.*`,
-  `src/runtime/vr_interaction_policy.*` and `src/backends/overture/*` port Rework's
-  complete tracking-space boundary, seated calibration, room-scale body-step/
-  rejection algorithm and fixed 1.5/2.25 m/s locomotion behind a narrow HPL body
-  adapter. The real source-game linkage, Framework-owned source host and Release
-  package are complete, and the exact autonomous artifact has an initial
-  functional headset validation. Exhaustive Overture coverage remains separate.
-  The exact Black Plague comparison is in `docs/OVERTURE_BACKEND_MIGRATION.md`.
+- `src/runtime/vr_tracking_space.*`, `src/runtime/vr_locomotion.*`, `src/runtime/vr_interaction_policy.*` and `src/backends/overture/*` port the proven Overture/Rework tracking/body policy behind a narrow source-game adapter.
+- `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
+- `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.
+- `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4 tone/ambient/dark-diffuse/sharpening/glowstick-halo behavior; GPU renderer-stage integration remains pending.
+- `src/audio/spatial_audio.*` owns HRTF config text, distance/occlusion low-pass behavior and the mine-gallery EFX preset; safe binary audio hook work remains open.
+- `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; transactional deployment remains installer work.
+- `src/adapters/hpl1/camera_matrix_override.*` owns the reusable byte-exact camera transaction; exact layouts remain backend-owned.
+- `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit, but the mirror is not supported/validated.
+- `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior.
+- `src/runtime/vr_input_state.*` owns logical actions, dead-zone scaling, context/handedness edge latching, pose-loss releases and action-idle grace.
+- `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state.
+- `assets/openvr` contains shared actions/bindings; `assets/openvr/overture` preserves exact Overture product mappings.
 
-- `src/runtime/render_target_policy.*` preserves the Rework scale range,
-  default scale and allocation fallback without depending on HPL types.
-- `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4
-  tone, ambient, dark-diffuse, sharpening and glowstick-halo behavior. The GPU
-  shader and renderer-stage adapter are still pending.
-- `src/audio/spatial_audio.*` owns the HRTF config text, distance/occlusion
-  low-pass calculation and mine-gallery EFX preset. It does not yet claim a
-  safe binary audio hook.
-- `src/deployment/pe_large_address.*` performs the one-bit PE32 transformation
-  in memory. Transactional file replacement remains installer work.
-- `src/adapters/hpl1/camera_matrix_override.*` owns the byte-exact camera
-  transaction; exact-build backends provide the layout.
-- `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit,
-  but the mirror is not currently a supported/validated gameplay feature.
-- `src/runtime/vr_grab_pose.*` preserves the selected palm/body transform and
-  uses a five-sample median with minimum history and bounded tracking-discontinuity
-  release. The Black Plague adapter restores its exact-build character-collision
-  flag on every owned release.
-- `src/runtime/vr_input_state.*` owns logical actions, radial move dead-zone
-  scaling, context/handedness edge latching, pose-loss releases and the 500 ms
-  action-idle grace period without depending on HPL or OpenVR types.
-- `src/runtime/vr_settings.*` owns the Rework defaults, limits, enum text values
-  and legacy smooth-turn migration, plus framework monitor-mirror state.
-- `assets/openvr` contains the shared action schema and bindings for PSVR2 Sense,
-  Vive, Index, Oculus, Pico and Windows motion controllers;
-  `assets/openvr/overture` preserves the exact Overture product mappings used
-  by its package.
+## Validation rule
 
-## First shared Black Plague body boundary
+Do not promote a shared behavior merely because it compiles in both backends.
 
-`runtime::VrAcceptedBodyMotion` is the first body contract used by both
-Overture and Black Plague. It derives accepted displacement from finite
-before/after positions and contains no binary details or body layouts.
-Overture now uses it in its unchanged Rework-derived reconciliation.
-`BlackPlagueBodyAdapter` uses it only after native `D460A` has called `D6E00`
-exactly once. It publishes the pre-existing native horizontal intent at the
-mapped `cPlayer::MoveForward/MoveSideways` calls, resolves `cPlayer+0x274`
-afresh on every callback, and fails closed on an exact-boundary mismatch.
+Use the evidence ladder consistently:
 
-This is live-tested only for the exact native boundary. It deliberately does
-not port Overture's speed constants, room-scale translation, active
-tracking/body reconciliation, vertical logic, jump or crouch.
+`planned` → `implemented` → `host-tested` → `live-tested` → `headset-validated` → `supported`
+
+For any reported regression, compare:
+
+`REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION`
+
+The next Black Plague body work should consume existing evidence, not restart it.

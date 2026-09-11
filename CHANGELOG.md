@@ -1,6 +1,6 @@
 # Changelog
 
-This project is pre-alpha. Entries distinguish implemented infrastructure from features validated in a headset.
+This project is pre-alpha. Entries distinguish implemented infrastructure from features validated live or in a headset.
 
 ## Unreleased
 
@@ -11,22 +11,21 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Framework-owned Overture product host under `products/overture`, containing the required Penumbra/HPL/OAL source, pinned Win32 dependencies, resource inputs, build/package gates and retained upstream notices.
 - Overture-specific OpenVR binding overlay under `assets/openvr/overture`; shared bindings remain available to the other backends.
 - Shared tracking-space, height/seated calibration, world-yaw, room-scale collision reconciliation, fixed-displacement locomotion and interaction-reach policies.
-- Black Plague HMD anchor/current-position, physical-delta and explicit positional-scale telemetry for the pending exact-build body adapter.
-- Exact-build Black Plague player/character-body/native-shape/movement/collision
-  mapping plus read-only telemetry for body/feet position, physics timestep,
-  requested displacement, immediate solver output, final accepted displacement
-  and unapplied HMD/body divergence. The probe is live-tested for the mapped
-  body/collision and native jump pipeline; positional translation is still
-  disabled.
+- Shared `runtime::VrAcceptedBodyMotion`, a game-neutral observation of finite body-before/body-after positions and accepted displacement. Overture now consumes it without changing its proven reconciliation behavior; Black Plague exposes the same observation through its exact-build body boundary.
+- Exact-build Black Plague player/character-body/native-shape/movement/collision mapping plus read-only telemetry for body/feet position, physics timestep, requested displacement, immediate solver output, final accepted displacement and unapplied HMD/body divergence.
+- Live-characterized Black Plague sprint/crouch/jump ownership: native walk/sprint limits around `3.0/4.5 m/s`, physical crouch shape swap preserving feet height, and a separate native Jump-state vertical pipeline.
+- First narrow `BlackPlagueBodyAdapter`, binding to the already-owned movement/body-update callsites without introducing another hook or second `D6E00` call. It dynamically re-resolves the current body, publishes existing native horizontal intent and observes accepted displacement after the one native update.
 - One-step Black Plague `--launch-vr` / `Start-Black-Plague-VR.cmd` and read-only `--check-vr` preflight.
-- Real OpenVR action/pose/skeleton/haptic reader, exact-build native input bridge and tracked desktop-menu panels with right-controller UI pointing. These paths remain headset-validation work unless explicitly marked otherwise.
-- Provisional depth-tested procedural gloves, controller-directed native picking and palm-relative free-body grab/throw adapter. Native physics transitions are preserved; joints, palm collisions and tool/light attachment remain pending.
+- Real OpenVR action/pose/skeleton/haptic reader, exact-build native input bridge and tracked desktop-menu panels with right-controller UI pointing.
+- Provisional depth-tested procedural gloves, controller-directed native picking and palm-relative free-body grab/throw adapter. Native physics transitions are preserved; joints, palm collisions and definitive tool/light attachment remain pending.
 - Per-eye light-scissor remapping at the main executable's `glScissor` import, scoped to the eye context, framebuffer and viewport, with per-frame counters.
 
 ### Fixed
 
-- Generic Black Plague controller picking is capped to Rework's 0.18 m direct physical reach instead of granting all props the native camera-ray distance.
-- Shared snap-turn activation uses Rework's post-dead-zone 0.65 threshold; smooth and snap turning both require a neutral sample on gameplay entry.
+- Black Plague body-adapter installation now respects single-owner callsites. `NativeInputBridge` remains the sole owner of `MoveForward/MoveSideways`, `BodyCollisionProbe` remains the sole owner of `D460A -> D6E00`, and the adapter binds through their verified live status instead of re-validating pristine bytes or stacking another hook.
+- Body-adapter mismatch diagnostics now identify concern, RVA, pristine/live instruction bytes, decoded targets and owner state.
+- Generic Black Plague controller picking is capped to Rework's `0.18 m` direct physical reach instead of granting all props the native camera-ray distance.
+- Shared snap-turn activation uses Rework's post-dead-zone `0.65` threshold; smooth and snap turning both require a neutral sample on gameplay entry.
 - Interact ownership remains with the grabbing hand until it releases; a second controller press no longer transfers ownership or masks release.
 - Launcher export relocation now uses the actual owner of forwarded Windows exports and rejects a probe loaded from a different build path.
 - Eye bindings isolate and restore scissor enable/box state, preventing a previous desktop or light rectangle from clipping the next eye's clear.
@@ -34,24 +33,25 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Current integration state
 
-- `pvr_overture_backend` now ports the proven Rework tracking-space, room-scale rejection/reconciliation and 1.5/2.25 m/s locomotion policy behind an Overture-specific HPL body/jump adapter. That adapter is linked into a real `Penumbra_vr.exe` from the Framework-owned source host. The exact autonomous Release artifact has been deployed and functionally exercised in a headset; exhaustive equivalence remains a separate evidence gate.
-- The migration audit records the explicit REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION comparison and is the authoritative reference for what was ported versus what still requires a game-specific adapter.
-- Black Plague positional HMD translation remains disabled. The exact native
-  character-body and collision boundary is mapped and live-characterized;
-  implementation of the narrow displacement adapter remains the next step.
-- The desktop monitor mirror is intentionally not a current supported feature. Existing code/commands remain experimental and must not be counted as a validated gameplay capability.
-- Rework revision `23c890f` remains the immutable behavioral baseline. Its working tree and the earlier consumer-side integration delta are no longer build or packaging dependencies and may be reset without affecting the Framework product.
+- Overture now builds entirely from this repository. `pvr_overture_backend` preserves the proven Rework tracking-space, room-scale rejection/reconciliation and `1.5/2.25 m/s` locomotion policy behind an Overture-specific HPL body/jump adapter. The exact autonomous Release artifact has been deployed and functionally exercised in a headset; exhaustive equivalence remains a separate evidence gate.
+- The migration audit records the explicit `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` comparison and remains the authoritative reference for what was ported versus what still requires game-specific mechanism.
+- Black Plague positional HMD translation remains disabled. The exact native body/collision boundary and first narrow body adapter are now live-tested. The next gameplay milestone is shared tracking/body reconciliation through that adapter, with positional translation kept gated until a separate validation step.
+- Black Plague native jump/vertical ownership remains separate from shared horizontal intent. Physical crouch, VR speed tuning and camera/bob comfort are also separate milestones rather than part of the first reconciliation change.
+- The desktop monitor mirror remains experimental and is not a current supported gameplay feature.
+- Rework revision `23c890f` remains the immutable Overture behavioral baseline. Its working tree is not a Framework build or packaging dependency.
 
 ### Validated
 
-- The current OpenVR and no-OpenVR configurations compile under MSVC with warnings treated as errors.
-- Twenty-five host-independent tests pass in OpenVR Release, OpenVR Debug and
-  the no-OpenVR Release configuration, including the exact-build BP
-  body/collision observation test.
-- The Framework-owned Overture Release pipeline passes: project checks, 16 shader compilations, 8,752 CPU visual checks, 231 texture selection/decode checks, 289 `VRTrackingTest` checks, Large Address Aware verification and package validation.
+- The current OpenVR and no-OpenVR configurations compile under MSVC with warnings treated as errors at the validated checkpoints.
+- **Twenty-six** host-independent CTest tests pass in the current validated Release configuration, including exact-build Black Plague body/collision and body-adapter boundary coverage.
+- The Framework-owned Overture Release pipeline passes project checks, 16 shader compilations, 8,752 CPU visual checks, 231 texture selection/decode checks, 289 `VRTrackingTest` checks, Large Address Aware verification and package validation.
 - The Framework-owned Overture Debug full rebuild also passes Large Address Aware verification and all 289 `VRTrackingTest` checks; only the game project disables legacy `/Gm` to coexist with C++20.
-- The user deployed the autonomous Release overlay with `Install-PenumbraVR.bat` and ran the exact packaged executable (SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`) with SteamVR, a real headset and controllers. The first functional pass felt equivalent to the previously tested Rework behavior and exposed no evident regression. This is initial headset validation, not exhaustive feature/hardware coverage or a supported-release claim.
-- Black Plague native stereo, yaw-aligned rotational tracking, keyboard/mouse preservation and HMD-aware visibility have previously been validated in the headset. Those results remain valid; newer controller/gameplay and lighting corrections are not automatically headset-validated by compilation or host tests.
+- The user deployed the autonomous Overture Release overlay with `Install-PenumbraVR.bat` and ran the exact packaged executable (SHA-256 `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1`) with SteamVR, a real headset and controllers. The first functional pass felt equivalent to the previously tested Rework behavior and exposed no evident regression. This is initial headset validation, not exhaustive feature/hardware coverage or a supported-release claim.
+- Black Plague native stereo, yaw-aligned rotational tracking, keyboard/mouse preservation and HMD-aware visibility have previously been validated in the headset.
+- Black Plague PID 30896 live-validated the mapped `0.70 x 1.65 m` player body, `dt=1/60`, free movement and collision rejection/slide behavior with positional HMD translation still disabled.
+- Black Plague PID 24780 live-validated corrected sprint/jump/crouch action ownership and the native `1.65 m → 0.95 m` crouch shape swap preserving feet height.
+- Black Plague PID 29672 completed a 240-tick jump burst, confirming separate native vertical ownership, about `+5.53 m/s` initial accepted vertical speed, ~`0.95 m` apex above baseline and native landing/state restoration.
+- Black Plague PID 8628 live-validated the first `BlackPlagueBodyAdapter`: input/body owners and adapter installed together, free movement/block/slide remained intact, body replacement did not leave a stale cached pointer, and the body update remained about 60 Hz with no evidence of a second `D6E00` call.
 
 ### Earlier work in this release
 
@@ -71,7 +71,7 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Rework-derived stereo scheduling that defaults continuous presentation to two eye world passes and permits an optional third monitor-mirror pass.
 - Runtime launcher commands to enable or disable the monitor mirror while the probe is attached, plus per-frame pass and frame-time-ownership telemetry.
 - A device-independent VR input router adapted from Rework, covering radial dead-zone scaling, context and handedness edge latching, pose-loss releases and the 500 ms SteamVR action-idle grace period.
-- A runtime-owned VR settings model adapted from Rework, with shared defaults, ranges, enum text conversion, malformed-value normalization, legacy migration and framework monitor-mirror state.
+- A runtime-owned VR settings model adapted from Rework, with shared defaults, ranges, enum text values and legacy smooth-turn migration, plus framework monitor-mirror state.
 - Persistent monitor-mirror preference in `%LOCALAPPDATA%\PenumbraVR\settings.ini`.
 
 ### Changed
@@ -79,3 +79,4 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Renamed the GitHub repository from `rubocopter/penumbra_vr` to `rubocopter/penumbra_vr_framework`, while retaining **Penumbra VR** as the public project name, to distinguish this trilogy framework from the original `veryjos/penumbra_vr` Overture mod.
 - Moved camera override behavior out of the Black Plague backend into the shared HPL1 adapter; exact camera offsets remain backend-owned.
 - Documented Enhanced visuals, audio, action, tracking and locomotion provenance against `rubocopter/penumbra_vr_rework` revision `23c890f`.
+- Clarified the extraction rule: Rework remains the proven Overture reference, while a better demonstrated implementation from another backend may become the shared baseline when the reusable behavior is genuinely game-neutral.

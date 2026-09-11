@@ -52,17 +52,17 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Implement a conservative HMD-aware render-list update
 - [x] Live-validate HMD-relative portal/frustum visibility correction
 - [x] Confirm continuous visual behavior in the headset
-- [ ] Implement a reliable desktop monitor mirror
-- [ ] Headset-validate medium-distance lamp lighting and scissor-hook performance
-- [ ] Achieve acceptable frame pacing at the headset's target refresh rate
-- [ ] Apply positional tracking with game/body calibration
 - [x] Submit both eyes to OpenVR
 - [x] Preserve functional keyboard and mouse input
 - [x] Implement one-step Steam launch, VR activation and read-only preflight
 - [x] Host-test tracked menu panels and controller-ray projection
+- [ ] Implement a reliable desktop monitor mirror
+- [ ] Headset-validate medium-distance lamp lighting and scissor-hook performance
+- [ ] Achieve acceptable frame pacing at the headset's target refresh rate
+- [ ] Apply positional tracking with game/body calibration
 - [ ] Live-validate direct VR startup and menu/gameplay transitions
 
-**Current milestone note:** the mirror is intentionally out of the active gameplay path. Existing mirror code/commands must not be treated as a supported feature until the headset/desktop behavior is reliable. Positional tracking remains disabled until the exact Black Plague body/capsule and collision path are mapped.
+**Current milestone note:** native stereo/head rotation and the player/body boundary are no longer the principal unknowns. Positional HMD translation remains disabled until the now-live-tested body adapter is connected to a shared tracking/body reconciliation policy and that policy passes a dedicated host/live/headset gate. The desktop mirror remains outside the active gameplay path.
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus, with frame pacing and positional tracking explicitly validated before claiming a complete visual MVP.
 
@@ -79,28 +79,33 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Migrate the minimal Overture/HPL source host, dependencies and packaging into the Framework
 - [x] Remove the Rework working tree from the Overture compile/package dependency graph
 - [x] Deploy the autonomous Release overlay and complete an initial functional SteamVR/headset/controller pass without an evident Rework regression
-- [ ] Validate tracking, height, recenter, locomotion, jump and room-scale rejection in the headset
+- [x] Extract shared accepted-body-motion observation through `runtime::VrAcceptedBodyMotion`
+- [ ] Validate tracking, height, recenter, locomotion, jump and room-scale rejection exhaustively in the headset
 - [x] Add host-independent tests for transforms, actions and settings
 - [x] Preserve copyright, license and provenance for extracted components
 
-Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current Overture integration milestone, while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete, and the exact autonomous Release artifact has passed an initial functional headset test. Exhaustive item-by-item equivalence and broader hardware coverage remain separate from this completed integration milestone.
+Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete; Black Plague now exercises the first shared accepted-displacement body contract through a live-tested binary adapter.
 
 ## Phase 4 — Black Plague gameplay VR
 
 - [x] Connect OpenVR action polling to the imported manifest and bindings
 - [x] Code-test native intents, tracked menus and provisional depth-tested gloves
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
-- [x] Limit the generic prop-pick fallback to Rework's 0.18 m physical reach
+- [x] Limit the generic prop-pick fallback to Rework's `0.18 m` physical reach
 - [ ] Complete palm collision, jointed mechanisms and tool/light attachment
-- [x] Statically map and host-test telemetry for the exact-build Black Plague player/character-body/native-shape/movement/collision path
-- [x] Live-validate the mapped BP body, active shape, physics timestep and requested/accepted displacement telemetry (PID 30896; room-scale remains disabled)
-- [ ] Complete final player-camera/entity ownership capture; PID 24780 live-validated the corrected action/body probe, while its gravity-disabled camera/entity sites are correctly zero for the active player path
-- [x] Live-test the narrow BP body adapter and first shared horizontal accepted-displacement policy; native jump remains a separate native move-state operation
-- [ ] Resolve head/body spatial reconciliation and physical movement without speculative camera translation
+- [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
+- [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
+- [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
+- [x] Live-test the narrow `BlackPlagueBodyAdapter` and shared accepted-displacement observation
+- [ ] Connect shared tracking/body reconciliation through the live-tested adapter while positional HMD translation remains gated
+- [ ] Headset-validate positional physical movement, blocking/sliding and head/body reconciliation
+- [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
+- [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
+- [ ] Implement/validate physical crouch without assuming Overture stand-clearance semantics
 - [ ] Validate long-body interaction and mechanism-specific states
-- [ ] inventory, notes, menus, HUD and subtitles
-- [ ] comfort settings and haptics
-- [ ] representative chapter-level validation
+- [ ] Inventory, notes, menus, HUD and subtitles
+- [ ] Comfort settings and haptics
+- [ ] Representative chapter-level validation
 
 Exit criterion: a documented playable alpha for an exact Black Plague build with physical interaction, body/room-scale movement and representative headset validation.
 
@@ -115,14 +120,14 @@ Exit criterion: a documented playable alpha for an exact Requiem build.
 
 ## Phase 6 — Unified installer and release
 
-- [ ] installation discovery and manual selection
-- [ ] build compatibility report
-- [ ] transactional backup, install, verify and rollback
+- [ ] Installation discovery and manual selection
+- [ ] Build compatibility report
+- [ ] Transactional backup, install, verify and rollback
 - [x] Implement and unit-test the x86 PE Large Address Aware byte transformation
 - [ ] Gate LAA behind known hashes and a transactional backup/rollback operation
-- [x] import the shared action manifest and controller bindings
-- [ ] register and deploy action assets through the installer
-- [ ] package attribution and licenses
-- [ ] clean-machine and upgrade testing
+- [x] Import the shared action manifest and controller bindings
+- [ ] Register and deploy action assets through the installer
+- [ ] Package attribution and licenses
+- [ ] Clean-machine and upgrade testing
 
 Exit criterion: one package safely installs any supported combination of the three games and can fully restore the original installations.

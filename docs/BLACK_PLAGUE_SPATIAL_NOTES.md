@@ -35,7 +35,6 @@ El `iCharacterBody` guarda posición actual en `+0x48`, posición anterior en
 cuerpo menos media altura de la shape. El constructor D63A0 calcula radio como
 `max(size.x,size.z)/2`; sólo usa esfera cuando el diámetro coincide con la
 altura dentro de 0,01 y, en otro caso, crea un cilindro rotado 90 grados en Z.
-La shape del jugador concreto se clasificará en el log por su tamaño activo.
 No hay una cápsula separada ni un collider de cabeza del Framework.
 
 `body_collision_probe.cpp` instala dos hooks de observación exact-build. El
@@ -62,44 +61,49 @@ posicional continúa forzada a cero.
 `tools/Test-BlackPlagueInputMap.ps1` verifica además estos callsites, entradas y
 firmas directamente contra la captura inicializada, sin modificar procesos.
 
-La siguiente prueba pendiente queda limitada al salto: tras el dispatch nativo
-`5299 -> 9CEA0`, la misma sonda `D460A` captura 240 body updates para relacionar
-take-off, impulso, hold, apex, caída y aterrizaje con los campos crudos ya
-confirmados. Cámara/head-bob, footstep-bob, room-scale y multiplicadores quedan
-fuera de esta medición.
+El milestone de probing corporal quedó cerrado después de las capturas PID
+24780, 29672 y 8628. Sprint/crouch/jump ownership está caracterizado, el salto
+tiene burst live completo y el primer `BlackPlagueBodyAdapter` está live-tested.
+No se deben añadir más sondas corporales por defecto. El siguiente paso útil es
+conectar reconciliación tracking/body a través del adapter existente, manteniendo
+la traslación HMD a cero durante la validación host y conservando cámara/bob como
+una pista de comfort separada.
 
 ### Comparación concreta con Overture
 
 Las primitivas neutrales de tracking/locomoción en `src/runtime` y la
-orquestación probada de `OvertureBackend` siguen siendo la candidata correcta:
-escala 1 unidad/m, pasos físicos de 0,05 m, epsilon de rechazo 0,002 m, rebase
-a 0,8 m, 1,5/2,25 m/s y reconciliación del head anchor. Su adapter de fuente puede escribir `vr_velocity`, activar
-`vr_stepstaticonly`, llamar `iCharacterBody::Update(dt)` y leer la posición
-resuelta. BP conserva el character body HPL base, pero no posee esos dos campos
-añadidos por Rework ni los argumentos `CollidePlayer/IsPlayer` de su solver.
+orquestación probada de `OvertureBackend` siguen siendo la referencia para la
+política compartida: escala 1 unidad/m, pasos físicos de 0,05 m, epsilon de
+rechazo 0,002 m, rebase a 0,8 m, 1,5/2,25 m/s y reconciliación del head anchor.
+El adapter de fuente de Overture puede escribir campos añadidos por Rework,
+activar su modo static-only y controlar explícitamente el update; esos detalles
+no existen como contrato binario en BP.
 
-Por tanto, posición de cuerpo/pies, timestep y resultado aceptado encajan ya en
-el contrato conceptual estrecho de una futura `BlackPlagueBodyAdapter`. La
-política de Overture debe extraerse mecánicamente al runtime cuando el adapter
-pueda devolver desplazamiento aceptado: no debe quedar una segunda política BP.
-Aún faltan inyección, static-only, jump/crouch y propietarios de bob; conectar
-la política ahora podría duplicar `iCharacterBody::Update`. No se debe emular
-`vr_velocity` escribiendo offsets inexistentes ni llamar dos veces a `Update`
-sin demostrar su secuencia.
+La primera extracción común ya existe: `runtime::VrAcceptedBodyMotion` recibe
+posición antes/después y desplazamiento aceptado sin conocer RVAs, layouts ni
+ownership del tick. Overture lo consume dentro de su comportamiento probado y
+`BlackPlagueBodyAdapter` lo produce después del único tick nativo `D460A ->
+D6E00`. BP conserva sus límites 3.0/4.5 m/s y su vertical/jump nativo en este
+checkpoint; no se emulan `vr_velocity`, `vr_stepstaticonly` ni argumentos de
+solver que no existen en la build binaria.
 
-### Ownership del movimiento plano: mapa estático pendiente de sonda live
+La siguiente extracción debe ser pequeña: política neutral de reconciliación
+tracking/body sobre intent horizontal + desplazamiento aceptado. No debe mezclar
+a la vez tuning 1.5/2.25, crouch físico, jump, bob o cámara.
+
+### Ownership del movimiento plano: estado confirmado
 
 | Concern | Black Plague owner/evidence | Relación con `D6E00` | Estado |
 |---|---|---|---|
-| Intento plano | `cButtonHandler::Update`: `51CD/5227 -> cPlayer::MoveForward/MoveSideways` (`9CBC0/9CC60`) | Antes | Mapeado |
-| Aceleración/objetivo | `cPlayer` comprueba state/ground y llama `iCharacterBody::Move(D4F50)`; éste suma `amount * acc * dt` en `+70..+7C`, marca `+88/+89` y limita por `+60..+6C` | Consumido por `D6E00` | Mapeado |
+| Intento plano | `cButtonHandler::Update`: `51CD/5227 -> cPlayer::MoveForward/MoveSideways` (`9CBC0/9CC60`) | Antes | Live-tested a través del adapter |
+| Aceleración/objetivo | `cPlayer` comprueba state/ground y llama `iCharacterBody::Move(D4F50)`; éste suma `amount * acc * dt` en `+70..+7C`, marca `+88/+89` y limita por `+60..+6C` | Consumido por `D6E00` | Mapeado + comportamiento live |
 | Deceleración y velocidad final | `D6E00` consume flags, aplica deacc y convierte los campos de velocidad en request horizontal antes de `D7312` | Dentro, antes de colisión | Mapeado |
-| Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan en el move-state virtual (`+30/+34`) | Antes | Semántica/state concreta pendiente |
-| Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` escribe `+1FC` y acumula `+200` mientras se mantiene | La fuerza/estado vertical se publica antes de `D6E00`; éste resuelve horizontal primero y vertical después | Live-characterized: impulso efectivo inicial ~5.53 m/s, apex ~0.95 m, landing nativo y 3→0 |
-| Crouch | queries `533B/536A` llegan a wrappers `9CFA0/9CFD0`, que delegan en move-state (`+38/+3C`) | Antes | Shape/state/transición pendientes |
+| Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan al move-state actual; inicialización de state aplica los límites por setters nativos | Antes | Live-characterized; ~3.0/4.5 m/s efectivos |
+| Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` gestiona hold `+1FC/+200/+204` | La fuerza/estado vertical se publica antes de `D6E00`; horizontal mantiene Y=0 y la vertical se aplica después | Live-characterized: ~5.53 m/s inicial, apex ~0.95 m, landing nativo y 3→0 |
+| Crouch | `5347 -> 9CFA0` es press; `538A -> 9CFD0` release/not-held; ambos delegan al move-state | Antes | Live-characterized: shape `1.65 -> 0.95 m`, feet Y preservado; stand-clearance exacto pendiente |
 | Colisión/step/gravedad | `D6E00`, primer solver `D7312`, fases posteriores de step/gravedad | Dentro | Live-tested para el límite |
-| Cámara corporal | calls `D790C -> D5F00` y `D7913 -> D6120` después de resolución; por estructura corresponden a composición de cámara y entidad | Después | Requiere lectura live de cámara/offset |
-| Head/footstep bob | No hay evidencia que permita atribuirlo aún a `iCharacterBody`, `cPlayer` o una animación visual | Posiblemente posterior | Pendiente |
+| `D790C/D7913` | Sync sólo de la rama con gravedad desactivada | Después | No son composición general de cámara; el player activo los evita |
+| Head/footstep bob | No hay evidencia suficiente para atribuir todavía el efecto visual concreto | Pista de comfort separada | Pendiente, no bloquea el adapter/reconciliation inicial |
 
 PID 29672 cerró el burst de salto: `+204=0.3` es umbral para la lógica de hold,
 no máximo de `+200`; el contador alcanzó 2.233332 y al soltar volvió a 0.3.
@@ -112,22 +116,17 @@ y no produjo telemetría accionable: `52CD` se había registrado erróneamente
 como CALL, pero la captura exact-build demuestra `6A 01`; el CALL real es
 `52CF -> 9A890`. Los otros siete pares son `52A5->9CEA0`,
 `52F7->9CF40`, `531F->9CF70`, `5347->9CFA0`, `538A->9CFD0`,
-`D790C->D5F00` y `D7913->D6120`. No solapan los hooks existentes: el bridge
-de entrada posee las consultas vecinas (`5299`, `52C1`, `52EB`, etc.), no estos
-despachos. La corrección valida los ocho CALLs y firmas de targets antes de
-parchear y refresca punteros en cada callback; queda `implemented`, no
-`live-tested`. El cambio observado de body/world coincidió con una transición
-gameplay→menú→gameplay; es compatible con recreación o carga de nivel, pero su
-causa no está demostrada.
+`D790C->D5F00` y `D7913->D6120`. La corrección validó los ocho CALLs y firmas
+de targets antes de parchear, refrescando identidades en cada callback. PID
+24780 confirmó la instrumentación corregida y permitió cerrar sprint/crouch y
+la no-utilidad de `D790C/D7913` para el player con gravedad activa.
 
-Esto descarta un adapter que llame directamente `D6E00`: el tick nativo
-`D460A` lo invocaría de nuevo y consumiría otra vez deacc, step/gravedad y/o
-acumuladores. La operación futura segura debe publicar una petición antes de
-ese único tick y leer su posición aceptada después; no llamar `Update` desde el
-Framework. La sonda siguiente debe enganchar de forma reversible los cinco
-callsites de acciones, `D790C/D7913` y el límite de render para registrar orden,
-state, tamaño del body y transform final de cámara, sin cambiar argumentos ni
-resultados.
+Esto descarta de forma definitiva un adapter que llame directamente `D6E00`:
+el tick nativo `D460A` lo invocaría de nuevo y consumiría otra vez deacc,
+step/gravedad y estados. La operación segura ya está implementada: publicar
+intent a través del owner de `MoveForward/MoveSideways`, dejar que el tick
+nativo se ejecute una vez y observar posición/desplazamiento aceptado después.
+No se debe reabrir esta frontera salvo evidencia contradictoria.
 
 ### Primer `BlackPlagueBodyAdapter` (live-tested; scope espacial aún desactivado)
 
@@ -304,6 +303,7 @@ La prueba matemática de agarre inyecta un pico extremo en una ventana estable y
 comprueba que la estimación conserva la mediana; una sola muestra produce cero.
 El verificador PowerShell contrasta la captura inicializada sin modificar procesos.
 
-No se ha iniciado el juego/SteamVR ni solicitado una prueba física en esta tanda.
-Los tres hitos completos de jugabilidad todavía no están certificados: herramientas,
-colisión y mecanismos articulados siguen pendientes, además de la prueba con visor.
+El boundary corporal/adapter ya está live-tested, pero los hitos amplios de
+jugabilidad todavía no están certificados. Positional HMD/body reconciliation,
+herramientas definitivas, palm collision y mecanismos articulados siguen
+pendientes, además de sus pruebas con visor.
