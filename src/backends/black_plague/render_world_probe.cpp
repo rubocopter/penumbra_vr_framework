@@ -1339,14 +1339,19 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     ActiveStereoFrame active;
     if (!TrackedStereoPresentationActive() || g_stereo_cancel.load(std::memory_order_acquire)) return;
     if (world_rendered) {
+        std::string error;
+        bool monitor_ok = true;
         if (TrackedStereoMonitorMirrorEnabled()) {
-            std::array<std::uint32_t,2> textures{}; std::string error;
-            if (!GetPersistentEyeColorTextures(textures,error) ||
-                !graphics::DrawMonitorMirror(textures[0],error)) {
-                AcquireSRWLockExclusive(&g_telemetry_lock);
-                strncpy_s(g_telemetry.stereo_error.data(),g_telemetry.stereo_error.size(),error.c_str(),_TRUNCATE);
-                ReleaseSRWLockExclusive(&g_telemetry_lock);
-            }
+            std::array<std::uint32_t,2> textures{};
+            monitor_ok = GetPersistentEyeColorTextures(textures,error) &&
+                graphics::DrawMonitorMirror(textures[0],error);
+        } else {
+            monitor_ok = graphics::ClearMonitorBackbuffer(error);
+        }
+        if (!monitor_ok) {
+            AcquireSRWLockExclusive(&g_telemetry_lock);
+            strncpy_s(g_telemetry.stereo_error.data(),g_telemetry.stereo_error.size(),error.c_str(),_TRUNCATE);
+            ReleaseSRWLockExclusive(&g_telemetry_lock);
         }
         g_menu_anchor_valid = runtime::PlanStablePanelAnchor(
             false, false, g_menu_anchor_valid).anchor_valid_after;

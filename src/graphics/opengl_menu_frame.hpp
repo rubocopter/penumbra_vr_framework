@@ -3,6 +3,9 @@
 #include <string>
 
 namespace penumbra_vr::graphics {
+// Deterministically blanks the desktop backbuffer when continuous stereo owns
+// presentation and the optional monitor mirror is disabled.
+[[nodiscard]] bool ClearMonitorBackbuffer(std::string& error) noexcept;
 // Final desktop presentation of an already rendered eye; preserves GL state.
 [[nodiscard]] bool DrawMonitorMirror(unsigned int texture, std::string& error) noexcept;
 // A transient desktop capture, owned by the render thread and shared by both

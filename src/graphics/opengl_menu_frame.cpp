@@ -106,6 +106,28 @@ bool Rigid(const runtime::VrMatrix44& pose) {
 }
 }
 
+bool ClearMonitorBackbuffer(std::string& error) noexcept {
+    error.clear();
+    if (!wglGetCurrentContext()) {
+        error = "Monitor clear requires a current context";
+        return false;
+    }
+    GLint framebuffer = 0;
+    glGetIntegerv(kFramebufferBinding, &framebuffer);
+    if (framebuffer != 0) {
+        error = "Monitor clear requires the desktop framebuffer";
+        return false;
+    }
+    glPushAttrib(GL_COLOR_BUFFER_BIT | GL_SCISSOR_BIT);
+    glDisable(GL_SCISSOR_TEST);
+    glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+    glDrawBuffer(GL_BACK);
+    glClearColor(0, 0, 0, 1);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glPopAttrib();
+    return true;
+}
+
 bool DrawMonitorMirror(unsigned int texture, std::string& error) noexcept {
     error.clear();
     if (!wglGetCurrentContext() || !texture || !glIsTexture(texture)) {
