@@ -61,6 +61,12 @@ VrSettingDescriptors() noexcept;
     VrSettingId id,
     int direction) noexcept;
 
+// Restores only settings owned by the supplied backend capability surface.
+// Persisted settings that a backend does not currently consume are preserved.
+void ResetVrSettings(
+    VrSettings& settings,
+    const VrSettingCapabilities& capabilities) noexcept;
+
 [[nodiscard]] std::string FormatVrSettingValue(
     VrSettingId id,
     const VrSettings& settings);

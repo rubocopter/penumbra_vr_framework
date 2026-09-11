@@ -279,7 +279,8 @@ add_executable(pvr_probe_launcher
     src/launcher/pe_memory_inspector.cpp
 )
 target_link_libraries(
-    pvr_probe_launcher PRIVATE pvr_build_catalog pvr_vr_settings_store shell32)
+    pvr_probe_launcher PRIVATE pvr_build_catalog pvr_vr_settings_store
+        pvr_black_plague_settings shell32)
 set_target_properties(pvr_probe_launcher PROPERTIES
     OUTPUT_NAME "PenumbraVR.ProbeLauncher"
 )

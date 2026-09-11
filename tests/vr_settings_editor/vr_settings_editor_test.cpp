@@ -102,6 +102,24 @@ using namespace penumbra_vr::runtime;
         !AdjustVrSetting(settings, VrSettingId::count, 1);
 }
 
+[[nodiscard]] bool TestCapabilityScopedReset() {
+    VrSettings settings;
+    settings.move_speed = 2.5F;
+    settings.turn_mode = VrTurnMode::smooth;
+    settings.player_height = 2.05F;
+    settings.enhanced_visuals = true;
+
+    VrSettingCapabilities capabilities;
+    capabilities.supported[static_cast<std::size_t>(VrSettingId::move_speed)] = true;
+    capabilities.supported[static_cast<std::size_t>(VrSettingId::turn_mode)] = true;
+    ResetVrSettings(settings, capabilities);
+
+    return NearlyEqual(settings.move_speed, vr_setting_limits::kMoveSpeed.default_value) &&
+        settings.turn_mode == VrTurnMode::snap &&
+        NearlyEqual(settings.player_height, 2.05F) &&
+        settings.enhanced_visuals;
+}
+
 } // namespace
 
 int main() {
@@ -109,6 +127,7 @@ int main() {
     if (!TestReworkAdjustmentStepsAndWrapping()) return 2;
     if (!TestAvailabilityAndLabels()) return 3;
     if (!TestClampingAtLimits()) return 4;
+    if (!TestCapabilityScopedReset()) return 5;
     std::cout << "VR settings editor policy matches the Overture Rework menu baseline\n";
     return 0;
 }

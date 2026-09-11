@@ -1,5 +1,7 @@
 #include "penumbra_vr/build_catalog.hpp"
 #include "pe_memory_inspector.hpp"
+#include "vr_settings_capabilities.hpp"
+#include "vr_settings_editor.hpp"
 #include "vr_settings_store.hpp"
 
 #define WIN32_LEAN_AND_MEAN
@@ -12,6 +14,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace {
@@ -879,9 +882,133 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
     return 0;
 }
 
+const wchar_t* VrSettingDisplayName(penumbra_vr::runtime::VrSettingId id) noexcept {
+    using penumbra_vr::runtime::VrSettingId;
+    switch (id) {
+    case VrSettingId::handedness: return L"Handedness";
+    case VrSettingId::play_mode: return L"Play mode";
+    case VrSettingId::player_height: return L"Player height";
+    case VrSettingId::turn_mode: return L"Turn mode";
+    case VrSettingId::snap_turn_angle: return L"Snap turn angle";
+    case VrSettingId::smooth_turn_speed: return L"Smooth turn speed";
+    case VrSettingId::turn_dead_zone: return L"Turn dead zone";
+    case VrSettingId::move_speed: return L"Move speed";
+    case VrSettingId::move_dead_zone: return L"Move dead zone";
+    case VrSettingId::crouch_mode: return L"Crouch mode";
+    case VrSettingId::physical_crouch_depth: return L"Physical crouch depth";
+    case VrSettingId::height_offset: return L"Height offset";
+    case VrSettingId::ui_distance: return L"UI distance";
+    case VrSettingId::ui_scale: return L"UI scale";
+    case VrSettingId::render_scale: return L"Render scale";
+    case VrSettingId::enhanced_visuals: return L"Enhanced visuals";
+    case VrSettingId::hrtf: return L"HRTF";
+    case VrSettingId::subtitle_scale: return L"Subtitle scale";
+    case VrSettingId::count: return L"";
+    }
+    return L"";
+}
+
+std::wstring WidenAscii(std::string_view text) {
+    return std::wstring(text.begin(), text.end());
+}
+
+int ConfigureBlackPlagueVrSettings() {
+    std::wstring error;
+    const auto path = penumbra_vr::launcher::DefaultVrSettingsPath(error);
+    if (path.empty()) {
+        std::wcerr << L"VR settings could not be located: " << error << L'\n';
+        return 8;
+    }
+
+    penumbra_vr::runtime::VrSettings settings;
+    if (!penumbra_vr::launcher::LoadVrSettings(path, settings, error)) {
+        std::wcerr << L"VR settings could not be loaded: " << error << L'\n';
+        return 8;
+    }
+    const auto capabilities =
+        penumbra_vr::backends::black_plague::BlackPlagueVrSettingCapabilities();
+
+    for (;;) {
+        std::vector<penumbra_vr::runtime::VrSettingId> rows;
+        std::wcout << L"\nBlack Plague VR settings\n"
+                   << L"File: " << path << L"\n"
+                   << L"Only settings currently consumed by the backend are shown.\n\n";
+        for (const auto& descriptor : penumbra_vr::runtime::VrSettingDescriptors()) {
+            if (!penumbra_vr::runtime::IsVrSettingAvailable(
+                    descriptor.id, settings, capabilities)) {
+                continue;
+            }
+            rows.push_back(descriptor.id);
+            std::wcout << L"  " << rows.size() << L") "
+                       << VrSettingDisplayName(descriptor.id) << L": "
+                       << WidenAscii(penumbra_vr::runtime::FormatVrSettingValue(
+                              descriptor.id, settings))
+                       << L'\n';
+        }
+        const std::size_t mirror_row = rows.size() + 1;
+        std::wcout << L"  " << mirror_row << L") Monitor mirror: "
+                   << (settings.monitor_mirror ? L"On" : L"Off") << L"\n\n"
+                   << L"Select a setting number, R to reset defaults, S to save and exit, "
+                   << L"or Q to discard: " << std::flush;
+
+        std::wstring choice;
+        if (!std::getline(std::wcin, choice)) {
+            std::wcout << L"\nNo changes saved.\n";
+            return 0;
+        }
+        if (_wcsicmp(choice.c_str(), L"q") == 0) {
+            std::wcout << L"No changes saved.\n";
+            return 0;
+        }
+        if (_wcsicmp(choice.c_str(), L"r") == 0) {
+            penumbra_vr::runtime::ResetVrSettings(settings, capabilities);
+            settings.monitor_mirror = false;
+            continue;
+        }
+        if (_wcsicmp(choice.c_str(), L"s") == 0) {
+            if (!penumbra_vr::launcher::SaveVrSettings(path, settings, error)) {
+                std::wcerr << L"VR settings could not be saved: " << error << L'\n';
+                return 9;
+            }
+            std::wcout << L"Saved VR settings to " << path
+                       << L". They will be applied on the next VR start.\n";
+            return 0;
+        }
+
+        wchar_t* end = nullptr;
+        const unsigned long selected = wcstoul(choice.c_str(), &end, 10);
+        if (selected == 0 || end == choice.c_str() || *end != L'\0' ||
+            selected > mirror_row) {
+            std::wcout << L"Invalid selection.\n";
+            continue;
+        }
+        if (selected == mirror_row) {
+            settings.monitor_mirror = !settings.monitor_mirror;
+            continue;
+        }
+
+        const auto id = rows[selected - 1];
+        std::wcout << L"Change " << VrSettingDisplayName(id)
+                   << L" (- previous / + next, Enter cancels): " << std::flush;
+        std::wstring direction;
+        if (!std::getline(std::wcin, direction)) {
+            std::wcout << L"\nNo changes saved.\n";
+            return 0;
+        }
+        if (direction.empty()) continue;
+        const int step = direction.front() == L'-' ? -1 : direction.front() == L'+' ? 1 : 0;
+        if (step == 0 || !penumbra_vr::runtime::AdjustVrSetting(settings, id, step)) {
+            std::wcout << L"Use - or + for one Rework-compatible menu step.\n";
+        }
+    }
+}
+
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
+    const bool configure_vr = argc == 3 &&
+        _wcsicmp(argv[1], L"--configure-vr") == 0 &&
+        _wcsicmp(argv[2], L"black-plague") == 0;
     const bool launch_vr = argc == 3 && _wcsicmp(argv[1], L"--launch-vr") == 0;
     const bool check_vr = argc == 3 && _wcsicmp(argv[1], L"--check-vr") == 0;
     const bool attach = argc == 3 && _wcsicmp(argv[1], L"--attach") == 0;
@@ -910,7 +1037,7 @@ int wmain(int argc, wchar_t** argv) {
         argc == 3 && _wcsicmp(argv[1], L"--vr-mirror-off") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
-    if ((!attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
+    if ((!configure_vr && !attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
          !hold_openvr_eye_targets && !validate_world_duplication &&
          !validate_stereo_matrices && !validate_stereo_submission &&
          !validate_tracked_stereo_submission && !start_vr && !stop_vr &&
@@ -924,6 +1051,7 @@ int wmain(int argc, wchar_t** argv) {
          argc != 3) ||
         ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --configure-vr black-plague\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --launch-vr <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --check-vr <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe <path-to-Black-Plague-Penumbra.exe>\n"
@@ -948,12 +1076,13 @@ int wmain(int argc, wchar_t** argv) {
 
     const std::filesystem::path probe_path =
         CurrentExecutableDirectory() / L"PenumbraVR.BlackPlague.Probe.dll";
-    if (!inspect && !inspect_camera && !capture_image &&
+    if (!configure_vr && !inspect && !inspect_camera && !capture_image &&
         !std::filesystem::is_regular_file(probe_path)) {
         std::wcerr << L"Probe DLL not found beside the launcher: " << probe_path << L'\n';
         return 5;
     }
 
+    if (configure_vr) return ConfigureBlackPlagueVrSettings();
     if (launch_vr || check_vr) return LaunchVr(argv[2], probe_path, check_vr);
 
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||

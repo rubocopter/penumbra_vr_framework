@@ -163,6 +163,43 @@ bool AdjustVrSetting(
     return true;
 }
 
+void ResetVrSettings(
+    VrSettings& settings,
+    const VrSettingCapabilities& capabilities) noexcept {
+    const VrSettings defaults;
+    for (const auto& descriptor : kDescriptors) {
+        if (!capabilities.supported[Index(descriptor.id)]) {
+            continue;
+        }
+        switch (descriptor.id) {
+        case VrSettingId::handedness: settings.handedness = defaults.handedness; break;
+        case VrSettingId::play_mode: settings.play_mode = defaults.play_mode; break;
+        case VrSettingId::player_height: settings.player_height = defaults.player_height; break;
+        case VrSettingId::turn_mode: settings.turn_mode = defaults.turn_mode; break;
+        case VrSettingId::snap_turn_angle: settings.snap_turn_angle = defaults.snap_turn_angle; break;
+        case VrSettingId::smooth_turn_speed: settings.smooth_turn_speed = defaults.smooth_turn_speed; break;
+        case VrSettingId::turn_dead_zone: settings.turn_dead_zone = defaults.turn_dead_zone; break;
+        case VrSettingId::move_speed: settings.move_speed = defaults.move_speed; break;
+        case VrSettingId::move_dead_zone: settings.move_dead_zone = defaults.move_dead_zone; break;
+        case VrSettingId::crouch_mode: settings.crouch_mode = defaults.crouch_mode; break;
+        case VrSettingId::physical_crouch_depth:
+            settings.physical_crouch_depth = defaults.physical_crouch_depth;
+            break;
+        case VrSettingId::height_offset: settings.height_offset = defaults.height_offset; break;
+        case VrSettingId::ui_distance: settings.ui_distance = defaults.ui_distance; break;
+        case VrSettingId::ui_scale: settings.ui_scale = defaults.ui_scale; break;
+        case VrSettingId::render_scale: settings.render_scale = defaults.render_scale; break;
+        case VrSettingId::enhanced_visuals:
+            settings.enhanced_visuals = defaults.enhanced_visuals;
+            break;
+        case VrSettingId::hrtf: settings.hrtf_mode = defaults.hrtf_mode; break;
+        case VrSettingId::subtitle_scale: settings.subtitle_scale = defaults.subtitle_scale; break;
+        case VrSettingId::count: break;
+        }
+    }
+    NormalizeVrSettings(settings);
+}
+
 std::string FormatVrSettingValue(
     VrSettingId id,
     const VrSettings& settings) {
