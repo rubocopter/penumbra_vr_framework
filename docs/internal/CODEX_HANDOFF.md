@@ -221,6 +221,12 @@ free/block/slide, recenter/body replacement, expected ~60 Hz single tick
 ownership, periodic `body_reconciliation_shadow` telemetry, and zero positional
 translation throughout.
 
+The user-facing launch procedure and ordered headset/gameplay sequence for this
+gate are maintained in `docs/VR_STARTUP_AND_CONTROLLERS.md` and
+`docs/VR_HEADSET_TEST_CHECKLIST.md`. Use those as the operational checklist for
+the next live session so older mirror/grab/tool test batches are not mixed into
+the reconciliation evidence.
+
 ## Camera/bob
 
 `D790C -> D5F00` and `D7913 -> D6120` are gravity-disabled synchronization calls, not the general active-player camera composition path. Do not reuse them as a camera boundary.

@@ -61,6 +61,52 @@ Abrir directamente el juego en Steam **no** ejecuta este lanzador automáticamen
 SteamVR debe estar instalado y los dispositivos configurados; OpenVR solicita
 su inicialización. El usuario confirmó el arranque directo con el BAT.
 
+### Próxima validación con visor: reconciliación shadow
+
+Para el gate actual de Black Plague no uses el BAT general ni abras el juego
+directamente desde Steam. Con `penumbra.exe` cerrado, ejecuta desde la raíz del
+repositorio:
+
+```powershell
+.\tools\Start-BlackPlagueShadowValidation.ps1
+```
+
+Si la instalación está en otra biblioteca:
+
+```powershell
+.\tools\Start-BlackPlagueShadowValidation.ps1 -GamePath "RUTA\A\Penumbra.exe"
+```
+
+El helper ejecuta `Test-BlackPlagueInputMap.ps1` antes del lanzamiento y falla
+cerrado si la imagen inicializada no coincide con la evidencia exacta admitida.
+Después mantiene una petición temporal mediante el mutex
+`Local\PenumbraVR.BlackPlague.ReconciliationShadow` mientras el juego está vivo.
+Mantén esa ventana de PowerShell abierta durante toda la sesión.
+
+La tanda solo cuenta como shadow validation cuando la consola confirma una línea
+de activación del proceso nuevo con:
+
+```text
+Black Plague body adapter installed=1 ... body_reconciliation_shadow enabled=1 source=mutex
+```
+
+Si no aparece, conserva el error de consola y no interpretes el resto de la
+sesión como evidencia de reconciliación shadow. El fallback
+`PVR_BP_RECONCILIATION_SHADOW=1` queda reservado a casos en los que el propio
+proceso del juego hereda realmente esa variable; no es la ruta normal de prueba.
+
+Los logs se crean automáticamente en `%LOCALAPPDATA%\PenumbraVR\logs`, con un
+`black-plague-probe-<PID>.log` para la ejecución. No hace falta copiar archivos
+durante la prueba. Tras cerrar el juego, indicar las anomalías observadas y que la
+sesión terminó es suficiente para inspeccionar la captura local.
+
+La secuencia de gameplay autoritativa para este gate está en
+`docs/VR_HEADSET_TEST_CHECKLIST.md`. Está centrada en tracking estacionario,
+movimiento nativo libre/bloqueado/deslizante, recentrado, sustitución de cuerpo
+por crouch, salto nativo y varios minutos de telemetría. Room-scale activo,
+traslación posicional del HMD, mirror, agarres y mecanismos quedan fuera de este
+gate.
+
 Si ya está abierto el mismo ejecutable, reutiliza ese proceso. No elige procesos
 por nombre solamente: Overture, Black Plague y Requiem deben distinguirse por
 ruta y huella. Si hay dos instancias coincidentes, se detiene. En caso de error

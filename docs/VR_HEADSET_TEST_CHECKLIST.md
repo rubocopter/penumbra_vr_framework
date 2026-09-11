@@ -1,164 +1,112 @@
-# Prueba con PSVR2 Sense — Black Plague
+# Black Plague — checklist de validación con visor
 
-Preparación inicial: 2026-09-06, código fef5d40. El checkpoint actual recompila
-con 22/22 tests; la preparación inicial también dejó correctos el preflight del
-ejecutable admitido y los archivos `vr` respecto al repositorio. El juego y
-SteamVR no se iniciaron durante la preparación.
-Esto prepara una prueba experimental; no certifica jugabilidad completa.
+Actualizado: 2026-09-11.
 
-## Seguimiento tras la primera prueba
+El siguiente gate de gameplay es **reconciliación tracking/body en modo shadow**.
+La prueba observa tracking, locomoción nativa y movimiento aceptado por el cuerpo,
+pero no inyecta desplazamiento físico ni activa traslación posicional del HMD.
 
-**Actualización tras la segunda prueba:** el agarre a la palma vuelve a estar
-habilitado con exclusión temporal de colisión body/character verificada contra
-la imagen exacta. Por el incidente de la barra, la primera prueba queda limitada
-a un objeto pequeño, movimientos lentos y sin lanzamiento.
+## Arranque obligatorio para esta tanda
 
-El usuario confirmó BAT, recentrado, menús/inventario/libreta, dedos, movimiento,
-giro, correr/agacharse y luces estables en la zona probada. Reportó mirror negro
-con manchas, rumbo desacoplado del HMD, interacción solo L2, agarres nativos y
-glowstick sin control rápido. Dashboard no presentó problemas aparentes.
+Con el juego cerrado, el visor y los mandos disponibles, abre PowerShell en la
+raíz del repositorio y ejecuta:
 
-Correcciones locales posteriores (pendientes de visor): mirror desde ojo
-izquierdo, propiedad diestra sin action set offhand, movimiento relativo al HMD,
-adquisición de agarre tras confirmar el estado nativo y ciclo L1 de Rework.
-Prioridad de la siguiente prueba: esas cinco rutas. Herramientas físicamente
-ancladas a la mano y manipulación de joints/puertas siguen incompletas.
+```powershell
+.\tools\Start-BlackPlagueShadowValidation.ps1
+```
 
-## Arranque
+Si Black Plague está instalado fuera de la biblioteca Steam habitual:
 
-### Próxima prueba acotada — tanda de herramientas y diagnóstico
+```powershell
+.\tools\Start-BlackPlagueShadowValidation.ps1 -GamePath "RUTA\A\Penumbra.exe"
+```
 
-1. Arranca con el BAT actualizado. El log debe incluir `VR monitor mirror
-   readback: enabled`; el launcher muestra el archivo leído y confirma el valor.
-   Cada bloque `spatial` debe mantener `collision_restore_failures=0`.
-2. Comprueba el monitor durante partida y al abrir/cerrar inventario. Debe mostrar
-   el ojo izquierdo en partida, sin blanco uniforme. Una captura si falla basta.
-3. En una zona despejada, usa L1 para glowstick/linterna/apagado. Mueve y gira la
-   mano izquierda: modelo y luz deben acompañarla. Anota si hay desplazamiento,
-   tamaño u orientación incorrectos. No empujes las herramientas contra paredes.
-4. Sin sostener cuerpos, camina recto/diagonal, corre y salta durante unos 20 s.
-   Deja otros 10 s quieto. Los registros de temporización ayudarán a distinguir
-   velocidad física de un problema del reloj. El perfil usa `MoveSpeed=0.85`;
-   indica si ahora caminar/correr se sienten naturales y si el salto sigue acelerado.
-5. Abre/cierra inventario y dashboard; comprueba que vuelven herramientas y dedos.
-6. Abre/cierra cada mano: el índice debe estar junto al pulgar en ambos lados.
-   Comprueba la nueva flexión diferenciada de falanges y del pulgar; indica si
-   se cruzan dedos o se siente menos inmediata la respuesta. La geometría sigue
-   siendo provisional; el modelo descargado no se ha incorporado.
+El helper ejecuta primero el verificador de la imagen exacta, crea la petición
+shadow temporal y lanza el juego por la ruta VR normal. No abras esta tanda
+directamente desde Steam ni con `Start-Black-Plague-VR.cmd`, porque esas rutas no
+demuestran que la petición shadow esté activa.
 
-Resultado recibido: el glowstick siguió la mano, pero quedó dentro de ella; no
-ajustar hasta tener la mano final. Los dedos se percibieron parecidos a la versión
-anterior. Estas observaciones quedan como referencia para la próxima iteración.
+Mantén abierta la ventana de PowerShell durante toda la sesión. Antes de contar
+la prueba como válida debe mostrar que detectó el proceso y confirmó:
 
-No hacer pruebas de lanzamiento ni repetir el incidente de la barra en esta
-primera validación. Esta prueba valida una tanda parcial, no los tres juegos ni
-los mecanismos articulados.
+```text
+body_reconciliation_shadow enabled=1 source=mutex
+```
 
-1. Conecta el visor y enciende ambos Sense. Para la primera pasada, comprueba
-   primero que SteamVR ve los tres dispositivos; así aislamos fallos del mod.
-2. Ejecuta `E:\penumbra_vr\Start-Black-Plague-VR.cmd`, no el acceso normal de Steam.
-   Debe abrir Black Plague, adjuntar el framework y activar VR sin introducir PID.
-3. El mirror está activado en `%LOCALAPPDATA%\PenumbraVR\settings.ini`.
-   Mantén teclado y ratón disponibles por si falla el menú con mandos.
-4. Usa una partida/punto de prueba y objetos prescindibles. No sobrescribas tu
-   guardado principal durante estas comprobaciones. No camines físicamente hacia
-   paredes: el movimiento corporal room-scale y la colisión de palmas no existen.
-5. Si aparece imagen doble persistente, orientación incorrecta o malestar, detén
-   la sesión. Si falla el lanzador, conserva el mensaje de su consola.
+Si esa confirmación no aparece, no continúes la tanda como validación shadow.
+La ventana mantiene vivo el mutex hasta que termina `penumbra.exe`.
 
-## Controles previstos (perfil diestro predeterminado)
+Los logs se guardan automáticamente en:
 
-Los siguientes son los bindings distribuidos; una personalización de SteamVR
-puede sustituirlos. Su funcionamiento real es precisamente parte de la prueba.
+```text
+%LOCALAPPDATA%\PenumbraVR\logs
+```
 
-| Control | Acción en partida |
-|---|---|
-| Stick izquierdo | Desplazarse |
-| Pulsar stick izquierdo | Correr |
-| Stick derecho horizontal | Giro por pasos de 45°, volviendo a neutro entre pasos |
-| Pulsar stick derecho | Agacharse (configuración actual con alternancia) |
-| X derecho | Saltar |
-| R2 | Interactuar o agarrar con la mano derecha; L2 no interactúa |
-| R1 | Inventario |
-| Cuadrado izquierdo | Libreta |
-| L1 | Apagado → glowstick → linterna → apagado (según objetos disponibles) |
-| Círculo derecho | Examinar |
-| Triángulo izquierdo | Guardar objeto, según estado nativo |
-| Options derecho | Pausa |
-| Crear izquierdo | Recentrar mirando al frente |
+El log principal de esta tanda será `black-plague-probe-<PID>.log`. No hace falta
+copiarlo ni prepararlo manualmente: al terminar basta con indicar que has cerrado
+el juego y cualquier anomalía observada; Codex puede revisar el log nuevo.
 
-En menú: apunta con la mano derecha y selecciona con R2. Círculo vuelve atrás;
-R1, Cuadrado u Options envían cerrar. El ratón tiene prioridad aproximadamente
-1,5 segundos después de moverlo: espera ese tiempo al volver al apuntado VR.
+## Secuencia de pruebas
 
-## Lista ordenada
+Hazlas en este orden. Prioriza una zona sencilla con paredes y obstáculos claros.
+No hace falta dedicar tiempo a menús, mirror, agarres o herramientas en esta tanda.
 
-- [ ] **Arranque y mirror:** imagen en ambos ojos, menú visible y escritorio con
-  imagen. No quedarse únicamente en la pantalla de cine virtual de SteamVR.
-- [ ] **Menú inicial:** apuntar, seleccionar una opción, entrar/salir de ajustes,
-  volver y cargar partida. Si falla, usar el ratón para continuar y anotarlo.
-- [ ] **Orientación y recentrado:** girar cabeza izquierda/derecha y arriba/abajo;
-  el mundo no gira al revés, no se inclina y no duplica imágenes. Crear debe
-  realinear la orientación; no se espera desplazamiento corporal room-scale.
-- [ ] **Visibilidad:** en una habitación, mirar detrás y a los lados y desplazarse
-  con el stick. Paredes y objetos no deberían aparecer solo al acercarse o al
-  orientar la cámara con el ratón.
-- [ ] **Lámparas (prioritaria):** repetir la lámpara problemática cerca, a media
-  distancia y lejos, mirando arriba/abajo y a ambos lados. Comprobar la luz sobre
-  paredes/suelo, no solo la bombilla. Anotar si desaparece en uno o ambos ojos.
-- [ ] **Locomoción:** caminar, parar, correr, saltar y agacharse. Probar cada paso
-  de giro con retorno a neutro. Al soltar los controles no debe continuar andando.
-- [ ] **Perfil aplicado:** la consola y el log deben indicar `handedness=right`,
-  `move_speed=0.850`, giro Snap 45°, `render_scale=1.00`, `ui_distance=1.75` y
-  `ui_scale=1.00`. No probar todavía el perfil zurdo dentro
-  de la misma ejecución: el cambio se aplica al volver a adjuntar el probe.
-- [ ] **Panel VR configurable:** menú, inventario y libreta deben verse a una
-  distancia cómoda y el rayo derecho debe coincidir con toda su superficie,
-  incluidas las esquinas. No hace falta cambiar aún los valores: esta pasada
-  comprueba que dibujado y selección usan la misma geometría.
-- [ ] **Manos y selección:** ver ambos guantes provisionales, moverlos por separado
-  y seleccionar un objeto con la mano derecha. El rayo y el objeto seleccionado deben
-  corresponder; las manos no deben dibujarse por delante de una pared que las tapa.
-  Dedos simplificados sin skeleton son una limitación conocida.
-- [ ] **Agarrar/soltar — prueba de seguridad prioritaria:** un objeto pequeño y
-  libre con R2; L2 no debe apropiárselo. Mover la mano despacio sin caminar,
-  después dar un paso corto con stick y soltar. Debe seguir la palma y caer con
-  gravedad sin acelerar ni desplazar al jugador. Si hay cualquier tirón, soltar
-  inmediatamente y no continuar. No usar barras, puertas ni palancas.
-- [ ] **Propiedad:** sin lanzar, pulsar la otra mano mientras se sostiene el objeto:
-  no debe cambiar de mano ni quedar pegado al soltar el gatillo propietario.
-- [ ] **Rotación y corte de tracking:** rota lentamente la muñeca; el objeto debe
-  conservar su punto y orientación relativos a la palma. Evita provocar un salto
-  real del mando: si ocurre por tracking, debe soltar sin lanzar el objeto.
-- [ ] **Inventario, libreta y pausa:** abrir/cerrar varias veces desde partida,
-  apuntar y seleccionar. Verificar que vuelve el mundo y no quedan acciones
-  pulsadas. Abrir pausa mientras sujetas un objeto: debe soltar sin lanzarlo.
-- [ ] **Pérdida de foco:** estando quieto y con un objeto prescindible, abrir el
-  dashboard de SteamVR. Al regresar no debe caminar solo ni conservar un agarre
-  atascado. No desconectar cables ni golpear/ocultar físicamente dispositivos.
-- [ ] **Linterna y acciones nativas:** alternar linterna, examinar y guardar un
-  objeto cuando proceda. Solo probar activación: la luz aún no sigue la mano.
-- [ ] **Teclado/ratón:** alternar con los mandos; comprobar que siguen funcionando
-  y que no quedan movimientos o botones atascados al cambiar de dispositivo.
-- [ ] **Fluidez y salida:** observar tirones al girar y cerca de luces; salir desde
-  el menú y comprobar que no se bloquean juego ni compositor. El mirror añade un
-  pase de renderizado: esta pasada no es una medición de rendimiento sin mirror.
-- [ ] **Segundo arranque opcional:** una vez superado lo anterior, con juego y
-  SteamVR cerrados pero dispositivos conectados, usar de nuevo el script para
-  comprobar también la inicialización automática del runtime.
+1. **Baseline quieto.** Quédate varios segundos sin tocar sticks. Mueve después
+   la cabeza solo unos centímetros hacia delante, atrás, izquierda y derecha.
+   El mundo debe permanecer estable.
+2. **Rotación de cabeza.** Haz yaw, pitch y roll normales. Comprueba que no aparece
+   un desplazamiento extraño del cuerpo o del mundo.
+3. **Movimiento nativo libre.** Camina con stick hacia delante, atrás y ambos
+   lados en una zona despejada.
+4. **Diagonales y cambios de dirección.** Combina ejes y cambia de dirección varias
+   veces para registrar aceptación parcial normal del movimiento nativo.
+5. **Bloqueo frontal.** Avanza despacio contra una pared hasta que el cuerpo deje
+   de progresar.
+6. **Deslizamiento.** Avanza en diagonal contra una pared. El componente bloqueado
+   debe detenerse mientras el movimiento tangencial permitido continúa.
+7. **Esquinas y obstáculos sólidos.** Busca varios casos de bloqueo total y
+   aceptación parcial sin forzar situaciones incómodas.
+8. **Recentrado.** Recentrar durante la partida y repetir brevemente movimiento de
+   cabeza y locomoción.
+9. **Agacharse/levantarse nativo.** Haz varios ciclos. Black Plague sustituye el
+   cuerpo físico al agacharse; esta prueba comprueba que el adapter sigue el cuerpo
+   actual y no conserva un puntero obsoleto.
+10. **Salto nativo.** Haz uno o dos saltos normales. Solo interesa comprobar que
+    convive con el seguimiento horizontal; no evalúa room-scale vertical.
+11. **Repetición tras cambios de cuerpo.** Después de agacharte y saltar, repite
+    bloqueo frontal y deslizamiento para detectar regresiones de ownership/body.
+12. **Juego normal.** Juega varios minutos con locomoción corriente. Esto permite
+    recoger suficiente telemetría para comprobar el tick nativo cercano a 60 Hz.
+13. **Salida normal.** Sal desde el menú del juego. El script debe terminar después
+    de `penumbra.exe` y liberar la petición shadow temporal.
 
-## No esperar todavía
+## Qué anotar durante la sesión
 
-Puertas/palancas manipuladas espacialmente, colisión física de manos, filtro
-exclusivo del jugador (el binario usa el más amplio `CollideCharacter`), room-scale,
-modelos de manos completos de Rework y Enhanced visuals GPU.
-Durante el agarre espacial, el rayo secundario de examinar tampoco está portado.
-No confundir estas limitaciones con regresiones de esta tanda.
+Solo hace falta comunicar observaciones que ayuden a relacionar lo visible con
+la telemetría: número de prueba, estancia/mapa, qué estabas haciendo y qué ocurrió.
+Son especialmente útiles desplazamientos del mundo al mover la cabeza, movimiento
+que atraviese o se pegue de forma extraña a colisiones, pérdida de movimiento
+tangencial al deslizar, cambios tras recentrar/agacharse y cualquier cierre o
+crash.
 
-## Cómo comunicar un fallo
+Si todo parece normal, al acabar basta con indicar que completaste la lista y que
+el juego está cerrado. El log permite verificar frecuencia de tick, cuerpo actual,
+movimiento nativo solicitado/aceptado y telemetría shadow.
 
-Indica número/nombre de prueba, mapa o estancia, objeto/lámpara, mano utilizada,
-distancia aproximada, si afecta a uno o ambos ojos y pasos para repetirlo.
-Para fluidez, distingue tirones visibles de cualquier cifra mostrada por SteamVR.
-Los logs del framework están en `%LOCALAPPDATA%\PenumbraVR\logs`; no los borres.
-No hace falta publicar capturas binarias del proceso ni archivos de la partida.
+## Fuera de este gate
+
+No interpretes todavía estas funciones como parte de la validación actual:
+
+- caminar físicamente por la habitación o aceptación de traslación HMD;
+- room-scale activo o crouch físico;
+- ajuste final de 1,5 / 2,25 m/s;
+- salto o movimiento vertical controlado por VR;
+- cámara/bob y ajustes de confort;
+- calidad o rendimiento del mirror;
+- agarres, barras largas, puertas, palancas o joints;
+- calibración definitiva de herramientas/manos;
+- Enhanced Visuals.
+
+Los valores de plan físico que pueda registrar el shadow son observacionales.
+Como todavía no existe una petición física inyectada y collision-aware en metros,
+no deben clasificarse como desplazamiento físico aceptado o rechazado.
