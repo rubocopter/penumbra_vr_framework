@@ -14,6 +14,7 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 - Default branch: `main`
 - Reviewed feature checkpoint: `18c63ef39adb9d3af6df0a6e9f97d0889df5194c` (`feat: add shared tracking body reconciliation shadow`)
 - CI hardening checkpoint: `ea12955f494976ed7e3fb2913a3da6221d7dcff8` (`ci: validate autonomous Overture regression on Windows`)
+- Shadow launch hardening checkpoint: `48e07dd6033c13326a36a6cb5c91103620e716ee` (`feat: add transient Black Plague shadow validation launch`)
 - Framework state: pre-alpha
 - Windows/x86 remains the current binary-research target
 - Rework `23c890f` is reference-only; Overture build/package no longer depends on that checkout
@@ -163,10 +164,14 @@ A same-compiler 512-frame differential trace matches the checkpoint bit-for-bit.
 
 BP feeds a default-off `BodyReconciliationShadow` directly from the existing
 post-native-tick adapter callback, using raw tracking published at the existing
-render boundary. Enable diagnostics only with `PVR_BP_RECONCILIATION_SHADOW=1`
-in the **game process environment before adapter installation**. Sampling uses
-existing owners, with periodic logs every 300 swap frames. No native physical
-request is injected and positional translation is still compile-time zero.
+render boundary. The preferred live-validation entry point is
+`tools/Start-BlackPlagueShadowValidation.ps1`: it runs the local exact-build
+verifier first and then holds a transient named mutex while the normal Steam
+launch path initializes the probe. The original `PVR_BP_RECONCILIATION_SHADOW=1`
+mechanism remains supported only when the **game process itself** actually
+inherits that variable. Sampling uses existing owners, with periodic logs every
+300 swap frames. No native physical request is injected and positional
+translation is still compile-time zero.
 
 The host gate is now green. GitHub Actions run `34616035023` for feature commit
 `18c63ef` passed metadata validation, Visual Studio 2022 Win32 configure and the
@@ -182,13 +187,15 @@ contract. Do not treat native accepted motion as acceptance/rejection of an
 uninjected physical plan, and do not enable positional translation after shadow
 validation alone.
 
-Before a Black Plague shadow-only live capture, rerun the local exact-build
-verifier against the supported initialized image / local research inputs and use
-a freshly built DLL. Hosted CI cannot substitute for that local binary-evidence
-gate. Once it passes, the next evidence step is a minimal shadow-only live run:
-stationary tracking, small physical head movement, native free/block/slide,
-recenter/body replacement, expected ~60 Hz single tick ownership, and zero
-positional translation throughout.
+Before a Black Plague shadow-only live capture, build a fresh Release probe and
+run `tools/Start-BlackPlagueShadowValidation.ps1` against the supported
+initialized image / local research input. The helper fails closed if the
+exact-build verifier does not pass. Hosted CI cannot substitute for that local
+binary-evidence gate. Once it passes, the next evidence step is a minimal
+shadow-only live run: stationary tracking, small physical head movement, native
+free/block/slide, recenter/body replacement, expected ~60 Hz single tick
+ownership, periodic `body_reconciliation_shadow` telemetry, and zero positional
+translation throughout.
 
 ## Camera/bob
 
