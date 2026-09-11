@@ -46,13 +46,13 @@ The first implementation sampled `PVR_BP_RECONCILIATION_SHADOW=1` from the **gam
 
 The repository therefore provides the internal validation helper `tools/Start-BlackPlagueShadowValidation.ps1`. It stays under `tools/` rather than adding another diagnostic launcher to the repository root.
 
-The helper first runs `Test-BlackPlagueInputMap.ps1` against the initialized exact-build image. It then holds the named mutex `Local\PenumbraVR.BlackPlague.ReconciliationShadow` only while the normal `--launch-vr` path waits for and initializes the probe. `BlackPlagueBodyAdapter` samples either the original environment variable or that mutex exactly once during installation. The mutex is disposed when the launcher returns, so no preference, registry value or persistent environment state remains for the next run.
+The helper first runs `Test-BlackPlagueInputMap.ps1` against the initialized exact-build image. It then holds the named mutex `Local\PenumbraVR.BlackPlague.ReconciliationShadow` for the complete validation session. `BlackPlagueBodyAdapter` samples either the original environment variable or that mutex exactly once during installation. The helper now watches the fresh PID's probe log and fails closed unless installation explicitly reports `body_reconciliation_shadow enabled=1 source=mutex`; merely launching the game no longer counts as shadow validation. The mutex is disposed when the validation session exits, so no preference, registry value or persistent environment state remains for the next run.
 
 By default the helper expects `artifacts\black-plague-22000-live.bin`. If that local research artifact is not present, pass `-ImagePath <initialized-capture>` explicitly. The helper fails closed rather than skipping the exact-build verification gate. The normal `Start-Black-Plague-VR.cmd` remains shadow-off.
 
 ## Remaining pre-live gate
 
-Hosted CI cannot verify the protected exact-build initialized image used for Black Plague research. Before a new DLL is exercised live, rerun the local exact-build verifier against the supported initialized capture / local binary evidence and ensure the freshly built probe matches the allowlisted research build. The shadow validation helper performs that verifier automatically before launch.
+Hosted CI cannot verify the protected exact-build initialized image used for Black Plague research. Before a new DLL is exercised live, rerun the local exact-build verifier against the supported initialized capture / local binary evidence and ensure the freshly built probe matches the allowlisted research build. The shadow validation helper performs that verifier automatically before launch. The 2026-09-11 launcher race where the forwarded `LoadLibraryW` owner was temporarily absent from a fresh Steam-started process is fixed locally by waiting on that actual export-owner module; Release build, 27/27 CTest and the exact-build verifier pass, but the fix still requires a future live confirmation.
 
 If that passes, the next evidence collection is deliberately shadow-only:
 

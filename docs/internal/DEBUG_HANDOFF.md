@@ -41,14 +41,21 @@ the local exact-build verification against the supported initialized image / loc
 research inputs; hosted CI cannot replace that binary-evidence check. See
 [the current report](TRACKING_BODY_RECONCILIATION.md).
 
-The local verifier passed again on 2026-09-11 and the freshly built probe
-attempted the transient-mutex launch, but PID 25784 crashed before native
+The local verifier passed again on 2026-09-11. PID 25784 crashed before native
 bridge/body-adapter installation (`APPCRASH c0000005`, `SDL.dll` offset
-`0x28c09`). The probe log contains two SDL frame callbacks but ends before the
-native bridge/body-adapter lines, so this is an SDL startup regression boundary,
-not evidence about the shadow request, body ownership or tracking
-reconciliation. Do not retry the live capture unchanged; first establish the
-`REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` chain for that crash.
+`0x28c09`), but a later ordinary VR run, PID 21048, installed the bridge,
+body/collision telemetry and body adapter and remained active for about 16
+minutes. That run reported `body_reconciliation_shadow enabled=0
+source=disabled`, so the SDL crash is not a stable blocker and did not validate
+the mutex path.
+
+The following transient-mutex launch instead failed earlier in the launcher:
+the actual DLL owner of forwarded `LoadLibraryW` was not yet visible in the
+freshly Steam-started process. The launcher previously treated that temporary
+absence as fatal. `ResolveRemoteKernelProcedure` now waits up to 15 seconds for
+that owner using the existing process-aware module wait. Release build, 27/27
+CTest and the exact-build verifier pass after the change. This resolves the
+identified host-side startup race, but live confirmation remains pending.
 
 The shadow path plans a physical displacement but does not inject it. Native
 accepted displacement feeds only native anchor carry. Physical rejection remains

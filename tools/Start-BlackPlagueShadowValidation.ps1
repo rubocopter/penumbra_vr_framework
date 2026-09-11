@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $repoRoot 'build\bin\Release\PenumbraVR.ProbeLauncher.exe'
 $verifier = Join-Path $PSScriptRoot 'Test-BlackPlagueInputMap.ps1'
+$logRoot = Join-Path $env:LOCALAPPDATA 'PenumbraVR\logs'
 
 if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
     throw "Release launcher not found at '$launcher'. Build the framework first."
@@ -46,6 +47,7 @@ $exitCode = 1
 try {
     Write-Host 'Exact-build verifier passed. Starting Black Plague with reconciliation shadow requested.'
     Write-Host 'Positional translation remains disabled; this mode is telemetry-only.'
+    $launchStartedAt = Get-Date
     & $launcher '--launch-vr' $GamePath
     $launcherExitCode = $LASTEXITCODE
     if ($launcherExitCode -ne 0) {
@@ -63,7 +65,36 @@ try {
         throw 'Black Plague did not create penumbra.exe within 60 seconds. The shadow request was not validated.'
     }
 
-    Write-Host "Black Plague detected (PID $($gameProcess.Id)). Shadow request will remain active until the game exits."
+    $probeLog = Join-Path $logRoot "black-plague-probe-$($gameProcess.Id).log"
+    $activationDeadline = (Get-Date).AddSeconds(30)
+    $activationLine = $null
+    do {
+        Start-Sleep -Milliseconds 100
+        if (Test-Path -LiteralPath $probeLog -PathType Leaf) {
+            $candidate = Get-Content -LiteralPath $probeLog |
+                Select-String -Pattern 'Black Plague body adapter installed=.*body_reconciliation_shadow enabled=[01] source=(disabled|environment|mutex)' |
+                Select-Object -Last 1
+            if ($null -ne $candidate -and $candidate.Line.Length -ge 23) {
+                $candidateTime = [DateTime]::ParseExact(
+                    $candidate.Line.Substring(0, 23),
+                    'yyyy-MM-dd HH:mm:ss.fff',
+                    [Globalization.CultureInfo]::InvariantCulture)
+                if ($candidateTime -ge $launchStartedAt.AddSeconds(-1)) {
+                    $activationLine = $candidate.Line
+                }
+            }
+        }
+    } while ($null -eq $activationLine -and -not $gameProcess.HasExited -and (Get-Date) -lt $activationDeadline)
+
+    if ($null -eq $activationLine) {
+        throw "Black Plague PID $($gameProcess.Id) did not report body-adapter/shadow activation within 30 seconds. Check '$probeLog'."
+    }
+    if ($activationLine -notmatch 'Black Plague body adapter installed=1 .*body_reconciliation_shadow enabled=1 source=mutex') {
+        throw "Black Plague PID $($gameProcess.Id) did not activate the requested shadow. Probe telemetry: $activationLine"
+    }
+
+    Write-Host "Black Plague detected (PID $($gameProcess.Id)); probe confirmed body_reconciliation_shadow enabled=1 source=mutex."
+    Write-Host 'Shadow request will remain active until the game exits.'
     Write-Host 'Keep this window open during the validation run.'
     $gameProcess.WaitForExit()
     $exitCode = 0

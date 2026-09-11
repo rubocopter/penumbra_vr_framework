@@ -176,13 +176,24 @@ translation is still compile-time zero.
 On 2026-09-11 the adapter gained one-shot installation telemetry that records
 whether shadow is disabled, requested from the game-process environment, or
 requested from the transient mutex. The Release build and all 27 CTest tests
-passed, including synthetic default-off, environment and mutex paths. The first
-new live attempt passed the local exact-build verifier but crashed
-`penumbra.exe` before native bridge/body-adapter installation (`APPCRASH
-c0000005` in `SDL.dll`, offset `0x28c09`; PID 25784). The probe log records
-two SDL frame callbacks but no adapter-install or shadow telemetry, so it is
-not a shadow validation and does not establish a mutex failure. Diagnose that
-SDL-startup crash before another live attempt.
+passed, including synthetic default-off, environment and mutex paths. An early
+attempt (PID 25784) crashed before native bridge/body-adapter installation with
+`APPCRASH c0000005` in `SDL.dll` at offset `0x28c09`, but a later ordinary VR
+run (PID 21048) loaded the exact supported build, installed the native bridge,
+body telemetry and body adapter, and ran for about 16 minutes with positional
+translation still zero. That later run reported
+`body_reconciliation_shadow enabled=0 source=disabled`, so it establishes that
+the SDL crash is not a consistent startup blocker but does not validate shadow.
+
+The next transient-mutex attempt then exposed the reproducible blocker before
+probe injection: `PenumbraVR.ProbeLauncher` resolved forwarded `LoadLibraryW`
+to its actual owner but failed immediately if that owner DLL was not yet visible
+in the freshly Steam-started process. `ResolveRemoteKernelProcedure` now reuses
+the existing bounded `WaitForRemoteModule` path for that export owner, preserving
+process-exit and timeout handling. Release build and all 27 CTest tests pass after
+the change, and the local exact-build verifier passes. This launcher sequencing
+fix is host-tested only; do not mark the shadow path live-tested until a future
+run confirms mutex activation and periodic shadow telemetry.
 
 The host gate is now green. GitHub Actions run `34616035023` for feature commit
 `18c63ef` passed metadata validation, Visual Studio 2022 Win32 configure and the
@@ -201,9 +212,11 @@ validation alone.
 Before a Black Plague shadow-only live capture, build a fresh Release probe and
 run `tools/Start-BlackPlagueShadowValidation.ps1` against the supported
 initialized image / local research input. The helper fails closed if the
-exact-build verifier does not pass. Hosted CI cannot substitute for that local
-binary-evidence gate. Once the SDL-startup crash is resolved, the next evidence step is a minimal
-shadow-only live run: stationary tracking, small physical head movement, native
+exact-build verifier does not pass and now also refuses to count the session as
+shadow validation unless the fresh process log reports
+`body_reconciliation_shadow enabled=1 source=mutex`. Hosted CI cannot substitute
+for that local binary-evidence gate. The next evidence step, when headset testing
+is available again, is a minimal shadow-only live run: stationary tracking, small physical head movement, native
 free/block/slide, recenter/body replacement, expected ~60 Hz single tick
 ownership, periodic `body_reconciliation_shadow` telemetry, and zero positional
 translation throughout.

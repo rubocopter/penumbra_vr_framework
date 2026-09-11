@@ -190,6 +190,7 @@ bool ResolveRemoteExport(
 }
 
 bool ResolveRemoteKernelProcedure(
+    HANDLE process,
     DWORD process_id,
     const char* procedure_name,
     LPTHREAD_START_ROUTINE& remote_procedure,
@@ -206,8 +207,12 @@ bool ResolveRemoteKernelProcedure(
     std::array<wchar_t,32768> owner_path{};
     const DWORD owner_length = GetModuleFileNameW(owner,owner_path.data(),static_cast<DWORD>(owner_path.size()));
     if (!owner_length || owner_length >= owner_path.size()) { error = L"Could not resolve forwarded export owner"; return false; }
-    const auto remote_owner = FindRemoteModuleBase(process_id,std::filesystem::path(owner_path.data()).filename().c_str());
-    if (!remote_owner) { error = L"The target process has not loaded the export owner"; return false; }
+    const auto owner_filename = std::filesystem::path(owner_path.data()).filename();
+    if (!WaitForRemoteModule(process, process_id, owner_filename.c_str(), 15'000, error)) {
+        return false;
+    }
+    const auto remote_owner = FindRemoteModuleBase(process_id, owner_filename.c_str());
+    if (!remote_owner) { error = L"The target process export owner disappeared after initialization"; return false; }
     // Kernel32 exports can resolve into KernelBase. Relocate relative to the
     // actual owner, not to whichever DLL was queried with GetProcAddress.
     remote_procedure = reinterpret_cast<LPTHREAD_START_ROUTINE>(
@@ -259,7 +264,7 @@ bool InjectAndInitialize(
 
         LPTHREAD_START_ROUTINE remote_load_library = nullptr;
         if (!ResolveRemoteKernelProcedure(
-                process_id, "LoadLibraryW", remote_load_library, error)) {
+                process, process_id, "LoadLibraryW", remote_load_library, error)) {
             release_remote_path();
             return false;
         }

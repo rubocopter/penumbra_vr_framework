@@ -29,6 +29,14 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- `PenumbraVR.ProbeLauncher` now waits for the actual owner DLL of forwarded
+  `LoadLibraryW` to appear in a freshly Steam-started process instead of failing
+  immediately during the startup race. The existing process-exit and bounded
+  timeout behavior is preserved; live confirmation remains pending.
+- The Black Plague shadow validation helper now verifies the fresh probe log and
+  fails closed unless the requested session reports
+  `body_reconciliation_shadow enabled=1 source=mutex`, preventing a silent
+  shadow-off launch from being counted as validation.
 - Black Plague body-adapter installation now respects single-owner callsites. `NativeInputBridge` remains the sole owner of `MoveForward/MoveSideways`, `BodyCollisionProbe` remains the sole owner of `D460A -> D6E00`, and the adapter binds through their verified live status instead of re-validating pristine bytes or stacking another hook.
 - Body-adapter mismatch diagnostics now identify concern, RVA, pristine/live instruction bytes, decoded targets and owner state.
 - Generic Black Plague controller picking is capped to Rework's `0.18 m` direct physical reach instead of granting all props the native camera-ray distance.
