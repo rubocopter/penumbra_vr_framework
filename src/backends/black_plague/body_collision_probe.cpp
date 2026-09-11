@@ -1,5 +1,7 @@
 #include "body_collision_probe.hpp"
 
+#include "black_plague_body_adapter.hpp"
+
 #include "native_input_bridge.hpp"
 #include "rel32_call_hook.hpp"
 
@@ -226,6 +228,10 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
                     Subtract(g_tick.collision_position, position_before));
             }
 
+            ObserveBlackPlagueNativeBodyTick(
+                player, character_body, sample.body_position_before,
+                sample.body_position_after, sample.feet_position_after);
+
             AcquireSRWLockExclusive(&g_telemetry_lock);
             sample.character_updates += g_telemetry.character_updates;
             sample.horizontal_collision_requests +=
@@ -275,6 +281,14 @@ template<std::size_t Size>
     std::array<std::uint8_t, Size> actual{};
     return ReadBytes(g_image + rva, actual.data(), actual.size()) &&
         actual == expected;
+}
+
+[[nodiscard]] std::uintptr_t DecodeCallTarget(
+    const std::array<std::uint8_t, 5>& bytes, std::uintptr_t call) noexcept {
+    if (bytes[0] != 0xE8) return 0;
+    std::int32_t displacement = 0;
+    std::memcpy(&displacement, bytes.data() + 1, sizeof(displacement));
+    return call + bytes.size() + displacement;
 }
 
 [[nodiscard]] bool InstallForImage(
@@ -395,6 +409,23 @@ BodyJumpBurstTelemetry ConsumeBodyJumpBurstTelemetry() noexcept {
     const BodyJumpBurstTelemetry result = g_jump_burst;
     g_jump_burst = {};
     ReleaseSRWLockExclusive(&g_telemetry_lock);
+    return result;
+}
+
+NativeBodyUpdateBoundaryStatus ReadNativeBodyUpdateBoundaryStatus() noexcept {
+    NativeBodyUpdateBoundaryStatus result;
+    result.expected = kUpdateCall;
+    result.expected_target = kCharacterUpdate;
+    result.owner_installed = g_update_hook.installed();
+    if (g_image != nullptr) {
+        static_cast<void>(ReadBytes(g_image + kPhysicsWorldCharacterUpdateCall,
+            result.live.data(), result.live.size()));
+    }
+    result.live_target = DecodeCallTarget(result.live,
+        kPhysicsWorldCharacterUpdateCall);
+    result.owner_matches_live = result.owner_installed &&
+        result.live == g_update_hook.replacement_instruction;
+    result.initialized = result.owner_matches_live;
     return result;
 }
 

@@ -6,6 +6,7 @@
 #include "render_world_probe.hpp"
 #include "native_input_bridge.hpp"
 #include "body_collision_probe.hpp"
+#include "black_plague_body_adapter.hpp"
 #include "movement_ownership_probe.hpp"
 #include "spatial_interaction.hpp"
 #include "sdl_frame_hook.hpp"
@@ -718,6 +719,15 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         penumbra_vr::probe::WriteLog(
             "Body/collision telemetry installed=%u error=%s",
             body_probe_ready ? 1U : 0U, hook_error.c_str());
+        const bool body_adapter_ready = body_probe_ready &&
+            penumbra_vr::backends::black_plague::InstallBlackPlagueBodyAdapter(
+                hook_error);
+        if (!body_probe_ready) {
+            hook_error = "body/collision observer was not installed";
+        }
+        penumbra_vr::probe::WriteLog(
+            "Black Plague body adapter installed=%u error=%s",
+            body_adapter_ready ? 1U : 0U, hook_error.c_str());
         const bool ownership_probe_ready =
             penumbra_vr::backends::black_plague::InstallMovementOwnershipProbe(hook_error);
         penumbra_vr::probe::WriteLog("Movement ownership telemetry installed=%u error=%s",
@@ -777,6 +787,12 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
     }
     if (!penumbra_vr::backends::black_plague::RemoveMovementOwnershipProbe(error)) {
         penumbra_vr::probe::WriteLog("Movement ownership telemetry removal failed: %s", error.c_str());
+        InterlockedExchange(&g_state, 2);
+        return 0;
+    }
+    if (!penumbra_vr::backends::black_plague::RemoveBlackPlagueBodyAdapter(error)) {
+        penumbra_vr::probe::WriteLog(
+            "Black Plague body adapter removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }

@@ -26,6 +26,24 @@ namespace {
 
 } // namespace
 
+bool ObserveAcceptedBodyMotion(
+    const std::array<float, 3>& body_before,
+    const std::array<float, 3>& body_after,
+    VrAcceptedBodyMotion& observation) noexcept {
+    observation = {};
+    if (!FiniteVector(body_before) || !FiniteVector(body_after)) {
+        return false;
+    }
+    observation.body_before = body_before;
+    observation.body_after = body_after;
+    observation.accepted_displacement = {
+        body_after[0] - body_before[0],
+        body_after[1] - body_before[1],
+        body_after[2] - body_before[2],
+    };
+    return FiniteVector(observation.accepted_displacement);
+}
+
 std::array<float, 3> HeadRelativeMoveDirection(
     const VrMatrix44& head,
     const VrAnalogState& move) noexcept {

@@ -129,6 +129,53 @@ callsites de acciones, `D790C/D7913` y el límite de render para registrar orden
 state, tamaño del body y transform final de cámara, sin cambiar argumentos ni
 resultados.
 
+### Primer `BlackPlagueBodyAdapter` (live-tested; scope espacial aún desactivado)
+
+La primera integración conserva ese límite. `black_plague_body_adapter.*`
+exige que los owners de los dos `E8` de `cPlayer::MoveForward/MoveSideways` y
+de `D460A -> D6E00` hayan validado la imagen exacta antes de habilitarse. Los
+hooks de input ya existentes envían al adapter el mismo `amount, dt` que antes
+pasaban directamente a cada método nativo; éste resuelve `cPlayer+0x274` en
+cada llamada y reenvía una sola vez el método original. No usa offsets de
+velocidad ni sustituye límites 3.0/4.5 m/s.
+
+El hook existente en `D460A` sigue siendo el único wrapper de `D6E00`: llama al
+original, lee body/feet después y entrega antes/después al adapter. El adapter
+forma `runtime::VrAcceptedBodyMotion`, cuyo único resultado común es el
+desplazamiento aceptado. Por diseño no puede llamar `D6E00`, por lo que la
+garantía es una llamada nativa por tick. Las cadenas player/body se leen de
+nuevo en publish y observe; una transición que reemplace el objeto deja de usar
+el anterior sin cachearlo. Jump, gravedad/vertical y crouch siguen en sus
+dispatches y tick nativos. HMD translation continúa a cero.
+
+La primera instalación live falló antes de movimiento, no por una imagen
+desconocida. `InstallNativeInputBridge` había validado los bytes vírgenes
+`51CD -> 9CBC0` y `5227 -> 9CC60`, y luego los sustituyó correctamente por sus
+wrappers `HookedForward/HookedSideways`. El adapter se instalaba después pero
+requería por error otra vez los `E8` vírgenes. `D460A` todavía estaba virgen
+porque body adapter se instalaba antes de `body_collision_probe`.
+
+El orden ahora es input bridge (owner de 51CD/5227) → body/collision probe
+(owner de D460A) → adapter (fan-out) → ownership/spatial probes. El adapter no
+valida ni parchea un callsite ya poseído: exige que cada owner haya validado la
+imagen exacta antes del parche y que su replacement siga presente. Si falla,
+el error enumera concern, RVA, bytes pristine esperados/live y targets rel32
+decodificados, además del estado del owner. Así no se relaja el gate exact-build
+ni se permite un segundo hook.
+
+La captura válida de PID 8628 confirmó `NativeInputBridge`,
+`BodyCollisionProbe` y `BlackPlagueBodyAdapter` instalados a la vez, sin un
+segundo owner. Hubo movimiento libre (`requested == solver == accepted`),
+bloqueo total (`[-0.00135,0,+0.04998] -> [0,0,0]`) y sliding/aceptación parcial
+(`[+0.02499,0,+0.00067] -> [+0.02499,0,0]`). La telemetría se mantuvo en
+`dt=0.016667` y aproximadamente 60 updates/s: **native body update remains
+exactly once per native physics tick**. `character_body` cambió de `1E841A98`
+a `1A4BE610` y el fan-out siguió funcionando, evidencia live de resolución
+dinámica sin cachear el body previo; la causa concreta del cambio no está
+demostrada. `positional_translation_enabled=0` durante toda la sesión: no se
+han validado room-scale, traslación posicional HMD, reconciliación activa,
+velocidades VR, crouch físico, jump VR ni comfort/bob.
+
 ### Articulación de dedos: BP no debe degradarse
 
 La comparación confirma dos capas distintas. BP ya usa la política neutral
@@ -248,7 +295,7 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 
 ## Verificación y límites
 
-Los 25 tests pasan en Release, Debug y Release sin SDK OpenVR. El test corporal
+Los 26 tests pasan en la configuración Release actual. El test corporal
 ejecuta la sonda exact-build sobre una imagen sintética y el test espacial
 ejecuta el código del adaptador en una imagen sintética con trampolines a dobles
 nativos; no prueba Newton ni el juego real. El test OpenGL usa el driver WGL,

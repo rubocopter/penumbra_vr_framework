@@ -311,3 +311,22 @@ requested/solver/final displacement, physics timestep and unapplied HMD/body
 divergence is implemented, host-tested and live-tested in PID 30896. Positional tracking,
 palm collision, articulated mechanisms, tool/light attachment and Enhanced
 visuals renderer hooks remain separate work.
+
+PID 8628 completed that narrow adapter validation. It installed the native
+input bridge, body/collision probe, adapter and ownership probe together. Free
+movement, total block and slide/partial acceptance all preserved the measured
+requested/solver/accepted boundary. `character_body` changed from `1E841A98`
+to `1A4BE610` without losing observation, proving dynamic resolution rather
+than a cached prior body. At `dt=0.016667` the native update rate remained
+about 60 Hz: **native body update remains exactly once per native physics
+tick**. This is not validation of room-scale, positional HMD translation,
+tracking/body reconciliation, VR speeds, physical crouch, jump VR or bob;
+`positional_translation_enabled=0` throughout.
+
+The first attempt failed before movement because the adapter was installed after
+the native input bridge had legitimately replaced the two movement calls, but
+still expected pristine bytes. Installation is now ordered after both existing
+owners: `NativeInputBridge` owns the movement callsites and
+`BodyCollisionProbe` owns `D460A`; the adapter only registers fan-out through
+their verified live status. A future diagnostic names the failing concern, RVA,
+pristine/live five-byte instructions, decoded targets and owner state.

@@ -205,8 +205,14 @@ bool OvertureBackend::UpdatePlayer(
                     error = "The Overture body adapter returned a non-finite room-scale result";
                     return false;
                 }
-                const std::array<float, 3> accepted =
-                    Subtract(body_after, body_position);
+                runtime::VrAcceptedBodyMotion observation;
+                if (!runtime::ObserveAcceptedBodyMotion(
+                        body_position, body_after, observation)) {
+                    error = "The Overture body adapter returned an invalid room-scale result";
+                    return false;
+                }
+                const std::array<float, 3>& accepted =
+                    observation.accepted_displacement;
                 const float accepted_distance =
                     runtime::AcceptedDistanceAlongRequest(request, accepted);
                 result.rejected_room_scale_distance =
@@ -247,8 +253,14 @@ bool OvertureBackend::UpdatePlayer(
                 error = "The Overture body adapter returned a non-finite locomotion result";
                 return false;
             }
-            const std::array<float, 3> accepted =
-                Subtract(body_after, body_before);
+            runtime::VrAcceptedBodyMotion observation;
+            if (!runtime::ObserveAcceptedBodyMotion(
+                    body_before, body_after, observation)) {
+                error = "The Overture body adapter returned an invalid locomotion result";
+                return false;
+            }
+            const std::array<float, 3>& accepted =
+                observation.accepted_displacement;
             if (runtime::ShouldCarryHeadAnchorWithLocomotion(
                     head_anchor_, body_before, accepted)) {
                 Add(head_anchor_, accepted);

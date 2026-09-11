@@ -1,4 +1,5 @@
 #include "native_input_bridge.hpp"
+#include "black_plague_body_adapter.hpp"
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
 #include "vr_native_intents.hpp"
@@ -99,6 +100,13 @@ template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
     if (object) static_cast<void>(ReadBytes(static_cast<const std::uint8_t*>(object) + offset, &result, sizeof(result)));
     return result;
 }
+[[nodiscard]] std::uintptr_t DecodeCallTarget(
+    const std::array<std::uint8_t, 5>& bytes, std::uintptr_t call) noexcept {
+    if (bytes[0] != 0xE8) return 0;
+    std::int32_t displacement = 0;
+    std::memcpy(&displacement, bytes.data() + 1, sizeof(displacement));
+    return call + bytes.size() + displacement;
+}
 bool UiContext(void* handler) {
     if (Read<int>(handler, 0x3C) != 1) return true;
     const auto* init = Read<void*>(handler, 0x2C);
@@ -138,10 +146,16 @@ bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
     return reinterpret_cast<Query>(g_image + Target(Q::pressed))(input, name);
 }
 void __fastcall HookedForward(void* player, void*, float amount, float dt) {
-    reinterpret_cast<Move>(g_image + 0x9CBC0)(player, g_intents ? g_intents->Move(amount, false) : amount, dt);
+    const float intent = g_intents ? g_intents->Move(amount, false) : amount;
+    if (!PublishBlackPlagueForwardIntent(player, intent, dt)) {
+        reinterpret_cast<Move>(g_image + 0x9CBC0)(player, intent, dt);
+    }
 }
 void __fastcall HookedSideways(void* player, void*, float amount, float dt) {
-    reinterpret_cast<Move>(g_image + 0x9CC60)(player, g_intents ? g_intents->Move(amount, true) : amount, dt);
+    const float intent = g_intents ? g_intents->Move(amount, true) : amount;
+    if (!PublishBlackPlagueSidewaysIntent(player, intent, dt)) {
+        reinterpret_cast<Move>(g_image + 0x9CC60)(player, intent, dt);
+    }
 }
 void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* physical_delta) {
     using Pointer = void(__thiscall*)(void*, const std::array<float, 2>*);
@@ -237,6 +251,28 @@ runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
     const auto result=g_timing_sample; g_timing_sample={};
     ReleaseSRWLockExclusive(&g_session_lock);
+    return result;
+}
+NativeMovementBoundaryStatus ReadNativeMovementBoundaryStatus() noexcept {
+    NativeMovementBoundaryStatus result;
+    constexpr std::array<std::uintptr_t, 2> sites{0x51CD, 0x5227};
+    constexpr std::array<std::uintptr_t, 2> targets{0x9CBC0, 0x9CC60};
+    result.initialized = g_installed.load(std::memory_order_acquire);
+    for (std::size_t index = 0; index < sites.size(); ++index) {
+        auto& callsite = result.callsites[index];
+        callsite.rva = sites[index];
+        callsite.expected = CallBytes(sites[index], targets[index]);
+        callsite.expected_target = targets[index];
+        callsite.owner_installed = g_move_hooks[index].installed();
+        if (g_image != nullptr) {
+            static_cast<void>(ReadBytes(g_image + sites[index],
+                callsite.live.data(), callsite.live.size()));
+        }
+        callsite.live_target = DecodeCallTarget(callsite.live, sites[index]);
+        callsite.owner_matches_live = callsite.owner_installed &&
+            callsite.live == g_move_hooks[index].replacement_instruction;
+        result.initialized = result.initialized && callsite.owner_matches_live;
+    }
     return result;
 }
 void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept {

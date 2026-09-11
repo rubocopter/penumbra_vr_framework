@@ -20,6 +20,21 @@ inline constexpr float kSprintMultiplier = 1.5F;
 
 } // namespace vr_locomotion_policy
 
+// Game-neutral result of one native horizontal-body phase.  Adapters provide
+// positions around their own engine tick; runtime policy only reasons about
+// the displacement the game actually accepted.  This deliberately contains no
+// layout, RVA, collision flag, or native-update ownership.
+struct VrAcceptedBodyMotion {
+    std::array<float, 3> body_before{};
+    std::array<float, 3> body_after{};
+    std::array<float, 3> accepted_displacement{};
+};
+
+[[nodiscard]] bool ObserveAcceptedBodyMotion(
+    const std::array<float, 3>& body_before,
+    const std::array<float, 3>& body_after,
+    VrAcceptedBodyMotion& observation) noexcept;
+
 [[nodiscard]] std::array<float, 3> HeadRelativeMoveDirection(
     const VrMatrix44& head_world_pose,
     const VrAnalogState& move) noexcept;

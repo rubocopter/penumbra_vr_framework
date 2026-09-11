@@ -46,6 +46,16 @@ struct BodyJumpBurstTelemetry {
     std::size_t count = 0;
 };
 
+struct NativeBodyUpdateBoundaryStatus {
+    bool initialized = false;
+    std::array<std::uint8_t, 5> expected{};
+    std::array<std::uint8_t, 5> live{};
+    std::uintptr_t expected_target = 0;
+    std::uintptr_t live_target = 0;
+    bool owner_installed = false;
+    bool owner_matches_live = false;
+};
+
 // Exact-build, read-only observation hooks for the initialized FD316F... image.
 // They do not enable positional HMD translation or alter native movement.
 [[nodiscard]] bool InstallBodyCollisionProbe(std::string& error) noexcept;
@@ -56,5 +66,9 @@ struct BodyJumpBurstTelemetry {
 void RequestBodyJumpBurst() noexcept;
 [[nodiscard]] bool IsBodyJumpBurstComplete() noexcept;
 [[nodiscard]] BodyJumpBurstTelemetry ConsumeBodyJumpBurstTelemetry() noexcept;
+// The body/collision probe is the sole owner of D460A. Consumers attach to its
+// post-original callback rather than installing another rel32 hook.
+[[nodiscard]] NativeBodyUpdateBoundaryStatus
+ReadNativeBodyUpdateBoundaryStatus() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague

@@ -2,8 +2,23 @@
 #include "openvr_session.hpp"
 #include "vr_update_timing.hpp"
 #include "vr_settings.hpp"
+#include <array>
+#include <cstdint>
 #include <string>
 namespace penumbra_vr::backends::black_plague {
+struct NativeMovementCallsiteStatus {
+    std::uintptr_t rva = 0;
+    std::array<std::uint8_t, 5> expected{};
+    std::array<std::uint8_t, 5> live{};
+    std::uintptr_t expected_target = 0;
+    std::uintptr_t live_target = 0;
+    bool owner_installed = false;
+    bool owner_matches_live = false;
+};
+struct NativeMovementBoundaryStatus {
+    bool initialized = false;
+    std::array<NativeMovementCallsiteStatus, 2> callsites{};
+};
 [[nodiscard]] bool InstallNativeInputBridge(std::string& error) noexcept;
 void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept;
 [[nodiscard]] bool RemoveNativeInputBridge(std::string& error) noexcept;
@@ -16,4 +31,8 @@ void ConnectNativeInput(runtime::OpenVrSession* session) noexcept;
 [[nodiscard]] void* NativePlayerPointer() noexcept;
 void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept;
 [[nodiscard]] runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept;
+// The input bridge is the sole owner of MoveForward/MoveSideways callsites.
+// Consumers use this status to bind fan-out behavior without re-patching them.
+[[nodiscard]] NativeMovementBoundaryStatus
+ReadNativeMovementBoundaryStatus() noexcept;
 }

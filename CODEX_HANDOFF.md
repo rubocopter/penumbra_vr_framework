@@ -41,7 +41,7 @@ The minimal coherent Overture/HPL source host, Win32 dependencies, required reso
 
 On 2026-09-10 the user deployed that exact package with its included `Install-PenumbraVR.bat` over a valid retail Overture installation, then ran it with SteamVR, a real headset and controllers. The deployed executable hash matched the autonomous Framework artifact above. The first functional headset pass showed perceived behavior equivalent to the previously tested Rework build, with no evident regression reported. This validates the autonomous build/deployment/integration path in a headset; it does **not** prove exhaustive coverage of every tracking, calibration, comfort, locomotion, collision, interaction, visual or hardware case, and it is not yet a `supported` release claim.
 
-Validation on 2026-09-10: the standalone Overture Release pipeline passed all shader, 8,752 visual, 231 texture/decode, metadata, LAA, package and 289 legacy tracking-test checks; the full Debug build also passed its 289 checks after disabling legacy `/Gm` only for the C++20 game project. Root Debug, Release and no-OpenVR Release builds include `PenumbraVR.BlackPlague.Probe.dll`, and all 25 CTest tests pass in each current configuration. The evaluated Release MSBuild project and all build/package inputs contain no positive Rework checkout path; `git diff --check` passes.
+Validation on 2026-09-10: the standalone Overture Release pipeline passed all shader, 8,752 visual, 231 texture/decode, metadata, LAA, package and 289 legacy tracking-test checks; the full Debug build also passed its 289 checks after disabling legacy `/Gm` only for the C++20 game project. Root Debug, Release and no-OpenVR Release builds include `PenumbraVR.BlackPlague.Probe.dll`, and all 26 CTest tests pass in the current Release configuration. The evaluated Release MSBuild project and all build/package inputs contain no positive Rework checkout path; `git diff --check` passes.
 
 **Milestone state:** autonomous Overture source/build/package integration is complete and has an initial functional headset validation. Preserve the tested hash and behavior. Any future exhaustive Overture checklist or regression report remains a separate evidence gate; do not reopen the source-host migration or mark the product supported without that evidence.
 
@@ -109,7 +109,8 @@ shows the two crouch sites are input branches, not transition names. It also
 shows `D790C/D7913` are gravity-disabled synchronization calls; the active
 player bypasses them, explaining their zero count. The probe now dynamically
 resolves player/body/character-camera on every action callback; it does not
-cache identities across loads. Do not add a body adapter or physical crouch.
+cache identities across loads. Do not add physical crouch or an additional
+body/collision callsite owner.
 
 PID 29672 completed the 240-tick native jump burst. The `9CEA0` transition
 selects state index 3, source-correlated with `cPlayerMoveState_Jump`, and its
@@ -123,6 +124,42 @@ is still only an unclassified alternative jump-eligibility flag. `+204=0.3` is
 not a max count: held `+200` reached 2.233332; release restores it to 0.3. It
 is the Jump-state hold threshold. No technical probing blocker remains before a
 narrow adapter; do not add more probes or change native vertical behavior.
+
+The first narrow `BlackPlagueBodyAdapter` is `live-tested` on the supported
+exact build (PID 8628). It validates the exact initialized `MoveForward`,
+`MoveSideways` and `D460A -> D6E00` call boundaries before activation. The
+existing input callsite hooks publish their already-computed native horizontal
+amounts through the adapter; the existing `D460A` observer records body/feet
+and accepted displacement after the original native call returns. It resolves
+`cPlayer+0x274` on every publish and observation, so body pointers are never
+cached across transitions. It never invokes `D6E00`; the game still does so
+once from `D460A`.
+
+`runtime::VrAcceptedBodyMotion` is the first shared body policy extraction: it
+validates before/after body positions and derives accepted displacement without
+HPL layouts, RVAs, speed constants or update ownership. Overture now uses it
+for unchanged room-scale and stick reconciliation. BP only observes the native
+tick; it does not enable positional HMD translation, room-scale, Overture's
+1.5/2.25 m/s tuning, vertical movement, jump or crouch.
+
+The first live adapter attach exposed an installation-order bug before movement
+validation: `InstallNativeInputBridge` correctly validates pristine
+`51CD -> 9CBC0` and `5227 -> 9CC60`, then replaces those calls with its own
+`HookedForward/HookedSideways` rel32 targets. The adapter was installed next
+but incorrectly required the pristine bytes again, so it rejected the bridge's
+legitimate hooks. This is corrected: native input is the sole movement-callsite
+owner, body/collision is the sole `D460A` owner, and the adapter binds only
+after both owners report their verified live replacement. Their status now
+reports expected/live bytes and decoded targets on a mismatch. PID 8628 then
+installed all three components successfully and exercised free displacement,
+total block and slide/partial acceptance. The body pointer changed from
+`1E841A98` to `1A4BE610` while the probe/adapter continued to operate; this is
+evidence that it does not cache the previous body, not evidence for the cause
+of that replacement. `dt=0.016667` and the observed update batches remain at
+about 60 body updates/s: **native body update remains exactly once per native
+physics tick**. `positional_translation_enabled=0` throughout, so this does
+not live-validate room-scale, positional HMD translation, active tracking/body
+reconciliation, VR speed tuning, physical crouch, jump, or camera/bob comfort.
 
 The current BP procedural finger policy is deliberately retained as the better
 candidate for common behavior: independent per-finger curls, per-joint curves,
@@ -192,8 +229,9 @@ Do not patch symptoms first. For the known recurring issues, read `DEBUG_HANDOFF
 3. Keep positional HMD translation disabled. Instrument camera/footstep bob,
    acceleration/deceleration, jump and crouch before driving the body through
    a shared policy.
-4. Extract the proven Overture gameplay policy mechanically to runtime and add
-   a narrow BP adapter only when native update sequencing is proven.
+4. Preserve the now live-tested single-owner adapter boundary. Keep positional
+   HMD translation zero until a separate tracking/body-reconciliation gate is
+   deliberately scoped and instrumented.
 6. Keep mirror, Requiem, production installer work and speculative movement/collider changes out of this milestone.
 
 ## Black Plague investigation order

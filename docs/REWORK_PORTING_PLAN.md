@@ -92,8 +92,9 @@ The corresponding Black Plague movement problem remains a binary-adapter task:
 feeding its native acceleration/cap system cannot be made Rework-equivalent by
 simply multiplying input. Its exact player link, character-body tick and first
 horizontal collision-resolution call are now live-characterized by a read-only
-requested/solver/final displacement probe. The next gate is routing the shared
-horizontal policy through a narrow BP adapter.
+requested/solver/final displacement probe. The first narrow adapter is now
+live-tested for native horizontal publication and post-update accepted
+displacement observation; positional policy remains disabled.
 
 Black Plague also supplies positive evidence back toward the Framework. Its
 current `VrHandArticulation` policy preserves five independent curls, distinct
@@ -194,3 +195,18 @@ adapter from being mistaken for a shared-runtime defect.
   Vive, Index, Oculus, Pico and Windows motion controllers;
   `assets/openvr/overture` preserves the exact Overture product mappings used
   by its package.
+
+## First shared Black Plague body boundary
+
+`runtime::VrAcceptedBodyMotion` is the first body contract used by both
+Overture and Black Plague. It derives accepted displacement from finite
+before/after positions and contains no binary details or body layouts.
+Overture now uses it in its unchanged Rework-derived reconciliation.
+`BlackPlagueBodyAdapter` uses it only after native `D460A` has called `D6E00`
+exactly once. It publishes the pre-existing native horizontal intent at the
+mapped `cPlayer::MoveForward/MoveSideways` calls, resolves `cPlayer+0x274`
+afresh on every callback, and fails closed on an exact-boundary mismatch.
+
+This is live-tested only for the exact native boundary. It deliberately does
+not port Overture's speed constants, room-scale translation, active
+tracking/body reconciliation, vertical logic, jump or crouch.
