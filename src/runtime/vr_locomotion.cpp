@@ -26,6 +26,70 @@ namespace {
 
 } // namespace
 
+VrBodyReconciliationPlan PlanBodyReconciliation(
+    const std::array<float, 3>& head_anchor,
+    const std::array<float, 3>& body_position,
+    const std::array<float, 3>& world_tracking_delta) noexcept {
+    VrBodyReconciliationPlan plan;
+    if (!FiniteVector(head_anchor) || !FiniteVector(body_position) ||
+        !FiniteVector(world_tracking_delta)) return plan;
+    plan.rebased = std::hypot(body_position[0] - head_anchor[0],
+        body_position[2] - head_anchor[2]) >
+        vr_locomotion_policy::kMaximumHeadBodySeparation;
+    plan.head_anchor = plan.rebased ? body_position : head_anchor;
+    plan.head_anchor[0] += world_tracking_delta[0];
+    plan.head_anchor[2] += world_tracking_delta[2];
+    if (!FiniteVector(plan.head_anchor)) return {};
+    // Rework does not drain a residual request on a stationary HMD tick.
+    if (HorizontalLength(world_tracking_delta) > 0.0F) {
+        plan.physical_request = ClampPhysicalBodyStep(
+            plan.head_anchor, body_position);
+    }
+    if (!FiniteVector(plan.physical_request)) return {};
+    plan.valid = true;
+    return plan;
+}
+
+VrPhysicalReconciliationResult ReconcilePhysicalBodyMotion(
+    const VrBodyReconciliationPlan& plan,
+    const VrAcceptedBodyMotion& physical_motion) noexcept {
+    VrPhysicalReconciliationResult result;
+    if (!plan.valid || !FiniteVector(plan.head_anchor) ||
+        !FiniteVector(plan.physical_request) ||
+        !FiniteVector(physical_motion.body_before) ||
+        !FiniteVector(physical_motion.body_after) ||
+        !FiniteVector(physical_motion.accepted_displacement)) return result;
+    result.head_anchor = plan.head_anchor;
+    const float requested = HorizontalLength(plan.physical_request);
+    if (!std::isfinite(requested)) return {};
+    result.rejected_distance = requested - AcceptedDistanceAlongRequest(
+        plan.physical_request, physical_motion.accepted_displacement);
+    if (!std::isfinite(result.rejected_distance)) return {};
+    if (result.rejected_distance > vr_locomotion_policy::kRejectedMotionEpsilon) {
+        const float inverse_length = 1.0F / requested;
+        for (const auto axis : {0U, 2U}) {
+            const float rejected = plan.physical_request[axis] * inverse_length *
+                result.rejected_distance;
+            result.anchor_correction[axis] = -rejected;
+            result.head_anchor[axis] -= rejected;
+        }
+    }
+    result.valid = FiniteVector(result.head_anchor);
+    return result.valid ? result : VrPhysicalReconciliationResult{};
+}
+
+std::array<float, 3> CarryHeadAnchorWithLocomotion(
+    const std::array<float, 3>& head_anchor,
+    const VrAcceptedBodyMotion& motion) noexcept {
+    auto result = head_anchor;
+    if (ShouldCarryHeadAnchorWithLocomotion(head_anchor, motion.body_before,
+            motion.accepted_displacement)) {
+        for (std::size_t axis = 0; axis < 3; ++axis)
+            result[axis] += motion.accepted_displacement[axis];
+    }
+    return FiniteVector(result) ? result : std::array<float, 3>{};
+}
+
 bool ObserveAcceptedBodyMotion(
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,

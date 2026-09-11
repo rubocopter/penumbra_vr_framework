@@ -1,4 +1,5 @@
 #include "render_world_probe.hpp"
+#include "black_plague_body_adapter.hpp"
 
 #include "camera_matrix_override.hpp"
 #include "opengl_eye_scissor.hpp"
@@ -41,6 +42,8 @@ constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
 // Positional tracking is deliberately disabled until the exact-build HPL
 // character-body adapter can reconcile requested and collision-resolved motion.
 constexpr float kPositionalWorldUnitsPerMeter = 0.0F;
+static_assert(kPositionalWorldUnitsPerMeter == 0.0F,
+    "Tracking/body shadow validation must not enable positional translation");
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
 using UpdateRenderList = void(__thiscall*)(
@@ -116,6 +119,7 @@ runtime::VrMatrix34 g_world_anchor;
 float g_world_movement_yaw = 0;
 std::uint64_t g_world_tracking_time = 0;
 void InvalidateWorldTracking() {
+    InvalidateBlackPlagueShadowTracking();
     AcquireSRWLockExclusive(&g_world_tracking_lock);
     g_world_tracking_time = 0;
     ReleaseSRWLockExclusive(&g_world_tracking_lock);
@@ -582,6 +586,7 @@ void __fastcall HookedUpdateRenderList(
     if (g_stereo_track_head_rotation) {
         if (g_recenter_requested.exchange(false, std::memory_order_acq_rel))
             g_stereo_tracking_anchor_valid = false;
+        const bool shadow_recentered = !g_stereo_tracking_anchor_valid;
         if (!g_stereo_tracking_anchor_valid) {
             g_stereo_tracking_anchor = pose.device_to_absolute;
             g_stereo_tracking_anchor_valid = true;
@@ -615,6 +620,15 @@ void __fastcall HookedUpdateRenderList(
             g_world_anchor.values[index] = pose.device_to_absolute.values[index];
         g_world_tracking_time = GetTickCount64();
         ReleaseSRWLockExclusive(&g_world_tracking_lock);
+        // Same yaw basis as ComposeYawRecenteredTrackedHeadView. Use the
+        // original rotational anchor, not g_world_anchor whose translation
+        // is deliberately overwritten for rotation-only hand rendering.
+        const float ax = -g_stereo_tracking_anchor.values[2];
+        const float az = -g_stereo_tracking_anchor.values[10];
+        const float shadow_yaw = std::atan2(az * gx - ax * gz,
+            ax * gx + az * gz);
+        PublishBlackPlagueShadowTracking(pose.device_to_absolute,
+            shadow_yaw, shadow_recentered);
     }
 
     // Read the snapshot sampled once by ButtonHandler::Update. Never consume

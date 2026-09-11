@@ -8,12 +8,14 @@
 #include <iostream>
 
 namespace penumbra_vr::backends::black_plague {
+extern bool g_test_movement_owner_ready;
 namespace {
 
 std::array<std::uint8_t, 0x300> g_player_storage{};
 std::array<std::uint8_t, 0x300> g_body_storage{};
 std::array<void*, 16> g_move_states{};
 void* g_test_player = g_player_storage.data();
+unsigned int g_native_update_calls = 0;
 
 template<class T>
 void Put(void* object, std::size_t offset, const T& value) {
@@ -40,6 +42,7 @@ bool __fastcall FakeCollision(
 }
 
 void __fastcall FakeUpdate(void* body, void*, float) {
+    ++g_native_update_calls;
     const Vec3 before = Read<Vec3>(body, kCharacterPositionOffset);
     Matrix requested{};
     requested.values[0] = requested.values[5] =
@@ -92,6 +95,13 @@ int RunBodyCollisionProbeTest() {
         VirtualFree(image, 0, MEM_RELEASE);
         return 2;
     }
+    g_test_movement_owner_ready = false;
+    if (InstallBlackPlagueBodyAdapter(error)) return 20;
+    g_test_movement_owner_ready = true;
+    SetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW", "1");
+    if (!InstallBlackPlagueBodyAdapter(error)) return 21;
+    runtime::VrMatrix34 head{{1,0,0,0, 0,1,0,1.7F, 0,0,1,0}};
+    PublishBlackPlagueShadowTracking(head, 0.0F, true);
 
     const Vec3 start{10.0F, 2.0F, -3.0F};
     const Vec3 size{0.8F, 1.8F, 0.6F};
@@ -118,6 +128,11 @@ int RunBodyCollisionProbeTest() {
         static_cast<void*>(g_move_states.data()));
 
     HookedCharacterUpdate(g_body_storage.data(), nullptr, 0.016F);
+    auto motion = ConsumeBlackPlagueBodyMotion();
+    auto shadow = ConsumeBlackPlagueShadowTelemetry();
+    if (g_native_update_calls != 1 || !motion.valid ||
+        !shadow.latest.valid || !shadow.latest.reset ||
+        !Near(motion.accepted.accepted_displacement[0], 0.05F)) return 22;
     const BodyCollisionTelemetry sample = ConsumeBodyCollisionTelemetry();
     if (!sample.valid || !sample.collision_sample_valid ||
         sample.character_updates != 1 ||
@@ -142,6 +157,7 @@ int RunBodyCollisionProbeTest() {
     RequestBodyJumpBurst();
     for (std::size_t index = 0;
         index < BodyJumpBurstTelemetry::kCapacity; ++index) {
+        PublishBlackPlagueShadowTracking(head, 0.0F, false);
         HookedCharacterUpdate(g_body_storage.data(), nullptr, 0.016F);
     }
     if (!IsBodyJumpBurstComplete()) {
@@ -165,6 +181,46 @@ int RunBodyCollisionProbeTest() {
         VirtualFree(image, 0, MEM_RELEASE);
         return 7;
     }
+
+    // Exercise the existing hook -> adapter -> shared shadow fan-out again
+    // with physical tracking. It must still call the native update only once.
+    head.values[3] = 0.03F;
+    PublishBlackPlagueShadowTracking(head, 0.0F, false);
+    const auto calls_before = g_native_update_calls;
+    HookedCharacterUpdate(g_body_storage.data(), nullptr, 0.016F);
+    shadow = ConsumeBlackPlagueShadowTelemetry();
+    if (g_native_update_calls != calls_before + 1 || !shadow.latest.valid ||
+        !Near(shadow.latest.physical_delta[0], 0.03F) ||
+        shadow.latest.physical_observation_available) return 23;
+
+    std::array<std::uint8_t, 0x300> replacement = g_body_storage;
+    Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
+        static_cast<void*>(replacement.data()));
+    static_cast<void>(ConsumeBlackPlagueBodyMotion());
+    HookedCharacterUpdate(g_body_storage.data(), nullptr, 0.016F);
+    if (ConsumeBlackPlagueBodyMotion().valid) return 24;
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    shadow = ConsumeBlackPlagueShadowTelemetry();
+    if (!ConsumeBlackPlagueBodyMotion().valid || !shadow.latest.reset ||
+        shadow.latest.plan.physical_request != std::array<float, 3>{}) return 25;
+    g_test_movement_owner_ready = false;
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    if (ConsumeBlackPlagueShadowTelemetry().latest.valid) return 26;
+    g_test_movement_owner_ready = true;
+    InvalidateBlackPlagueShadowTracking();
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    if (ConsumeBlackPlagueShadowTelemetry().latest.valid) return 27;
+    PublishBlackPlagueShadowTracking(head, 0.0F, true);
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    if (!ConsumeBlackPlagueShadowTelemetry().latest.reset) return 28;
+    if (!RemoveBlackPlagueBodyAdapter(error)) return 29;
+    SetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW", nullptr);
+    if (!InstallBlackPlagueBodyAdapter(error)) return 30;
+    PublishBlackPlagueShadowTracking(head, 0.0F, true);
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    if (ConsumeBlackPlagueShadowTelemetry().observed_ticks != 0 ||
+        g_native_update_calls != calls_before + 7) return 31;
+    if (!RemoveBlackPlagueBodyAdapter(error)) return 32;
 
     if (!RemoveBodyCollisionProbe(error)) {
         VirtualFree(image, 0, MEM_RELEASE);

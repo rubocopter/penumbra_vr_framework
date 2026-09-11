@@ -30,6 +30,37 @@ struct VrAcceptedBodyMotion {
     std::array<float, 3> accepted_displacement{};
 };
 
+// Stateless phases of Rework Player.cpp's reconciliation sequence. The host
+// retains tracking history and owns when/how a physical request is executed.
+struct VrBodyReconciliationPlan {
+    bool valid = false;
+    bool rebased = false;
+    std::array<float, 3> head_anchor{};
+    std::array<float, 3> physical_request{};
+};
+
+struct VrPhysicalReconciliationResult {
+    bool valid = false;
+    std::array<float, 3> head_anchor{};
+    std::array<float, 3> anchor_correction{};
+    float rejected_distance = 0.0F;
+};
+
+[[nodiscard]] VrBodyReconciliationPlan PlanBodyReconciliation(
+    const std::array<float, 3>& head_anchor,
+    const std::array<float, 3>& body_position,
+    const std::array<float, 3>& world_tracking_delta) noexcept;
+
+// Only call for an observation of this physical request. Missing observations
+// and unrelated native locomotion are NOT evidence of physical rejection.
+[[nodiscard]] VrPhysicalReconciliationResult ReconcilePhysicalBodyMotion(
+    const VrBodyReconciliationPlan& plan,
+    const VrAcceptedBodyMotion& physical_motion) noexcept;
+
+[[nodiscard]] std::array<float, 3> CarryHeadAnchorWithLocomotion(
+    const std::array<float, 3>& head_anchor,
+    const VrAcceptedBodyMotion& motion) noexcept;
+
 [[nodiscard]] bool ObserveAcceptedBodyMotion(
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,

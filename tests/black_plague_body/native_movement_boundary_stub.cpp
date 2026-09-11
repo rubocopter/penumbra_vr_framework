@@ -2,11 +2,12 @@
 
 namespace penumbra_vr::backends::black_plague {
 
-// body_collision_probe_test includes the probe implementation directly and
-// deliberately does not link the native input bridge. The adapter is inactive
-// in that isolated probe test; this supplies only its read-only status import.
+// Synthetic verified owner; no native input calls are executed in this test.
+bool g_test_movement_owner_ready = true;
 NativeMovementBoundaryStatus ReadNativeMovementBoundaryStatus() noexcept {
-    return {};
+    NativeMovementBoundaryStatus status;
+    status.initialized = g_test_movement_owner_ready;
+    return status;
 }
 
 } // namespace penumbra_vr::backends::black_plague

@@ -123,7 +123,7 @@ Current order:
 2. Preserve the live-tested single-owner Black Plague body adapter boundary.
 3. Connect a minimal shared tracking/body reconciliation policy to that boundary while keeping Black Plague positional HMD translation at zero during host testing.
 4. Prove the policy still preserves free motion, full block and sliding through accepted displacement and does not introduce a second body update.
-5. Only then enable positional HMD/body translation for a deliberately scoped live/headset test.
+5. Validate shadow-only tracking/body observations first. Active room-scale additionally requires a demonstrated physical displacement injection capability; native analog intent is not that capability.
 6. After reconciliation is stable, decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
 7. Keep physical crouch and jump comfort/tuning as separate milestones.
 8. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body adapter/reconciliation contract.
@@ -168,3 +168,13 @@ For any reported regression, compare:
 `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION`
 
 The next Black Plague body work should consume existing evidence, not restart it.
+
+## Tracking/body extraction checkpoint (2026-09-11)
+
+The remaining plan/rebase, physical rejection correction and native anchor carry
+phases have moved from `OvertureBackend` to `vr_locomotion.*`. The BP consumer
+is shadow-only and default-off: it cannot inject a physical request. Portable
+tests and the Overture differential trace pass; Windows builds/CTest/verifiers
+remain pending. The exact Rework sequence, ownership table, API, test results
+and missing injection capability are in
+[the internal report](internal/TRACKING_BODY_RECONCILIATION.md).

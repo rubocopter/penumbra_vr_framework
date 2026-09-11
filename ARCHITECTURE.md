@@ -133,23 +133,28 @@ Native jump/vertical ownership remains separate from shared horizontal intent. N
 
 The previous Black Plague proof was establishing the exact body/collision boundary and a safe adapter without double-updating physics. That proof is complete at `live-tested` level for the supported research build.
 
-The next framework proof is **tracking/body spatial reconciliation through that adapter**:
+The tracking/body policy now has shared stateless planning, physical rejection
+and locomotion-carry phases. Overture executes physical requests through its
+source adapter; BP only plans them in a default-off shadow consumer:
 
 ```text
-tracked physical displacement
+raw tracking at existing render boundary
       ↓
-shared reconciliation policy
+BP shadow input snapshot (pose + aligned yaw)
       ↓
-BP adapter publishes measured/native horizontal intent
+existing adapter observes the single native tick
       ↓
-native body tick runs once and resolves collision
+shared plan/rebase + native accepted-motion anchor carry
       ↓
-adapter observes accepted displacement
-      ↓
-shared policy reconciles body/head anchor
+shadow telemetry only; no camera/body write
 ```
 
-Positional HMD translation stays disabled while this path is wired and host-tested. It should only be enabled in a deliberate live/headset validation gate after free motion, blocking and sliding remain correct through the shared policy.
+BP's accepted native movement is not a response to the physical plan: that plan
+was never injected. A collision-aware request in metres, separated from native
+acceleration and owned by the single tick, remains a missing adapter capability.
+Positional translation stays zero; a successful shadow capture alone cannot
+justify enabling it. Portable tests pass, but Windows host validation remains
+pending. See [the milestone report](docs/internal/TRACKING_BODY_RECONCILIATION.md).
 
 Camera/head-bob/footstep-bob ownership is a separate comfort track. It must not be “fixed” by speculative offsets while the body reconciliation milestone is in progress.
 

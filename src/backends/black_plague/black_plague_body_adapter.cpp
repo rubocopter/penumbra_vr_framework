@@ -23,6 +23,15 @@ std::uint8_t* g_image = nullptr;
 bool g_installed = false;
 SRWLOCK g_lock = SRWLOCK_INIT;
 BlackPlagueBodyMotion g_motion;
+bool g_shadow_enabled = false;
+BodyReconciliationShadow g_shadow;
+BlackPlagueShadowTelemetry g_shadow_telemetry;
+runtime::VrMatrix34 g_shadow_pose;
+float g_shadow_yaw = 0.0F;
+std::uint64_t g_shadow_tracking_time = 0;
+std::uint64_t g_shadow_body_time = 0;
+void* g_shadow_body_identity = nullptr; // Comparison only; never dereferenced.
+std::uint64_t g_shadow_generation = 0;
 
 [[nodiscard]] bool ReadBytes(const void* source, void* destination,
     std::size_t size) noexcept {
@@ -91,6 +100,15 @@ template<class T>
     }
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
+    char shadow_option[2]{};
+    g_shadow_enabled = GetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW",
+        shadow_option, 2) == 1 && shadow_option[0] == '1';
+    g_shadow = {};
+    g_shadow_telemetry = {};
+    g_shadow_tracking_time = 0;
+    g_shadow_body_time = 0;
+    g_shadow_body_identity = nullptr;
+    g_shadow_generation = 0;
     ReleaseSRWLockExclusive(&g_lock);
     g_installed = true;
     return true;
@@ -121,6 +139,12 @@ bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept {
     g_image = nullptr;
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
+    g_shadow_enabled = false;
+    g_shadow = {};
+    g_shadow_telemetry = {};
+    g_shadow_tracking_time = 0;
+    g_shadow_body_time = 0;
+    g_shadow_body_identity = nullptr;
     ReleaseSRWLockExclusive(&g_lock);
     return true;
 }
@@ -138,17 +162,48 @@ bool PublishBlackPlagueSidewaysIntent(void* player, float amount,
 void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,
-    const std::array<float, 3>& feet_after) noexcept {
+    const std::array<float, 3>& feet_after,
+    float delta_seconds) noexcept {
     if (!g_installed || !MatchesCurrentBody(player) ||
-        Read<void*>(player, kPlayerCharacterBodyOffset) != character_body) return;
+        Read<void*>(player, kPlayerCharacterBodyOffset) != character_body) {
+        InvalidateBlackPlagueShadowTracking();
+        return;
+    }
     runtime::VrAcceptedBodyMotion accepted;
     if (!runtime::ObserveAcceptedBodyMotion(body_before, body_after,
-            accepted)) return;
+            accepted)) {
+        InvalidateBlackPlagueShadowTracking();
+        return;
+    }
     AcquireSRWLockExclusive(&g_lock);
     g_motion.valid = true;
     ++g_motion.native_tick_sequence;
     g_motion.feet_after = feet_after;
     g_motion.accepted = accepted;
+    if (g_shadow_enabled) {
+        const auto now = GetTickCount64();
+        std::string owner_error;
+        const bool owners_ready = MovementOwnerReady(owner_error) &&
+            BodyUpdateOwnerReady(owner_error);
+        if (!owners_ready || g_shadow_tracking_time == 0 ||
+            now - g_shadow_tracking_time > 250) {
+            g_shadow.Reset();
+            g_shadow_telemetry.latest = {};
+        } else {
+            if (g_shadow_body_time == 0 || now - g_shadow_body_time > 250)
+                g_shadow.Reset();
+            if (g_shadow_body_identity != character_body) {
+                g_shadow_body_identity = character_body;
+                ++g_shadow_generation;
+            }
+            g_shadow_telemetry.latest = g_shadow.Observe(g_shadow_pose,
+                g_shadow_yaw, g_shadow_generation, accepted, feet_after,
+                delta_seconds);
+            ++g_shadow_telemetry.observed_ticks;
+            if (g_shadow_telemetry.latest.reset) ++g_shadow_telemetry.resets;
+        }
+        g_shadow_body_time = now;
+    }
     ReleaseSRWLockExclusive(&g_lock);
 }
 
@@ -156,6 +211,35 @@ BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept {
     AcquireSRWLockExclusive(&g_lock);
     const BlackPlagueBodyMotion result = g_motion;
     g_motion = {};
+    ReleaseSRWLockExclusive(&g_lock);
+    return result;
+}
+
+void PublishBlackPlagueShadowTracking(const runtime::VrMatrix34& pose,
+    float world_yaw, bool recentered) noexcept {
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_shadow_enabled) {
+        if (recentered) g_shadow.Reset();
+        g_shadow_pose = pose;
+        g_shadow_yaw = world_yaw;
+        g_shadow_tracking_time = GetTickCount64();
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+void InvalidateBlackPlagueShadowTracking() noexcept {
+    AcquireSRWLockExclusive(&g_lock);
+    g_shadow_tracking_time = 0;
+    g_shadow_body_time = 0;
+    g_shadow.Reset();
+    g_shadow_telemetry.latest = {};
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
+BlackPlagueShadowTelemetry ConsumeBlackPlagueShadowTelemetry() noexcept {
+    AcquireSRWLockExclusive(&g_lock);
+    const auto result = g_shadow_telemetry;
+    g_shadow_telemetry = {};
     ReleaseSRWLockExclusive(&g_lock);
     return result;
 }

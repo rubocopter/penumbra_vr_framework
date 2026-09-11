@@ -1,6 +1,7 @@
 #pragma once
 
 #include "vr_locomotion.hpp"
+#include "body_reconciliation_shadow.hpp"
 
 #include <array>
 #include <cstdint>
@@ -40,7 +41,21 @@ void ObserveBlackPlagueNativeBodyTick(
     void* character_body,
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,
-    const std::array<float, 3>& feet_after) noexcept;
+    const std::array<float, 3>& feet_after,
+    float delta_seconds) noexcept;
 [[nodiscard]] BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept;
+
+// Optional diagnostics, enabled only by PVR_BP_RECONCILIATION_SHADOW=1 at
+// adapter installation. The renderer publishes raw tracking; the existing
+// native body callback consumes it. Neither path writes player/camera state.
+void PublishBlackPlagueShadowTracking(const runtime::VrMatrix34& pose,
+    float world_yaw, bool recentered) noexcept;
+void InvalidateBlackPlagueShadowTracking() noexcept;
+struct BlackPlagueShadowTelemetry {
+    std::uint64_t observed_ticks = 0;
+    std::uint64_t resets = 0;
+    BodyReconciliationShadowSample latest{};
+};
+[[nodiscard]] BlackPlagueShadowTelemetry ConsumeBlackPlagueShadowTelemetry() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague

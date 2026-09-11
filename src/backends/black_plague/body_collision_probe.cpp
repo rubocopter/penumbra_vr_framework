@@ -230,7 +230,8 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
 
             ObserveBlackPlagueNativeBodyTick(
                 player, character_body, sample.body_position_before,
-                sample.body_position_after, sample.feet_position_after);
+                sample.body_position_after, sample.feet_position_after,
+                delta_seconds);
 
             AcquireSRWLockExclusive(&g_telemetry_lock);
             sample.character_updates += g_telemetry.character_updates;

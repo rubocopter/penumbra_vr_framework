@@ -31,17 +31,21 @@ The user previously reported world displacement / collision discomfort while mov
 
 ### Next evidence
 
-The body/collision mapping and narrow adapter are complete enough to stop probing by default. The next milestone is a deliberately scoped **tracking/body reconciliation** path through the live-tested adapter while positional HMD translation remains disabled during host validation.
+The shared reconciliation phases and default-off BP shadow consumer are now
+implemented; portable tests pass. Windows Release builds, the full CTest suite,
+verifiers and historical Overture checks remain pending. See
+[the current report](TRACKING_BODY_RECONCILIATION.md).
 
-Required evidence for the next live/headset gate:
+The shadow path plans a physical displacement but does not inject it. Native
+accepted displacement feeds only native anchor carry. Physical rejection remains
+unknown, not zero or total rejection. Do not infer a physical movement capability
+from `MoveForward/MoveSideways`: those calls drive native acceleration state.
 
-1. shared policy publishes only through the existing horizontal intent boundary;
-2. native body update remains exactly once per physics tick;
-3. accepted displacement still distinguishes free movement, block and slide;
-4. head/body anchor reconciliation uses accepted movement rather than speculative camera translation;
-5. only after those hold should positional HMD translation be enabled and tested in headset.
-
-Camera/head-bob/footstep-bob ownership remains separate comfort work and is not a reason to reopen body ownership.
+After Windows gates pass, capture a shadow-only live run with translation still
+zero, verifying free/block/slide native observations, tracking plans, reset on
+body replacement and single tick ownership. Active room-scale requires a
+separately demonstrated physical displacement boundary. Camera/bob remains
+separate comfort work.
 
 ## 2. Black Plague locomotion speed / timing
 

@@ -186,6 +186,7 @@ pvr_enable_warnings(pvr_openvr_session)
 target_link_libraries(pvr_openvr_session PUBLIC pvr_vr_action_input)
 
 add_library(pvr_black_plague_body_adapter STATIC
+    src/backends/black_plague/body_reconciliation_shadow.cpp
     src/backends/black_plague/body_adapter_boundary.cpp
     src/backends/black_plague/black_plague_body_adapter.cpp
 )
@@ -300,11 +301,21 @@ if(BUILD_TESTING)
     add_test(NAME body_collision_probe COMMAND pvr_body_collision_probe_test)
 
     add_executable(pvr_black_plague_body_adapter_test
-        tests/black_plague_body/black_plague_body_adapter_test.cpp)
+        tests/black_plague_body/black_plague_body_adapter_test.cpp
+        src/backends/black_plague/body_adapter_boundary.cpp)
     target_include_directories(pvr_black_plague_body_adapter_test PRIVATE
         src/backends/black_plague)
     pvr_enable_warnings(pvr_black_plague_body_adapter_test)
     add_test(NAME black_plague_body_adapter COMMAND pvr_black_plague_body_adapter_test)
+
+    add_executable(pvr_body_reconciliation_test
+        tests/vr_tracking_space/body_reconciliation_test.cpp
+        src/backends/black_plague/body_reconciliation_shadow.cpp)
+    target_include_directories(pvr_body_reconciliation_test PRIVATE
+        src/backends/black_plague)
+    target_link_libraries(pvr_body_reconciliation_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_body_reconciliation_test)
+    add_test(NAME body_reconciliation COMMAND pvr_body_reconciliation_test)
 
     add_executable(pvr_spatial_interaction_test tests/vr_input_state/spatial_interaction_test.cpp)
     target_include_directories(pvr_spatial_interaction_test PRIVATE src/hooks src/backends/black_plague src/adapters/hpl1 src/graphics)

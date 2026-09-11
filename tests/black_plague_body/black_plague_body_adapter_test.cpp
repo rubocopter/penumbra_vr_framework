@@ -1,4 +1,4 @@
-#include "../../src/backends/black_plague/body_adapter_boundary.cpp"
+#include "body_adapter_boundary.hpp"
 
 #include <iostream>
 

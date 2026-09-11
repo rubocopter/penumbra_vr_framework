@@ -97,7 +97,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
 - [x] Live-test the narrow `BlackPlagueBodyAdapter` and shared accepted-displacement observation
-- [ ] Connect shared tracking/body reconciliation through the live-tested adapter while positional HMD translation remains gated
+- [ ] Connect shared tracking/body reconciliation through the live-tested adapter while positional HMD translation remains gated — implementation and portable tests complete; Windows host gates pending (see [report](docs/internal/TRACKING_BODY_RECONCILIATION.md))
+- [ ] Demonstrate a collision-aware physical displacement request mechanism separately from native analog movement before enabling room-scale
 - [ ] Headset-validate positional physical movement, blocking/sliding and head/body reconciliation
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work

@@ -19,22 +19,9 @@ namespace {
     return {left[0] - right[0], left[1] - right[1], left[2] - right[2]};
 }
 
-void Add(std::array<float, 3>& destination,
-         const std::array<float, 3>& value) noexcept {
-    destination[0] += value[0];
-    destination[1] += value[1];
-    destination[2] += value[2];
-}
-
 [[nodiscard]] float HorizontalLength(
     const std::array<float, 3>& value) noexcept {
     return std::hypot(value[0], value[2]);
-}
-
-[[nodiscard]] float HorizontalDistance(
-    const std::array<float, 3>& first,
-    const std::array<float, 3>& second) noexcept {
-    return std::hypot(first[0] - second[0], first[2] - second[2]);
 }
 
 [[nodiscard]] bool FiniteDelta(float delta_seconds) noexcept {
@@ -176,12 +163,6 @@ bool OvertureBackend::UpdatePlayer(
         error = "The Overture body adapter returned a non-finite position";
         return false;
     }
-    if (HorizontalDistance(body_position, head_anchor_) >
-        runtime::vr_locomotion_policy::kMaximumHeadBodySeparation) {
-        head_anchor_ = body_position;
-        result.head_anchor_rebased = true;
-    }
-
     const std::array<float, 3> current_head =
         Translation(frame.head_tracking_pose);
     std::array<float, 3> tracking_delta =
@@ -189,12 +170,19 @@ bool OvertureBackend::UpdatePlayer(
     tracking_delta[1] = 0.0F;
     tracking_delta = tracking_space_.TrackingDirectionToWorld(tracking_delta);
     previous_head_position_ = current_head;
-    Add(head_anchor_, tracking_delta);
+    const auto plan = runtime::PlanBodyReconciliation(
+        head_anchor_, body_position, tracking_delta);
+    if (!plan.valid) {
+        error = "The Overture reconciliation plan is invalid";
+        return false;
+    }
+    head_anchor_ = plan.head_anchor;
+    result.head_anchor_rebased = plan.rebased;
 
     if (frame.body_motion_enabled) {
         if (HorizontalLength(tracking_delta) > 0.0F) {
             const std::array<float, 3> request =
-                runtime::ClampPhysicalBodyStep(head_anchor_, body_position);
+                plan.physical_request;
             result.requested_room_scale_distance = HorizontalLength(request);
             if (result.requested_room_scale_distance > 0.0F) {
                 const std::array<float, 3> body_after = body.MoveBodyBy(
@@ -211,21 +199,14 @@ bool OvertureBackend::UpdatePlayer(
                     error = "The Overture body adapter returned an invalid room-scale result";
                     return false;
                 }
-                const std::array<float, 3>& accepted =
-                    observation.accepted_displacement;
-                const float accepted_distance =
-                    runtime::AcceptedDistanceAlongRequest(request, accepted);
-                result.rejected_room_scale_distance =
-                    result.requested_room_scale_distance - accepted_distance;
-                if (result.rejected_room_scale_distance >
-                    runtime::vr_locomotion_policy::kRejectedMotionEpsilon) {
-                    const float inverse_length =
-                        1.0F / result.requested_room_scale_distance;
-                    head_anchor_[0] -= request[0] * inverse_length *
-                        result.rejected_room_scale_distance;
-                    head_anchor_[2] -= request[2] * inverse_length *
-                        result.rejected_room_scale_distance;
+                const auto reconciled = runtime::ReconcilePhysicalBodyMotion(
+                    plan, observation);
+                if (!reconciled.valid) {
+                    error = "The Overture physical reconciliation is invalid";
+                    return false;
                 }
+                result.rejected_room_scale_distance = reconciled.rejected_distance;
+                head_anchor_ = reconciled.head_anchor;
                 body_position = body_after;
             }
         }
@@ -259,12 +240,8 @@ bool OvertureBackend::UpdatePlayer(
                 error = "The Overture body adapter returned an invalid locomotion result";
                 return false;
             }
-            const std::array<float, 3>& accepted =
-                observation.accepted_displacement;
-            if (runtime::ShouldCarryHeadAnchorWithLocomotion(
-                    head_anchor_, body_before, accepted)) {
-                Add(head_anchor_, accepted);
-            }
+            head_anchor_ = runtime::CarryHeadAnchorWithLocomotion(
+                head_anchor_, observation);
             body_position = body_after;
         }
     }

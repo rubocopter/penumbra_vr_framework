@@ -5,6 +5,22 @@ Base virtual 0x00400000. Los números siguientes son RVAs, nunca offsets del PE
 protegido en disco. Captura local: `artifacts/black-plague-22000-live.bin`.
 Rework de referencia: 23c890f7dbd06b939be9951d282e6e948d9a6623, sin modificar.
 
+## Reconciliación shadow — 2026-09-11
+
+Implementada la política compartida de plan/rebase, rechazo físico y arrastre
+por locomoción. BP sólo planifica el paso físico; el desplazamiento nativo
+aceptado alimenta el arrastre de ancla shadow, no simula aceptación del plan.
+No hay inyección física ni cambios de cámara. El diagnóstico está desactivado
+por defecto y registra un resumen cada 300 swap frames si se habilita mediante
+`PVR_BP_RECONCILIATION_SHADOW=1` en el proceso del juego antes del attach.
+
+Los tests portables pasan. Build/CTest/verificadores Windows y validación live
+siguen pendientes: no declarar este milestone host-complete todavía. La
+capability pendiente es una solicitud en metros que resuelva colisiones dentro
+del tick único y cuya aceptación pueda distinguirse de la locomoción nativa.
+No ampliar reversing automáticamente. Véase el
+[informe detallado](internal/TRACKING_BODY_RECONCILIATION.md).
+
 ## Player/body/movement/collision: mapa estático e instrumentación
 
 El límite nativo se ha localizado en la captura inicializada, sin copiar RVAs

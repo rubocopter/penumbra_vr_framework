@@ -151,40 +151,33 @@ PID 8628 demonstrated:
 
 Overture consumes it without changing its proven room-scale/locomotion behavior. Black Plague currently uses it as observation only.
 
-## Current milestone — tracking/body reconciliation
+## Current milestone — tracking/body reconciliation (implementation ready for Windows checks)
 
-Do not add more body/collision probes by default. The next milestone is to connect a minimal shared tracking/body reconciliation policy through the live-tested BP boundary.
+The shared stateless phases now live in `vr_locomotion.*`:
+`PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
+`CarryHeadAnchorWithLocomotion`. Overture calls them in its existing order.
+A same-compiler 512-frame differential trace matches the checkpoint bit-for-bit;
+portable tracking, Overture, reconciliation/shadow and boundary tests pass.
 
-Required sequencing:
+BP feeds a default-off `BodyReconciliationShadow` directly from the existing
+post-native-tick adapter callback, using raw tracking published at the existing
+render boundary. Enable diagnostics only with `PVR_BP_RECONCILIATION_SHADOW=1`
+in the **game process environment before adapter installation**. Sampling uses
+existing owners, with periodic logs every 300 swap frames. No native physical
+request is injected and positional translation is still compile-time zero.
 
-```text
-tracked physical head/body intent
-        ↓
-shared game-neutral reconciliation policy
-        ↓
-BlackPlagueBodyAdapter publishes horizontal native intent
-        ↓
-native D6E00 executes once in its normal physics tick
-        ↓
-native collision + native vertical/move-state processing
-        ↓
-adapter observes accepted displacement
-        ↓
-shared policy reconciles the tracking/body anchor
-```
+The missing capability is a collision-aware physical displacement request in
+metres, distinguishable from native acceleration/locomotion and consumed by the
+single native tick. `MoveForward/MoveSideways` does not establish that contract.
+Do not treat native accepted motion as acceptance/rejection of an uninjected
+physical plan, and do not enable positional translation after shadow alone.
 
-Initial implementation must remain conservative:
-
-1. keep Black Plague positional HMD translation at zero while wiring and host-testing the policy;
-2. preserve keyboard/mouse and controller input;
-3. preserve native `3.0/4.5 m/s` tuning during the first boundary integration unless the milestone explicitly scopes speed policy;
-4. keep jump/vertical native;
-5. do not implement physical crouch in the same change;
-6. do not solve camera/head-bob/footstep-bob by zeroing constants or inventing offsets;
-7. do not add a second body-update or movement-callsite hook;
-8. validate free motion, block and sliding before enabling positional HMD translation.
-
-Only after that host boundary is stable should a deliberate headset gate enable and validate physical HMD/body translation.
+Windows/x86 Release builds, full CTest, exact-build/metadata verifiers and the
+historical Overture suite could not run in the Linux editing environment. The
+expanded synthetic Windows fan-out test has been written, not executed here.
+This is **not host-complete or ready for a live test yet**. Complete those gates
+before a minimal shadow-only live capture. See
+[the implementation/validation report](TRACKING_BODY_RECONCILIATION.md).
 
 ## Camera/bob
 

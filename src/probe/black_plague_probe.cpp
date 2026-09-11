@@ -116,6 +116,31 @@ void OnFrame(std::uint64_t frame_number) noexcept {
          render_world.compositor_submitted_frames != 0);
     const bool jump_burst_complete =
         penumbra_vr::backends::black_plague::IsBodyJumpBurstComplete();
+    if (frame_number % 300 == 0) {
+        const auto shadow = penumbra_vr::backends::black_plague::
+            ConsumeBlackPlagueShadowTelemetry();
+        if (shadow.observed_ticks != 0) {
+            const auto& s = shadow.latest;
+            penumbra_vr::probe::WriteLog(
+                "body_reconciliation_shadow ticks=%llu resets=%llu valid=%u "
+                "physical_delta=[%.4f,%.4f] physical_plan=[%.4f,%.4f] "
+                "native_accepted=[%.4f,%.4f,%.4f] body=[%.4f,%.4f,%.4f] "
+                "predicted_anchor=[%.4f,%.4f,%.4f] native_correction=[%.4f,%.4f] "
+                "separation=%.4f rebase=%u physical_observation=0 positional_translation_enabled=0",
+                static_cast<unsigned long long>(shadow.observed_ticks),
+                static_cast<unsigned long long>(shadow.resets), s.valid ? 1U : 0U,
+                s.physical_delta[0], s.physical_delta[2],
+                s.plan.physical_request[0], s.plan.physical_request[2],
+                s.native_motion.accepted_displacement[0],
+                s.native_motion.accepted_displacement[1],
+                s.native_motion.accepted_displacement[2],
+                s.native_motion.body_after[0], s.native_motion.body_after[1],
+                s.native_motion.body_after[2],
+                s.predicted_anchor[0], s.predicted_anchor[1], s.predicted_anchor[2],
+                s.native_anchor_correction[0], s.native_anchor_correction[2],
+                s.separation, s.plan.rebased ? 1U : 0U);
+        }
+    }
     if (frame_number <= 10 || frame_number % 300 == 0 ||
         bounded_stereo_activity ||
         jump_burst_complete ||
