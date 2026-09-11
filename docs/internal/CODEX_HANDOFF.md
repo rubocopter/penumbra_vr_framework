@@ -71,6 +71,16 @@ Implemented/code-tested but not automatically headset-validated:
 - tool/light attachment groundwork;
 - eye-scissor/light remapping.
 
+Controller parity is an explicit framework requirement. `assets/openvr` ships
+eight shared default profiles: PS VR2 Sense, Vive, Valve Index/Knuckles,
+Oculus/Meta Touch, Pico 4, Pico Neo 3 and the two Windows Mixed Reality
+controller types. Asset presence is not sufficient evidence. Before Black
+Plague controller support is considered equivalent to Overture, each available
+profile must cover the same logical actions and handedness routing plus grip/aim
+poses, menu/picking behavior, haptics and hardware-supported finger articulation.
+Requiem should inherit this shared matrix and repeat only the backend-specific
+intent/headset validation needed by its exact build.
+
 ### Player/body and collision
 
 This reverse-engineering milestone is closed unless contradictory evidence appears.

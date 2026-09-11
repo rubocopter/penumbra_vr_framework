@@ -37,7 +37,7 @@ Current example:
 | tracking-to-world, yaw recenter and height policy | shared runtime | high | backend supplies body/camera mechanism |
 | accepted body displacement / reconciliation policy | shared runtime | high | backend publishes intent and reports accepted movement through its native body boundary |
 | logical VR input state, action sets and haptics | shared runtime | high | backend maps intents to each game's actions |
-| generated bindings for PS VR2, Index, Touch, Pico, WMR and Vive | shared package | nearly direct | remove/remap unavailable game actions |
+| generated bindings for PS VR2, Index, Touch, Pico, WMR and Vive | shared package | nearly direct | bindings are only the starting point; each profile must reach Overture-equivalent action/handedness/pose/menu/haptic behavior, with finger articulation where the hardware exposes it, and be validated per backend |
 | settings types, limits and defaults | shared runtime | high | backend/installer supplies storage/UI |
 | render scale and per-eye targets | shared runtime | high | backend owns renderer/GL integration |
 | hand pose validity, aim/grip poses and finger articulation output | shared runtime | high | backend owns model/bone rig profile |
@@ -180,6 +180,8 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 - `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state; `vr_settings_editor.*` owns the demonstrated 18-row edit/format/dependency policy, and `vr_settings_store.*` persists the complete shared schema.
 - Black Plague exposes an explicit backend capability map for the currently wired editor settings. A dedicated in-game settings page remains game-specific work until a safe native-menu insertion boundary is demonstrated.
 - `assets/openvr` contains shared actions/bindings; `assets/openvr/overture` preserves exact Overture product mappings.
+
+Controller support is a behavioral parity requirement, not an asset-presence check. The shared package currently carries eight default OpenVR profiles: PS VR2 Sense, Vive, Valve Index/Knuckles, Oculus/Meta Touch, Pico 4, Pico Neo 3, Windows Mixed Reality motion controllers and the holographic-controller variant. A profile is only considered at parity after its logical actions, left/right-handed routing, grip/aim poses, menu and picking controls, haptics and any hardware-supported finger articulation behave equivalently to the proven Overture baseline in the target backend. Black Plague must close that matrix before controller parity is claimed; Requiem should inherit the same matrix and repeat only backend-specific validation.
 
 ## Validation rule
 

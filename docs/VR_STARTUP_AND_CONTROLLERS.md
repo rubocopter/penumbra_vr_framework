@@ -108,6 +108,16 @@ Comprobación sin abrir el juego ni SteamVR:
    curls de dedos y salida háptica limitada. Bindings de PSVR2 y demás perfiles
    se copian a `build/bin/<config>/vr` en cada compilación. No se sondea por ojo:
    lo hace una vez `cButtonHandler::Update`.
+
+   El paquete compartido incluye ocho perfiles OpenVR: PS VR2 Sense, HTC Vive,
+   Valve Index/Knuckles, Oculus/Meta Touch, Pico 4, Pico Neo 3 y las dos variantes
+   Windows Mixed Reality (`microsoft/motion_controller` y
+   `holographic_controller`). La presencia del JSON no implica paridad. Cada
+   perfil debe validar las mismas acciones lógicas disponibles en Overture,
+   handedness, poses grip/aim, navegación y apuntado de menús, haptics y, cuando
+   el hardware lo exponga, articulación de dedos. Esta matriz debe cerrarse en
+   Black Plague antes de declarar paridad de controles y reutilizarse después en
+   Requiem con validación específica de su backend.
 2. Puente nativo exacto: movimiento analógico combinado con teclado, giro por
    pasos configurable o suave integrado por tiempo, salto, correr, agacharse,
    interactuar, examinar, guardar objeto, inventario, libreta, pausa y ciclo de
@@ -178,6 +188,10 @@ hitos de gameplay estén terminados**.
 - Falta validar transiciones mientras se mantiene un botón, la pérdida de
   tracking/foco en una partida real y la convivencia de mandos y teclado al
   mantener ambos la misma acción. Las pruebas puras no sustituyen esa prueba.
+- También falta cerrar la matriz de paridad por perfil de mando. PS VR2 Sense es
+  el perfil usado en la validación live actual; los demás bindings compartidos
+  todavía requieren validación funcional equivalente antes de considerarse al
+  mismo nivel que Overture.
 - La iluminación pasó la zona probada por el usuario; falta cobertura en otras zonas.
 
 A petición del usuario se prepara una prueba experimental de lo incorporado,

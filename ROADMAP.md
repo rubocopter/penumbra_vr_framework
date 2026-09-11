@@ -72,6 +72,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Import the shared OpenVR action manifest and controller bindings as data
 - [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
 - [x] Extract Rework semantic haptic events, profiles, strength scaling and cooldown policy into the shared runtime
+- [ ] Establish and validate controller-profile parity against the proven Overture behavior for PS VR2 Sense, Valve Index/Knuckles, Meta/Oculus Touch, Pico 4, Pico Neo 3, Windows Mixed Reality and HTC Vive, covering action availability, handedness, poses, menu/picking input, haptics and hardware-supported finger articulation
 - [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime
 - [x] Extract stable VR panel anchoring and transient overlay ownership handoff policy with Overture/Black Plague consumers
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
@@ -95,6 +96,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 
 - [x] Connect OpenVR action polling to the imported manifest and bindings
 - [x] Code-test native intents, tracked menus and provisional depth-tested gloves
+- [ ] Headset-validate the supported controller profiles on Black Plague and close any per-profile feature gaps before controller parity is claimed
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's `0.18 m` physical reach
 - [ ] Complete palm collision, jointed mechanisms and tool/light attachment
@@ -125,6 +127,7 @@ Exit criterion: a documented playable alpha for an exact Black Plague build with
 - [ ] Repeat exact-build research rather than assuming Black Plague RVAs
 - [ ] Reuse validated HPL-level hooks where binary evidence permits
 - [ ] Adapt Requiem-specific gameplay and UI behavior
+- [ ] Reuse the shared controller-profile parity matrix and validate Requiem-specific native intent routing without regressing any supported controller profile
 - [ ] Complete stereo, input and representative-level validation
 
 Exit criterion: a documented playable alpha for an exact Requiem build.
