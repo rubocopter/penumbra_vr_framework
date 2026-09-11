@@ -1,0 +1,27 @@
+﻿Traducción mejorada para Penumbra Black Plague
+
+por Oscar 'darkpadawan' Rodríguez - Clan DLAN (www.clandlan.net)
+
+
+
+Traducción mejorada para el juego Penumbra Black Plague, de Frictional Games. Se parte de la traducción oficial -disponible originalmente en la versión de disco del juego, y editada por DeM para su uso en sus versiones digitales posteriores, en Windows y Linux-, repasando los diversos errores y mala traducción.
+
+
+
+Instalación
+
+-Instala Penumbra Black Plague.
+
+-Copia el archivo español.lang incluido en el parche de la traducción en la carpeta "config" del juego. Su ubicación depende de la versión que se use, aunque en todos los casos debería ser una subdirectorio del juego instalado. Sabrás que la carpeta es la correcta si en ella está el archivo "english.lang", que corresponde a los textos originales en inglés del juego.
+
+-Lanza el juego. Por defecto, se lanzará en inglés, y para cambiar los textos a castellano haz lo siguiente:
+1. Elige la opción "Options" del menú principal.
+2. Haz clic en la sección "Game".
+3. Haz clic sobre "English", al lado de "Language", y elige "Español".
+4. Configura el juego como prefieras. Se recomienda que actives los subtítulos, en el mismo submenú.
+
+
+Agradecimientos
+-A Frictional Games, por Penumbra Black Plague.
+-A Clan DLAN (www.clandlan.net), por su fantástico apoyo a las traducciones de videojuegos. En particular, a DeM por extraer y preparar los archivos de lenguaje de la saga Penumbra para su uso en las versiones digitales actuales.
+-Y a ti, por utilizar esta traducción.

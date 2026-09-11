@@ -142,6 +142,8 @@ Exit criterion: a documented playable alpha for an exact Requiem build.
 - [ ] Apply LAA only through the known-build-gated transactional backup/rollback path
 - [x] Import the shared action manifest and controller bindings
 - [ ] Register and deploy action assets through the installer
+- [x] Import Black Plague/Requiem Spanish translation payloads with exact hashes and original attribution notices
+- [ ] Deploy and roll back the Spanish translation payloads through the unified installer transaction
 - [ ] Package attribution and licenses
 - [ ] Clean-machine and upgrade testing
 

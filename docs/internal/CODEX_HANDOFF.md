@@ -331,6 +331,16 @@ temporary copies of the installed canonical executables changed only file offset
 The installed originals were not modified. Transactional filesystem
 backup/apply/verify/rollback remains future installer work.
 
+The supplied Spanish translations for Black Plague and Requiem are now retained
+as exact Framework deployment inputs under `assets/localization`, together with
+their original `leeme.txt` attribution notices. `assets/localization/manifest.json`
+pins their hashes and their real install-relative destinations
+(`redist/config/Espanol.lang` and
+`redist/expansion01/config/Espanol_exp.lang`). Metadata validation checks these
+inputs, but the production installer still needs to deploy and roll them back
+through the transactional filesystem layer. Overture continues to package its
+own `products/overture/data/config/Espanol.lang` overlay.
+
 ## Validation discipline
 
 Keep states distinct:

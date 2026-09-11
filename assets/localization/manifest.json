@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "translations": [
+    {
+      "game": "black_plague",
+      "sourcePath": "assets/localization/black_plague/redist/config/Espanol.lang",
+      "installPath": "redist/config/Espanol.lang",
+      "sha256": "7ABA80438B49F9F24BF997BB73F552D46745CCAA1C7FE6959A2E6B9B1436A13E",
+      "noticePath": "assets/localization/black_plague/leeme.txt"
+    },
+    {
+      "game": "requiem",
+      "sourcePath": "assets/localization/requiem/redist/expansion01/config/Espanol_exp.lang",
+      "installPath": "redist/expansion01/config/Espanol_exp.lang",
+      "sha256": "E7FB95342104DE4BE86AA4B2FC59466C068D7AA7C925ADA2C412DA80F8B24F25",
+      "noticePath": "assets/localization/requiem/leeme.txt"
+    }
+  ]
+}

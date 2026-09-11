@@ -27,6 +27,12 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- Imported the existing Spanish localization payloads for Black Plague and
+  Requiem under `assets/localization`, preserving their original `leeme.txt`
+  attribution notices. A small localization manifest fixes their exact hashes
+  and install-relative destinations, and the metadata gate now verifies both
+  payload integrity and attribution-file presence for future unified-installer
+  deployment.
 - Complete Framework persistence for the shared Rework-derived VR settings schema, plus a host-tested 18-row editor policy matching the Overture menu's ordering, formatting, step sizes, wrapping, clamps and snap/smooth row dependencies.
 - An explicit Black Plague VR-setting capability map exposes only backend-wired editor controls; persisted-but-unwired settings remain unavailable to a future in-game page until their backend application exists.
 - An offline Black Plague VR configuration surface is available through `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. It shows only backend-consumed Rework-derived controls plus monitor mirror, supports snap/smooth dependent rows, saves through the shared settings store and resets only supported controls so persisted-but-unwired values are preserved.

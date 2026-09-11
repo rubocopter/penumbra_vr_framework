@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $manifestRoot = Join-Path $repositoryRoot 'manifests'
 $openVrAssetRoot = Join-Path $repositoryRoot 'assets\openvr'
+$localizationAssetRoot = Join-Path $repositoryRoot 'assets\localization'
 
 function Read-JsonFile([string]$Path) {
     try {
@@ -17,7 +18,7 @@ function Read-JsonFile([string]$Path) {
 }
 
 $jsonFiles = @(
-    Get-ChildItem -LiteralPath $manifestRoot, $openVrAssetRoot -Recurse -File -Filter '*.json'
+    Get-ChildItem -LiteralPath $manifestRoot, $openVrAssetRoot, $localizationAssetRoot -Recurse -File -Filter '*.json'
 )
 foreach ($jsonFile in $jsonFiles) {
     $null = Read-JsonFile $jsonFile.FullName
@@ -153,6 +154,52 @@ $catalogLaaHashes = @($catalogEntries | Where-Object { $_.Variant -eq 'large_add
 $documentedLaaHashes = @($manifestVariantHashes | Sort-Object)
 if (@(Compare-Object -ReferenceObject $catalogLaaHashes -DifferenceObject $documentedLaaHashes).Count -ne 0) {
     throw 'The compiled Large Address Aware build variants and manifest transformed variants disagree.'
+}
+
+$localizationManifestPath = Join-Path $localizationAssetRoot 'manifest.json'
+$localizationManifest = Read-JsonFile $localizationManifestPath
+if ($localizationManifest.schemaVersion -ne 1) {
+    throw "assets\localization\manifest.json has unsupported schemaVersion '$($localizationManifest.schemaVersion)'."
+}
+
+$expectedLocalizationTargets = @{
+    black_plague = 'redist/config/Espanol.lang'
+    requiem = 'redist/expansion01/config/Espanol_exp.lang'
+}
+$localizationEntries = @($localizationManifest.translations)
+$localizationGames = @($localizationEntries | ForEach-Object { $_.game })
+if (($localizationGames | Sort-Object -Unique).Count -ne $localizationGames.Count) {
+    throw 'Spanish localization metadata contains duplicate game entries.'
+}
+if (@(Compare-Object -ReferenceObject @($expectedLocalizationTargets.Keys | Sort-Object) -DifferenceObject @($localizationGames | Sort-Object)).Count -ne 0) {
+    throw 'Spanish localization metadata must contain exactly the Black Plague and Requiem payloads.'
+}
+
+foreach ($entry in $localizationEntries) {
+    if ($entry.installPath -cne $expectedLocalizationTargets[$entry.game]) {
+        throw "Spanish localization '$($entry.game)' has unexpected install path '$($entry.installPath)'."
+    }
+    if ([System.IO.Path]::IsPathRooted([string]$entry.sourcePath) -or
+        [System.IO.Path]::IsPathRooted([string]$entry.noticePath)) {
+        throw "Spanish localization '$($entry.game)' must use repository-relative source and notice paths."
+    }
+    if ($entry.sha256 -cnotmatch '^[A-F0-9]{64}$') {
+        throw "Spanish localization '$($entry.game)' must declare an uppercase SHA-256."
+    }
+
+    $payloadPath = Join-Path $repositoryRoot ([string]$entry.sourcePath -replace '/', '\')
+    $noticePath = Join-Path $repositoryRoot ([string]$entry.noticePath -replace '/', '\')
+    if (-not (Test-Path -LiteralPath $payloadPath -PathType Leaf)) {
+        throw "Spanish localization payload is missing: $($entry.sourcePath)"
+    }
+    if (-not (Test-Path -LiteralPath $noticePath -PathType Leaf)) {
+        throw "Spanish localization attribution notice is missing: $($entry.noticePath)"
+    }
+
+    $actualHash = (Get-FileHash -LiteralPath $payloadPath -Algorithm SHA256).Hash
+    if ($actualHash -cne $entry.sha256) {
+        throw "Spanish localization '$($entry.game)' hash '$actualHash' does not match metadata '$($entry.sha256)'."
+    }
 }
 
 $actionManifestPath = Join-Path $openVrAssetRoot 'actions.json'

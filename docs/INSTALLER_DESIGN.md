@@ -94,6 +94,20 @@ bindings, configuration schema and shared runtime. Each exact-build manifest
 selects one backend and its bootstrap method. A backend must never be chosen by
 probing arbitrary addresses in an unknown process.
 
+Spanish localization is also a Framework-owned deployment payload for the two
+binary games. `assets/localization/manifest.json` records the exact repository
+file, SHA-256 and install-relative destination for each game:
+
+- Black Plague: `redist/config/Espanol.lang`;
+- Requiem: `redist/expansion01/config/Espanol_exp.lang`.
+
+The original attribution notice supplied with each translation is retained
+under `assets/localization/<game>/leeme.txt`. The installer must treat an
+existing destination language file like any other owned replacement: record and
+verify it before modification, back it up, verify the copied translation, and
+restore the original on uninstall/rollback. Overture's Spanish file remains in
+its source-product overlay at `products/overture/data/config/Espanol.lang`.
+
 The action files under `assets/openvr` are now consumed by the framework's
 runtime input path: the shared action manifest/bindings are copied into the
 build output, real OpenVR action polling is implemented, and Black Plague's
@@ -109,5 +123,7 @@ versioning and rollback of these files remain installer work.
 - wire the exact canonical/transformed catalogue identities into transactional apply/repair/uninstall;
 - package per-build backends and shared runtime assets;
 - define the exact ownership/versioning rules for deployed OpenVR action files;
+- deploy the imported Black Plague/Requiem Spanish localization payloads through
+  the transactional install/repair/uninstall path;
 - test install, repair, upgrade and rollback on clean game copies;
 - design a recovery flow for missing backups and externally modified files.
