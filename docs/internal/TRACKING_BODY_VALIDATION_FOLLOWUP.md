@@ -44,12 +44,9 @@ The single-owner model remains mandatory: `NativeInputBridge` owns movement call
 
 The first implementation sampled `PVR_BP_RECONCILIATION_SHADOW=1` from the **game process** during body-adapter installation. That remains supported for advanced/manual workflows where the game actually inherits the variable, but it is not a reliable one-click launch mechanism: `--launch-vr` starts the protected build through `steam://rungameid/22120`, so an already-running Steam process does not inherit variables set only in the launcher shell.
 
-The repository therefore provides a transient diagnostic path:
+The repository therefore provides the internal validation helper `tools/Start-BlackPlagueShadowValidation.ps1`. It stays under `tools/` rather than adding another diagnostic launcher to the repository root.
 
-- `Start-Black-Plague-VR-Shadow.cmd`
-- `tools/Start-BlackPlagueShadowValidation.ps1`
-
-The PowerShell helper first runs `Test-BlackPlagueInputMap.ps1` against the initialized exact-build image. It then holds the named mutex `Local\PenumbraVR.BlackPlague.ReconciliationShadow` only while the normal `--launch-vr` path waits for and initializes the probe. `BlackPlagueBodyAdapter` samples either the original environment variable or that mutex exactly once during installation. The mutex is disposed when the launcher returns, so no preference, registry value or persistent environment state remains for the next run.
+The helper first runs `Test-BlackPlagueInputMap.ps1` against the initialized exact-build image. It then holds the named mutex `Local\PenumbraVR.BlackPlague.ReconciliationShadow` only while the normal `--launch-vr` path waits for and initializes the probe. `BlackPlagueBodyAdapter` samples either the original environment variable or that mutex exactly once during installation. The mutex is disposed when the launcher returns, so no preference, registry value or persistent environment state remains for the next run.
 
 By default the helper expects `artifacts\black-plague-22000-live.bin`. If that local research artifact is not present, pass `-ImagePath <initialized-capture>` explicitly. The helper fails closed rather than skipping the exact-build verification gate. The normal `Start-Black-Plague-VR.cmd` remains shadow-off.
 
@@ -59,7 +56,7 @@ Hosted CI cannot verify the protected exact-build initialized image used for Bla
 
 If that passes, the next evidence collection is deliberately shadow-only:
 
-1. build a fresh Release probe/launcher and run `Start-Black-Plague-VR-Shadow.cmd`; use `tools/Start-BlackPlagueShadowValidation.ps1 -ImagePath <capture>` if the default initialized image path is unavailable;
+1. build a fresh Release probe/launcher and run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Start-BlackPlagueShadowValidation.ps1`; pass `-ImagePath <capture>` if the default initialized image path is unavailable;
 2. keep positional translation at zero and preserve existing VR settings;
 3. confirm periodic `body_reconciliation_shadow` telemetry appears before interpreting the run;
 4. capture a stationary baseline and small horizontal physical HMD movements;
