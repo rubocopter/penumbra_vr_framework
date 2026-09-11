@@ -29,19 +29,44 @@ if ([string]::IsNullOrWhiteSpace($ImagePath)) {
 Write-Host "Validating exact-build initialized image before shadow launch..."
 & $verifier -ImagePath $ImagePath
 
-# The game is started through an already-running Steam process, so launcher-shell
-# environment variables are not a reliable way to reach the game. Hold a named
-# object only while --launch-vr waits for and initializes the probe. The body
-# adapter samples this request once during installation; disposing the mutex
-# leaves no persistent setting for the next run.
+# --launch-vr delegates the actual game start to an already-running Steam
+# process. The launcher can therefore exit before Steam creates penumbra.exe.
+# Keep the per-session request object alive for the complete validation run so
+# the body adapter cannot race the request during its one-time installation
+# sample. Nothing is persisted after this helper exits.
+$existingGame = @(Get-Process -Name 'penumbra' -ErrorAction SilentlyContinue)
+if ($existingGame.Count -ne 0) {
+    throw 'A penumbra.exe process is already running. Close it before starting shadow validation so activation can be proven from a fresh game process.'
+}
+
 $shadowRequestName = 'Local\PenumbraVR.BlackPlague.ReconciliationShadow'
 $shadowRequest = New-Object System.Threading.Mutex -ArgumentList $false, $shadowRequestName
+$gameProcess = $null
 $exitCode = 1
 try {
     Write-Host 'Exact-build verifier passed. Starting Black Plague with reconciliation shadow requested.'
     Write-Host 'Positional translation remains disabled; this mode is telemetry-only.'
     & $launcher '--launch-vr' $GamePath
-    $exitCode = $LASTEXITCODE
+    $launcherExitCode = $LASTEXITCODE
+    if ($launcherExitCode -ne 0) {
+        throw "Probe launcher failed with exit code $launcherExitCode."
+    }
+
+    $deadline = (Get-Date).AddSeconds(60)
+    do {
+        Start-Sleep -Milliseconds 250
+        $gameProcess = Get-Process -Name 'penumbra' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+    } while ($null -eq $gameProcess -and (Get-Date) -lt $deadline)
+
+    if ($null -eq $gameProcess) {
+        throw 'Black Plague did not create penumbra.exe within 60 seconds. The shadow request was not validated.'
+    }
+
+    Write-Host "Black Plague detected (PID $($gameProcess.Id)). Shadow request will remain active until the game exits."
+    Write-Host 'Keep this window open during the validation run.'
+    $gameProcess.WaitForExit()
+    $exitCode = 0
 }
 finally {
     $shadowRequest.Dispose()
