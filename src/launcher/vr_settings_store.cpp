@@ -9,6 +9,8 @@
 #include <vector>
 #include <cerrno>
 #include <cmath>
+#include <cwchar>
+#include <limits>
 
 namespace penumbra_vr::launcher {
 namespace {
@@ -73,6 +75,114 @@ namespace {
     return true;
 }
 
+[[nodiscard]] bool ParseBool(
+    std::wstring_view text,
+    bool& value) noexcept {
+    if (EqualsCaseInsensitive(text, L"true") || text == L"1" ||
+        EqualsCaseInsensitive(text, L"on") ||
+        EqualsCaseInsensitive(text, L"yes")) {
+        value = true;
+        return true;
+    }
+    if (EqualsCaseInsensitive(text, L"false") || text == L"0" ||
+        EqualsCaseInsensitive(text, L"off") ||
+        EqualsCaseInsensitive(text, L"no")) {
+        value = false;
+        return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool ReadBool(
+    const std::filesystem::path& path,
+    const wchar_t* key,
+    bool& value,
+    std::wstring& error) {
+    const auto text = ReadValue(path, key);
+    if (text.empty()) {
+        return true;
+    }
+    if (ParseBool(text, value)) {
+        return true;
+    }
+    error = std::wstring(L"VR/") + key +
+        L" must be true or false in " + path.wstring();
+    return false;
+}
+
+[[nodiscard]] bool ReadVersion(
+    const std::filesystem::path& path,
+    std::uint32_t& version,
+    std::wstring& error) {
+    const auto text = ReadValue(path, L"SettingsVersion");
+    if (text.empty()) {
+        version = 0;
+        return true;
+    }
+    wchar_t* end = nullptr;
+    errno = 0;
+    const unsigned long parsed = std::wcstoul(text.c_str(), &end, 10);
+    if (errno == ERANGE || end != text.c_str() + text.size() ||
+        parsed > (std::numeric_limits<std::uint32_t>::max)()) {
+        error = L"VR/SettingsVersion must be a non-negative integer in " +
+            path.wstring();
+        return false;
+    }
+    version = static_cast<std::uint32_t>(parsed);
+    return true;
+}
+
+[[nodiscard]] bool WriteValue(
+    const std::filesystem::path& path,
+    const wchar_t* key,
+    const std::wstring& value,
+    std::wstring& error) {
+    SetLastError(ERROR_SUCCESS);
+    if (!WritePrivateProfileStringW(L"VR", key, value.c_str(), path.c_str())) {
+        error = Win32Error(L"WritePrivateProfileStringW", GetLastError());
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] std::wstring FloatText(float value) {
+    wchar_t buffer[64]{};
+    swprintf_s(buffer, L"%.9g", static_cast<double>(value));
+    return buffer;
+}
+
+[[nodiscard]] std::wstring ConfigText(std::string_view value) {
+    return std::wstring(value.begin(), value.end());
+}
+
+[[nodiscard]] bool ValidateSettingsPath(
+    const std::filesystem::path& path,
+    bool allow_missing,
+    std::wstring& error) {
+    error.clear();
+    if (path.empty()) {
+        error = L"The VR settings path is empty";
+        return false;
+    }
+    std::error_code filesystem_error;
+    const bool exists = std::filesystem::exists(path, filesystem_error);
+    if (filesystem_error) {
+        const std::string message = filesystem_error.message();
+        error = L"Could not inspect the VR settings file: " +
+            std::wstring(message.begin(), message.end());
+        return false;
+    }
+    if (!exists) {
+        return allow_missing;
+    }
+    if (!std::filesystem::is_regular_file(path, filesystem_error) ||
+        filesystem_error) {
+        error = L"The VR settings path is not a regular file";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 std::filesystem::path DefaultVrSettingsPath(std::wstring& error) {
@@ -101,26 +211,11 @@ bool LoadMonitorMirrorSetting(
     std::wstring& error) {
     enabled = runtime::VrSettings{}.monitor_mirror;
     error.clear();
-    if (path.empty()) {
-        error = L"The VR settings path is empty";
+    if (!ValidateSettingsPath(path, true, error)) {
         return false;
     }
-
-    std::error_code filesystem_error;
-    const bool exists = std::filesystem::exists(path, filesystem_error);
-    if (filesystem_error) {
-        const std::string message = filesystem_error.message();
-        error = L"Could not inspect the VR settings file: " +
-            std::wstring(message.begin(), message.end());
-        return false;
-    }
-    if (!exists) {
+    if (!std::filesystem::exists(path)) {
         return true;
-    }
-    if (!std::filesystem::is_regular_file(path, filesystem_error) ||
-        filesystem_error) {
-        error = L"The VR settings path is not a regular file";
-        return false;
     }
 
     wchar_t value[32]{};
@@ -136,16 +231,7 @@ bool LoadMonitorMirrorSetting(
     }
 
     const std::wstring_view text(value, length);
-    if (EqualsCaseInsensitive(text, L"true") || text == L"1" ||
-        EqualsCaseInsensitive(text, L"on") ||
-        EqualsCaseInsensitive(text, L"yes")) {
-        enabled = true;
-        return true;
-    }
-    if (EqualsCaseInsensitive(text, L"false") || text == L"0" ||
-        EqualsCaseInsensitive(text, L"off") ||
-        EqualsCaseInsensitive(text, L"no")) {
-        enabled = false;
+    if (ParseBool(text, enabled)) {
         return true;
     }
 
@@ -184,25 +270,36 @@ bool SaveMonitorMirrorSetting(
     return true;
 }
 
-bool LoadVrInputSettings(
+bool LoadVrSettings(
     const std::filesystem::path& path,
     runtime::VrSettings& settings,
     std::wstring& error) {
     settings = runtime::VrSettings{};
     error.clear();
-    bool mirror = false;
-    if (!LoadMonitorMirrorSetting(path, mirror, error)) {
+    if (!ValidateSettingsPath(path, true, error)) {
         return false;
     }
-    settings.monitor_mirror = mirror;
+    if (!std::filesystem::exists(path)) {
+        return true;
+    }
+    std::uint32_t source_version = 0;
+    if (!ReadVersion(path, source_version, error)) {
+        return false;
+    }
     if (!ReadFloat(path, L"MoveSpeed", settings.move_speed, error) ||
         !ReadFloat(path, L"MoveDeadZone", settings.move_dead_zone, error) ||
+        !ReadFloat(path, L"HeightOffset", settings.height_offset, error) ||
         !ReadFloat(path, L"SnapTurnAngle", settings.snap_turn_angle, error) ||
         !ReadFloat(path, L"SmoothTurnSpeed", settings.smooth_turn_speed, error) ||
         !ReadFloat(path, L"TurnDeadZone", settings.turn_dead_zone, error) ||
         !ReadFloat(path, L"UiDistance", settings.ui_distance, error) ||
         !ReadFloat(path, L"UiScale", settings.ui_scale, error) ||
-        !ReadFloat(path, L"RenderScale", settings.render_scale, error)) {
+        !ReadFloat(path, L"RenderScale", settings.render_scale, error) ||
+        !ReadBool(path, L"EnhancedVisuals", settings.enhanced_visuals, error) ||
+        !ReadBool(path, L"MonitorMirror", settings.monitor_mirror, error) ||
+        !ReadFloat(path, L"PhysicalCrouchDepth", settings.physical_crouch_depth, error) ||
+        !ReadFloat(path, L"SubtitleScale", settings.subtitle_scale, error) ||
+        !ReadFloat(path, L"PlayerHeight", settings.player_height, error)) {
         return false;
     }
     const auto turn = ReadValue(path, L"TurnMode");
@@ -230,8 +327,103 @@ bool LoadVrInputSettings(
             return false;
         }
     }
-    runtime::NormalizeVrSettings(settings);
+    const auto crouch = ReadValue(path, L"CrouchMode");
+    if (!crouch.empty()) {
+        if (EqualsCaseInsensitive(crouch, L"physical")) {
+            settings.crouch_mode = runtime::VrCrouchMode::physical;
+        } else if (EqualsCaseInsensitive(crouch, L"button")) {
+            settings.crouch_mode = runtime::VrCrouchMode::button;
+        } else if (EqualsCaseInsensitive(crouch, L"hybrid")) {
+            settings.crouch_mode = runtime::VrCrouchMode::hybrid;
+        } else {
+            error = L"VR/CrouchMode must be Physical, Button or Hybrid in " +
+                path.wstring();
+            return false;
+        }
+    }
+    const auto play = ReadValue(path, L"PlayMode");
+    if (!play.empty()) {
+        if (EqualsCaseInsensitive(play, L"standing")) {
+            settings.play_mode = runtime::VrPlayMode::standing;
+        } else if (EqualsCaseInsensitive(play, L"seated")) {
+            settings.play_mode = runtime::VrPlayMode::seated;
+        } else {
+            error = L"VR/PlayMode must be Standing or Seated in " + path.wstring();
+            return false;
+        }
+    }
+    const auto hrtf = ReadValue(path, L"HRTF");
+    if (!hrtf.empty()) {
+        if (EqualsCaseInsensitive(hrtf, L"auto")) {
+            settings.hrtf_mode = runtime::VrHrtfMode::automatic;
+        } else if (EqualsCaseInsensitive(hrtf, L"on")) {
+            settings.hrtf_mode = runtime::VrHrtfMode::on;
+        } else if (EqualsCaseInsensitive(hrtf, L"off")) {
+            settings.hrtf_mode = runtime::VrHrtfMode::off;
+        } else {
+            error = L"VR/HRTF must be Auto, On or Off in " + path.wstring();
+            return false;
+        }
+    }
+    runtime::NormalizeVrSettings(settings, source_version);
     return true;
+}
+
+bool SaveVrSettings(
+    const std::filesystem::path& path,
+    const runtime::VrSettings& source,
+    std::wstring& error) {
+    error.clear();
+    if (path.empty() || path.parent_path().empty()) {
+        error = L"The VR settings path has no parent directory";
+        return false;
+    }
+    std::error_code filesystem_error;
+    std::filesystem::create_directories(path.parent_path(), filesystem_error);
+    if (filesystem_error) {
+        const std::string message = filesystem_error.message();
+        error = L"Could not create the VR settings directory: " +
+            std::wstring(message.begin(), message.end());
+        return false;
+    }
+
+    runtime::VrSettings settings = source;
+    runtime::NormalizeVrSettings(settings);
+    const auto write_float = [&](const wchar_t* key, float value) {
+        return WriteValue(path, key, FloatText(value), error);
+    };
+    const auto write_bool = [&](const wchar_t* key, bool value) {
+        return WriteValue(path, key, value ? L"true" : L"false", error);
+    };
+
+    return write_float(L"MoveSpeed", settings.move_speed) &&
+        write_float(L"MoveDeadZone", settings.move_dead_zone) &&
+        write_float(L"HeightOffset", settings.height_offset) &&
+        WriteValue(path, L"TurnMode", ConfigText(runtime::ToConfigValue(settings.turn_mode)), error) &&
+        write_float(L"SnapTurnAngle", settings.snap_turn_angle) &&
+        write_float(L"SmoothTurnSpeed", settings.smooth_turn_speed) &&
+        write_float(L"TurnDeadZone", settings.turn_dead_zone) &&
+        write_float(L"UiDistance", settings.ui_distance) &&
+        write_float(L"UiScale", settings.ui_scale) &&
+        write_float(L"RenderScale", settings.render_scale) &&
+        write_bool(L"EnhancedVisuals", settings.enhanced_visuals) &&
+        write_bool(L"MonitorMirror", settings.monitor_mirror) &&
+        WriteValue(path, L"CrouchMode", ConfigText(runtime::ToConfigValue(settings.crouch_mode)), error) &&
+        write_float(L"PhysicalCrouchDepth", settings.physical_crouch_depth) &&
+        write_float(L"SubtitleScale", settings.subtitle_scale) &&
+        WriteValue(path, L"Handedness", ConfigText(runtime::ToConfigValue(settings.handedness)), error) &&
+        WriteValue(path, L"PlayMode", ConfigText(runtime::ToConfigValue(settings.play_mode)), error) &&
+        write_float(L"PlayerHeight", settings.player_height) &&
+        WriteValue(path, L"HRTF", ConfigText(runtime::ToConfigValue(settings.hrtf_mode)), error) &&
+        WriteValue(path, L"SettingsVersion",
+            std::to_wstring(runtime::kCurrentVrSettingsVersion), error);
+}
+
+bool LoadVrInputSettings(
+    const std::filesystem::path& path,
+    runtime::VrSettings& settings,
+    std::wstring& error) {
+    return LoadVrSettings(path, settings, error);
 }
 
 } // namespace penumbra_vr::launcher

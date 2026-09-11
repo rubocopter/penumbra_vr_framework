@@ -759,7 +759,7 @@ bool StartRemoteVr(HANDLE process, DWORD pid, const std::filesystem::path& probe
                    std::wstring& error) {
     const auto settings = penumbra_vr::launcher::DefaultVrSettingsPath(error);
     penumbra_vr::runtime::VrSettings profile;
-    if (settings.empty() || !penumbra_vr::launcher::LoadVrInputSettings(settings,profile,error))
+    if (settings.empty() || !penumbra_vr::launcher::LoadVrSettings(settings,profile,error))
         return false;
     const bool mirror=profile.monitor_mirror;
     std::wcout << L"VR settings: " << settings << L"; monitor mirror "
@@ -808,7 +808,7 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
     // Reading preferences is part of preflight; do not open Steam if corrupt.
     const auto settings = penumbra_vr::launcher::DefaultVrSettingsPath(error);
     penumbra_vr::runtime::VrSettings profile;
-    if (settings.empty() || !penumbra_vr::launcher::LoadVrInputSettings(settings,profile,error)) {
+    if (settings.empty() || !penumbra_vr::launcher::LoadVrSettings(settings,profile,error)) {
         std::wcerr << error << L'\n';
         return 5;
     }

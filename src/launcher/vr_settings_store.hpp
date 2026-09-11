@@ -19,8 +19,21 @@ namespace penumbra_vr::launcher {
     bool enabled,
     std::wstring& error);
 
-// Loads the input, menu and render subset currently consumed by the binary backends.
-// Missing keys retain normalized Rework defaults; malformed keys fail closed.
+// Loads the complete game-neutral VR settings schema shared with the Overture
+// reference implementation. Missing keys retain normalized Rework defaults;
+// malformed recognized keys fail closed.
+[[nodiscard]] bool LoadVrSettings(
+    const std::filesystem::path& path,
+    runtime::VrSettings& settings,
+    std::wstring& error);
+
+[[nodiscard]] bool SaveVrSettings(
+    const std::filesystem::path& path,
+    const runtime::VrSettings& settings,
+    std::wstring& error);
+
+// Compatibility alias retained for existing binary-backend callers while the
+// shared settings editor migrates them to the complete schema.
 [[nodiscard]] bool LoadVrInputSettings(
     const std::filesystem::path& path,
     runtime::VrSettings& settings,

@@ -687,7 +687,7 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     std::wstring settings_error;
     const auto settings_path =
         penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
-    if (settings_path.empty() || !penumbra_vr::launcher::LoadVrInputSettings(
+    if (settings_path.empty() || !penumbra_vr::launcher::LoadVrSettings(
             settings_path, g_vr_settings, settings_error)) {
         penumbra_vr::probe::WriteLog("VR input settings fallback to defaults: %s",
             WideToUtf8(settings_error).c_str());
