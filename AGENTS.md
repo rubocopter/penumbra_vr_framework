@@ -1,6 +1,6 @@
 # Penumbra VR Framework — Agent instructions
 
-Read this file before changing code. Then read `CODEX_HANDOFF.md` for the current checkpoint, `DEBUG_HANDOFF.md` for known regression boundaries, and `docs/REWORK_PORTING_PLAN.md` for the extraction contract.
+Read this file before changing code. Then read `docs/internal/CODEX_HANDOFF.md` for the current checkpoint, `docs/internal/DEBUG_HANDOFF.md` for known regression boundaries, and `docs/REWORK_PORTING_PLAN.md` for the extraction contract.
 
 ## Core rule
 
@@ -21,7 +21,7 @@ Rework is not automatically the best implementation of every game-neutral subsys
 ## Before editing
 
 1. Inspect the current repository state and relevant owning files.
-2. Read `CODEX_HANDOFF.md` and `DEBUG_HANDOFF.md`.
+2. Read `docs/internal/CODEX_HANDOFF.md` and `docs/internal/DEBUG_HANDOFF.md`.
 3. For a Rework-derived behavior, inspect the exact Rework implementation before writing new code.
 4. Preserve existing ownership boundaries unless target evidence proves they are insufficient.
 5. Treat every exact-build address, structure field, signature and calling convention as evidence-backed data, never as a generic HPL contract.
@@ -94,8 +94,8 @@ After meaningful changes, update only the relevant documentation, but keep these
 - `README.md`
 - `ROADMAP.md`
 - `CHANGELOG.md`
-- `CODEX_HANDOFF.md`
-- `DEBUG_HANDOFF.md`
+- `docs/internal/CODEX_HANDOFF.md`
+- `docs/internal/DEBUG_HANDOFF.md`
 - `docs/REWORK_PORTING_PLAN.md`
 - `docs/OVERTURE_BACKEND_MIGRATION.md`
 - `docs/VR_STARTUP_AND_CONTROLLERS.md`
