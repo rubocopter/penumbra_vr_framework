@@ -97,6 +97,7 @@ pvr_enable_warnings(pvr_stereo_render_policy)
 
 add_library(pvr_vr_settings STATIC
     src/runtime/vr_settings.cpp
+    src/runtime/vr_settings_editor.cpp
 )
 target_include_directories(pvr_vr_settings PUBLIC src/runtime)
 pvr_enable_warnings(pvr_vr_settings)
@@ -468,6 +469,14 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_vr_settings_test)
 
     add_test(NAME vr_settings COMMAND pvr_vr_settings_test)
+
+    add_executable(pvr_vr_settings_editor_test
+        tests/vr_settings_editor/vr_settings_editor_test.cpp
+    )
+    target_link_libraries(pvr_vr_settings_editor_test PRIVATE pvr_vr_settings)
+    pvr_enable_warnings(pvr_vr_settings_editor_test)
+
+    add_test(NAME vr_settings_editor COMMAND pvr_vr_settings_editor_test)
 
     add_executable(pvr_vr_settings_store_test
         tests/vr_settings_store/vr_settings_store_test.cpp
