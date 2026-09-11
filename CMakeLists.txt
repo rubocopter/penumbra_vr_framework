@@ -109,6 +109,14 @@ target_include_directories(pvr_vr_settings_store PUBLIC src/launcher)
 target_link_libraries(pvr_vr_settings_store PUBLIC pvr_vr_settings)
 pvr_enable_warnings(pvr_vr_settings_store)
 
+add_library(pvr_black_plague_settings STATIC
+    src/backends/black_plague/vr_settings_capabilities.cpp
+)
+target_include_directories(pvr_black_plague_settings PUBLIC
+    src/backends/black_plague src/runtime)
+target_link_libraries(pvr_black_plague_settings PUBLIC pvr_vr_settings)
+pvr_enable_warnings(pvr_black_plague_settings)
+
 add_library(pvr_vr_input_state STATIC
     src/runtime/vr_input_state.cpp
 )
@@ -218,6 +226,7 @@ target_link_libraries(
         pvr_hpl1_camera_adapter
         pvr_vr_math
         pvr_black_plague_body_adapter
+        pvr_black_plague_settings
         pvr_stereo_render_policy)
 target_link_libraries(pvr_black_plague_backend_probe PUBLIC pvr_vr_native_intents pvr_iat_hook)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
@@ -477,6 +486,15 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_vr_settings_editor_test)
 
     add_test(NAME vr_settings_editor COMMAND pvr_vr_settings_editor_test)
+
+    add_executable(pvr_black_plague_vr_settings_test
+        tests/black_plague_settings/black_plague_vr_settings_test.cpp
+    )
+    target_link_libraries(
+        pvr_black_plague_vr_settings_test PRIVATE pvr_black_plague_settings)
+    pvr_enable_warnings(pvr_black_plague_vr_settings_test)
+
+    add_test(NAME black_plague_vr_settings COMMAND pvr_black_plague_vr_settings_test)
 
     add_executable(pvr_vr_settings_store_test
         tests/vr_settings_store/vr_settings_store_test.cpp
