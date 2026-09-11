@@ -39,3 +39,16 @@ jobs:
           cmake --build --preset release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           ctest --preset release --output-on-failure -E '^opengl_eye_targets$'
+
+  overture-regression:
+    name: Overture Release regression
+    runs-on: windows-2022
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Build and run autonomous Overture validation
+        shell: pwsh
+        run: ./tools/Build-OvertureProduct.ps1 -Configuration Release -Full
