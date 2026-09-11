@@ -91,6 +91,8 @@ The Framework-owned product host under `products/overture` contains the minimum 
 
 The exact autonomous Release artifact has completed an initial functional SteamVR/headset/controller pass without an evident Rework regression. Exhaustive feature/hardware coverage remains separate from that completed integration milestone.
 
+The autonomous Release build is now also a dedicated Windows CI regression gate. After the shared tracking/body extraction, the clean CI job completed `Build-OvertureProduct.ps1 -Configuration Release -Full` successfully, preserving the product-level project/shader/visual/texture/LAA/`VRTrackingTest` checks as a guard against shared-runtime regressions.
+
 ## Black Plague backend
 
 The Black Plague backend is exact-build binary integration. Unknown hashes fail closed.
@@ -153,8 +155,15 @@ BP's accepted native movement is not a response to the physical plan: that plan
 was never injected. A collision-aware request in metres, separated from native
 acceleration and owned by the single tick, remains a missing adapter capability.
 Positional translation stays zero; a successful shadow capture alone cannot
-justify enabling it. Portable tests pass, but Windows host validation remains
-pending. See [the milestone report](docs/internal/TRACKING_BODY_RECONCILIATION.md).
+justify enabling it.
+
+The shared extraction and shadow wiring are now **host-tested** on Windows x86.
+GitHub Actions passed metadata validation plus Debug/Release root CTest and a
+clean autonomous Overture Release regression after the extraction. Hosted CI
+still cannot replace the local Black Plague exact-build initialized-image gate.
+After that local verifier passes, the next evidence step is a shadow-only live
+capture with positional translation still zero. See
+[`docs/internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md`](docs/internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
 Camera/head-bob/footstep-bob ownership is a separate comfort track. It must not be “fixed” by speculative offsets while the body reconciliation milestone is in progress.
 

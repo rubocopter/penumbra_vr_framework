@@ -66,11 +66,14 @@ Shared/runtime behavior now includes:
 - fixed `0.05 m` physical steps;
 - Rework locomotion policy of `1.5 m/s` walk and `2.25 m/s` sprint;
 - common interaction reach of `0.18 m`;
-- accepted-body-motion observation through `runtime::VrAcceptedBodyMotion`.
+- accepted-body-motion observation through `runtime::VrAcceptedBodyMotion`;
+- stateless body reconciliation planning, physical rejection correction and locomotion-anchor carry in `vr_locomotion.*`.
 
 `OvertureBodyAdapter` keeps source-game HPL body position, feet height, collision movement and jump calls behind the game boundary.
 
 The Framework-owned source host under `products/overture` builds and packages independently of the Rework checkout. The exact autonomous Release artifact has completed an initial SteamVR/headset/controller pass with no evident regression versus the previously tested Rework behavior. Exhaustive feature/hardware equivalence remains a separate evidence gate.
+
+The autonomous Overture Release pipeline is now also a dedicated Windows CI regression gate. After the shared reconciliation extraction, a clean Windows 2022 job passed `Build-OvertureProduct.ps1 -Configuration Release -Full`, retaining the existing project/shader/visual/texture/LAA/`VRTrackingTest` checks.
 
 ## Black Plague body boundary state
 
@@ -86,7 +89,7 @@ Live evidence establishes:
 - physical crouch body/shape swap from `1.65 m` to `0.95 m` preserving feet Y;
 - native Jump-state vertical ownership separate from the horizontal request/solver path.
 
-The first narrow `BlackPlagueBodyAdapter` is now live-tested.
+The first narrow `BlackPlagueBodyAdapter` is live-tested.
 
 Ownership is intentionally singular:
 
@@ -113,22 +116,25 @@ Do not force these into the first common body contract:
 
 The first shared contract exists to separate **policy** from **native mechanism**, not to flatten every game difference immediately.
 
-## Current priority — Black Plague tracking/body reconciliation
+## Current priority — Black Plague shadow validation, then physical displacement mechanism
 
-The body/collision/adaptor mapping milestone is complete enough that more probing should require a concrete contradiction.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction is also host-tested; the next gate is no longer generic host implementation work.
 
 Current order:
 
 1. Preserve the completed Overture source host and validated artifact behavior.
 2. Preserve the live-tested single-owner Black Plague body adapter boundary.
-3. Connect a minimal shared tracking/body reconciliation policy to that boundary while keeping Black Plague positional HMD translation at zero during host testing.
-4. Prove the policy still preserves free motion, full block and sliding through accepted displacement and does not introduce a second body update.
-5. Validate shadow-only tracking/body observations first. Active room-scale additionally requires a demonstrated physical displacement injection capability; native analog intent is not that capability.
-6. After reconciliation is stable, decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
-7. Keep physical crouch and jump comfort/tuning as separate milestones.
-8. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body adapter/reconciliation contract.
-9. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
-10. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
+3. Preserve the host-tested shared reconciliation/shadow implementation with Black Plague positional HMD translation at zero.
+4. Rerun the local exact-build verifier against the supported initialized image / local research inputs before the next live DLL capture.
+5. Validate shadow-only tracking/body observations in the live Black Plague process: stationary baseline, small physical HMD deltas, native free/block/slide, recenter/body replacement and one native body update per tick.
+6. Do not treat the shadow plan as accepted/rejected physical motion; no physical request is injected.
+7. After shadow validation, identify and demonstrate a bounded collision-aware physical X/Z displacement request in metres, consumed by the existing single native tick. Native analog intent is not that capability.
+8. Only after that physical boundary has separate evidence should active room-scale/positional tracking be enabled for live/headset validation.
+9. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
+10. Keep physical crouch and jump comfort/tuning as separate milestones.
+11. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.
+12. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
+13. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
 
 This order proves each boundary in isolation and prevents a game-adapter defect from being mistaken for a shared-runtime defect.
 
@@ -144,6 +150,7 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 
 - `src/runtime/vr_tracking_space.*`, `src/runtime/vr_locomotion.*`, `src/runtime/vr_interaction_policy.*` and `src/backends/overture/*` port the proven Overture/Rework tracking/body policy behind a narrow source-game adapter.
 - `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
+- `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and `CarryHeadAnchorWithLocomotion` now provide the shared stateless reconciliation phases used by Overture and the Black Plague shadow consumer.
 - `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.
 - `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4 tone/ambient/dark-diffuse/sharpening/glowstick-halo behavior; GPU renderer-stage integration remains pending.
 - `src/audio/spatial_audio.*` owns HRTF config text, distance/occlusion low-pass behavior and the mine-gallery EFX preset; safe binary audio hook work remains open.
@@ -174,7 +181,10 @@ The next Black Plague body work should consume existing evidence, not restart it
 The remaining plan/rebase, physical rejection correction and native anchor carry
 phases have moved from `OvertureBackend` to `vr_locomotion.*`. The BP consumer
 is shadow-only and default-off: it cannot inject a physical request. Portable
-tests and the Overture differential trace pass; Windows builds/CTest/verifiers
-remain pending. The exact Rework sequence, ownership table, API, test results
-and missing injection capability are in
-[the internal report](internal/TRACKING_BODY_RECONCILIATION.md).
+tests and the Overture differential trace passed during implementation. Post-push
+Windows CI then passed root metadata/Debug/Release tests and the autonomous
+Overture Release regression gate. The exact Rework sequence, ownership table,
+API and implementation-time test results remain in
+[the internal report](internal/TRACKING_BODY_RECONCILIATION.md); the post-push
+host result and next live gate are recorded in
+[the validation follow-up](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).

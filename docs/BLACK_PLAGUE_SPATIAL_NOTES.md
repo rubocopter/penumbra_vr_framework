@@ -14,12 +14,19 @@ No hay inyección física ni cambios de cámara. El diagnóstico está desactiva
 por defecto y registra un resumen cada 300 swap frames si se habilita mediante
 `PVR_BP_RECONCILIATION_SHADOW=1` en el proceso del juego antes del attach.
 
-Los tests portables pasan. Build/CTest/verificadores Windows y validación live
-siguen pendientes: no declarar este milestone host-complete todavía. La
-capability pendiente es una solicitud en metros que resuelva colisiones dentro
-del tick único y cuya aceptación pueda distinguirse de la locomoción nativa.
-No ampliar reversing automáticamente. Véase el
-[informe detallado](internal/TRACKING_BODY_RECONCILIATION.md).
+El milestone está ahora **host-tested**. Tras el push, GitHub Actions pasó
+metadata, configuración Win32 y build/CTest Debug+Release del Framework. También
+se añadió y pasó un gate CI separado que reconstruye Overture Release con
+`Build-OvertureProduct.ps1 -Configuration Release -Full`, conservando sus
+comprobaciones históricas. Esto no promueve ningún estado live/headset de BP.
+
+La traslación posicional continúa a cero. La capability pendiente sigue siendo
+una solicitud física X/Z en metros que resuelva colisiones dentro del tick único
+y cuya aceptación pueda distinguirse de la locomoción nativa. El siguiente gate
+es rerun local del verificador exact-build sobre la captura/binario soportado y,
+después, una captura **shadow-only live**. No ampliar reversing automáticamente.
+Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
+[el seguimiento post-push](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
 ## Player/body/movement/collision: mapa estático e instrumentación
 
@@ -80,10 +87,10 @@ firmas directamente contra la captura inicializada, sin modificar procesos.
 El milestone de probing corporal quedó cerrado después de las capturas PID
 24780, 29672 y 8628. Sprint/crouch/jump ownership está caracterizado, el salto
 tiene burst live completo y el primer `BlackPlagueBodyAdapter` está live-tested.
-No se deben añadir más sondas corporales por defecto. El siguiente paso útil es
-conectar reconciliación tracking/body a través del adapter existente, manteniendo
-la traslación HMD a cero durante la validación host y conservando cámara/bob como
-una pista de comfort separada.
+No se deben añadir más sondas corporales por defecto. La reconciliación shadow
+sobre ese adapter ya está host-tested; el siguiente paso útil es verificar
+localmente el exact-build y realizar la captura shadow-only live, manteniendo la
+traslación HMD a cero y conservando cámara/bob como una pista de comfort separada.
 
 ### Comparación concreta con Overture
 
@@ -103,9 +110,11 @@ D6E00`. BP conserva sus límites 3.0/4.5 m/s y su vertical/jump nativo en este
 checkpoint; no se emulan `vr_velocity`, `vr_stepstaticonly` ni argumentos de
 solver que no existen en la build binaria.
 
-La siguiente extracción debe ser pequeña: política neutral de reconciliación
-tracking/body sobre intent horizontal + desplazamiento aceptado. No debe mezclar
-a la vez tuning 1.5/2.25, crouch físico, jump, bob o cámara.
+La segunda extracción común también está hecha: `PlanBodyReconciliation`,
+`ReconcilePhysicalBodyMotion` y `CarryHeadAnchorWithLocomotion` viven en
+`vr_locomotion.*`. Overture los ejecuta en el orden probado; BP usa sólo el plan
+y carry en shadow porque aún carece de una observación física correspondiente a
+un request inyectado. No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
 
 ### Ownership del movimiento plano: estado confirmado
 
@@ -310,16 +319,19 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 
 ## Verificación y límites
 
-Los 26 tests pasan en la configuración Release actual. El test corporal
-ejecuta la sonda exact-build sobre una imagen sintética y el test espacial
-ejecuta el código del adaptador en una imagen sintética con trampolines a dobles
-nativos; no prueba Newton ni el juego real. El test OpenGL usa el driver WGL,
-verifica píxeles de guantes y oclusión/restauración de estado en ambos ojos.
-La prueba matemática de agarre inyecta un pico extremo en una ventana estable y
-comprueba que la estimación conserva la mediana; una sola muestra produce cero.
-El verificador PowerShell contrasta la captura inicializada sin modificar procesos.
+La configuración raíz contiene ahora 27 tests. El CI Windows x86 pasa los gates
+Debug y Release establecidos, excluyendo deliberadamente `opengl_eye_targets`
+en el runner SDK-less porque esa prueba necesita el driver WGL real. El test
+corporal ejecuta la sonda exact-build sobre una imagen sintética y el test
+espacial ejecuta el código del adaptador en una imagen sintética con trampolines
+a dobles nativos; no prueba Newton ni el juego real. La prueba matemática de
+agarre inyecta un pico extremo en una ventana estable y comprueba que la
+estimación conserva la mediana; una sola muestra produce cero. El verificador
+PowerShell local contrasta la captura inicializada sin modificar procesos.
 
-El boundary corporal/adapter ya está live-tested, pero los hitos amplios de
-jugabilidad todavía no están certificados. Positional HMD/body reconciliation,
-herramientas definitivas, palm collision y mecanismos articulados siguen
-pendientes, además de sus pruebas con visor.
+El boundary corporal/adapter ya está live-tested y la reconciliación shadow está
+host-tested, pero los hitos amplios de jugabilidad todavía no están certificados.
+La siguiente evidencia de esta pista es el exact-build verifier local seguido de
+una captura shadow-only live con traslación cero. Room-scale activo, herramientas
+definitivas, palm collision y mecanismos articulados siguen pendientes, además
+de sus pruebas con visor.
