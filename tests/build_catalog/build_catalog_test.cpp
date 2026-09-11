@@ -12,6 +12,8 @@ struct ExpectedBuild {
     std::string_view sha256;
     penumbra_vr::GameId game;
     std::string_view id;
+    penumbra_vr::BuildVariant variant;
+    std::string_view canonical_sha256;
     bool black_plague_probe_allowed;
 };
 
@@ -23,24 +25,48 @@ int main() {
             "95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448",
             penumbra_vr::GameId::overture,
             "overture-retail-observed",
+            penumbra_vr::BuildVariant::observed,
+            "95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448",
             false,
         },
         {
             "A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71",
             penumbra_vr::GameId::overture,
             "overture-vr-rework-v0.1.0",
+            penumbra_vr::BuildVariant::observed,
+            "A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71",
             false,
         },
         {
             "FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF",
             penumbra_vr::GameId::black_plague,
             "black-plague-steam-observed",
+            penumbra_vr::BuildVariant::observed,
+            "FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF",
+            true,
+        },
+        {
+            "DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196",
+            penumbra_vr::GameId::black_plague,
+            "black-plague-steam-observed",
+            penumbra_vr::BuildVariant::large_address_aware,
+            "FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF",
             true,
         },
         {
             "B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2",
             penumbra_vr::GameId::requiem,
             "requiem-steam-observed",
+            penumbra_vr::BuildVariant::observed,
+            "B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2",
+            false,
+        },
+        {
+            "577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955",
+            penumbra_vr::GameId::requiem,
+            "requiem-steam-observed",
+            penumbra_vr::BuildVariant::large_address_aware,
+            "B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2",
             false,
         },
     };
@@ -50,6 +76,8 @@ int main() {
             penumbra_vr::FindKnownBuild(expected.sha256);
         if (build == nullptr || build->game != expected.game ||
             build->id != expected.id ||
+            build->variant != expected.variant ||
+            build->canonical_sha256 != expected.canonical_sha256 ||
             build->black_plague_probe_allowed !=
                 expected.black_plague_probe_allowed) {
             std::cerr << "Known-build catalogue entry does not match "

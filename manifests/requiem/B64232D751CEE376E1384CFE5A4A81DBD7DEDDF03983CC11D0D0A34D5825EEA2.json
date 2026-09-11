@@ -7,6 +7,13 @@
     "machine": "x86",
     "largeAddressAware": false,
     "sha256": "B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2",
+    "transformedVariants": [
+      {
+        "kind": "large-address-aware",
+        "largeAddressAware": true,
+        "sha256": "577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955"
+      }
+    ],
     "preferredImageBase": "0x00400000"
   },
   "protection": {

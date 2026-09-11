@@ -14,21 +14,43 @@ $knownBuilds = @{
     '95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448' = @{
         Game = 'Overture'
         BuildId = 'overture-retail-observed'
+        Variant = 'observed'
+        CanonicalSHA256 = '95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448'
         Status = 'recognized-only'
     }
     'A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71' = @{
         Game = 'Overture'
         BuildId = 'overture-vr-rework-v0.1.0'
+        Variant = 'observed'
+        CanonicalSHA256 = 'A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71'
         Status = 'external-rework'
     }
     'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF' = @{
         Game = 'Black Plague'
         BuildId = 'black-plague-steam-observed'
+        Variant = 'observed'
+        CanonicalSHA256 = 'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF'
+        Status = 'research-target'
+    }
+    'DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196' = @{
+        Game = 'Black Plague'
+        BuildId = 'black-plague-steam-observed'
+        Variant = 'large-address-aware'
+        CanonicalSHA256 = 'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF'
         Status = 'research-target'
     }
     'B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2' = @{
         Game = 'Requiem'
         BuildId = 'requiem-steam-observed'
+        Variant = 'observed'
+        CanonicalSHA256 = 'B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2'
+        Status = 'research-target'
+    }
+    '577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955' = @{
+        Game = 'Requiem'
+        BuildId = 'requiem-steam-observed'
+        Variant = 'large-address-aware'
+        CanonicalSHA256 = 'B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2'
         Status = 'research-target'
     }
 }
@@ -98,6 +120,8 @@ $results = foreach ($candidatePath in $Path) {
         KnownBuild = ($null -ne $known)
         Game = if ($null -ne $known) { $known.Game } else { 'Unknown' }
         BuildId = if ($null -ne $known) { $known.BuildId } else { 'unknown' }
+        Variant = if ($null -ne $known) { $known.Variant } else { 'unknown' }
+        CanonicalSHA256 = if ($null -ne $known) { $known.CanonicalSHA256 } else { $null }
         Status = if ($null -ne $known) { $known.Status } else { 'unknown' }
         SupportedByThisRepository = $false
     }

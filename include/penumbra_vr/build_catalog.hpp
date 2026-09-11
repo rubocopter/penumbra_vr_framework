@@ -12,10 +12,17 @@ enum class GameId {
     requiem,
 };
 
+enum class BuildVariant {
+    observed,
+    large_address_aware,
+};
+
 struct KnownBuild {
     GameId game;
     std::string_view id;
     std::string_view sha256;
+    BuildVariant variant;
+    std::string_view canonical_sha256;
     bool black_plague_probe_allowed;
 };
 

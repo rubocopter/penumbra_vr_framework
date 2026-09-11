@@ -26,13 +26,15 @@ foreach ($jsonFile in $jsonFiles) {
 $catalogSourcePath = Join-Path $repositoryRoot 'src\common\build_catalog.cpp'
 $catalogSource = Get-Content -LiteralPath $catalogSourcePath -Raw
 $catalogPattern = [regex]::new(
-    '\{GameId::(?<game>[a-z_]+),\s*"(?<id>[^"]+)",\s*"(?<sha>[A-F0-9]{64})",\s*(?<probe>true|false)\}',
+    '\{GameId::(?<game>[a-z_]+),\s*"(?<id>[^"]+)",\s*"(?<sha>[A-F0-9]{64})",\s*BuildVariant::(?<variant>[a-z_]+),\s*"(?<canonical>[A-F0-9]{64})",\s*(?<probe>true|false)\}',
     [System.Text.RegularExpressions.RegexOptions]::Singleline)
 $catalogEntries = @($catalogPattern.Matches($catalogSource) | ForEach-Object {
     [pscustomobject]@{
         Game = $_.Groups['game'].Value
         Id = $_.Groups['id'].Value
         Sha256 = $_.Groups['sha'].Value
+        Variant = $_.Groups['variant'].Value
+        CanonicalSha256 = $_.Groups['canonical'].Value
         ProbeAllowed = $_.Groups['probe'].Value -eq 'true'
     }
 })
@@ -43,12 +45,40 @@ if (-not $catalogEntries) {
 if (($catalogEntries.Sha256 | Sort-Object -Unique).Count -ne $catalogEntries.Count) {
     throw 'The compiled known-build catalogue contains duplicate SHA-256 values.'
 }
-if (($catalogEntries.Id | Sort-Object -Unique).Count -ne $catalogEntries.Count) {
-    throw 'The compiled known-build catalogue contains duplicate build IDs.'
+$catalogIdentityVariants = @($catalogEntries | ForEach-Object { "$($_.Game)|$($_.Id)|$($_.Variant)" })
+if (($catalogIdentityVariants | Sort-Object -Unique).Count -ne $catalogIdentityVariants.Count) {
+    throw 'The compiled known-build catalogue contains duplicate game/build/variant identities.'
+}
+foreach ($catalogEntry in $catalogEntries) {
+    if ($catalogEntry.Variant -eq 'observed') {
+        if ($catalogEntry.Sha256 -cne $catalogEntry.CanonicalSha256) {
+            throw "Observed build '$($catalogEntry.Id)' does not use its own SHA-256 as canonical identity."
+        }
+        continue
+    }
+    if ($catalogEntry.Variant -ne 'large_address_aware') {
+        throw "Known build '$($catalogEntry.Id)' uses unsupported variant '$($catalogEntry.Variant)'."
+    }
+    if ($catalogEntry.Sha256 -ceq $catalogEntry.CanonicalSha256) {
+        throw "Large Address Aware variant '$($catalogEntry.Id)' must differ from its canonical SHA-256."
+    }
+    $canonicalEntry = @($catalogEntries | Where-Object {
+        $_.Game -eq $catalogEntry.Game -and
+        $_.Id -eq $catalogEntry.Id -and
+        $_.Variant -eq 'observed' -and
+        $_.Sha256 -ceq $catalogEntry.CanonicalSha256
+    })
+    if ($canonicalEntry.Count -ne 1) {
+        throw "Large Address Aware variant '$($catalogEntry.Id)' does not resolve to exactly one canonical observed build."
+    }
+    if ($canonicalEntry[0].ProbeAllowed -ne $catalogEntry.ProbeAllowed) {
+        throw "Large Address Aware variant '$($catalogEntry.Id)' changes probe authorization relative to its canonical build."
+    }
 }
 
 $manifestFiles = @(Get-ChildItem -LiteralPath $manifestRoot -Recurse -File -Filter '*.json')
 $manifestHashes = @()
+$manifestVariantHashes = @()
 foreach ($manifestFile in $manifestFiles) {
     $manifest = Read-JsonFile $manifestFile.FullName
     $relativePath = $manifestFile.FullName.Substring($repositoryRoot.Length + 1)
@@ -73,7 +103,9 @@ foreach ($manifestFile in $manifestFiles) {
         throw "$relativePath does not have exactly one matching compiled catalogue entry."
     }
     if ($catalogEntry[0].Game -ne $manifest.game -or
-        $catalogEntry[0].Id -ne $manifest.buildId) {
+        $catalogEntry[0].Id -ne $manifest.buildId -or
+        $catalogEntry[0].Variant -ne 'observed' -or
+        $catalogEntry[0].CanonicalSha256 -cne $fileHash) {
         throw "$relativePath disagrees with the compiled catalogue game or build ID."
     }
     if ($manifest.game -eq 'black_plague' -and -not $catalogEntry[0].ProbeAllowed) {
@@ -83,10 +115,44 @@ foreach ($manifestFile in $manifestFiles) {
         throw "$relativePath unexpectedly allows the Black Plague probe."
     }
     $manifestHashes += $fileHash
+
+    if ($manifest.executable.PSObject.Properties.Name -contains 'transformedVariants') {
+        foreach ($variant in @($manifest.executable.transformedVariants)) {
+            if ($variant.kind -ne 'large-address-aware') {
+                throw "$relativePath declares unsupported transformed variant '$($variant.kind)'."
+            }
+            if ($variant.sha256 -cnotmatch '^[A-F0-9]{64}$') {
+                throw "$relativePath transformed variant must use a canonical uppercase SHA-256."
+            }
+            if ($variant.largeAddressAware -ne $true) {
+                throw "$relativePath Large Address Aware variant must declare largeAddressAware=true."
+            }
+
+            $variantCatalogEntry = @($catalogEntries | Where-Object { $_.Sha256 -ceq $variant.sha256 })
+            if ($variantCatalogEntry.Count -ne 1) {
+                throw "$relativePath transformed variant does not have exactly one matching compiled catalogue entry."
+            }
+            if ($variantCatalogEntry[0].Game -ne $manifest.game -or
+                $variantCatalogEntry[0].Id -ne $manifest.buildId -or
+                $variantCatalogEntry[0].Variant -ne 'large_address_aware' -or
+                $variantCatalogEntry[0].CanonicalSha256 -cne $fileHash -or
+                $variantCatalogEntry[0].ProbeAllowed -ne $catalogEntry[0].ProbeAllowed) {
+                throw "$relativePath transformed variant disagrees with its canonical build identity."
+            }
+            $manifestVariantHashes += $variant.sha256
+        }
+    }
 }
 
-if (($manifestHashes | Sort-Object -Unique).Count -ne $manifestHashes.Count) {
+if ((@($manifestHashes + $manifestVariantHashes) | Sort-Object -Unique).Count -ne
+    @($manifestHashes + $manifestVariantHashes).Count) {
     throw 'Exact-build manifests contain duplicate executable hashes.'
+}
+
+$catalogLaaHashes = @($catalogEntries | Where-Object { $_.Variant -eq 'large_address_aware' } | ForEach-Object { $_.Sha256 } | Sort-Object)
+$documentedLaaHashes = @($manifestVariantHashes | Sort-Object)
+if (@(Compare-Object -ReferenceObject $catalogLaaHashes -DifferenceObject $documentedLaaHashes).Count -ne 0) {
+    throw 'The compiled Large Address Aware build variants and manifest transformed variants disagree.'
 }
 
 $actionManifestPath = Join-Path $openVrAssetRoot 'actions.json'
