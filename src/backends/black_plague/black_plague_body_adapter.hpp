@@ -58,4 +58,18 @@ struct BlackPlagueShadowTelemetry {
 };
 [[nodiscard]] BlackPlagueShadowTelemetry ConsumeBlackPlagueShadowTelemetry() noexcept;
 
+// Installation-time state for the default-off shadow diagnostic. This is
+// intentionally observation-only: callers can prove how the one-shot request
+// was received without changing body or camera ownership.
+enum class BlackPlagueShadowRequestSource : std::uint8_t {
+    disabled,
+    environment,
+    mutex,
+};
+struct BlackPlagueShadowStatus {
+    bool enabled = false;
+    BlackPlagueShadowRequestSource source = BlackPlagueShadowRequestSource::disabled;
+};
+[[nodiscard]] BlackPlagueShadowStatus ReadBlackPlagueShadowStatus() noexcept;
+
 } // namespace penumbra_vr::backends::black_plague

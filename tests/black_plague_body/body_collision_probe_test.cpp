@@ -216,11 +216,30 @@ int RunBodyCollisionProbeTest() {
     if (!RemoveBlackPlagueBodyAdapter(error)) return 29;
     SetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW", nullptr);
     if (!InstallBlackPlagueBodyAdapter(error)) return 30;
+    if (ReadBlackPlagueShadowStatus().enabled) return 33;
     PublishBlackPlagueShadowTracking(head, 0.0F, true);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
     if (ConsumeBlackPlagueShadowTelemetry().observed_ticks != 0 ||
         g_native_update_calls != calls_before + 7) return 31;
     if (!RemoveBlackPlagueBodyAdapter(error)) return 32;
+    HANDLE shadow_mutex = CreateMutexW(nullptr, FALSE,
+        L"Local\\PenumbraVR.BlackPlague.ReconciliationShadow");
+    if (shadow_mutex == nullptr) return 34;
+    if (!InstallBlackPlagueBodyAdapter(error)) {
+        CloseHandle(shadow_mutex);
+        return 35;
+    }
+    const auto shadow_status = ReadBlackPlagueShadowStatus();
+    if (!shadow_status.enabled || shadow_status.source !=
+        BlackPlagueShadowRequestSource::mutex) {
+        CloseHandle(shadow_mutex);
+        return 36;
+    }
+    if (!RemoveBlackPlagueBodyAdapter(error)) {
+        CloseHandle(shadow_mutex);
+        return 37;
+    }
+    CloseHandle(shadow_mutex);
 
     if (!RemoveBodyCollisionProbe(error)) {
         VirtualFree(image, 0, MEM_RELEASE);

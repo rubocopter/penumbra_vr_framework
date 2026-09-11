@@ -6,6 +6,10 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- One-shot Black Plague shadow-install telemetry records `disabled`,
+  `environment` or transient `mutex` activation, making a live request
+  distinguishable from a silent no-tick session. The synthetic default-off,
+  environment and mutex paths are covered by the body-probe test.
 - Shared stateless tracking/body planning, physical rejection correction and locomotion anchor carry, consumed by Overture without changing the tested sequence.
 - Default-off Black Plague tracking/body shadow diagnostics (`PVR_BP_RECONCILIATION_SHADOW=1`), using existing tracking and native body callbacks; no physical request injection or positional camera translation. Portable tests and Windows x86 host validation pass; live shadow validation remains pending.
 - Dedicated Windows CI regression job for the autonomous Framework-owned Overture Release pipeline. It forces a clean full product rebuild and runs the retained project/shader/visual/texture/LAA/`VRTrackingTest` gates after shared-runtime changes.

@@ -26,6 +26,8 @@ bool g_installed = false;
 SRWLOCK g_lock = SRWLOCK_INIT;
 BlackPlagueBodyMotion g_motion;
 bool g_shadow_enabled = false;
+BlackPlagueShadowRequestSource g_shadow_source =
+    BlackPlagueShadowRequestSource::disabled;
 BodyReconciliationShadow g_shadow;
 BlackPlagueShadowTelemetry g_shadow_telemetry;
 runtime::VrMatrix34 g_shadow_pose;
@@ -84,11 +86,11 @@ template<class T>
     return player != nullptr && Read<void*>(player, kPlayerCharacterBodyOffset) != nullptr;
 }
 
-[[nodiscard]] bool ReconciliationShadowRequested() noexcept {
+[[nodiscard]] BlackPlagueShadowRequestSource ReconciliationShadowRequested() noexcept {
     char shadow_option[2]{};
     if (GetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW",
             shadow_option, 2) == 1 && shadow_option[0] == '1') {
-        return true;
+        return BlackPlagueShadowRequestSource::environment;
     }
 
     // Steam owns the game process when --launch-vr uses steam://, so a variable
@@ -98,9 +100,9 @@ template<class T>
     // adapter samples it once here, preserving the existing default-off and
     // no-persistent-setting semantics.
     HANDLE request = OpenMutexW(SYNCHRONIZE, FALSE, kShadowRequestMutexName);
-    if (request == nullptr) return false;
+    if (request == nullptr) return BlackPlagueShadowRequestSource::disabled;
     CloseHandle(request);
-    return true;
+    return BlackPlagueShadowRequestSource::mutex;
 }
 
 [[nodiscard]] bool InstallForImage(std::uint8_t* image,
@@ -121,7 +123,8 @@ template<class T>
     }
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
-    g_shadow_enabled = ReconciliationShadowRequested();
+    g_shadow_source = ReconciliationShadowRequested();
+    g_shadow_enabled = g_shadow_source != BlackPlagueShadowRequestSource::disabled;
     g_shadow = {};
     g_shadow_telemetry = {};
     g_shadow_tracking_time = 0;
@@ -159,6 +162,7 @@ bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept {
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
     g_shadow_enabled = false;
+    g_shadow_source = BlackPlagueShadowRequestSource::disabled;
     g_shadow = {};
     g_shadow_telemetry = {};
     g_shadow_tracking_time = 0;
@@ -261,6 +265,13 @@ BlackPlagueShadowTelemetry ConsumeBlackPlagueShadowTelemetry() noexcept {
     g_shadow_telemetry = {};
     ReleaseSRWLockExclusive(&g_lock);
     return result;
+}
+
+BlackPlagueShadowStatus ReadBlackPlagueShadowStatus() noexcept {
+    AcquireSRWLockShared(&g_lock);
+    const BlackPlagueShadowStatus status{g_shadow_enabled, g_shadow_source};
+    ReleaseSRWLockShared(&g_lock);
+    return status;
 }
 
 } // namespace penumbra_vr::backends::black_plague

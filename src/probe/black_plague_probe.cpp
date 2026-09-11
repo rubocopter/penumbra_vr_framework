@@ -750,9 +750,21 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         if (!body_probe_ready) {
             hook_error = "body/collision observer was not installed";
         }
+        const auto shadow_status = penumbra_vr::backends::black_plague::
+            ReadBlackPlagueShadowStatus();
+        const char* shadow_source = "disabled";
+        if (shadow_status.source == penumbra_vr::backends::black_plague::
+                BlackPlagueShadowRequestSource::environment) {
+            shadow_source = "environment";
+        } else if (shadow_status.source == penumbra_vr::backends::black_plague::
+                BlackPlagueShadowRequestSource::mutex) {
+            shadow_source = "mutex";
+        }
         penumbra_vr::probe::WriteLog(
-            "Black Plague body adapter installed=%u error=%s",
-            body_adapter_ready ? 1U : 0U, hook_error.c_str());
+            "Black Plague body adapter installed=%u error=%s body_reconciliation_shadow "
+            "enabled=%u source=%s",
+            body_adapter_ready ? 1U : 0U, hook_error.c_str(),
+            shadow_status.enabled ? 1U : 0U, shadow_source);
         const bool ownership_probe_ready =
             penumbra_vr::backends::black_plague::InstallMovementOwnershipProbe(hook_error);
         penumbra_vr::probe::WriteLog("Movement ownership telemetry installed=%u error=%s",

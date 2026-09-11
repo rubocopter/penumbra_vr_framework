@@ -173,6 +173,17 @@ inherits that variable. Sampling uses existing owners, with periodic logs every
 300 swap frames. No native physical request is injected and positional
 translation is still compile-time zero.
 
+On 2026-09-11 the adapter gained one-shot installation telemetry that records
+whether shadow is disabled, requested from the game-process environment, or
+requested from the transient mutex. The Release build and all 27 CTest tests
+passed, including synthetic default-off, environment and mutex paths. The first
+new live attempt passed the local exact-build verifier but crashed
+`penumbra.exe` before native bridge/body-adapter installation (`APPCRASH
+c0000005` in `SDL.dll`, offset `0x28c09`; PID 25784). The probe log records
+two SDL frame callbacks but no adapter-install or shadow telemetry, so it is
+not a shadow validation and does not establish a mutex failure. Diagnose that
+SDL-startup crash before another live attempt.
+
 The host gate is now green. GitHub Actions run `34616035023` for feature commit
 `18c63ef` passed metadata validation, Visual Studio 2022 Win32 configure and the
 established Debug/Release CTest jobs. Run `34616820448` repeated that root gate
@@ -191,7 +202,7 @@ Before a Black Plague shadow-only live capture, build a fresh Release probe and
 run `tools/Start-BlackPlagueShadowValidation.ps1` against the supported
 initialized image / local research input. The helper fails closed if the
 exact-build verifier does not pass. Hosted CI cannot substitute for that local
-binary-evidence gate. Once it passes, the next evidence step is a minimal
+binary-evidence gate. Once the SDL-startup crash is resolved, the next evidence step is a minimal
 shadow-only live run: stationary tracking, small physical head movement, native
 free/block/slide, recenter/body replacement, expected ~60 Hz single tick
 ownership, periodic `body_reconciliation_shadow` telemetry, and zero positional

@@ -41,6 +41,15 @@ the local exact-build verification against the supported initialized image / loc
 research inputs; hosted CI cannot replace that binary-evidence check. See
 [the current report](TRACKING_BODY_RECONCILIATION.md).
 
+The local verifier passed again on 2026-09-11 and the freshly built probe
+attempted the transient-mutex launch, but PID 25784 crashed before native
+bridge/body-adapter installation (`APPCRASH c0000005`, `SDL.dll` offset
+`0x28c09`). The probe log contains two SDL frame callbacks but ends before the
+native bridge/body-adapter lines, so this is an SDL startup regression boundary,
+not evidence about the shadow request, body ownership or tracking
+reconciliation. Do not retry the live capture unchanged; first establish the
+`REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` chain for that crash.
+
 The shadow path plans a physical displacement but does not inject it. Native
 accepted displacement feeds only native anchor carry. Physical rejection remains
 unknown, not zero or total rejection. Do not infer a physical movement capability
