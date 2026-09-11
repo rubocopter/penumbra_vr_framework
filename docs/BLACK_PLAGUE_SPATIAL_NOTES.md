@@ -88,9 +88,10 @@ El milestone de probing corporal quedó cerrado después de las capturas PID
 24780, 29672 y 8628. Sprint/crouch/jump ownership está caracterizado, el salto
 tiene burst live completo y el primer `BlackPlagueBodyAdapter` está live-tested.
 No se deben añadir más sondas corporales por defecto. La reconciliación shadow
-sobre ese adapter ya está host-tested; el siguiente paso útil es verificar
-localmente el exact-build y realizar la captura shadow-only live, manteniendo la
-traslación HMD a cero y conservando cámara/bob como una pista de comfort separada.
+sobre ese adapter ya está live-tested en PID 28172 con traslación HMD a cero. El
+siguiente paso útil es identificar y demostrar una petición física X/Z
+collision-aware en metros, conservando cámara/bob como una pista de comfort
+separada.
 
 ### Comparación concreta con Overture
 
@@ -329,9 +330,8 @@ agarre inyecta un pico extremo en una ventana estable y comprueba que la
 estimación conserva la mediana; una sola muestra produce cero. El verificador
 PowerShell local contrasta la captura inicializada sin modificar procesos.
 
-El boundary corporal/adapter ya está live-tested y la reconciliación shadow está
-host-tested, pero los hitos amplios de jugabilidad todavía no están certificados.
-La siguiente evidencia de esta pista es el exact-build verifier local seguido de
-una captura shadow-only live con traslación cero. Room-scale activo, herramientas
-definitivas, palm collision y mecanismos articulados siguen pendientes, además
-de sus pruebas con visor.
+El boundary corporal/adapter y la reconciliación shadow ya están live-tested,
+pero los hitos amplios de jugabilidad todavía no están certificados. La siguiente
+evidencia de esta pista debe demostrar una petición física X/Z collision-aware en
+metros antes de activar room-scale. Herramientas definitivas, palm collision y
+mecanismos articulados siguen pendientes, además de sus pruebas con visor.

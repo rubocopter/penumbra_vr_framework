@@ -155,7 +155,7 @@ PID 8628 demonstrated:
 
 Overture consumes it without changing its proven room-scale/locomotion behavior. Black Plague currently uses it as observation only.
 
-## Current milestone — tracking/body reconciliation shadow is host-tested
+## Current milestone — shadow live-tested; physical displacement boundary missing
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -175,25 +175,20 @@ translation is still compile-time zero.
 
 On 2026-09-11 the adapter gained one-shot installation telemetry that records
 whether shadow is disabled, requested from the game-process environment, or
-requested from the transient mutex. The Release build and all 27 CTest tests
-passed, including synthetic default-off, environment and mutex paths. An early
-attempt (PID 25784) crashed before native bridge/body-adapter installation with
-`APPCRASH c0000005` in `SDL.dll` at offset `0x28c09`, but a later ordinary VR
-run (PID 21048) loaded the exact supported build, installed the native bridge,
-body telemetry and body adapter, and ran for about 16 minutes with positional
-translation still zero. That later run reported
-`body_reconciliation_shadow enabled=0 source=disabled`, so it establishes that
-the SDL crash is not a consistent startup blocker but does not validate shadow.
+requested from the transient mutex. Earlier PID 25784 crashed before native
+bridge/body-adapter installation in `SDL.dll`, while PID 21048 later established
+that the crash was not a stable startup blocker but ran with shadow disabled.
+The launcher was then hardened to wait for the actual forwarded `LoadLibraryW`
+owner DLL in a freshly Steam-started process.
 
-The next transient-mutex attempt then exposed the reproducible blocker before
-probe injection: `PenumbraVR.ProbeLauncher` resolved forwarded `LoadLibraryW`
-to its actual owner but failed immediately if that owner DLL was not yet visible
-in the freshly Steam-started process. `ResolveRemoteKernelProcedure` now reuses
-the existing bounded `WaitForRemoteModule` path for that export owner, preserving
-process-exit and timeout handling. Release build and all 27 CTest tests pass after
-the change, and the local exact-build verifier passes. This launcher sequencing
-fix is host-tested only; do not mark the shadow path live-tested until a future
-run confirms mutex activation and periodic shadow telemetry.
+The subsequent PID 28172 live session closed the shadow gate. The fresh process
+reported `body_reconciliation_shadow enabled=1 source=mutex`, retained
+`positional_translation_enabled=0`, exercised stationary/small physical head
+deltas plus native free movement, blocking and sliding, observed body replacement
+and recenter handling, and retained the existing ~60 Hz native body update with
+no evidence of a duplicate `D6E00`. This promotes the Black Plague reconciliation
+shadow path to **live-tested**, while active positional/body reconciliation is
+still disabled and not headset-validated.
 
 The host gate was green at that checkpoint. GitHub Actions run `34616035023` for feature commit
 `18c63ef` passed metadata validation, Visual Studio 2022 Win32 configure and the
@@ -202,30 +197,27 @@ and also passed the new autonomous Overture Release regression job. That root
 configuration contained 27 CTest tests; hosted CI intentionally excluded only
 the real-driver `opengl_eye_targets` pixel test as documented in the workflow.
 
-The missing capability remains a collision-aware physical displacement request
+The current missing capability is a collision-aware physical displacement request
 in metres, distinguishable from native acceleration/locomotion and consumed by
 the single native tick. `MoveForward/MoveSideways` does not establish that
 contract. Do not treat native accepted motion as acceptance/rejection of an
-uninjected physical plan, and do not enable positional translation after shadow
-validation alone.
+uninjected physical plan. Do not enable positional translation until a bounded
+physical X/Z request has separate host/live evidence through the existing native
+tick and collision path.
 
-Before a Black Plague shadow-only live capture, build a fresh Release probe and
-run `tools/Start-BlackPlagueShadowValidation.ps1` against the supported
-initialized image / local research input. The helper fails closed if the
-exact-build verifier does not pass and now also refuses to count the session as
-shadow validation unless the fresh process log reports
-`body_reconciliation_shadow enabled=1 source=mutex`. Hosted CI cannot substitute
-for that local binary-evidence gate. The next evidence step, when headset testing
-is available again, is a minimal shadow-only live run: stationary tracking, small physical head movement, native
-free/block/slide, recenter/body replacement, expected ~60 Hz single tick
-ownership, periodic `body_reconciliation_shadow` telemetry, and zero positional
-translation throughout.
+The next implementation/research step is therefore to identify that physical
+request boundary. `tools/Start-BlackPlagueShadowValidation.ps1` remains a
+reproducible diagnostic for future regression captures, not the next gameplay
+milestone.
 
-The user-facing launch procedure and ordered headset/gameplay sequence for this
-gate are maintained in `docs/VR_STARTUP_AND_CONTROLLERS.md` and
-`docs/VR_HEADSET_TEST_CHECKLIST.md`. Use those as the operational checklist for
-the next live session so older mirror/grab/tool test batches are not mixed into
-the reconciliation evidence.
+Two presentation regressions from the completed headset session remain separate:
+with monitor mirror disabled the desktop showed a growing white-point artifact,
+and after Alt+Tab/focus loss headset gameplay continued while main menu/inventory
+could render black. The mirror-off path now clears the desktop backbuffer
+deterministically when stereo owns presentation; this is host-tested only and
+still needs headset confirmation. The focus-loss menu issue is not patched: the
+current tracked-menu capture still depends on the desktop framebuffer/focus and
+needs a better evidenced ownership boundary before changing behavior.
 
 ## Camera/bob
 
@@ -298,10 +290,18 @@ snap/smooth dependent visibility and crouch-depth label behavior.
 Black Plague now has an explicit backend capability map. It marks only the
 currently applied editor settings as available: handedness, turn mode and its
 snap/smooth/dead-zone controls, move speed/dead-zone, UI distance/scale and
-render scale. Monitor mirror remains a separate runtime/launcher toggle.
+render scale. Monitor mirror remains a separate setting.
 Play mode, player height, height offset, crouch settings, Enhanced visuals,
 HRTF and subtitle scale are persisted but are not Black Plague functional
 controls yet.
+
+`PenumbraVR.ProbeLauncher.exe --configure-vr black-plague` now provides an
+offline configuration surface for those backend-consumed controls plus monitor
+mirror. It uses the shared Rework-derived editor semantics, applies dependent
+snap/smooth row visibility, saves through the existing settings store, and its
+reset action restores only Black Plague-supported controls plus mirror so
+persisted-but-unwired values are preserved. This path does not require the game
+or probe DLL to be running.
 
 Do not invent a binary menu hook merely to expose this policy. A dedicated
 Black Plague VR Settings page still requires a demonstrated safe native-menu
@@ -336,7 +336,7 @@ real-driver `opengl_eye_targets` test excluded.
 Overture retains its 289 historical `VRTrackingTest` checks plus
 shader/visual/texture/LAA gates, now also exercised by the dedicated
 `Overture Release regression` CI job. The latest complete local offline result
-on 2026-09-11 passed the full Release build and all **30/30** root CTest tests,
+on 2026-09-12 passed the full Release build and all **30/30** root CTest tests,
 including the real-driver `opengl_eye_targets` test. Metadata validation also
 passed with 6 catalogue entries, 2 exact-build manifests, 42 actions, 6 action
 sets and 8 controller bindings. `Build-OvertureProduct.ps1 -Configuration

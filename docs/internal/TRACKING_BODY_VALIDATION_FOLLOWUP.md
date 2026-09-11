@@ -1,6 +1,6 @@
-# Tracking/body reconciliation — post-push host validation
+# Tracking/body reconciliation — host and live shadow validation
 
-Date: 2026-09-11.
+Updated: 2026-09-12.
 Feature checkpoint: `18c63ef39adb9d3af6df0a6e9f97d0889df5194c`.
 CI hardening checkpoint: `ea12955f494976ed7e3fb2913a3da6221d7dcff8`.
 
@@ -8,7 +8,7 @@ This file follows up `TRACKING_BODY_RECONCILIATION.md`. That report is an implem
 
 ## Host result
 
-**Status: host-tested; Black Plague live shadow validation still pending.**
+**Status: shared extraction host-tested; Black Plague shadow path live-tested.**
 
 GitHub Actions run `34616035023` validated the feature commit on Windows Server 2022. The existing `Windows x86 (without OpenVR SDK)` job completed successfully through:
 
@@ -50,23 +50,26 @@ The helper first runs `Test-BlackPlagueInputMap.ps1` against the initialized exa
 
 By default the helper expects `artifacts\black-plague-22000-live.bin`. If that local research artifact is not present, pass `-ImagePath <initialized-capture>` explicitly. The helper fails closed rather than skipping the exact-build verification gate. The normal `Start-Black-Plague-VR.cmd` remains shadow-off.
 
-## Remaining pre-live gate
+## Live shadow result
 
-Hosted CI cannot verify the protected exact-build initialized image used for Black Plague research. Before a new DLL is exercised live, rerun the local exact-build verifier against the supported initialized capture / local binary evidence and ensure the freshly built probe matches the allowlisted research build. The shadow validation helper performs that verifier automatically before launch. The 2026-09-11 launcher race where the forwarded `LoadLibraryW` owner was temporarily absent from a fresh Steam-started process is fixed locally by waiting on that actual export-owner module; Release build, 27/27 CTest and the exact-build verifier pass, but the fix still requires a future live confirmation.
+PID 28172 completed the intended transient-mutex validation route. The fresh
+process reported `body_reconciliation_shadow enabled=1 source=mutex`, kept
+positional translation zero, exercised stationary/small horizontal HMD deltas,
+native free/block/slide movement, recenter/body replacement and retained the
+existing approximately 60 Hz native body tick without evidence of a second
+`D6E00`. The earlier forwarded-`LoadLibraryW` startup race is therefore also
+live-confirmed past its former failure point.
 
-If that passes, the next evidence collection is deliberately shadow-only:
+This proves the shadow lifecycle and observation wiring in the live process. It
+does not demonstrate acceptance/rejection of physical VR displacement because
+the shadow request is never injected.
 
-1. build a fresh Release probe/launcher and run `powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\tools\Start-BlackPlagueShadowValidation.ps1`; pass `-ImagePath <capture>` if the default initialized image path is unavailable;
-2. keep positional translation at zero and preserve existing VR settings;
-3. confirm periodic `body_reconciliation_shadow` telemetry appears before interpreting the run;
-4. capture a stationary baseline and small horizontal physical HMD movements;
-5. exercise ordinary native locomotion in free space, into a wall and tangentially along it;
-6. exercise recenter and an ordinary body-replacement/load transition where convenient;
-7. confirm shadow history resets cleanly, requests stay bounded to `0.05 m`, native body updates remain approximately 60 Hz with one `D6E00` per native tick, and no shadow output changes camera/body position;
-8. stop/deactivate through the normal flow and retain the periodic shadow summaries plus existing body telemetry.
+## Next implementation decision
 
-Do not enable room-scale or combine this capture with speed, crouch, jump, camera/bob or interaction tuning.
-
-## Next implementation decision after the shadow capture
-
-A successful shadow run is evidence that the extracted policy and lifecycle wiring behave correctly in the live process. It is **not** authorization to enable positional tracking. The next implementation milestone must first identify and demonstrate the missing bounded collision-aware physical displacement request mechanism for Black Plague. Only after that mechanism has separate host/live evidence should active tracking/body reconciliation and headset positional validation begin.
+Identify and demonstrate the missing bounded collision-aware physical X/Z
+displacement request mechanism for Black Plague, distinct from native analog
+movement and consumed by the existing single native tick. Keep positional HMD
+translation disabled until that mechanism has separate host/live evidence. Only
+then should active tracking/body reconciliation and headset positional validation
+begin. `Start-BlackPlagueShadowValidation.ps1` remains useful for regression
+captures rather than as the next milestone.

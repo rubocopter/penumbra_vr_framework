@@ -29,13 +29,14 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 - Complete Framework persistence for the shared Rework-derived VR settings schema, plus a host-tested 18-row editor policy matching the Overture menu's ordering, formatting, step sizes, wrapping, clamps and snap/smooth row dependencies.
 - An explicit Black Plague VR-setting capability map exposes only backend-wired editor controls; persisted-but-unwired settings remain unavailable to a future in-game page until their backend application exists.
+- An offline Black Plague VR configuration surface is available through `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. It shows only backend-consumed Rework-derived controls plus monitor mirror, supports snap/smooth dependent rows, saves through the shared settings store and resets only supported controls so persisted-but-unwired values are preserved.
 - Exact canonical/LAA build variants for the observed Black Plague and Requiem executables. Catalogue/manifests preserve the canonical semantic build identity while fingerprinting the one-bit transformed executable independently.
 - One-shot Black Plague shadow-install telemetry records `disabled`,
   `environment` or transient `mutex` activation, making a live request
   distinguishable from a silent no-tick session. The synthetic default-off,
   environment and mutex paths are covered by the body-probe test.
 - Shared stateless tracking/body planning, physical rejection correction and locomotion anchor carry, consumed by Overture without changing the tested sequence.
-- Default-off Black Plague tracking/body shadow diagnostics (`PVR_BP_RECONCILIATION_SHADOW=1`), using existing tracking and native body callbacks; no physical request injection or positional camera translation. Portable tests and Windows x86 host validation pass; live shadow validation remains pending.
+- Default-off Black Plague tracking/body shadow diagnostics (`PVR_BP_RECONCILIATION_SHADOW=1` or transient validation mutex), using existing tracking and native body callbacks; no physical request injection or positional camera translation. Portable/Windows host tests pass and PID 28172 live-tested the mutex path with positional translation still zero.
 - Dedicated Windows CI regression job for the autonomous Framework-owned Overture Release pipeline. It forces a clean full product rebuild and runs the retained project/shader/visual/texture/LAA/`VRTrackingTest` gates after shared-runtime changes.
 - Initial `pvr_overture_backend` gameplay core with a narrow HPL body/jump adapter boundary, ported from Rework revision `23c890f`.
 - Source-level Overture integration that compiles the Framework backend into `Penumbra_vr.exe`, maps the existing HPL input/settings/tracking types, and implements `OvertureBodyAdapter` with the real `cPlayer` and `iCharacterBody` calls.
@@ -53,10 +54,11 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- When the Black Plague monitor mirror is disabled, continuous stereo now clears the desktop backbuffer to black instead of leaving stale desktop contents that produced the reported growing white-point artifact. This path is host-tested and still needs headset confirmation.
 - `PenumbraVR.ProbeLauncher` now waits for the actual owner DLL of forwarded
   `LoadLibraryW` to appear in a freshly Steam-started process instead of failing
   immediately during the startup race. The existing process-exit and bounded
-  timeout behavior is preserved; live confirmation remains pending.
+  timeout behavior is preserved; PID 28172 subsequently live-confirmed startup past this boundary.
 - The Black Plague shadow validation helper now verifies the fresh probe log and
   fails closed unless the requested session reports
   `body_reconciliation_shadow enabled=1 source=mutex`, preventing a silent
@@ -74,16 +76,16 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 - Overture now builds entirely from this repository. `pvr_overture_backend` preserves the proven Rework tracking-space, room-scale rejection/reconciliation and `1.5/2.25 m/s` locomotion policy behind an Overture-specific HPL body/jump adapter. The exact autonomous Release artifact has been deployed and functionally exercised in a headset; exhaustive equivalence remains a separate evidence gate. The autonomous Release pipeline is also now a dedicated CI regression job.
 - The migration audit records the explicit `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` comparison and remains the authoritative reference for what was ported versus what still requires game-specific mechanism.
-- Black Plague positional HMD translation remains disabled. The exact native body/collision boundary and first narrow body adapter are live-tested. Shared tracking/body reconciliation is now connected as a default-off, no-write shadow consumer and is host-tested on Windows x86. The next gate is a local exact-build verification followed by a shadow-only live capture; active room-scale still requires a separately demonstrated collision-aware physical displacement request.
+- Black Plague positional HMD translation remains disabled. The exact native body/collision boundary, first narrow body adapter and default-off no-write reconciliation shadow consumer are live-tested. The next body milestone is a separately demonstrated collision-aware physical X/Z displacement request in metres through the existing native tick before active room-scale can be enabled.
 - Black Plague native jump/vertical ownership remains separate from shared horizontal intent. Physical crouch, VR speed tuning and camera/bob comfort are also separate milestones rather than part of the first reconciliation live gate.
-- The desktop monitor mirror remains experimental and is not a current supported gameplay feature.
+- The desktop monitor mirror remains experimental and is not a current supported gameplay feature. Mirror-off desktop clearing is host-tested only. Alt+Tab/focus loss can still leave tracked menus/inventory black in the headset because the capture path depends on the desktop framebuffer/focus; that boundary remains unresolved.
 - Rework revision `23c890f` remains the immutable Overture behavioral baseline. Its working tree is not a Framework build or packaging dependency.
 
 ### Validated
 
 - The current OpenVR and no-OpenVR configurations compile under MSVC with warnings treated as errors at the validated checkpoints.
 - The full root CMake configuration now registers **thirty** CTest tests. The established hosted Windows x86 suite still intentionally excludes only the real-driver `opengl_eye_targets` pixel test from the SDK-less runner; newer local tests remain host validation until a subsequent CI run covers them.
-- Local offline validation on 2026-09-11 passed the Release build and all **30/30** root CTest tests, including the real-driver `opengl_eye_targets` test. Metadata validation passed with 6 catalogue entries, 2 exact-build manifests, 42 actions, 6 action sets and 8 controller bindings. A subsequent full autonomous Overture Release regression passed the project, 16-shader, 8,752 visual-reference, 231-texture decode and Large Address Aware gates plus **289 `VRTrackingTest` checks with 0 failures**. No game, SteamVR or headset process was launched for this validation.
+- Local offline validation on 2026-09-12 passed the Release build and all **30/30** root CTest tests, including the real-driver `opengl_eye_targets` test. No game, SteamVR or headset process was launched for this validation. The earlier full autonomous Overture Release regression passed the project, 16-shader, 8,752 visual-reference, 231-texture decode and Large Address Aware gates plus **289 `VRTrackingTest` checks with 0 failures**.
 - GitHub Actions run `34616035023` host-validated feature commit `18c63ef` on Windows Server 2022: metadata/OpenVR assets, Visual Studio 2022 Win32 configuration, Debug build/CTest and Release build/CTest all passed.
 - GitHub Actions run `34616820448` repeated the root Windows x86 gate after CI hardening and also passed the new `Overture Release regression` job using `Build-OvertureProduct.ps1 -Configuration Release -Full`.
 - The Framework-owned Overture Release pipeline passes project checks, 16 shader compilations, 8,752 CPU visual checks, 231 texture selection/decode checks, 289 `VRTrackingTest` checks, Large Address Aware verification and package validation. This pipeline has now been revalidated after the shared tracking/body extraction by the dedicated Windows CI job.
@@ -94,6 +96,7 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Black Plague PID 24780 live-validated corrected sprint/jump/crouch action ownership and the native `1.65 m → 0.95 m` crouch shape swap preserving feet height.
 - Black Plague PID 29672 completed a 240-tick jump burst, confirming separate native vertical ownership, about `+5.53 m/s` initial accepted vertical speed, ~`0.95 m` apex above baseline and native landing/state restoration.
 - Black Plague PID 8628 live-validated the first `BlackPlagueBodyAdapter`: input/body owners and adapter installed together, free movement/block/slide remained intact, body replacement did not leave a stale cached pointer, and the body update remained about 60 Hz with no evidence of a second `D6E00` call.
+- Black Plague PID 28172 live-validated the reconciliation shadow request through `source=mutex` with positional translation disabled. Stationary/small physical HMD deltas, native free/block/slide, recenter/body replacement and the existing ~60 Hz single body tick were observed without the shadow writing camera/body position.
 
 ### Earlier work in this release
 

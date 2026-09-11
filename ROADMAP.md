@@ -62,7 +62,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [ ] Apply positional tracking with game/body calibration
 - [ ] Live-validate direct VR startup and menu/gameplay transitions
 
-**Current milestone note:** native stereo/head rotation and the player/body boundary are no longer the principal unknowns. Shared tracking/body reconciliation planning plus the Black Plague default-off shadow path are implemented and host-tested. Positional HMD translation remains disabled; the next live gate is shadow-only observation, and active room-scale additionally requires a demonstrated collision-aware physical displacement request boundary. The desktop mirror remains outside the active gameplay path.
+**Current milestone note:** native stereo/head rotation, the player/body boundary and the default-off reconciliation shadow path are now live-tested. Positional HMD translation remains disabled. The next body milestone is to identify and demonstrate a bounded collision-aware physical X/Z displacement request in metres through the existing single native tick; active room-scale remains gated on that evidence. The desktop mirror remains experimental.
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus, with frame pacing and positional tracking explicitly validated before claiming a complete visual MVP.
 
@@ -89,7 +89,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Add host-independent tests for transforms, actions and settings
 - [x] Preserve copyright, license and provenance for extracted components
 
-Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete; Black Plague now exercises the shared reconciliation policy in host-tested shadow mode over its live-tested binary body adapter.
+Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete; Black Plague now exercises the shared reconciliation policy through a live-tested default-off shadow path over its live-tested binary body adapter.
 
 ## Phase 4 — Black Plague gameplay VR
 
@@ -103,7 +103,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
 - [x] Live-test the narrow `BlackPlagueBodyAdapter` and shared accepted-displacement observation
 - [x] Connect and host-test shared tracking/body reconciliation through the adapter as a default-off shadow path while positional HMD translation remains gated
-- [ ] Rerun the local exact-build verifier and live-validate the shadow-only reconciliation path with translation still zero
+- [x] Live-validate the shadow-only reconciliation path with translation still zero through the exact-build/mutex validation route
 - [ ] Demonstrate a collision-aware physical displacement request mechanism separately from native analog movement before enabling room-scale
 - [ ] Headset-validate positional physical movement, blocking/sliding and head/body reconciliation
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
@@ -113,6 +113,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Inventory, notes, menus, HUD and subtitles
 - [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy
 - [x] Define the Black Plague settings capability map from backend-wired behavior
+- [x] Provide an offline Black Plague VR settings editor through `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`
 - [ ] Integrate a dedicated Black Plague VR settings page after a safe native-menu insertion boundary is demonstrated
 - [ ] Comfort settings and haptics
 - [ ] Representative chapter-level validation

@@ -57,17 +57,16 @@ The autonomous Overture source/build/package integration is complete. The exact 
 
 Black Plague body/collision ownership is also no longer an open mapping problem. The exact-build player body, native update sequence, horizontal collision boundary, crouch shape swap and jump ownership are live-characterized. The first narrow `BlackPlagueBodyAdapter` is live-tested on the supported research build. It binds to the existing `NativeInputBridge` movement owner and `BodyCollisionProbe` update owner, never calls `D6E00` itself, dynamically re-resolves the current body and observes accepted displacement through `runtime::VrAcceptedBodyMotion`.
 
-The shared tracking/body reconciliation phases and default-off Black Plague shadow consumer are now implemented and **host-tested** on Windows x86. Positional HMD translation remains compile-time zero and the shadow path performs no body/camera writes.
+The shared tracking/body reconciliation phases and default-off Black Plague shadow consumer are implemented and **live-tested** through the existing adapter. PID 28172 confirmed transient-mutex activation, stationary/small-head-motion planning, native free/block/slide observations, body replacement/recenter handling and the existing ~60 Hz native body tick while positional HMD translation remained zero. The shadow path still performs no body/camera writes.
 
-The next Black Plague gameplay gate is **shadow-only live validation through the existing live-tested adapter**:
+The next Black Plague gameplay gate is the missing **collision-aware physical X/Z displacement request in metres**:
 
 1. preserve the single-owner callsite model;
-2. use `tools/Start-BlackPlagueShadowValidation.ps1` so the local exact-build verifier runs before launch and the shadow request reaches the Steam-started game through a transient named mutex;
-3. keep Black Plague positional HMD translation at zero; `PVR_BP_RECONCILIATION_SHADOW=1` remains an advanced fallback only when the game process actually inherits that variable;
-4. validate stationary tracking, small physical head deltas, native free motion, blocking/sliding, recenter/body replacement and one ~60 Hz native body tick;
-5. do not interpret the uninjected physical plan as accepted/rejected physical motion;
-6. after shadow validation, active room-scale still requires a separately demonstrated collision-aware physical displacement request in metres, distinct from native analog movement;
-7. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
+2. keep Black Plague positional HMD translation at zero until the physical request boundary has separate evidence;
+3. identify and demonstrate a bounded physical displacement request that is distinct from native `MoveForward/MoveSideways` acceleration and is consumed by the existing single native tick;
+4. do not interpret the shadow plan or native accepted locomotion as acceptance/rejection of an uninjected physical request;
+5. only after that boundary is host/live evidenced should active room-scale and positional HMD translation move to headset validation;
+6. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
 
 ## Black Plague constraints
 
@@ -77,13 +76,13 @@ Do not call `iCharacterBody::Update(D6E00)` from the adapter. The native physics
 
 Do not make horizontal VR intent responsible for the native Jump state's vertical pipeline. The live jump burst demonstrates separate ownership.
 
-Do not enable positional HMD translation merely because the adapter is live-tested or the reconciliation shadow is host-tested. The collision-aware physical displacement request boundary is still missing.
+Do not enable positional HMD translation merely because the adapter and reconciliation shadow are live-tested. The collision-aware physical displacement request boundary is still missing.
 
 Do not force doors, levers, joints or other mechanism bodies through the free-body grab path; map their native state instead.
 
 Do not copy Overture RVAs, model-specific grip values or body layouts into Black Plague/Requiem.
 
-The monitor mirror remains experimental and is not a current gameplay milestone.
+The monitor mirror remains experimental and is not a current gameplay milestone. The mirror-off desktop clear is host-tested only; the reported Alt+Tab/focus-loss menu-black behavior remains an unresolved presentation boundary.
 
 ## Reuse and scope discipline
 

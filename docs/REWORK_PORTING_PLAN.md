@@ -120,25 +120,23 @@ Do not force these into the first common body contract:
 
 The first shared contract exists to separate **policy** from **native mechanism**, not to flatten every game difference immediately.
 
-## Current priority — Black Plague shadow validation, then physical displacement mechanism
+## Current priority — Black Plague physical displacement mechanism
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction is also host-tested; the next gate is no longer generic host implementation work.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction is host-tested and its default-off Black Plague shadow consumer is live-tested through PID 28172 with positional translation still zero.
 
 Current order:
 
 1. Preserve the completed Overture source host and validated artifact behavior.
 2. Preserve the live-tested single-owner Black Plague body adapter boundary.
-3. Preserve the host-tested shared reconciliation/shadow implementation with Black Plague positional HMD translation at zero.
-4. Rerun the local exact-build verifier against the supported initialized image / local research inputs before the next live DLL capture.
-5. Validate shadow-only tracking/body observations in the live Black Plague process: stationary baseline, small physical HMD deltas, native free/block/slide, recenter/body replacement and one native body update per tick.
-6. Do not treat the shadow plan as accepted/rejected physical motion; no physical request is injected.
-7. After shadow validation, identify and demonstrate a bounded collision-aware physical X/Z displacement request in metres, consumed by the existing single native tick. Native analog intent is not that capability.
-8. Only after that physical boundary has separate evidence should active room-scale/positional tracking be enabled for live/headset validation.
-9. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
-10. Keep physical crouch and jump comfort/tuning as separate milestones.
-11. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.
-12. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
-13. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
+3. Preserve the live-tested shared reconciliation/shadow implementation with Black Plague positional HMD translation at zero.
+4. Do not treat the shadow plan as accepted/rejected physical motion; no physical request is injected.
+5. Identify and demonstrate a bounded collision-aware physical X/Z displacement request in metres, consumed by the existing single native tick. Native analog intent is not that capability.
+6. Only after that physical boundary has separate evidence should active room-scale/positional tracking be enabled for live/headset validation.
+7. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
+8. Keep physical crouch and jump comfort/tuning as separate milestones.
+9. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.
+10. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
+11. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
 
 This order proves each boundary in isolation and prevents a game-adapter defect from being mistaken for a shared-runtime defect.
 

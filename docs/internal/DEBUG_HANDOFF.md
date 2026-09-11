@@ -21,6 +21,7 @@ The user previously reported world displacement / collision discomfort while mov
 - PID 8628 live-observed free movement, total blocking, sliding and body replacement with the adapter active. Native body updates remained ~60 Hz; no second `D6E00` was introduced.
 - `runtime::VrAcceptedBodyMotion` is shared by Overture and Black Plague as the game-neutral accepted-displacement observation.
 - Shared reconciliation planning/rebase, physical-rejection correction and locomotion-anchor carry are implemented in `vr_locomotion.*`; the Black Plague consumer remains shadow-only and default-off.
+- PID 28172 live-tested the shadow consumer through the transient mutex with positional translation still zero: stationary/small-head-motion planning, native free/block/slide, recenter/body replacement and the existing ~60 Hz single native tick were observed without a second `D6E00`.
 - GitHub Actions has host-tested the current shared extraction on Windows x86: root metadata/Debug/Release tests pass, and the autonomous Overture Release regression job also passes.
 
 ### Do not try again
@@ -35,38 +36,21 @@ The user previously reported world displacement / collision discomfort while mov
 ### Next evidence
 
 The shared reconciliation phases and default-off BP shadow consumer are now
-**host-tested**. Root Windows x86 metadata/Debug/Release CI and the dedicated
-autonomous Overture Release regression are green. The remaining pre-live gate is
-the local exact-build verification against the supported initialized image / local
-research inputs; hosted CI cannot replace that binary-evidence check. See
-[the current report](TRACKING_BODY_RECONCILIATION.md).
-
-The local verifier passed again on 2026-09-11. PID 25784 crashed before native
-bridge/body-adapter installation (`APPCRASH c0000005`, `SDL.dll` offset
-`0x28c09`), but a later ordinary VR run, PID 21048, installed the bridge,
-body/collision telemetry and body adapter and remained active for about 16
-minutes. That run reported `body_reconciliation_shadow enabled=0
-source=disabled`, so the SDL crash is not a stable blocker and did not validate
-the mutex path.
-
-The following transient-mutex launch instead failed earlier in the launcher:
-the actual DLL owner of forwarded `LoadLibraryW` was not yet visible in the
-freshly Steam-started process. The launcher previously treated that temporary
-absence as fatal. `ResolveRemoteKernelProcedure` now waits up to 15 seconds for
-that owner using the existing process-aware module wait. Release build, 27/27
-CTest and the exact-build verifier pass after the change. This resolves the
-identified host-side startup race, but live confirmation remains pending.
+**live-tested** through PID 28172. The earlier forwarded-`LoadLibraryW` startup
+race is also live-confirmed past the point that previously failed: the fresh
+Steam-started process installed the bridge/body adapter and activated the shadow
+from the transient mutex.
 
 The shadow path plans a physical displacement but does not inject it. Native
 accepted displacement feeds only native anchor carry. Physical rejection remains
 unknown, not zero or total rejection. Do not infer a physical movement capability
 from `MoveForward/MoveSideways`: those calls drive native acceleration state.
 
-After the local exact-build gate passes, capture a shadow-only live run with
-translation still zero, verifying free/block/slide native observations, tracking
-plans, reset on recenter/body replacement and single tick ownership. Active
-room-scale still requires a separately demonstrated collision-aware physical
-displacement boundary. Camera/bob remains separate comfort work.
+The next evidence must identify and demonstrate a bounded collision-aware
+physical X/Z displacement request in metres, distinct from native analog
+movement and consumed by the existing single native tick. Keep positional HMD
+translation disabled until that mechanism has separate host/live evidence.
+Camera/bob remains separate comfort work.
 
 ## 2. Black Plague locomotion speed / timing
 
@@ -92,7 +76,7 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-Complete the shadow-only tracking/body live validation and establish the missing physical displacement boundary first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
+Establish the missing physical displacement boundary first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
 
 ## 3. Black Plague jump
 

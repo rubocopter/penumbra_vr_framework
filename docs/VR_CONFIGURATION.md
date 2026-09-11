@@ -97,6 +97,18 @@ separate launcher/runtime toggle. `PlayMode`, `PlayerHeight`, `HeightOffset`,
 `SubtitleScale` are persisted but must not be presented as functional Black
 Plague controls until their backend application exists.
 
+Edit the currently supported Black Plague controls offline with:
+
+```powershell
+.\build\Release\PenumbraVR.ProbeLauncher.exe --configure-vr black-plague
+```
+
+The editor does not launch Black Plague or require an attached probe. It shows
+only controls the backend currently consumes plus `MonitorMirror`; snap/smooth
+dependent rows follow the shared Rework editor policy. `S` saves, `Q` discards
+and `R` restores defaults only for Black Plague-supported controls plus mirror,
+preserving persisted-but-unwired fields for future backends/features.
+
 The shared editor policy reproduces the 18 Overture Rework rows, step sizes,
 formatting, enum wrapping, clamps and snap/smooth dependent-row behavior and is
 host-tested. Black Plague does not yet have a demonstrated safe insertion point

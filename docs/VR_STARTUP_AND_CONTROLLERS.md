@@ -45,7 +45,10 @@ reloj, gravedad ni física. El contador `native_update_timing` sigue siendo la
 evidencia para separar velocidad física de una anomalía temporal.
 
 El launcher imprime la ruta efectiva de settings y el valor del mirror tanto en
-preflight como al activarlo. El mirror continúa pendiente de certificación física.
+preflight como al activarlo. Los ajustes Black Plague que el backend consume
+también pueden editarse sin arrancar el juego con
+`PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. El mirror continúa
+pendiente de certificación física.
 
 ## Arrancar sin adjuntar el mod a mano
 
@@ -61,51 +64,31 @@ Abrir directamente el juego en Steam **no** ejecuta este lanzador automáticamen
 SteamVR debe estar instalado y los dispositivos configurados; OpenVR solicita
 su inicialización. El usuario confirmó el arranque directo con el BAT.
 
-### Próxima validación con visor: reconciliación shadow
+### Estado de la validación shadow y próximas pruebas
 
-Para el gate actual de Black Plague no uses el BAT general ni abras el juego
-directamente desde Steam. Con `penumbra.exe` cerrado, ejecuta desde la raíz del
-repositorio:
+La reconciliación shadow ya fue live-tested en PID 28172 mediante
+`tools/Start-BlackPlagueShadowValidation.ps1`: el proceso confirmó
+`body_reconciliation_shadow enabled=1 source=mutex`, mantuvo la traslación
+posicional a cero y conservó el único tick nativo de cuerpo durante movimiento
+libre, bloqueo/deslizamiento, recentrado y sustitución de cuerpo. No es necesario
+repetir esa tanda salvo para investigar una regresión.
 
-```powershell
-.\tools\Start-BlackPlagueShadowValidation.ps1
-```
+El helper se conserva como ruta reproducible de diagnóstico. Ejecuta primero el
+verificador exact-build y mantiene el mutex temporal durante la sesión; el
+fallback `PVR_BP_RECONCILIATION_SHADOW=1` sigue reservado a procesos que hereden
+realmente esa variable.
 
-Si la instalación está en otra biblioteca:
-
-```powershell
-.\tools\Start-BlackPlagueShadowValidation.ps1 -GamePath "RUTA\A\Penumbra.exe"
-```
-
-El helper ejecuta `Test-BlackPlagueInputMap.ps1` antes del lanzamiento y falla
-cerrado si la imagen inicializada no coincide con la evidencia exacta admitida.
-Después mantiene una petición temporal mediante el mutex
-`Local\PenumbraVR.BlackPlague.ReconciliationShadow` mientras el juego está vivo.
-Mantén esa ventana de PowerShell abierta durante toda la sesión.
-
-La tanda solo cuenta como shadow validation cuando la consola confirma una línea
-de activación del proceso nuevo con:
-
-```text
-Black Plague body adapter installed=1 ... body_reconciliation_shadow enabled=1 source=mutex
-```
-
-Si no aparece, conserva el error de consola y no interpretes el resto de la
-sesión como evidencia de reconciliación shadow. El fallback
-`PVR_BP_RECONCILIATION_SHADOW=1` queda reservado a casos en los que el propio
-proceso del juego hereda realmente esa variable; no es la ruta normal de prueba.
+La próxima tanda con visor se divide en dos grupos. La presentación puede
+revalidarse ya: con mirror desactivado el monitor debe permanecer negro sin el
+artefacto del punto blanco creciente; además hay que volver a comprobar
+Alt+Tab/foco porque actualmente menú e inventario pueden quedar negros en el
+visor al perder foco la ventana. La prueba de room-scale debe esperar a que el
+backend implemente y demuestre una petición física X/Z collision-aware en metros;
+hasta entonces la traslación posicional del HMD permanece desactivada.
 
 Los logs se crean automáticamente en `%LOCALAPPDATA%\PenumbraVR\logs`, con un
-`black-plague-probe-<PID>.log` para la ejecución. No hace falta copiar archivos
-durante la prueba. Tras cerrar el juego, indicar las anomalías observadas y que la
-sesión terminó es suficiente para inspeccionar la captura local.
-
-La secuencia de gameplay autoritativa para este gate está en
-`docs/VR_HEADSET_TEST_CHECKLIST.md`. Está centrada en tracking estacionario,
-movimiento nativo libre/bloqueado/deslizante, recentrado, sustitución de cuerpo
-por crouch, salto nativo y varios minutos de telemetría. Room-scale activo,
-traslación posicional del HMD, mirror, agarres y mecanismos quedan fuera de este
-gate.
+`black-plague-probe-<PID>.log` para cada ejecución. La lista ordenada de pruebas
+pendientes se mantiene en `docs/VR_HEADSET_TEST_CHECKLIST.md`.
 
 Si ya está abierto el mismo ejecutable, reutiliza ese proceso. No elige procesos
 por nombre solamente: Overture, Black Plague y Requiem deben distinguirse por
