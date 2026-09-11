@@ -69,6 +69,7 @@ $requiredFrameworkPaths = @(
     'src\adapters\overture_source\PenumbraVR.Framework.Overture.props',
     'src\adapters\overture_source\overture_source_integration.cpp',
     'src\backends\overture\overture_backend.cpp',
+    'src\runtime\vr_haptics.hpp',
     'src\runtime\vr_locomotion.cpp'
 )
 $missingFrameworkPaths = foreach ($relativePath in $requiredFrameworkPaths) {
@@ -198,6 +199,31 @@ $hapticOffender = $sourceFiles | Where-Object {
 if ($hapticOffender) {
     throw ("Gameplay haptics must be routed through PenumbraOverture\VRHaptics.cpp " +
         "(found in $($hapticOffender.RelativePath)).")
+}
+
+$vrHapticsHeader = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\VRHaptics.h')
+$vrHapticsSource = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\VRHaptics.cpp')
+$sharedHaptics = Get-Content -Raw -LiteralPath (Join-Path $frameworkRoot 'src\runtime\vr_haptics.hpp')
+foreach ($requiredSharedHapticSnippet in @(
+    'return {0.025F, 120.0F, 0.18F, 60, "ui_select"}',
+    'return {0.045F, 90.0F, 0.30F, 80, "object_pickup"}',
+    'return {0.025F, 80.0F, 0.20F, 80, "object_drop"}',
+    'return {0.040F, 95.0F, 0.28F, 100, "interaction"}',
+    'return {0.035F, 100.0F, 0.24F, 150, "light_toggle"}',
+    'return {0.070F, 65.0F, 0.75F, 250, "melee_impact"}',
+    'return {0.120F, 45.0F, 1.00F, 200, "damage"}',
+    'ScaleHapticAmplitude',
+    'HapticCooldownReady'
+)) {
+    if ($sharedHaptics -notmatch [regex]::Escape($requiredSharedHapticSnippet)) {
+        throw "The Framework haptic policy is missing '$requiredSharedHapticSnippet'."
+    }
+}
+if ($vrHapticsHeader -notmatch [regex]::Escape('#include "vr_haptics.hpp"') -or
+    $vrHapticsHeader -notmatch [regex]::Escape('using eVRHapticEvent = penumbra_vr::runtime::VrHapticEvent') -or
+    $vrHapticsSource -notmatch [regex]::Escape('penumbra_vr::runtime::HapticProfile(aEvent)') -or
+    $vrHapticsSource -notmatch [regex]::Escape('penumbra_vr::runtime::HapticCooldownReady(')) {
+    throw 'Overture must consume the Framework-owned shared semantic haptic policy.'
 }
 
 $steamVRInputHeader = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'HPL1Engine\include\input\SteamVRInput.h')
@@ -581,13 +607,15 @@ if ($playerSource -match [regex]::Escape('mpScene->GetWorld3D()->GetPhysicsWorld
 }
 
 $vrHandCollisionPolicy = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\VRHandCollisionPolicy.h')
+$sharedInteractionPolicy = Get-Content -Raw -LiteralPath (Join-Path $frameworkRoot 'src\runtime\vr_interaction_policy.hpp')
 $vrMathTests = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'tests\VRTrackingTest\main.cpp')
+$vrTrackingTestProject = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'tests\VRTrackingTest\VRTrackingTest.vcxproj')
 foreach ($requiredHandCollisionSnippet in @(
-    'kCollisionSizeX = 0.190f',
-    'kCollisionSizeY = 0.052f',
-    'kCollisionSizeZ = 0.125f',
-    'kInteractionContactTolerance = 0.008f',
-	'kMaxTrackedHandDistanceFromHead = 2.50f',
+    'kCollisionSizeX = 0.190F',
+    'kCollisionSizeY = 0.052F',
+    'kCollisionSizeZ = 0.125F',
+    'kInteractionContactTolerance = 0.008F',
+	'kMaxTrackedHandDistanceFromHead = 2.50F',
     'CheckVRHandWorldCollision',
 	'IsUsableVRHandPose',
 	'InterpolateVRHandRotation',
@@ -602,9 +630,19 @@ foreach ($requiredHandCollisionSnippet in @(
 	'TestVRHandRecoveryCannotCrossClosedDoor',
 	'TestVRHandHingeRecoveryRequiresPullback'
 )) {
-    if (($vrHandCollisionPolicy + $playerSource + $vrMathTests) -notmatch [regex]::Escape($requiredHandCollisionSnippet)) {
+    if (($sharedInteractionPolicy + $playerSource + $vrMathTests) -notmatch [regex]::Escape($requiredHandCollisionSnippet)) {
         throw "The VR hand collision regression guard is missing '$requiredHandCollisionSnippet'."
     }
+}
+if ($vrHandCollisionPolicy -notmatch [regex]::Escape('#include "vr_interaction_policy.hpp"') -or
+    $vrHandCollisionPolicy -notmatch [regex]::Escape('penumbra_vr::runtime::vr_interaction_policy')) {
+    throw 'Overture must consume the Framework-owned shared palm collision policy.'
+}
+if ($vrTrackingTestProject -notmatch [regex]::Escape('..\..\..\..\src\runtime')) {
+    throw 'VRTrackingTest must include the Framework runtime headers used by Overture compatibility shims.'
+}
+if (([regex]::Matches($vrTrackingTestProject, '<LanguageStandard>stdcpp20</LanguageStandard>')).Count -lt 2) {
+    throw 'VRTrackingTest Debug and Release must compile with the Framework/Oveture C++20 language standard.'
 }
 if ($playerSource -match 'fMaxVisualLag|vRawPos\s*\+\s*vVisualLag') {
     throw 'VR hand collision must never follow the raw controller through a barrier to cap visual lag.'

@@ -10,6 +10,7 @@
 #include "rel32_call_hook.hpp"
 #include "stereo_render_policy.hpp"
 #include "vr_math.hpp"
+#include "vr_panel_policy.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -1347,7 +1348,8 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
                 ReleaseSRWLockExclusive(&g_telemetry_lock);
             }
         }
-        g_menu_anchor_valid = false;
+        g_menu_anchor_valid = runtime::PlanStablePanelAnchor(
+            false, false, g_menu_anchor_valid).anchor_valid_after;
         AcquireSRWLockExclusive(&g_menu_pointer_lock);
         g_menu_pointer_aspect = 0;
         ReleaseSRWLockExclusive(&g_menu_pointer_lock);
@@ -1359,8 +1361,14 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     runtime::VrHmdPose pose;
     std::string error;
     if (!session->WaitForHmdPose(pose, error) || !pose.device_connected || !pose.pose_valid) return;
-    if (g_recenter_requested.exchange(false, std::memory_order_acq_rel)) g_menu_anchor_valid = false;
-    if (!g_menu_anchor_valid) { g_menu_anchor = pose.device_to_absolute; g_menu_anchor_valid = true; }
+    const bool recenter_requested =
+        g_recenter_requested.exchange(false, std::memory_order_acq_rel);
+    const auto anchor_plan = runtime::PlanStablePanelAnchor(
+        true, recenter_requested, g_menu_anchor_valid);
+    if (anchor_plan.capture_current_pose) {
+        g_menu_anchor = pose.device_to_absolute;
+    }
+    g_menu_anchor_valid = anchor_plan.anchor_valid_after;
     const float menu_distance = g_menu_distance.load(std::memory_order_acquire);
     const float menu_scale = g_menu_scale.load(std::memory_order_acquire);
     std::array<GLint, 4> viewport{};

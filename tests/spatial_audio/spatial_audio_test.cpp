@@ -45,9 +45,27 @@ int main() {
         previous = gain;
     }
 
-    if (!Near(kMineGalleryReverb.decay_time, 2.6F) ||
-        !Near(kMineGalleryReverb.bus_gain, 0.32F) ||
-        !Near(kMineGalleryReverb.air_absorption_gain_hf, 0.894F)) {
+    if (!Near(kMineGalleryReverb.density, 0.70F) ||
+        !Near(kMineGalleryReverb.diffusion, 0.90F) ||
+        !Near(kMineGalleryReverb.gain, 0.28F) ||
+        !Near(kMineGalleryReverb.gain_hf, 0.77F) ||
+        !Near(kMineGalleryReverb.gain_lf, 1.0F) ||
+        !Near(kMineGalleryReverb.decay_time, 2.6F) ||
+        !Near(kMineGalleryReverb.decay_hf_ratio, 0.55F) ||
+        !Near(kMineGalleryReverb.decay_lf_ratio, 1.0F) ||
+        !Near(kMineGalleryReverb.reflections_gain, 0.15F) ||
+        !Near(kMineGalleryReverb.reflections_delay, 0.016F) ||
+        !Near(kMineGalleryReverb.late_reverb_gain, 0.85F) ||
+        !Near(kMineGalleryReverb.late_reverb_delay, 0.030F) ||
+        !Near(kMineGalleryReverb.echo_time, 0.25F) ||
+        !Near(kMineGalleryReverb.echo_depth, 0.0F) ||
+        !Near(kMineGalleryReverb.modulation_time, 0.25F) ||
+        !Near(kMineGalleryReverb.modulation_depth, 0.0F) ||
+        !Near(kMineGalleryReverb.air_absorption_gain_hf, 0.894F) ||
+        !Near(kMineGalleryReverb.hf_reference, 5000.0F) ||
+        !Near(kMineGalleryReverb.lf_reference, 250.0F) ||
+        !Near(kMineGalleryReverb.room_rolloff_factor, 0.0F) ||
+        !Near(kMineGalleryReverb.bus_gain, 0.32F)) {
         std::cerr << "Mine-gallery EFX preset drifted from the accepted Rework values\n";
         return 4;
     }

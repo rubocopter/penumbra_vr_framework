@@ -26,6 +26,7 @@
 #include "HudModel_Throw.h"
 
 #include "VRHelper.hpp"
+#include "vr_interaction_policy.hpp"
 
 static const char* ksHandBoneNames[] = {
 	"Middle1","Middle2","Middle3",
@@ -134,13 +135,14 @@ bool iHudModel::UpdatePoseMatrix(cMatrixf& aPoseMtx, float afTimeStep)
     if(pHandModel != NULL &&
       (pHandModel->msName == "Hand" || pHandModel->msName == "LeftHand"))
     {
-      const float fPoseWeight = cMath::Clamp(
-        1.15f - mfVrGripRadius * 12.5f, 0.72f, 1.0f);
+      const float fPoseWeight =
+        penumbra_vr::runtime::vr_interaction_policy::GripPoseWeight(mfVrGripRadius);
       //Opening the fingers increases the fitted cylinder radius and moves
       //its centre away from the palm by about 3.25 cm per unit of pose
       //weight. Follow that measured centre so radius correction does not
       //reintroduce a lateral offset for thick handles.
-      const float fOpenCentreOffset = (1.0f - fPoseWeight) * 0.0325f;
+      const float fOpenCentreOffset =
+        penumbra_vr::runtime::vr_interaction_policy::GripOpenCentreOffset(mfVrGripRadius);
       const cVector3f vGripSocket(0.050f,
         mlHandIndex == 0 ? 0.019f + fOpenCentreOffset :
           -0.014f - fOpenCentreOffset,
@@ -773,8 +775,9 @@ void cPlayerHands::Update(float afTimeStep)
       //The inner finger arc is about 3 cm at full curl. Convert the measured
       //handle radius into a stable 0.72..1 pose fraction: thin rods close
       //fully, while thick flashlight bodies retain clearance.
-      pHudModel->mfForcedGrabPoseWeight = cMath::Clamp(
-        1.15f - pAttachment->mfVrGripRadius * 12.5f, 0.72f, 1.0f);
+      pHudModel->mfForcedGrabPoseWeight =
+        penumbra_vr::runtime::vr_interaction_policy::GripPoseWeight(
+          pAttachment->mfVrGripRadius);
     }
     else
     {
@@ -1147,8 +1150,9 @@ void cPlayerHands::SetAttachmentModel(int alNum,const tString& asName)
 	pAttachModel->EquipEffect(true);
 	pAttachModel->mfTime = 0;
 	pAttachModel->mState = eHudModelState_Idle;
-	const float fPoseWeight = cMath::Clamp(
-		1.15f - pAttachModel->mfVrGripRadius * 12.5f, 0.72f, 1.0f);
+	const float fPoseWeight =
+		penumbra_vr::runtime::vr_interaction_policy::GripPoseWeight(
+			pAttachModel->mfVrGripRadius);
 	Log(" [hand-grip] '%s': point %s radius %.3f twist %.2f pose %.2f\n",
 		pAttachModel->msName.c_str(), pAttachModel->mvVrGripPoint.ToString().c_str(),
 		pAttachModel->mfVrGripRadius, pAttachModel->mfVrGripTwist, fPoseWeight);

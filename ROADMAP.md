@@ -71,6 +71,9 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Extract render-scale fallback, visual-calibration and spatial-audio reference behavior
 - [x] Import the shared OpenVR action manifest and controller bindings as data
 - [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
+- [x] Extract Rework semantic haptic events, profiles, strength scaling and cooldown policy into the shared runtime
+- [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime
+- [x] Extract stable VR panel anchoring and transient overlay ownership handoff policy with Overture/Black Plague consumers
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
 - [x] Keep Overture's existing build and tests green during extraction
 - [x] Port Rework's tracking space, room-scale rejection and locomotion policy

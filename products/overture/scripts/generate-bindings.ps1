@@ -473,7 +473,7 @@ function Get-SourceObject {
         throw ("Binding row references unknown input '{0}' ({1})." -f $row.input, $controller.ControllerType)
     }
 
-    $inputs = [ordered]::new()
+    $inputs = [ordered]@{}
     foreach ($behavior in ($row.behaviors.Keys | Sort-Object)) {
         $target = $row.behaviors[$behavior]
         if ($target.StartsWith('global/in/')) {
@@ -500,7 +500,7 @@ function Get-BindingDocument {
     $family = $families[$controller.Family]
     $nl = [Environment]::NewLine
 
-    $sets = [ordered]::new()
+    $sets = [ordered]@{}
 
     # Global set: haptics, poses, optional skeleton, optional recenter source.
     # Poses are grouped by type exactly as SteamVR's own samples ship them:

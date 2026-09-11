@@ -114,6 +114,23 @@ using penumbra_vr::runtime::VrTrackingSpace;
         !Near(vr_interaction_policy::kMagneticItemRange, 2.35F)) {
         return false;
     }
+    if (!Near(vr_interaction_policy::kCollisionSizeX, 0.190F) ||
+        !Near(vr_interaction_policy::kCollisionSizeY, 0.052F) ||
+        !Near(vr_interaction_policy::kCollisionSizeZ, 0.125F) ||
+        vr_interaction_policy::SweepStepCount(0.0F) != 1 ||
+        vr_interaction_policy::SweepStepCount(0.041F) != 3 ||
+        vr_interaction_policy::IsBlockingPenetration(0.008F, true) ||
+        !vr_interaction_policy::IsBlockingPenetration(0.0081F, true) ||
+        vr_interaction_policy::ShouldUseRecoveryAnchor(11, 0.10F, 0.20F) ||
+        !vr_interaction_policy::ShouldUseRecoveryAnchor(12, 0.10F, 0.20F)) {
+        return false;
+    }
+    if (!Near(vr_interaction_policy::GripPoseWeight(0.018F), 0.925F) ||
+        !Near(vr_interaction_policy::GripPoseWeight(0.0F), 1.0F) ||
+        !Near(vr_interaction_policy::GripPoseWeight(0.05F), 0.72F) ||
+        !Near(vr_interaction_policy::GripOpenCentreOffset(0.018F), 0.0024375F)) {
+        return false;
+    }
     return true;
 }
 

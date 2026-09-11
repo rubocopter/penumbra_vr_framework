@@ -2,6 +2,7 @@
 #include "black_plague_body_adapter.hpp"
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
+#include "vr_haptics.hpp"
 #include "vr_native_intents.hpp"
 #include "legacy_input_abi.hpp"
 #include "render_world_probe.hpp"
@@ -397,7 +398,16 @@ void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
     if (g_session) {
         std::string error;
-        static_cast<void>(g_session->TriggerHaptic(hand, 0.025F, 110, pickup ? 0.4F : 0.2F, error));
+        const auto event = pickup
+            ? runtime::VrHapticEvent::object_pickup
+            : runtime::VrHapticEvent::object_drop;
+        const auto profile = runtime::HapticProfile(event);
+        static_cast<void>(g_session->TriggerHaptic(
+            hand,
+            profile.duration_seconds,
+            profile.frequency_hz,
+            runtime::ScaleHapticAmplitude(event, 1.0F),
+            error));
     }
     ReleaseSRWLockExclusive(&g_session_lock);
 }

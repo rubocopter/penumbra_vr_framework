@@ -66,6 +66,10 @@ Shared/runtime behavior now includes:
 - fixed `0.05 m` physical steps;
 - Rework locomotion policy of `1.5 m/s` walk and `2.25 m/s` sprint;
 - common interaction reach of `0.18 m`;
+- the proven palm dimensions, contact tolerances, sweep/refinement limits and
+  recovery thresholds from `VRHandCollisionPolicy.h`, now owned by
+  `src/runtime/vr_interaction_policy.hpp` and consumed by Overture through a
+  compatibility namespace;
 - accepted-body-motion observation through `runtime::VrAcceptedBodyMotion`;
 - stateless body reconciliation planning, physical rejection correction and locomotion-anchor carry in `vr_locomotion.*`.
 
@@ -149,11 +153,27 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 ## Extracted so far
 
 - `src/runtime/vr_tracking_space.*`, `src/runtime/vr_locomotion.*`, `src/runtime/vr_interaction_policy.*` and `src/backends/overture/*` port the proven Overture/Rework tracking/body policy behind a narrow source-game adapter.
+- `src/runtime/vr_haptics.hpp` owns Rework's gameplay-level haptic event
+  profiles, strength scaling and per-event cooldown semantics. Overture keeps
+  pose validity and OpenVR submission in `cVRHaptics`; Black Plague reuses the
+  same pickup/drop profiles at its existing native-input submission boundary.
+- `src/runtime/vr_panel_policy.hpp` owns the reusable stable-panel anchor
+  lifetime and transient overlay ownership handoff. Black Plague consumes the
+  stable-anchor plan for its tracked menu; Overture consumes the overlay handoff
+  for radio/subtitle presentation while draw order, transforms and menu state
+  remain game/backend-owned.
+- `src/runtime/vr_interaction_policy.hpp` now also owns Rework's demonstrated
+  palm collision dimensions, contact/sweep/refinement constants and recovery
+  predicates. Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so
+  future Black Plague/Requiem palm adapters can reuse the same policy while
+  keeping native collision queries and body exclusions game-specific.
 - `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
 - `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and `CarryHeadAnchorWithLocomotion` now provide the shared stateless reconciliation phases used by Overture and the Black Plague shadow consumer.
 - `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.
 - `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4 tone/ambient/dark-diffuse/sharpening/glowstick-halo behavior; GPU renderer-stage integration remains pending.
-- `src/audio/spatial_audio.*` owns HRTF config text, distance/occlusion low-pass behavior and the mine-gallery EFX preset; safe binary audio hook work remains open.
+- `src/audio/spatial_audio.*` owns HRTF config text, distance/occlusion low-pass
+  behavior and the complete accepted mine-gallery EFX preset, including echo,
+  modulation and room-rolloff fields; safe binary audio hook work remains open.
 - `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; transactional deployment remains installer work.
 - `src/adapters/hpl1/camera_matrix_override.*` owns the reusable byte-exact camera transaction; exact layouts remain backend-owned.
 - `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit, but the mirror is not supported/validated.

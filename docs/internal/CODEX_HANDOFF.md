@@ -243,7 +243,33 @@ Do not degrade Black Plague articulation to match Overture merely because Overtu
 
 ## Interaction priorities after body reconciliation
 
-1. palm collision and character/body exclusion validation;
+The game-neutral Rework palm collision policy (dimensions, contact skin,
+sweep/refinement and recovery thresholds/predicates) is now Framework-owned in
+`vr_interaction_policy.hpp`; Overture consumes that exact policy through its
+legacy `VRHandCollisionPolicy` namespace. Black Plague still needs a native
+collision/contact adapter and character/body exclusion validation before this
+becomes an implemented gameplay feature there.
+
+Rework's semantic haptic profiles are also Framework-owned in
+`vr_haptics.hpp`, including strength clamping/scaling and per-event cooldowns.
+Overture consumes them through its existing `cVRHaptics` API. Black Plague's
+existing pickup/drop feedback now uses the same proven profiles while its
+backend continues to own session availability and actual OpenVR submission.
+This is host-testable policy reuse only; it does not complete Black Plague's
+comfort/haptics milestone or constitute headset validation.
+
+Stable panel anchoring and transient overlay ownership handoff are now also
+Framework-owned in `vr_panel_policy.hpp`. Black Plague's tracked menu consumes
+the stable-anchor lifetime plan, while Overture's radio/subtitle path consumes
+the overlay handoff. Placement transforms, renderer calls and game menu state
+remain backend/product-specific. The new policy is host-tested only.
+
+The shared spatial-audio reference now contains the complete accepted Overture
+mine-gallery EFX parameter set, including echo, modulation and room-rolloff
+fields. This strengthens the offline reference; Black Plague/Requiem audio hook
+integration still requires game-specific evidence.
+
+1. palm collision adapter and character/body exclusion validation;
 2. jointed mechanisms / doors / levers through native mechanism state;
 3. definitive per-game tool/glowstick grip profiles;
 4. inventory, notes, menus, HUD and subtitles;
@@ -263,7 +289,14 @@ Keep states distinct:
 
 Compilation and CTest do not imply live or headset validation.
 
-Current root validation count is 27 CTest tests in the full configured suite. The hosted SDK-less CI executes the established suite with the real-driver `opengl_eye_targets` test excluded. Overture retains its 289 historical `VRTrackingTest` checks plus shader/visual/texture/LAA gates, now also exercised by the dedicated `Overture Release regression` CI job.
+Current root validation count is 28 CTest tests in the full configured suite,
+including the shared VR panel-policy regression. The hosted SDK-less CI executes
+the established suite with the real-driver `opengl_eye_targets` test excluded.
+Overture retains its 289 historical `VRTrackingTest` checks plus
+shader/visual/texture/LAA gates, now also exercised by the dedicated
+`Overture Release regression` CI job. The latest local offline extraction batch
+passed all 28 root Release tests and the full autonomous Overture Release build
+with 289/289 `VRTrackingTest` checks; no game or SteamVR process was launched.
 
 For meaningful changes update the smallest relevant set among:
 

@@ -319,7 +319,7 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 
 ## Verificación y límites
 
-La configuración raíz contiene ahora 27 tests. El CI Windows x86 pasa los gates
+La configuración raíz contiene ahora 28 tests. El CI Windows x86 pasa los gates
 Debug y Release establecidos, excluyendo deliberadamente `opengl_eye_targets`
 en el runner SDK-less porque esa prueba necesita el driver WGL real. El test
 corporal ejecuta la sonda exact-build sobre una imagen sintética y el test

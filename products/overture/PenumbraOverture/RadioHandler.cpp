@@ -25,6 +25,7 @@
 #include "Notebook.h"
 #include "Inventory.h"
 #include "NumericalPanel.h"
+#include "vr_panel_policy.hpp"
 
 //////////////////////////////////////////////////////////////////////////
 // CONSTRUCTORS
@@ -147,8 +148,11 @@ void cRadioHandler::Update(float afTimeStep)
 		bool menuOwnsState = mpInit->mpNotebook->IsActive() ||
 			mpInit->mpInventory->IsActive() ||
 			mpInit->mpNumericalPanel->IsActive();
+		const auto overlayPlan = penumbra_vr::runtime::PlanTransientOverlayHandoff(
+			IsActive(), menuOwnsState, mbVRAnchored);
 
-		if(IsActive() && menuOwnsState==false)
+		if(overlayPlan.action ==
+			penumbra_vr::runtime::VrTransientOverlayAction::anchor_world_position)
 		{
 			cCamera3D* pCamera3D = static_cast<cCamera3D*>(scene->GetCamera());
 			float fDistance = mpInit->mVRSettings.GetUIDistance();
@@ -165,19 +169,13 @@ void cRadioHandler::Update(float afTimeStep)
 			transMat = cMath::MatrixMul(translateMat, transMat);
 
 			scene->SetVRMenuState(MenuState_WorldPosition, transMat);
-			mbVRAnchored = true;
 		}
-		else if(mbVRAnchored)
+		else if(overlayPlan.action ==
+			penumbra_vr::runtime::VrTransientOverlayAction::restore_face_locked)
 		{
-			// Restore facelock only when the radio finished AND no menu took
-			// over the overlay meanwhile; menus assert their own state once,
-			// so writing here would clobber it.
-			if(IsActive()==false && menuOwnsState==false)
-			{
-				scene->SetVRMenuState(MenuState_Facelock, cMatrixf::Identity);
-			}
-			mbVRAnchored = false;
+			scene->SetVRMenuState(MenuState_Facelock, cMatrixf::Identity);
 		}
+		mbVRAnchored = overlayPlan.anchored_after;
 	}
 }
 

@@ -16,47 +16,8 @@
 
 namespace
 {
-	struct cVRHapticProfile
-	{
-		float mfDuration;
-		float mfFrequency;
-		float mfAmplitude;
-		unsigned long mlMinIntervalMs;
-		const char *msName;
-	};
-
-	unsigned long glLastSubmission[eVRHapticEvent_LastEnum][2] = {};
-	bool gbHasSubmitted[eVRHapticEvent_LastEnum][2] = {};
-
-	cVRHapticProfile GetProfile(eVRHapticEvent aEvent)
-	{
-		switch(aEvent)
-		{
-		case eVRHapticEvent_UISelect:
-			return {0.025f, 120.0f, 0.18f, 60, "ui_select"};
-		case eVRHapticEvent_ObjectPickup:
-			return {0.045f, 90.0f, 0.30f, 80, "object_pickup"};
-		case eVRHapticEvent_ObjectDrop:
-			return {0.025f, 80.0f, 0.20f, 80, "object_drop"};
-		case eVRHapticEvent_Interaction:
-			return {0.040f, 95.0f, 0.28f, 100, "interaction"};
-		case eVRHapticEvent_LightToggle:
-			return {0.035f, 100.0f, 0.24f, 150, "light_toggle"};
-		case eVRHapticEvent_MeleeImpact:
-			return {0.070f, 65.0f, 0.75f, 250, "melee_impact"};
-		case eVRHapticEvent_Damage:
-			return {0.120f, 45.0f, 1.00f, 200, "damage"};
-		default:
-			return {0.030f, 90.0f, 0.20f, 100, "unknown"};
-		}
-	}
-
-	float Clamp01(float afValue)
-	{
-		if(afValue < 0.0f) return 0.0f;
-		if(afValue > 1.0f) return 1.0f;
-		return afValue;
-	}
+	std::uint32_t glLastSubmission[penumbra_vr::runtime::kVrHapticEventCount][2] = {};
+	bool gbHasSubmitted[penumbra_vr::runtime::kVrHapticEventCount][2] = {};
 
 	const char *GetHandName(eVRHapticHand aHand)
 	{
@@ -70,28 +31,31 @@ namespace
 	}
 
 	bool SubmitToHand(cInit *apInit, eVRHapticEvent aEvent,
-		eSteamVRHand aSteamVRHand, int alHandIndex, const cVRHapticProfile &aProfile,
-		float afAmplitude, unsigned long alNow)
+		eSteamVRHand aSteamVRHand, int alHandIndex,
+		const penumbra_vr::runtime::VrHapticProfile &aProfile,
+		float afAmplitude, std::uint32_t alNow)
 	{
 		const bool poseValid = aSteamVRHand == eSteamVRHand_Left
 			? apInit->mpGame->vr_left_hand.IsPoseValid()
 			: apInit->mpGame->vr_right_hand.IsPoseValid();
 		if(!poseValid) return false;
 
-		if(gbHasSubmitted[aEvent][alHandIndex] &&
-			alNow - glLastSubmission[aEvent][alHandIndex] < aProfile.mlMinIntervalMs)
+		const std::size_t eventIndex = penumbra_vr::runtime::HapticEventIndex(aEvent);
+		if(!penumbra_vr::runtime::HapticCooldownReady(
+			aEvent, gbHasSubmitted[eventIndex][alHandIndex],
+			glLastSubmission[eventIndex][alHandIndex], alNow))
 		{
 			return false;
 		}
 
 		if(!apInit->mpGame->vr_input.TriggerHaptic(aSteamVRHand,
-			aProfile.mfDuration, aProfile.mfFrequency, afAmplitude))
+			aProfile.duration_seconds, aProfile.frequency_hz, afAmplitude))
 		{
 			return false;
 		}
 
-		gbHasSubmitted[aEvent][alHandIndex] = true;
-		glLastSubmission[aEvent][alHandIndex] = alNow;
+		gbHasSubmitted[eventIndex][alHandIndex] = true;
+		glLastSubmission[eventIndex][alHandIndex] = alNow;
 		return true;
 	}
 }
@@ -100,29 +64,32 @@ bool cVRHaptics::Play(cInit *apInit, eVRHapticEvent aEvent,
 	eVRHapticHand aHand, float afStrength)
 {
 	if(apInit == NULL || apInit->mpGame == NULL) return false;
-	if(aEvent < 0 || aEvent >= eVRHapticEvent_LastEnum) return false;
+	if(!penumbra_vr::runtime::IsKnownHapticEvent(aEvent)) return false;
 
-	const cVRHapticProfile profile = GetProfile(aEvent);
-	const float fAmplitude = Clamp01(profile.mfAmplitude * Clamp01(afStrength));
+	const penumbra_vr::runtime::VrHapticProfile profile =
+		penumbra_vr::runtime::HapticProfile(aEvent);
+	const float fAmplitude =
+		penumbra_vr::runtime::ScaleHapticAmplitude(aEvent, afStrength);
 	if(fAmplitude <= 0.0f) return false;
 
 	const unsigned long lNow = GetApplicationTime();
+	const std::uint32_t lNowMs = static_cast<std::uint32_t>(lNow);
 	bool bSuccess = false;
 	if(aHand == eVRHapticHand_Left || aHand == eVRHapticHand_Both)
 	{
 		bSuccess = SubmitToHand(apInit, aEvent, eSteamVRHand_Left, 0,
-			profile, fAmplitude, lNow) || bSuccess;
+			profile, fAmplitude, lNowMs) || bSuccess;
 	}
 	if(aHand == eVRHapticHand_Right || aHand == eVRHapticHand_Both)
 	{
 		bSuccess = SubmitToHand(apInit, aEvent, eSteamVRHand_Right, 1,
-			profile, fAmplitude, lNow) || bSuccess;
+			profile, fAmplitude, lNowMs) || bSuccess;
 	}
 
 	if(bSuccess)
 	{
 		Log(" [VR haptics +%lu ms] %s -> %s (submitted).\n",
-			lNow, profile.msName, GetHandName(aHand));
+			lNow, profile.name, GetHandName(aHand));
 	}
 	return bSuccess;
 }

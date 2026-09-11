@@ -11,6 +11,8 @@
 #ifndef GAME_VR_HAPTICS_H
 #define GAME_VR_HAPTICS_H
 
+#include "vr_haptics.hpp"
+
 class cInit;
 
 enum eVRHapticHand
@@ -20,17 +22,14 @@ enum eVRHapticHand
 	eVRHapticHand_Both
 };
 
-enum eVRHapticEvent
-{
-	eVRHapticEvent_UISelect,
-	eVRHapticEvent_ObjectPickup,
-	eVRHapticEvent_ObjectDrop,
-	eVRHapticEvent_Interaction,
-	eVRHapticEvent_LightToggle,
-	eVRHapticEvent_MeleeImpact,
-	eVRHapticEvent_Damage,
-	eVRHapticEvent_LastEnum
-};
+using eVRHapticEvent = penumbra_vr::runtime::VrHapticEvent;
+inline constexpr eVRHapticEvent eVRHapticEvent_UISelect = eVRHapticEvent::ui_select;
+inline constexpr eVRHapticEvent eVRHapticEvent_ObjectPickup = eVRHapticEvent::object_pickup;
+inline constexpr eVRHapticEvent eVRHapticEvent_ObjectDrop = eVRHapticEvent::object_drop;
+inline constexpr eVRHapticEvent eVRHapticEvent_Interaction = eVRHapticEvent::interaction;
+inline constexpr eVRHapticEvent eVRHapticEvent_LightToggle = eVRHapticEvent::light_toggle;
+inline constexpr eVRHapticEvent eVRHapticEvent_MeleeImpact = eVRHapticEvent::melee_impact;
+inline constexpr eVRHapticEvent eVRHapticEvent_Damage = eVRHapticEvent::damage;
 
 // Penumbra owns the meaning of feedback events. The HPL input backend only
 // receives a device-independent hand plus vibration parameters.

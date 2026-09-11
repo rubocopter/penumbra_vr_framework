@@ -1,5 +1,26 @@
 # Changelog
 
+- Extracted the demonstrated Overture/Rework palm collision policy into
+  `src/runtime/vr_interaction_policy.hpp`: palm dimensions, contact tolerances,
+  sweep/refinement limits and recovery predicates now have one Framework-owned
+  source of truth. The autonomous Overture product keeps its legacy
+  `VRHandCollisionPolicy` API through a compatibility namespace, leaving native
+  physics/contact queries and body exclusions for each backend adapter.
+- Extracted Rework's semantic haptic event profiles, strength scaling and
+  per-event cooldown policy into `src/runtime/vr_haptics.hpp`. Overture now
+  consumes that shared policy through its existing `cVRHaptics` boundary, and
+  Black Plague's existing pickup/drop feedback uses the same proven profiles
+  while device submission remains backend-owned.
+- Extracted the demonstrated stable-panel anchor lifetime and transient overlay
+  ownership handoff into `src/runtime/vr_panel_policy.hpp`. Black Plague's
+  tracked menu anchor and Overture's radio/subtitle overlay now consume the
+  shared policy while retaining their renderer/game-specific placement code.
+- Completed the shared mine-gallery EFX reference with the remaining accepted
+  Rework echo, modulation and room-rolloff fields and expanded its host test to
+  lock the full preset.
+- Fixed the Overture binding generator's ordered-map construction for Windows
+  PowerShell; `-Check` again validates all eight generated controller bindings.
+
 This project is pre-alpha. Entries distinguish implemented infrastructure from features validated live or in a headset.
 
 ## Unreleased

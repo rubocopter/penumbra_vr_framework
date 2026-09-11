@@ -23,9 +23,14 @@ struct ReverbProfile {
     float reflections_delay = 0.016F;
     float late_reverb_gain = 0.85F;
     float late_reverb_delay = 0.030F;
+    float echo_time = 0.25F;
+    float echo_depth = 0.0F;
+    float modulation_time = 0.25F;
+    float modulation_depth = 0.0F;
     float air_absorption_gain_hf = 0.894F;
     float hf_reference = 5000.0F;
     float lf_reference = 250.0F;
+    float room_rolloff_factor = 0.0F;
     float bus_gain = 0.32F;
 };
 

@@ -1,4 +1,5 @@
 #include "vr_action_input.hpp"
+#include "vr_haptics.hpp"
 
 #include <iostream>
 #include <limits>
@@ -51,6 +52,19 @@ public:
 };
 }
 int main() {
+    const auto pickup = HapticProfile(VrHapticEvent::object_pickup);
+    const auto damage = HapticProfile(VrHapticEvent::damage);
+    if (pickup.duration_seconds != 0.045F || pickup.frequency_hz != 90.0F ||
+        pickup.amplitude != 0.30F || pickup.min_interval_ms != 80 ||
+        std::string_view(pickup.name) != "object_pickup" ||
+        damage.duration_seconds != 0.120F || damage.frequency_hz != 45.0F ||
+        damage.amplitude != 1.0F || damage.min_interval_ms != 200) return 22;
+    if (ScaleHapticAmplitude(VrHapticEvent::melee_impact, 0.5F) != 0.375F ||
+        ScaleHapticAmplitude(VrHapticEvent::damage, 2.0F) != 1.0F ||
+        ScaleHapticAmplitude(VrHapticEvent::damage, -1.0F) != 0.0F) return 23;
+    if (!HapticCooldownReady(VrHapticEvent::ui_select, false, 0, 0) ||
+        HapticCooldownReady(VrHapticEvent::ui_select, true, 100, 159) ||
+        !HapticCooldownReady(VrHapticEvent::ui_select, true, 100, 160)) return 24;
     VrActionInput reader;
     FakeBackend fake;
     std::string error;

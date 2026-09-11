@@ -436,6 +436,14 @@ if(BUILD_TESTING)
 
     add_test(NAME stereo_render_policy COMMAND pvr_stereo_render_policy_test)
 
+    add_executable(pvr_vr_panel_policy_test
+        tests/vr_panel_policy/vr_panel_policy_test.cpp
+    )
+    target_include_directories(pvr_vr_panel_policy_test PRIVATE src/runtime)
+    pvr_enable_warnings(pvr_vr_panel_policy_test)
+
+    add_test(NAME vr_panel_policy COMMAND pvr_vr_panel_policy_test)
+
     add_executable(pvr_vr_input_state_test
         tests/vr_input_state/vr_input_state_test.cpp
     )
