@@ -40,19 +40,33 @@ This closes the host-validation gap for the shared reconciliation extraction and
 
 The single-owner model remains mandatory: `NativeInputBridge` owns movement callsites, `BodyCollisionProbe` owns `D460A -> D6E00`, and `BlackPlagueBodyAdapter` receives fan-out without adding a second native update.
 
+## Reproducible shadow request path
+
+The first implementation sampled `PVR_BP_RECONCILIATION_SHADOW=1` from the **game process** during body-adapter installation. That remains supported for advanced/manual workflows where the game actually inherits the variable, but it is not a reliable one-click launch mechanism: `--launch-vr` starts the protected build through `steam://rungameid/22120`, so an already-running Steam process does not inherit variables set only in the launcher shell.
+
+The repository therefore provides a transient diagnostic path:
+
+- `Start-Black-Plague-VR-Shadow.cmd`
+- `tools/Start-BlackPlagueShadowValidation.ps1`
+
+The PowerShell helper first runs `Test-BlackPlagueInputMap.ps1` against the initialized exact-build image. It then holds the named mutex `Local\PenumbraVR.BlackPlague.ReconciliationShadow` only while the normal `--launch-vr` path waits for and initializes the probe. `BlackPlagueBodyAdapter` samples either the original environment variable or that mutex exactly once during installation. The mutex is disposed when the launcher returns, so no preference, registry value or persistent environment state remains for the next run.
+
+By default the helper expects `artifacts\black-plague-22000-live.bin`. If that local research artifact is not present, pass `-ImagePath <initialized-capture>` explicitly. The helper fails closed rather than skipping the exact-build verification gate. The normal `Start-Black-Plague-VR.cmd` remains shadow-off.
+
 ## Remaining pre-live gate
 
-Hosted CI cannot verify the protected exact-build initialized image used for Black Plague research. Before a new DLL is exercised live, rerun the local exact-build verifier against the supported initialized capture / local binary evidence and ensure the freshly built probe matches the allowlisted research build.
+Hosted CI cannot verify the protected exact-build initialized image used for Black Plague research. Before a new DLL is exercised live, rerun the local exact-build verifier against the supported initialized capture / local binary evidence and ensure the freshly built probe matches the allowlisted research build. The shadow validation helper performs that verifier automatically before launch.
 
 If that passes, the next evidence collection is deliberately shadow-only:
 
-1. set `PVR_BP_RECONCILIATION_SHADOW=1` in the game process before adapter installation;
+1. build a fresh Release probe/launcher and run `Start-Black-Plague-VR-Shadow.cmd`; use `tools/Start-BlackPlagueShadowValidation.ps1 -ImagePath <capture>` if the default initialized image path is unavailable;
 2. keep positional translation at zero and preserve existing VR settings;
-3. capture a stationary baseline and small horizontal physical HMD movements;
-4. exercise ordinary native locomotion in free space, into a wall and tangentially along it;
-5. exercise recenter and an ordinary body-replacement/load transition where convenient;
-6. confirm shadow history resets cleanly, requests stay bounded to `0.05 m`, native body updates remain approximately 60 Hz with one `D6E00` per native tick, and no shadow output changes camera/body position;
-7. stop/deactivate through the normal flow and retain the periodic shadow summaries plus existing body telemetry.
+3. confirm periodic `body_reconciliation_shadow` telemetry appears before interpreting the run;
+4. capture a stationary baseline and small horizontal physical HMD movements;
+5. exercise ordinary native locomotion in free space, into a wall and tangentially along it;
+6. exercise recenter and an ordinary body-replacement/load transition where convenient;
+7. confirm shadow history resets cleanly, requests stay bounded to `0.05 m`, native body updates remain approximately 60 Hz with one `D6E00` per native tick, and no shadow output changes camera/body position;
+8. stop/deactivate through the normal flow and retain the periodic shadow summaries plus existing body telemetry.
 
 Do not enable room-scale or combine this capture with speed, crouch, jump, camera/bob or interaction tuning.
 

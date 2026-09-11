@@ -62,8 +62,8 @@ The shared tracking/body reconciliation phases and default-off Black Plague shad
 The next Black Plague gameplay gate is **shadow-only live validation through the existing live-tested adapter**:
 
 1. preserve the single-owner callsite model;
-2. rerun the local exact-build verifier against the supported research inputs before the live capture;
-3. keep Black Plague positional HMD translation at zero and enable only `PVR_BP_RECONCILIATION_SHADOW=1` in the game process;
+2. use `Start-Black-Plague-VR-Shadow.cmd` / `tools/Start-BlackPlagueShadowValidation.ps1` so the local exact-build verifier runs before launch and the shadow request reaches the Steam-started game through a transient named mutex;
+3. keep Black Plague positional HMD translation at zero; `PVR_BP_RECONCILIATION_SHADOW=1` remains an advanced fallback only when the game process actually inherits that variable;
 4. validate stationary tracking, small physical head deltas, native free motion, blocking/sliding, recenter/body replacement and one ~60 Hz native body tick;
 5. do not interpret the uninjected physical plan as accepted/rejected physical motion;
 6. after shadow validation, active room-scale still requires a separately demonstrated collision-aware physical displacement request in metres, distinct from native analog movement;

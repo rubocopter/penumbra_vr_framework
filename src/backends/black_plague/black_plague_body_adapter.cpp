@@ -18,6 +18,8 @@ using Move = void(__thiscall*)(void*, float, float);
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kMoveForward = 0x9CBC0;
 constexpr std::uintptr_t kMoveSideways = 0x9CC60;
+constexpr wchar_t kShadowRequestMutexName[] =
+    L"Local\\PenumbraVR.BlackPlague.ReconciliationShadow";
 
 std::uint8_t* g_image = nullptr;
 bool g_installed = false;
@@ -82,6 +84,25 @@ template<class T>
     return player != nullptr && Read<void*>(player, kPlayerCharacterBodyOffset) != nullptr;
 }
 
+[[nodiscard]] bool ReconciliationShadowRequested() noexcept {
+    char shadow_option[2]{};
+    if (GetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW",
+            shadow_option, 2) == 1 && shadow_option[0] == '1') {
+        return true;
+    }
+
+    // Steam owns the game process when --launch-vr uses steam://, so a variable
+    // set only in the launcher shell is not a reliable child-process signal if
+    // Steam was already running. The diagnostic launcher therefore holds this
+    // per-session named mutex only until probe initialization completes. The
+    // adapter samples it once here, preserving the existing default-off and
+    // no-persistent-setting semantics.
+    HANDLE request = OpenMutexW(SYNCHRONIZE, FALSE, kShadowRequestMutexName);
+    if (request == nullptr) return false;
+    CloseHandle(request);
+    return true;
+}
+
 [[nodiscard]] bool InstallForImage(std::uint8_t* image,
     std::string& error) noexcept {
     error.clear();
@@ -100,9 +121,7 @@ template<class T>
     }
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
-    char shadow_option[2]{};
-    g_shadow_enabled = GetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW",
-        shadow_option, 2) == 1 && shadow_option[0] == '1';
+    g_shadow_enabled = ReconciliationShadowRequested();
     g_shadow = {};
     g_shadow_telemetry = {};
     g_shadow_tracking_time = 0;
