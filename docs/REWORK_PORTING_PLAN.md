@@ -196,6 +196,34 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 - Black Plague exposes an explicit backend capability map for the currently wired editor settings. A dedicated in-game settings page remains game-specific work until a safe native-menu insertion boundary is demonstrated.
 - `assets/openvr` contains shared actions/bindings; `assets/openvr/overture` preserves exact Overture product mappings.
 
+## Current host-only extraction frontier
+
+The remaining Rework-specific VR code was re-audited after the shared
+attachment-socket extraction. No additional game-neutral behavior currently has
+enough evidence for another shared runtime abstraction without either a second
+backend consumer or target-specific validation:
+
+- Rework's VR dimmer has a separable scalar ramp, but its ownership and render
+  placement are currently only demonstrated by Overture inventory/message/panel
+  flows. Keep it product-owned until another backend needs the same policy.
+- staged loading/fade is coupled to Overture's synchronous map load and
+  compositor presentation lifecycle; a second backend presentation boundary is
+  required before extracting it.
+- physical crouch cannot be generalized from Rework until Black Plague's native
+  stand-clearance boundary is evidenced; its body/shape ownership is already
+  known to differ.
+- inventory/notes/HUD/subtitle integration still depends on each game's menu,
+  draw-order and native state boundaries. The reusable panel/pointer/settings
+  policy already extracted should be consumed once those boundaries are mapped.
+- doors, levers, sliders and other jointed mechanisms require a mapped native
+  mechanism state/update boundary before any shared interaction policy can be
+  justified.
+
+This is a deliberate host-only stopping point, not completion of the unchecked
+"remaining demonstrated reusable systems" milestone. Resume extraction when
+new Black Plague/Requiem evidence produces a real second consumer or when a
+pending live/headset gate validates the required boundary.
+
 Controller support is a behavioral parity requirement, not an asset-presence check. The shared package currently carries eight default OpenVR profiles: PS VR2 Sense, Vive, Valve Index/Knuckles, Oculus/Meta Touch, Pico 4, Pico Neo 3, Windows Mixed Reality motion controllers and the holographic-controller variant. A profile is only considered at parity after its logical actions, left/right-handed routing, grip/aim poses, menu and picking controls, haptics and any hardware-supported finger articulation behave equivalently to the proven Overture baseline in the target backend. Black Plague must close that matrix before controller parity is claimed; Requiem should inherit the same matrix and repeat only backend-specific validation.
 
 The metadata gate now compares the shared action manifest and the functional graph of every shared controller binding against the preserved Overture profile set. Descriptive text may differ, but action sets, source routing, grip/aim poses, skeleton inputs and haptic outputs cannot silently drift. This host gate also restored the Rework-proven left PS VR2 Sense trigger route for UI select after detecting that it had been dropped from the shared profile. It establishes static/profile parity only; live SteamVR routing, device pose behavior, haptics and finger articulation still require the corresponding hardware/backend evidence.

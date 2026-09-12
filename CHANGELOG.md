@@ -34,6 +34,11 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
   exact matrix tests prove numerical parity with the previous backend-local
   implementation. Release build and all 30 root CTest tests pass; definitive
   hand/tool geometry and light direction remain headset validation gates.
+- Re-audited the remaining Rework VR-only systems after that extraction and
+  documented the current host-only frontier: dimming, staged loading, physical
+  crouch, game UI flows and jointed mechanisms all still require either a real
+  second backend consumer or target-specific live/native evidence before a new
+  shared abstraction is justified.
 - Extracted Rework's controller-to-finger curl conditioning into shared runtime:
   the measured `0.08` skeletal deadzone, grip/trigger fallback closing windows
   and ~70 ms exponential smoothing now have one host-tested implementation.

@@ -335,6 +335,16 @@ integration still requires game-specific evidence.
 
 Long bars and mechanisms must not be fixed by arbitrary springs or rigid palm offsets. Map native joint/slider/hinge state.
 
+The remaining Rework VR code was re-audited host-only on 2026-09-12 after the
+attachment-socket extraction. There is no further justified shared-runtime
+extraction at the current evidence level: the VR dimmer is only consumed by
+Overture UI flows; staged loading is tied to Overture's map/compositor lifecycle;
+physical crouch still needs Black Plague stand-clearance evidence; inventory,
+notes, HUD and subtitles need native menu/draw-state boundaries; and jointed
+mechanisms need one mapped native mechanism consumer. Do not manufacture a
+generic abstraction to make the roadmap checkbox move. Resume this audit when a
+second backend boundary is demonstrated or after the relevant live/headset gate.
+
 ## Requiem
 
 Requiem remains a future exact-build binary backend. Do not assume Black Plague RVAs, layouts, calling conventions or lifecycle boundaries transfer without evidence.
