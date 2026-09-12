@@ -5,17 +5,17 @@ Actualizado: 2026-09-12.
 La tanda shadow de tracking/body ya está completada y **live-tested** en PID
 28172. No la repitas como siguiente gate salvo que aparezca una regresión.
 
-La petición física X/Z collision-aware en `0xD7281` está **implementada y
-host-tested**, pero todavía no está live-tested. La traslación posicional del HMD
-sigue desactivada y debe permanecer a cero durante esta prueba. El objetivo de
-la siguiente sesión con visor es validar únicamente:
+La petición física X/Z collision-aware en `0xD7281` está **live-tested** en PID
+26144. La traslación posicional del HMD permaneció a cero. La sesión demostró:
 
 `queue -> injection -> native collision resolution -> matched reconciliation`
 
-con casos stationary/free/block/slide y manteniendo un único tick nativo del
-cuerpo.
+con `12 stationary`, `37 free`, `2 blocked` y `15 slide/partial` al reanalizar el
+log con el clasificador corregido. El helper original exigía cero inyecciones
+para `stationary`, algo incompatible con el jitter normal del visor y con la
+referencia Rework `23c890f`, que procesa cualquier delta HMD no nulo.
 
-## Próxima prueba obligatoria: physical displacement live gate
+## Gate físico completado — repetir solo ante regresión
 
 Desde la raíz del repositorio ejecuta:
 
@@ -37,7 +37,8 @@ la evidencia completa.
 ### Escenarios que debes hacer, en este orden
 
 1. **Stationary.** Quédate quieto varios segundos, sin stick y sin intentar
-   desplazarte físicamente. La consola debe terminar registrando `stationary`.
+   desplazarte físicamente. No necesitas inmovilidad matemática: el helper
+   considera stationary el jitter horizontal inferior o igual a `2 mm`.
 2. **Free.** En una zona despejada, desplázate físicamente unos centímetros en
    X/Z sin usar el stick. Repite delante/atrás y lateralmente durante varios
    segundos. Debe aparecer `free` y no debe haber salto del mundo ni movimiento
@@ -85,14 +86,14 @@ fresco:
 - al menos una muestra `blocked`;
 - al menos una muestra `slide/partial`.
 
-Si falta cualquiera de esos puntos, la sesión sigue siendo **incompleta** y el
-boundary permanece `host-tested`. Conserva el mensaje final de la consola y el
-log del PID; indican exactamente qué evidencia faltó.
+Si falta cualquiera de esos puntos en una futura repetición, esa sesión es
+**incompleta**. Conserva el mensaje final de la consola y el log del PID;
+indican exactamente qué evidencia faltó.
 
-Si todos pasan, esta prueba permite promocionar el boundary físico de
-`0xD7281` a **live-tested**. No significa todavía que room-scale activo o la
-traslación posicional del HMD estén headset-validated; esos son el siguiente
-gate una vez incorporado de forma deliberada el consumo activo de esta ruta.
+PID 26144 ya promocionó el boundary físico de `0xD7281` a **live-tested**. Esto
+no significa todavía que room-scale activo o la traslación posicional del HMD
+estén headset-validated; ese es el siguiente gate una vez incorporado de forma
+deliberada el consumo activo de esta ruta.
 
 ## Prueba separada: presentación, mirror y pérdida de foco
 
@@ -100,8 +101,8 @@ Haz esta tanda en otra sesión usando la ruta normal `Start-Black-Plague-VR.cmd`
 No la mezcles con el physical displacement gate porque sus fallos pertenecen a
 otro límite.
 
-1. **Mirror apagado.** Confirma que la ventana del PC permanece negra y estable;
-   no debe reaparecer el punto blanco que crecía hasta ocupar casi toda la
+1. **Mirror apagado — completado en PID 26144.** La ventana del PC permaneció
+   negra; no reapareció el punto blanco que crecía hasta ocupar casi toda la
    ventana.
 2. **Mirror encendido.** Comprueba que la copia del ojo funciona y que alternarlo
    no rompe la presentación del visor.
@@ -117,7 +118,7 @@ otro límite.
 La regresión de menú negro tras pérdida de foco sigue abierta y no se considera
 resuelta por la limpieza del monitor.
 
-## Gates posteriores, solo después del physical displacement live pass
+## Siguientes gates tras el physical displacement live pass
 
 Mantén separados, en este orden aproximado, los siguientes hitos:
 
@@ -128,7 +129,7 @@ Mantén separados, en este orden aproximado, los siguientes hitos:
 5. cámara/bob y confort;
 6. manos, agarres y geometría de herramientas;
 7. mecanismos articulados;
-8. presentación/mirror si sigue pendiente;
+8. presentación/foco si sigue pendiente;
 9. Enhanced Visuals y otros extras no necesarios para el gate corporal.
 
 No promociones ningún sistema por compilación, tests host o análisis estático:

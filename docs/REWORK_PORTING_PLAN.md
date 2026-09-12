@@ -128,9 +128,9 @@ Do not force these into the first common body contract:
 
 The first shared contract exists to separate **policy** from **native mechanism**, not to flatten every game difference immediately.
 
-## Current priority — Black Plague physical displacement live validation
+## Current priority — Black Plague active room-scale validation
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction is host-tested and its default-off Black Plague shadow consumer is live-tested through PID 28172 with positional translation still zero. The bounded physical X/Z request is now implemented and host-tested at exact-build RVA `0xD7281`; it is still awaiting dedicated live evidence.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero.
 
 Current order:
 
@@ -138,9 +138,9 @@ Current order:
 2. Preserve the live-tested single-owner Black Plague body adapter boundary.
 3. Preserve the live-tested shared reconciliation/shadow implementation with Black Plague positional HMD translation at zero.
 4. Preserve shadow-only mode as observation-only; its plan is not evidence that the dedicated physical request was injected.
-5. Preserve the host-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
-6. Live-validate the dedicated request through stationary/free/block/slide cases and prove queue → injection → native collision resolution → measured accepted/rejected displacement.
-7. Only after that physical boundary has live evidence should active room-scale/positional tracking be enabled for headset validation.
+5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
+6. Enable active room-scale/positional tracking through that boundary as a deliberately scoped gate.
+7. Headset-validate active free movement, blocking/sliding and head/body reconciliation before promoting the integration.
 8. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
 9. Keep physical crouch and jump comfort/tuning as separate milestones.
 10. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.
@@ -256,7 +256,7 @@ API and implementation-time test results remain in
 host result and next live gate are recorded in
 [the validation follow-up](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
-Subsequent work live-tested that shadow path in PID 28172 and added the separate
-default-off `0xD7281` bounded X/Z request. The request is implemented and
-host-tested; its stationary/free/block/slide live gate remains pending. The
-current priority and validation order are recorded above.
+Subsequent work live-tested that shadow path in PID 28172 and the separate
+default-off `0xD7281` bounded X/Z request in PID 26144. Active
+room-scale/positional HMD translation through that boundary remains the next
+headset gate. The current priority and validation order are recorded above.

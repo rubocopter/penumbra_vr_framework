@@ -22,10 +22,11 @@ se añadió y pasó un gate CI separado que reconstruye Overture Release con
 comprobaciones históricas. Esto no promueve ningún estado live/headset de BP.
 
 Este texto conserva el estado histórico del 11 de septiembre. Después se
-live-testó el shadow en PID 28172 y se implementó y host-testó una solicitud
-física X/Z separada en `0xD7281`. La traslación posicional continúa a cero. El
-gate actual es validar live esa solicitud en stationary/free/block/slide. No
-ampliar reversing automáticamente.
+live-testó el shadow en PID 28172 y la solicitud física X/Z separada en
+`0xD7281` quedó live-tested en PID 26144. La traslación posicional continúa a
+cero. El siguiente gate es activar deliberadamente room-scale/traslación HMD a
+través de ese boundary y validarlo con visor. No ampliar reversing
+automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
 [el seguimiento post-push](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
@@ -90,11 +91,13 @@ El milestone de probing corporal quedó cerrado después de las capturas PID
 tiene burst live completo y el primer `BlackPlagueBodyAdapter` está live-tested.
 No se deben añadir más sondas corporales por defecto. La reconciliación shadow
 sobre ese adapter ya está live-tested en PID 28172 con traslación HMD a cero. El
-boundary dedicado de petición física X/Z collision-aware en metros ya está
-implementado y host-tested en `0xD7281`, con clamp horizontal de `0,05 m`, Y a
-cero, consumo one-shot ligado al body actual y sin duplicar `D6E00`. El siguiente
-paso útil es validarlo live en stationary/free/block/slide manteniendo la
-traslación HMD posicional a cero. Cámara/bob sigue como pista de comfort separada.
+boundary dedicado de petición física X/Z collision-aware en metros está
+live-tested en `0xD7281`, con clamp horizontal de `0,05 m`, Y a cero, consumo
+one-shot ligado al body actual y sin duplicar `D6E00`. PID 26144 produjo
+queue/injection/reconciliation y muestras free/blocked/slide; al corregir el
+clasificador stationary para tolerar jitter sub-2 mm, el mismo log aporta 12
+muestras stationary. El siguiente paso útil es validar room-scale/traslación HMD
+activa a través de este boundary. Cámara/bob sigue como pista de comfort separada.
 El launcher dedicado ya exige telemetría fresca de queue/injection/collision/
 reconciliation y clasifica muestras stationary/free/block/slide-or-partial a
 partir del request físico y el desplazamiento aceptado desde la posición previa
@@ -122,9 +125,9 @@ solver que no existen en la build binaria.
 La segunda extracción común también está hecha: `PlanBodyReconciliation`,
 `ReconcilePhysicalBodyMotion` y `CarryHeadAnchorWithLocomotion` viven en
 `vr_locomotion.*`. Overture los ejecuta en el orden probado. BP conserva el
-shadow sólo como observación y dispone de una ruta física separada, host-tested,
-que produce la observación correspondiente a su request inyectado. Esa ruta aún
-no está live-tested. No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
+shadow sólo como observación y dispone de una ruta física separada, live-tested
+en PID 26144, que produce la observación correspondiente a su request inyectado.
+No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
 
 ### Ownership del movimiento plano: estado confirmado
 
@@ -339,9 +342,10 @@ agarre inyecta un pico extremo en una ventana estable y comprueba que la
 estimación conserva la mediana; una sola muestra produce cero. El verificador
 PowerShell local contrasta la captura inicializada sin modificar procesos.
 
-El boundary corporal/adapter y la reconciliación shadow ya están live-tested,
-pero los hitos amplios de jugabilidad todavía no están certificados. La siguiente
-evidencia de esta pista debe validar live la petición física X/Z collision-aware
-ya host-tested en `0xD7281` antes de activar room-scale. Herramientas definitivas,
+El boundary corporal/adapter, la reconciliación shadow y la petición física X/Z
+collision-aware en `0xD7281` ya están live-tested, pero los hitos amplios de
+jugabilidad todavía no están certificados. La siguiente evidencia de esta pista
+debe validar con visor room-scale/traslación HMD activa a través de ese boundary.
+Herramientas definitivas,
 palm collision y mecanismos articulados siguen pendientes, además de sus pruebas
 con visor.

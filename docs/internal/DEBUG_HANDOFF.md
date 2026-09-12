@@ -41,7 +41,8 @@ The user previously reported world displacement / collision discomfort while mov
 - Shared reconciliation planning/rebase, physical-rejection correction and
   locomotion-anchor carry are implemented in `vr_locomotion.*`. The Black
   Plague shadow consumer remains observation-only and default-off; a separate
-  default-off physical request exists at `0xD7281` and is host-tested only.
+  default-off physical request exists at `0xD7281` and is now live-tested in
+  PID 26144.
 - PID 28172 live-tested the shadow consumer through the transient mutex with positional translation still zero: stationary/small-head-motion planning, native free/block/slide, recenter/body replacement and the existing ~60 Hz single native tick were observed without a second `D6E00`.
 - GitHub Actions has host-tested the current shared extraction on Windows x86: root metadata/Debug/Release tests pass, and the autonomous Overture Release regression job also passes.
 
@@ -63,27 +64,30 @@ Steam-started process installed the bridge/body adapter and activated the shadow
 from the transient mutex.
 
 The shadow-only mode still plans without injection. Separately, the bounded
-physical X/Z request boundary is now implemented and host-tested at exact-build
+physical X/Z request boundary is now live-tested at exact-build
 RVA `0xD7281`, immediately before the native X/Z comparison/collision path. It
 injects at most `0.05 m` horizontally, forces Y to zero, is one-shot for the
 current body, and is consumed by the existing single native tick without a
 second `D6E00`. `MoveForward/MoveSideways` remains native acceleration state and
 is not used as this metric displacement mechanism.
 
-The next evidence is live validation of that dedicated physical path. Require
-queued request → matched injection → native collision solver → measured
-acceptance/rejection for stationary/free/block/slide cases, with the acceptance
-baseline taken immediately before injection. Keep positional HMD translation
-disabled until that mechanism has separate live evidence. Camera/bob remains
+PID 26144 closed that live gate: queue → matched injection → native collision
+solver → measured acceptance/rejection was observed with positional HMD
+translation disabled. The corrected classifier treats sub-2 mm native/physical
+X/Z motion as stationary headset jitter, matching the fact that Rework 23c890f
+reacts to any non-zero HMD delta. Re-analysis of the session yields 12
+stationary, 37 free, 2 blocked and 15 slide/partial samples. Camera/bob remains
 separate comfort work.
 
-`tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1` now enforces that
-gate rather than treating activation as success. It also classifies stationary,
+`tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1` enforces that gate
+rather than treating activation as success. It also classifies stationary,
 free, blocked and slide/partial samples from the existing pre-injection physical
-request/accepted-displacement fields. PID 18392 deliberately ended after
+request/accepted-displacement fields. Its stationary classification now accepts
+sub-2 mm injected tracking jitter instead of requiring a mathematically zero
+request. PID 18392 deliberately ended after
 activation only and the helper correctly failed because no queued,
-consumed/injected, reconciled or injected-body telemetry existed. Do not promote
-the boundary from `host-tested` on activation evidence alone.
+consumed/injected, reconciled or injected-body telemetry existed. Do not count a
+future repetition as successful on activation evidence alone.
 
 ## 2. Black Plague locomotion speed / timing
 
@@ -109,7 +113,11 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-Live-validate the host-tested physical displacement boundary first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
+Headset-validate active room-scale/positional HMD translation through the
+live-tested physical displacement boundary first. Then compare a deliberately
+scoped Black Plague VR locomotion policy against the proven Overture
+`1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement
+rather than analog scaling as the correctness boundary.
 
 ## 3. Black Plague jump
 

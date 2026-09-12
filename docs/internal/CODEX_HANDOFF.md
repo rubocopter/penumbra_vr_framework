@@ -198,9 +198,12 @@ PID 8628 demonstrated:
 
 `runtime::VrAcceptedBodyMotion` is the first body contract used by both Overture and Black Plague. It contains finite before/after positions and accepted displacement only. It must remain free of RVAs, HPL layouts, speed constants and native-update ownership.
 
-Overture consumes it without changing its proven room-scale/locomotion behavior. Black Plague currently uses it as observation only.
+Overture consumes it without changing its proven room-scale/locomotion behavior.
+Black Plague produces it from the native tick; the live-tested validation path
+feeds the matched physical observation into shared reconciliation while active
+positional camera translation remains disabled.
 
-## Current milestone — physical displacement boundary host-tested; live gate pending
+## Current milestone — physical displacement live-tested; active room-scale pending
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -240,8 +243,8 @@ and also passed the new autonomous Overture Release regression job. That root
 configuration contained 27 CTest tests; hosted CI intentionally excluded only
 the real-driver `opengl_eye_targets` pixel test as documented in the workflow.
 
-The collision-aware physical displacement boundary is now implemented and
-**host-tested**. Exact-build RVA `0xD7281` is the pre-comparison injection point:
+The collision-aware physical displacement boundary is now **live-tested**.
+Exact-build RVA `0xD7281` is the pre-comparison injection point:
 a bounded one-shot X/Z request (maximum horizontal step `0.05 m`, Y forced to
 zero) is injected immediately before the native horizontal comparison/collision
 path and is consumed by the existing single `D6E00` tick. The gateway preserves
@@ -254,11 +257,19 @@ The dedicated path is default-off and can be activated by
 `PVR_BP_PHYSICAL_DISPLACEMENT_VALIDATION=1` or the transient mutex held by
 `tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1`. Local Release build,
 all **30/30** root CTest tests and `tools/Test-BlackPlagueInputMap.ps1` against
-the initialized exact-build capture pass with the new `0xD7281` verification.
-This advances the physical request boundary to **implemented → host-tested**.
-It has not yet been live-tested.
+the initialized exact-build capture passed with the new `0xD7281` verification.
+PID 26144 advanced the physical request boundary through
+**implemented → host-tested → live-tested**. The session retained
+`positional_translation_enabled=0`, exercised queue/injection/matched
+reconciliation with the existing native `dt~=1/60` tick, and produced free,
+blocked and slide/partial physical outcomes. The original helper could not mark
+`stationary` because it required literally zero physical injection; Rework
+`23c890f` itself reacts to any non-zero HMD delta, so real headset jitter makes
+that criterion invalid. Re-analysis with the corrected 2 mm significance
+boundary yields 12 stationary/jitter samples, 37 free, 2 blocked and 15
+slide/partial samples from the same PID.
 
-The dedicated launcher is now fail-closed for that promotion. It requires fresh
+The dedicated launcher remains fail-closed for future repetitions. It requires fresh
 telemetry proving a non-zero queued physical plan, consumed/injected boundary
 request, matched reconciliation, body telemetry with the non-zero physical
 request/injection, the existing `dt~=1/60` native body tick and explicit sampled
@@ -271,18 +282,17 @@ positional translation zero but no physical request telemetry exits with failure
 instead of being counted as live validation. PID 24484 likewise remains
 activation evidence only.
 
-The next gameplay gate is the dedicated live physical-displacement validation:
-prove queued request → one injection → native collision solver → measured
-acceptance/rejection for stationary/free/block/slide cases while retaining the
-existing ~60 Hz single native body tick. Keep
-`positional_translation_enabled=0` until that evidence is complete.
+The next gameplay gate is active room-scale/positional HMD translation through
+that live-tested body boundary. Preserve the same single-owner `0xD7281` path,
+body/generation matching and native vertical/jump ownership, then headset-validate
+free movement, blocking/sliding and head/body reconciliation before promoting
+the active integration.
 
-Two presentation regressions from the completed headset session remain separate:
-with monitor mirror disabled the desktop showed a growing white-point artifact,
-and after Alt+Tab/focus loss headset gameplay continued while main menu/inventory
-could render black. The mirror-off path now clears the desktop backbuffer
-deterministically when stereo owns presentation; this is host-tested only and
-still needs headset confirmation. The focus-loss menu issue is not patched: the
+Two presentation regressions from the earlier headset session remain separate.
+PID 26144 visually confirmed that with monitor mirror disabled the desktop now
+stays black; the growing white-point artifact did not return, so the mirror-off
+clear has headset confirmation. After Alt+Tab/focus loss, main menu/inventory
+can still render black; that issue is not patched. The
 current tracked-menu capture still depends on the desktop framebuffer/focus and
 needs a better evidenced ownership boundary before changing behavior.
 

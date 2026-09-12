@@ -139,8 +139,8 @@ The tracking/body policy now has shared stateless planning, physical rejection
 and locomotion-carry phases. Overture executes physical requests through its
 source adapter. Black Plague has two deliberately separate consumers: a
 default-off observation-only shadow and a default-off physical-validation path.
-The shadow path is live-tested; the physical path is implemented and
-host-tested at exact-build RVA `0xD7281`:
+The shadow and physical-validation paths are live-tested. PID 26144 exercised
+the physical path at exact-build RVA `0xD7281`:
 
 ```text
 raw tracking at existing render boundary
@@ -160,10 +160,11 @@ measured accepted motion + reconciliation telemetry
 ```
 
 Shadow accepted movement is still not a response to its observation-only plan.
-The separate validation mode can inject a collision-aware request in metres,
-but it has no live evidence yet. Positional translation stays zero until a live
-run proves queue, injection, native collision and matched reconciliation for
-stationary, free, blocked and sliding cases.
+The separate validation mode injects a collision-aware request in metres and
+now has live queue, injection, native collision and matched-reconciliation
+evidence for stationary/jitter, free, blocked and sliding cases. Positional
+translation remained zero in that run; active room-scale is the next headset
+gate through the same boundary.
 
 The shared extraction is host-tested and the shadow wiring is live-tested in PID
 28172. GitHub Actions passed metadata validation plus Debug/Release root CTest

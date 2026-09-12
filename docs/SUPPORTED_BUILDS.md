@@ -25,10 +25,9 @@ Use these states consistently:
 Examples at the current checkpoint:
 
 - the autonomous Overture Framework build has an initial functional `headset-validated` integration pass, but is not yet a supported release;
-- the Black Plague body/collision, narrow body-adapter and default-off reconciliation shadow boundaries are `live-tested` on the allowlisted hash;
+- the Black Plague body/collision, narrow body-adapter, default-off reconciliation shadow and collision-aware physical X/Z request boundaries are `live-tested` on the allowlisted hash;
 - Black Plague native stereo/yaw tracking have prior headset validation;
-- the Black Plague collision-aware physical X/Z request is implemented and host-tested on the allowlisted hash, but is not yet live-tested;
-- Black Plague active positional HMD/body reconciliation remains disabled pending live queue/injection/collision/reconciliation evidence for that request path;
+- Black Plague active positional HMD/body reconciliation remains disabled pending its separate headset-validation gate through the live-tested request path;
 - Requiem remains research/planned work.
 
 ## Support rules

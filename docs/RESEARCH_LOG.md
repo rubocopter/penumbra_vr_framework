@@ -454,3 +454,26 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
   headset-validated. Scissor query cost, menus, flashlight and both mirror modes
   require the next live session. No new tonemapping/shader integration; Rework
   remains untouched and the installed game executables are unchanged.
+
+### 2026-09-12 — Physical displacement live gate and mirror-off confirmation
+
+- Live evidence: Black Plague PID 26144 activated the transient physical
+  displacement validation path with `positional_translation_enabled=0` and
+  retained the native `dt=0.016667` body tick.
+- Boundary evidence: the fresh log records non-zero plans queued, requests
+  consumed/injected at exact-build RVA `0xD7281`, and matched reconciliation for
+  the current body/generation. Re-analysis yields 37 free, 2 blocked and 15
+  slide/partial samples.
+- Stationary classifier correction: the first helper required no physical
+  injection at all, but Rework `23c890f` intentionally processes any non-zero
+  HMD delta and a real headset continuously produces small tracking jitter. The
+  classifier now uses the shared `0.002 m` rejection-significance boundary for
+  stationary/jitter and finds 12 valid samples in PID 26144. This changes only
+  evidence classification; runtime movement policy is unchanged.
+- Presentation evidence: the user visually confirmed that with monitor mirror
+  disabled the desktop remained black and the prior growing white-point
+  artifact did not return. Mirror-on contents and Alt+Tab/focus-loss menu
+  behavior remain separate pending checks.
+- Result: the `0xD7281` request boundary advances to `live-tested`. Active
+  room-scale/positional HMD translation remains disabled and requires its own
+  headset-validation gate through this boundary.

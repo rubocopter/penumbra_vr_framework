@@ -36,9 +36,9 @@ physics ticks. It is not evidence that the whole simulation runs at 2x.
 
 | System | Runtime | Overture backend / adapter | Black Plague backend |
 |---|---|---|---|
-| Tracking space | `VrTrackingSpace`: metres, yaw, calibration, posture/seated offsets and tracking-to-world | supplies source HPL body/feet pose | exact-build body and shadow reconciliation are live-tested; positional translation remains disabled pending the physical-request live gate |
-| Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | native movement/speed ownership is live-characterized; the separate bounded X/Z request is host-tested |
-| Collision | requested/accepted displacement reconciliation | `OvertureBodyAdapter::MoveBodyBy` owns `iCharacterBody::Update` and static-only mode | cylinder/body/update/solver ownership is live-tested; injected request reconciliation is not yet live-tested |
+| Tracking space | `VrTrackingSpace`: metres, yaw, calibration, posture/seated offsets and tracking-to-world | supplies source HPL body/feet pose | exact-build body, shadow reconciliation and physical-request boundary are live-tested; active positional translation awaits its headset gate |
+| Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | native movement/speed ownership is live-characterized; the separate bounded X/Z request is live-tested |
+| Collision | requested/accepted displacement reconciliation | `OvertureBodyAdapter::MoveBodyBy` owns `iCharacterBody::Update` and static-only mode | cylinder/body/update/solver ownership and injected request reconciliation are live-tested |
 | Jump | edge/held semantics | adapter calls native `Jump` and `SetJumpButtonDown` | native Jump-state vertical ownership and the unique body tick are live-characterized |
 | Turn | shared neutral-arm and dead-zone policy | changes tracking-space world yaw | currently changes native player yaw |
 | Interaction | shared palm-relative grab/release math already present | HPL entity classification, palm overlap and joints stay backend-side | exact-build direct free-body path; no jointed-body adapter yet |
@@ -247,9 +247,10 @@ injection point, crouch-size state, jump and solver differences. BP has no
 evidence for Overture's added `vr_velocity`, `vr_stepstaticonly`,
 `CollidePlayer` or `IsPlayer` fields/arguments, so none may be copied by layout.
 The probe measures before/requested/solver/final positions. Those mappings,
-jump ownership and the narrow body adapter are live-characterized. A separate
-default-off X/Z injection boundary now exists at `0xD7281`; it is host-tested
-and awaits its dedicated live collision/reconciliation gate.
+jump ownership and the narrow body adapter are live-characterized. The separate
+default-off X/Z injection boundary at `0xD7281` is live-tested in PID 26144;
+active room-scale/positional HMD translation still requires its own headset
+validation through that boundary.
 
 Finger articulation points in the other direction. BP's existing shared
 `VrHandArticulation` output (independent curls, three joint curves, spread and

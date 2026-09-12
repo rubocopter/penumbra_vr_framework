@@ -89,6 +89,12 @@ function Get-PhysicalScenarioEvidence {
         [Parameter(Mandatory = $true)] [string[]]$Lines
     )
 
+    # Rework 23c890f deliberately reacts to any non-zero HMD tracking delta.
+    # Real headsets therefore keep producing tiny injected X/Z requests even
+    # when the player is intentionally stationary. Use the shared 2 mm
+    # reconciliation significance boundary to distinguish tracking jitter from
+    # meaningful physical motion; do not require a mathematically zero request.
+    $meaningfulPhysicalMotionMeters = 0.002
     $stationary = $false
     $free = $false
     $blocked = $false
@@ -98,18 +104,26 @@ function Get-PhysicalScenarioEvidence {
     [UInt64]$blockedSamples = 0
     [UInt64]$slideSamples = 0
 
-    # Body telemetry is emitted from the already-owned native D6E00 tick. A
-    # stationary sample requires no native horizontal request/acceptance and no
-    # physical injection. Physical cases compare the injected X/Z request with
-    # displacement accepted from the pre-injection position, so native stick
-    # locomotion that occurred earlier in the tick is excluded.
+    # Body telemetry is emitted from the already-owned native D6E00 tick.
+    # Stationary means no meaningful horizontal native/physical displacement;
+    # sub-2 mm injected tracking jitter is expected on real HMDs. Physical cases
+    # compare the injected X/Z request with displacement accepted from the
+    # pre-injection position, so native stick locomotion that occurred earlier
+    # in the tick is excluded.
     foreach ($line in $Lines | Where-Object { $_ -like '*body_collision *' }) {
         $nativeRequested = Get-VectorField -Line $line -Field 'requested_delta'
         $nativeAccepted = Get-VectorField -Line $line -Field 'accepted_delta'
+        $physicalRequested = Get-VectorField -Line $line -Field 'physical_requested'
+        $physicalAccepted = Get-VectorField -Line $line -Field 'physical_accepted'
+        $physicalInactive = $line -match 'physical_consumed=0 physical_injected=0'
+        $physicalJitterOnly = $line -match 'physical_consumed=1 physical_injected=1' -and
+            $null -ne $physicalRequested -and $null -ne $physicalAccepted -and
+            (Get-HorizontalMagnitude -Vector $physicalRequested) -le $meaningfulPhysicalMotionMeters -and
+            (Get-HorizontalMagnitude -Vector $physicalAccepted) -le $meaningfulPhysicalMotionMeters
         if ($null -ne $nativeRequested -and $null -ne $nativeAccepted -and
-            $line -match 'physical_consumed=0 physical_injected=0' -and
-            (Get-HorizontalMagnitude -Vector $nativeRequested) -le 0.00025 -and
-            (Get-HorizontalMagnitude -Vector $nativeAccepted) -le 0.00025) {
+            ($physicalInactive -or $physicalJitterOnly) -and
+            (Get-HorizontalMagnitude -Vector $nativeRequested) -le $meaningfulPhysicalMotionMeters -and
+            (Get-HorizontalMagnitude -Vector $nativeAccepted) -le $meaningfulPhysicalMotionMeters) {
             $stationary = $true
             $stationarySamples++
         }
@@ -118,14 +132,14 @@ function Get-PhysicalScenarioEvidence {
             continue
         }
 
-        $requested = Get-VectorField -Line $line -Field 'physical_requested'
-        $accepted = Get-VectorField -Line $line -Field 'physical_accepted'
+        $requested = $physicalRequested
+        $accepted = $physicalAccepted
         if ($null -eq $requested -or $null -eq $accepted) {
             continue
         }
 
         $requestedMagnitude = Get-HorizontalMagnitude -Vector $requested
-        if ($requestedMagnitude -lt 0.00025) {
+        if ($requestedMagnitude -lt $meaningfulPhysicalMotionMeters) {
             continue
         }
 

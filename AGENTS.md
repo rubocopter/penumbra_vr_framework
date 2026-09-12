@@ -59,17 +59,20 @@ Black Plague body/collision ownership is also no longer an open mapping problem.
 
 The shared tracking/body reconciliation phases and default-off Black Plague shadow consumer are implemented and **live-tested** through the existing adapter. PID 28172 confirmed transient-mutex activation, stationary/small-head-motion planning, native free/block/slide observations, body replacement/recenter handling and the existing ~60 Hz native body tick while positional HMD translation remained zero. The shadow path still performs no body/camera writes.
 
-The next Black Plague gameplay gate is live validation of the host-tested
-**collision-aware physical X/Z displacement request in metres** at exact-build
-RVA `0xD7281`:
+The collision-aware physical X/Z displacement request in metres at exact-build
+RVA `0xD7281` is now **live-tested** in PID 26144. The session demonstrated
+queue → injection → native collision resolution → matched reconciliation with
+free, blocked and slide/partial outcomes while positional HMD translation stayed
+zero. Re-analysis with the corrected real-HMD stationary classifier also found
+12 sub-2 mm stationary/jitter samples. The boundary retained the `0.05 m`
+horizontal clamp, body/generation matching and the existing single native tick.
 
-1. preserve the single-owner callsite model;
-2. keep Black Plague positional HMD translation at zero until the physical request boundary has live evidence;
-3. preserve the bounded one-shot X/Z request, `0.05 m` horizontal clamp, body/generation matching and existing single native tick ownership;
-4. demonstrate queue → injection → native collision resolution → matched reconciliation through stationary/free/block/slide cases;
-5. do not interpret the shadow plan or native accepted locomotion as acceptance/rejection of an uninjected physical request;
-6. only after that boundary is live evidenced should active room-scale and positional HMD translation move to headset validation;
-7. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
+The next Black Plague gameplay gate is active room-scale/positional HMD
+translation through that now-live-tested body boundary. Preserve the same
+single-owner path and validate physical movement, blocking/sliding and
+head/body reconciliation in-headset before promoting it further. Keep
+jump/vertical state native and keep physical crouch, speed tuning and camera/bob
+work as separate validation gates.
 
 ## Black Plague constraints
 
@@ -79,13 +82,19 @@ Do not call `iCharacterBody::Update(D6E00)` from the adapter. The native physics
 
 Do not make horizontal VR intent responsible for the native Jump state's vertical pipeline. The live jump burst demonstrates separate ownership.
 
-Do not enable positional HMD translation merely because the adapter and reconciliation shadow are live-tested. The collision-aware physical displacement request boundary is host-tested but still lacks the dedicated live stationary/free/block/slide evidence.
+Do not bypass the live-tested `0xD7281` body boundary when enabling positional
+HMD translation. Active room-scale still requires its own headset validation;
+the live boundary evidence does not by itself validate the final camera/body
+integration.
 
 Do not force doors, levers, joints or other mechanism bodies through the free-body grab path; map their native state instead.
 
 Do not copy Overture RVAs, model-specific grip values or body layouts into Black Plague/Requiem.
 
-The monitor mirror remains experimental and is not a current gameplay milestone. The mirror-off desktop clear is host-tested only; the reported Alt+Tab/focus-loss menu-black behavior remains an unresolved presentation boundary.
+The monitor mirror remains experimental and is not a current gameplay milestone.
+PID 26144 visually confirmed the mirror-off desktop clear remains black with no
+return of the growing white-point artifact. The reported Alt+Tab/focus-loss
+menu-black behavior remains an unresolved presentation boundary.
 
 ## Reuse and scope discipline
 

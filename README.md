@@ -26,7 +26,7 @@ The autonomous Framework build has completed an initial SteamVR/headset/controll
 
 Black Plague already has native stereo, rotational HMD tracking and keyboard/mouse preservation working in-headset. Controller input, tracked menus, provisional hands and initial physical interaction are also implemented.
 
-The native player-body/collision boundary, first narrow body adapter and default-off tracking/body reconciliation shadow are now live-tested. The separate **collision-aware physical X/Z displacement request** through the existing native tick is implemented and host-tested at the exact-build pre-collision boundary. Positional HMD translation remains disabled until that request path is live-validated through real queue/injection/collision/reconciliation evidence.
+The native player-body/collision boundary, first narrow body adapter, default-off tracking/body reconciliation shadow and separate **collision-aware physical X/Z displacement request** through the existing native tick are now live-tested. PID 26144 demonstrated queue/injection/native collision/matched reconciliation at the exact-build pre-collision boundary while positional HMD translation remained zero. Active room-scale/positional HMD translation is the next headset-validation gate through that boundary.
 
 The complete Rework-derived VR settings schema is persisted by the Framework, and the shared 18-row editor policy is host-tested. Black Plague has an explicit capability map for the settings its backend currently applies and an offline editor via `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. A dedicated in-game VR settings page still requires a demonstrated safe native-menu insertion boundary.
 

@@ -1,6 +1,6 @@
 # Arranque VR y estado de los mandos
 
-Actualizado: 2026-09-08. Backend **Black Plague FD316F…** únicamente.
+Actualizado: 2026-09-12. Backend **Black Plague FD316F…** únicamente.
 
 La prueba de visor del 2026-09-06 confirmó el arranque mediante BAT, recentrado,
 menús, inventario/libreta, dedos, movimiento, giro, correr/agacharse y luces
@@ -21,7 +21,9 @@ mejora visual validada hasta una nueva prueba.
 - **Validado en visor:** BAT, recentrado, menús/inventario/libreta, dedos,
   locomoción básica, giro, correr/agacharse y estabilidad de luces en la zona
   probada.
-- **Pendiente de nueva prueba:** mirror desde el ojo izquierdo, propiedad diestra
+- **Validado después:** con mirror desactivado, PID 26144 mantuvo el monitor
+  negro sin el artefacto del punto blanco creciente.
+- **Pendiente de nueva prueba:** mirror activado desde el ojo izquierdo, propiedad diestra
   y L2/R2, movimiento relativo al HMD, adquisición de agarre tras confirmar el
   estado nativo, ciclo L1 Rework y anclaje de herramientas.
 - **Deliberadamente no terminado:** room-scale, colisión de palmas, puertas/
@@ -47,7 +49,8 @@ evidencia para separar velocidad física de una anomalía temporal.
 El launcher imprime la ruta efectiva de settings y el valor del mirror tanto en
 preflight como al activarlo. Los ajustes Black Plague que el backend consume
 también pueden editarse sin arrancar el juego con
-`PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. El mirror continúa
+`PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. El clear del monitor
+con mirror desactivado tiene confirmación visual; el mirror activado sigue
 pendiente de certificación física.
 
 ## Arrancar sin adjuntar el mod a mano
@@ -78,14 +81,13 @@ verificador exact-build y mantiene el mutex temporal durante la sesión; el
 fallback `PVR_BP_RECONCILIATION_SHADOW=1` sigue reservado a procesos que hereden
 realmente esa variable.
 
-La próxima tanda con visor se divide en dos grupos. La presentación puede
-revalidarse ya: con mirror desactivado el monitor debe permanecer negro sin el
-artefacto del punto blanco creciente; además hay que volver a comprobar
-Alt+Tab/foco porque actualmente menú e inventario pueden quedar negros en el
-visor al perder foco la ventana. El backend ya implementa y ha host-testado la
-petición física X/Z collision-aware en metros. La prueba de room-scale debe
-esperar a que esa ruta se demuestre live; hasta entonces la traslación posicional
-del HMD permanece desactivada.
+PID 26144 cerró dos comprobaciones: el monitor permaneció negro con mirror
+desactivado y la petición física X/Z collision-aware en `0xD7281` quedó
+live-tested con positional translation a cero. La siguiente tanda corporal es
+la validación con visor de room-scale/traslación HMD activa a través de ese
+boundary. En presentación siguen pendientes el mirror activado y Alt+Tab/foco,
+porque menú e inventario pueden quedar negros en el visor al perder foco la
+ventana.
 
 Los logs se crean automáticamente en `%LOCALAPPDATA%\PenumbraVR\logs`, con un
 `black-plague-probe-<PID>.log` para cada ejecución. La lista ordenada de pruebas
