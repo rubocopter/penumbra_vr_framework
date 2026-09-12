@@ -23,9 +23,13 @@ comprobaciones históricas. Esto no promueve ningún estado live/headset de BP.
 
 Este texto conserva el estado histórico del 11 de septiembre. Después se
 live-testó el shadow en PID 28172 y la solicitud física X/Z separada en
-`0xD7281` quedó live-tested en PID 26144. La traslación posicional continúa a
-cero. El siguiente gate es activar deliberadamente room-scale/traslación HMD a
-través de ese boundary y validarlo con visor. No ampliar reversing
+`0xD7281` quedó live-tested en PID 26144. La traslación posicional estuvo a
+cero en esa sesión. El consumidor room-scale X/Z activo ya está implementado
+tras un doble opt-in transitorio: obtiene `predicted_anchor - body_after` del
+shadow reconciliado, caduca a los 250 ms y aplica la misma base a cámara,
+visibilidad y controladores. Sus targets Release afectados compilan, pero
+permanece `implemented`, sin pruebas host, live ni con visor. El siguiente gate es
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
 [el seguimiento post-push](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
@@ -96,8 +100,9 @@ live-tested en `0xD7281`, con clamp horizontal de `0,05 m`, Y a cero, consumo
 one-shot ligado al body actual y sin duplicar `D6E00`. PID 26144 produjo
 queue/injection/reconciliation y muestras free/blocked/slide; al corregir el
 clasificador stationary para tolerar jitter sub-2 mm, el mismo log aporta 12
-muestras stationary. El siguiente paso útil es validar room-scale/traslación HMD
-activa a través de este boundary. Cámara/bob sigue como pista de comfort separada.
+muestras stationary. Room-scale/traslación HMD activa ya está implementado
+detrás del request de validación separado y debe validarse ahora a través de
+este boundary. Cámara/bob sigue como pista de comfort separada.
 El launcher dedicado ya exige telemetría fresca de queue/injection/collision/
 reconciliation y clasifica muestras stationary/free/block/slide-or-partial a
 partir del request físico y el desplazamiento aceptado desde la posición previa

@@ -67,12 +67,20 @@ zero. Re-analysis with the corrected real-HMD stationary classifier also found
 12 sub-2 mm stationary/jitter samples. The boundary retained the `0.05 m`
 horizontal clamp, body/generation matching and the existing single native tick.
 
-The next Black Plague gameplay gate is active room-scale/positional HMD
-translation through that now-live-tested body boundary. Preserve the same
-single-owner path and validate physical movement, blocking/sliding and
-head/body reconciliation in-headset before promoting it further. Keep
-jump/vertical state native and keep physical crouch, speed tuning and camera/bob
-work as separate validation gates.
+The default-off Black Plague active room-scale consumer is now **implemented**
+and statically reviewed. It only activates when the separate room-scale request
+and live-tested physical-displacement request are both present, reads a fresh
+body-generation-matched reconciliation sample, and applies its horizontal
+offset to camera, visibility and controller space. It expires stale samples,
+keeps jump/Y native and does not add another body tick. The affected Release
+targets compile, but no test executable was run; this is not yet host-tested,
+live-tested or headset-validated.
+
+The next Black Plague gameplay gate is
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must validate active
+physical movement, blocking/sliding, recenter, the native crouch shape swap and
+recovery, head/hand coherence and mirror-on presentation before promotion. Keep physical
+crouch-by-height, speed tuning and camera/bob as separate validation gates.
 
 ## Black Plague constraints
 
@@ -92,9 +100,10 @@ Do not force doors, levers, joints or other mechanism bodies through the free-bo
 Do not copy Overture RVAs, model-specific grip values or body layouts into Black Plague/Requiem.
 
 The monitor mirror remains experimental and is not a current gameplay milestone.
-PID 26144 visually confirmed the mirror-off desktop clear remains black with no
-return of the growing white-point artifact. The reported Alt+Tab/focus-loss
-menu-black behavior remains an unresolved presentation boundary.
+PID 19192 confirmed that mirror-off suppresses the gameplay world to black while
+native 2D menus remain visible, which matches the current pass ownership. The
+room-scale helper persists mirror on for the next batch. Mirror-on behavior and
+the reported Alt+Tab/focus-loss menu-black boundary remain unresolved.
 
 ## Reuse and scope discipline
 

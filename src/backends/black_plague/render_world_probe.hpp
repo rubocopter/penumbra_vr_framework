@@ -49,6 +49,11 @@ struct RenderWorldFrameTelemetry {
     std::array<float, 3> hmd_tracking_position_m{};
     float hmd_horizontal_delta_m = 0.0F;
     float positional_world_units_per_meter = 0.0F;
+    bool room_scale_enabled = false;
+    bool room_scale_sample_valid = false;
+    bool positional_translation_applied = false;
+    std::uint64_t room_scale_body_generation = 0;
+    std::array<float, 3> room_scale_camera_offset_m{};
     bool persistent_stereo_active = false;
     bool monitor_mirror_enabled = false;
     std::uint32_t monitor_world_passes = 0;

@@ -21,12 +21,15 @@ mejora visual validada hasta una nueva prueba.
 - **Validado en visor:** BAT, recentrado, menús/inventario/libreta, dedos,
   locomoción básica, giro, correr/agacharse y estabilidad de luces en la zona
   probada.
-- **Validado después:** con mirror desactivado, PID 26144 mantuvo el monitor
-  negro sin el artefacto del punto blanco creciente.
+- **Validado después:** con mirror desactivado, PID 19192 mostró los menús 2D
+  nativos en el monitor y dejó negro el gameplay al suprimir su pase de mundo,
+  sin el artefacto del punto blanco creciente.
 - **Pendiente de nueva prueba:** mirror activado desde el ojo izquierdo, propiedad diestra
   y L2/R2, movimiento relativo al HMD, adquisición de agarre tras confirmar el
   estado nativo, ciclo L1 Rework y anclaje de herramientas.
-- **Deliberadamente no terminado:** room-scale, colisión de palmas, puertas/
+- **Implementado y pendiente de visor:** room-scale X/Z activo detrás del helper
+  transitorio `Start-BlackPlagueRoomScaleValidation.ps1`.
+- **Deliberadamente no terminado:** colisión de palmas, puertas/
   palancas/joints, modelos HPL de Rework y Enhanced visuals GPU.
 
 La tanda posterior añadió `native_update_timing`, contadores de herramientas y
@@ -81,11 +84,13 @@ verificador exact-build y mantiene el mutex temporal durante la sesión; el
 fallback `PVR_BP_RECONCILIATION_SHADOW=1` sigue reservado a procesos que hereden
 realmente esa variable.
 
-PID 26144 cerró dos comprobaciones: el monitor permaneció negro con mirror
-desactivado y la petición física X/Z collision-aware en `0xD7281` quedó
-live-tested con positional translation a cero. La siguiente tanda corporal es
-la validación con visor de room-scale/traslación HMD activa a través de ese
-boundary. En presentación siguen pendientes el mirror activado y Alt+Tab/foco,
+PID 26144 cerró la petición física X/Z collision-aware en `0xD7281` con
+positional translation a cero. PID 19192 confirmó que mirror-off conserva los
+menús 2D pero deja negro el gameplay, de acuerdo con el ownership de pases. El
+room-scale X/Z activo ya está implementado, sus targets Release afectados
+compilan y sigue default-off, pendiente de pruebas host, live y con visor mediante
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`. El helper fuerza mirror
+activado para la tanda. En presentación siguen pendientes mirror-on y Alt+Tab/foco,
 porque menú e inventario pueden quedar negros en el visor al perder foco la
 ventana.
 

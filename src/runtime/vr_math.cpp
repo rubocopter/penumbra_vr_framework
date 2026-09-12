@@ -338,6 +338,40 @@ bool ComposeYawRecenteredTrackedHeadView(
     return true;
 }
 
+bool ApplyWorldTranslationToView(
+    const VrMatrix44& view,
+    const std::array<float, 3>& world_translation,
+    VrMatrix44& translated_view,
+    std::string& error) noexcept {
+    error.clear();
+    translated_view = {};
+    if (!IsFinite(view)) {
+        error = "The view matrix contains a non-finite value";
+        return false;
+    }
+    if (!std::isfinite(world_translation[0]) ||
+        !std::isfinite(world_translation[1]) ||
+        !std::isfinite(world_translation[2])) {
+        error = "The world translation contains a non-finite value";
+        return false;
+    }
+
+    VrMatrix44 pose;
+    if (!InvertRigidTransform(CollapseRigidMatrix(view), pose, error)) {
+        error = "The view matrix is not rigid: " + error;
+        return false;
+    }
+    for (std::size_t axis = 0; axis < 3; ++axis) {
+        pose.values[Index(axis, 3)] += world_translation[axis];
+    }
+    if (!InvertRigidTransform(
+            CollapseRigidMatrix(pose), translated_view, error)) {
+        error = "The translated view is invalid: " + error;
+        return false;
+    }
+    return true;
+}
+
 bool BuildHplInfiniteProjection(
     const VrEyeConfiguration& eye,
     float near_clip,

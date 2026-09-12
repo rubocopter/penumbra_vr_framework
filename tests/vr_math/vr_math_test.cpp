@@ -372,6 +372,49 @@ using penumbra_vr::runtime::VrMatrix44;
     return true;
 }
 
+[[nodiscard]] bool TestWorldTranslationToView() {
+    VrMatrix44 translated;
+    std::string error;
+    if (!penumbra_vr::runtime::ApplyWorldTranslationToView(
+            penumbra_vr::runtime::IdentityMatrix(),
+            {1.0F, 2.0F, -3.0F}, translated, error)) {
+        std::cerr << "World translation failed: " << error << '\n';
+        return false;
+    }
+    if (!ExpectMatrixValue(translated, 0, 3, -1.0F, "Translated view X") ||
+        !ExpectMatrixValue(translated, 1, 3, -2.0F, "Translated view Y") ||
+        !ExpectMatrixValue(translated, 2, 3, 3.0F, "Translated view Z")) {
+        return false;
+    }
+
+    VrMatrix44 yawed_view;
+    if (!penumbra_vr::runtime::InvertRigidTransform(
+            YawNinetyDegrees(4.0F, 2.0F, -3.0F), yawed_view, error) ||
+        !penumbra_vr::runtime::ApplyWorldTranslationToView(
+            yawed_view, {1.0F, 0.0F, 0.0F}, translated, error)) {
+        std::cerr << "Yawed world translation failed: " << error << '\n';
+        return false;
+    }
+    if (!ExpectMatrixValue(translated, 0, 3, -3.0F,
+            "Yawed translated view X") ||
+        !ExpectMatrixValue(translated, 1, 3, -2.0F,
+            "Yawed translated view Y") ||
+        !ExpectMatrixValue(translated, 2, 3, -5.0F,
+            "Yawed translated view Z")) {
+        std::cerr << "World translation was applied in view-local space\n";
+        return false;
+    }
+
+    if (penumbra_vr::runtime::ApplyWorldTranslationToView(
+            penumbra_vr::runtime::IdentityMatrix(),
+            {std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F},
+            translated, error) || error.empty()) {
+        std::cerr << "A non-finite world translation was accepted\n";
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestInvalidInputs() {
     VrMatrix34 scaled = Translation(0.0F, 0.0F, 0.0F);
     scaled.values[0] = 2.0F;
@@ -442,7 +485,7 @@ int main() {
     if (!TestRigidInverse() || !TestProjection() ||
         !TestConservativeStereoCullFrustum() || !TestEyeViews() ||
         !TestRelativeHeadTracking() || !TestYawRecenteredHeadTracking() ||
-        !TestInvalidInputs()) {
+        !TestWorldTranslationToView() || !TestInvalidInputs()) {
         return 1;
     }
     std::cout << "VR matrix tests passed\n";

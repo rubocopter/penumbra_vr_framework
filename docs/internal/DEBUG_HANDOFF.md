@@ -28,7 +28,9 @@ The user previously reported world displacement / collision discomfort while mov
 
 ### Established facts
 
-- Framework positional HMD translation is currently disabled (`0.0`).
+- Framework positional HMD translation remains default-off. A transient active
+  room-scale mode is implemented and its affected Release targets compile, but
+  no test executable was run and it has no host, live or headset evidence yet.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.
@@ -49,7 +51,9 @@ The user previously reported world displacement / collision discomfort while mov
 ### Do not try again
 
 - Do not add a fake head collider.
-- Do not translate the camera alone to simulate room-scale.
+- Do not translate the camera from raw HMD delta. The active validation path
+  must use the fresh reconciled `predicted_anchor - body_after` X/Z sample and
+  apply the same basis to camera visibility and controllers.
 - Do not tune arbitrary positional multipliers to hide clipping or push-back.
 - Do not add another owner for `MoveForward/MoveSideways` or `D460A`.
 - Do not call `D6E00` from `BlackPlagueBodyAdapter`.
@@ -78,6 +82,14 @@ X/Z motion as stationary headset jitter, matching the fact that Rework 23c890f
 reacts to any non-zero HMD delta. Re-analysis of the session yields 12
 stationary, 37 free, 2 blocked and 15 slide/partial samples. Camera/bob remains
 separate comfort work.
+
+The next path is now implemented behind the separate
+`Local\PenumbraVR.BlackPlague.RoomScaleValidation` request. It fails closed
+unless physical validation is also active, expires camera samples after 250 ms
+and applies only the reconciled X/Z offset to camera, culling and controller
+space. Run `tools/Start-BlackPlagueRoomScaleValidation.ps1`; do not promote it
+past `implemented` until host evidence and the required headset pass
+exist.
 
 `tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1` enforces that gate
 rather than treating activation as success. It also classifies stationary,
@@ -113,8 +125,11 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-Headset-validate active room-scale/positional HMD translation through the
-live-tested physical displacement boundary first. Then compare a deliberately
+Headset-validate the implemented active room-scale/positional HMD translation
+through the live-tested physical displacement boundary first. Require
+free/block/slide, recenter, native crouch shape swap/recovery, hands and
+mirror-on evidence.
+Then compare a deliberately
 scoped Black Plague VR locomotion policy against the proven Overture
 `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement
 rather than analog scaling as the correctness boundary.

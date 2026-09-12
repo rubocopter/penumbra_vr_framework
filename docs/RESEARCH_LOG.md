@@ -477,3 +477,26 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - Result: the `0xD7281` request boundary advances to `live-tested`. Active
   room-scale/positional HMD translation remains disabled and requires its own
   headset-validation gate through this boundary.
+
+### 2026-09-12 — Active room-scale gate prepared
+
+- Mirror evidence: PID 19192 confirmed that mirror-off suppresses the gameplay
+  world to black while native 2D menus remain visible. Telemetry shows
+  `monitor_mirror=0`, zero monitor world passes and one suppressed world pass
+  during gameplay; menu frames have no `RenderWorld` pass to suppress.
+- Implementation: a separate transient room-scale request is accepted only
+  while physical-displacement validation is also active. The adapter publishes
+  the current body generation plus the reconciled
+  `predicted_anchor - body_after` X/Z offset. Invalid, stale (>250 ms),
+  mismatched or queue-failed samples are not applied.
+- Rendering: the offset is applied to yaw-recentered head view, conservative
+  visibility view and controller game-view basis. Raw HMD translation is not
+  applied again, Y/jump remain native and the existing body tick remains the
+  sole owner.
+- Validation tooling: `Start-BlackPlagueRoomScaleValidation.ps1` persists
+  mirror on, holds both transient requests and requires active camera offset,
+  mirror, the native `1.65 -> 0.95 -> 1.65 m` crouch shape sequence and fresh
+  free/block/slide evidence after standing again.
+- State: `implemented`. Affected Release targets compile, but no project binary
+  or test executable was run during this pass; host/live/headset evidence
+  remains pending.

@@ -130,17 +130,17 @@ The first shared contract exists to separate **policy** from **native mechanism*
 
 ## Current priority — Black Plague active room-scale validation
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. The separate active room-scale consumer is now implemented behind a transient double opt-in; affected Release targets compile, but test executables were not run.
 
 Current order:
 
 1. Preserve the completed Overture source host and validated artifact behavior.
 2. Preserve the live-tested single-owner Black Plague body adapter boundary.
-3. Preserve the live-tested shared reconciliation/shadow implementation with Black Plague positional HMD translation at zero.
+3. Preserve the live-tested shared reconciliation/shadow implementation and keep active Black Plague translation default-off outside its dedicated validation request.
 4. Preserve shadow-only mode as observation-only; its plan is not evidence that the dedicated physical request was injected.
 5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
-6. Enable active room-scale/positional tracking through that boundary as a deliberately scoped gate.
-7. Headset-validate active free movement, blocking/sliding and head/body reconciliation before promoting the integration.
+6. Host-test the implemented active room-scale consumer, which applies only a fresh reconciled X/Z offset to camera, visibility and controller space.
+7. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to headset-validate active free movement, blocking/sliding, recenter, the native crouch shape swap/recovery and head/hand reconciliation before promoting the integration.
 8. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
 9. Keep physical crouch and jump comfort/tuning as separate milestones.
 10. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.
@@ -258,5 +258,7 @@ host result and next live gate are recorded in
 
 Subsequent work live-tested that shadow path in PID 28172 and the separate
 default-off `0xD7281` bounded X/Z request in PID 26144. Active
-room-scale/positional HMD translation through that boundary remains the next
-headset gate. The current priority and validation order are recorded above.
+room-scale/positional HMD translation through that boundary is now implemented
+behind a separate transient request. Its affected Release targets compile, but
+it remains at `implemented` pending host/live/headset evidence. The current priority and validation order are
+recorded above.

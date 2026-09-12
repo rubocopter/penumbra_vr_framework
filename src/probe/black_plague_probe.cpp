@@ -156,6 +156,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     penumbra_vr::backends::black_plague::ProcessEyeTargetRequestsOnRenderThread(false);
     const penumbra_vr::backends::black_plague::RenderWorldFrameTelemetry render_world =
         penumbra_vr::backends::black_plague::ConsumeRenderWorldFrameTelemetry();
+    const auto room_scale_status = penumbra_vr::backends::black_plague::
+        ReadBlackPlagueRoomScaleStatus();
+    const auto room_scale_camera = penumbra_vr::backends::black_plague::
+        ReadBlackPlagueRoomScaleCameraSample();
     penumbra_vr::backends::black_plague::PresentTrackedMenuOnRenderThread(render_world.calls != 0 &&
         !penumbra_vr::backends::black_plague::NativeInputUiActive());
     const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
@@ -183,7 +187,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "separation=%.4f rebase=%u physical_observation=%u "
                 "physical_accepted=[%.5f,%.5f,%.5f] physical_rejected_distance=%.5f "
                 "physical_anchor_correction=[%.5f,%.5f,%.5f] "
-                "positional_translation_enabled=0",
+                "positional_translation_enabled=%u room_scale_sample_valid=%u "
+                "room_scale_camera_offset=[%.5f,%.5f,%.5f]",
                 static_cast<unsigned long long>(shadow.observed_ticks),
                 static_cast<unsigned long long>(shadow.resets), s.valid ? 1U : 0U,
                 s.physical_delta[0], s.physical_delta[2],
@@ -203,7 +208,12 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 s.physical_reconciliation.rejected_distance,
                 s.physical_reconciliation.anchor_correction[0],
                 s.physical_reconciliation.anchor_correction[1],
-                s.physical_reconciliation.anchor_correction[2]);
+                s.physical_reconciliation.anchor_correction[2],
+                room_scale_status.enabled ? 1U : 0U,
+                room_scale_camera.valid ? 1U : 0U,
+                room_scale_camera.horizontal_world_offset[0],
+                room_scale_camera.horizontal_world_offset[1],
+                room_scale_camera.horizontal_world_offset[2]);
         }
         if (physical_request.queued_requests != 0 ||
             physical_request.consumed_requests != 0 || physical_request.pending) {
@@ -211,7 +221,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "physical_displacement_boundary queued=%llu consumed=%llu injected=%llu "
                 "rejected=%llu pending=%u result=%s expected_body=%p "
                 "requested=[%.5f,%.5f,%.5f] bounded=[%.5f,%.5f,%.5f] "
-                "positional_translation_enabled=0",
+                "positional_translation_enabled=%u room_scale_sample_valid=%u",
                 static_cast<unsigned long long>(physical_request.queued_requests),
                 static_cast<unsigned long long>(physical_request.consumed_requests),
                 static_cast<unsigned long long>(physical_request.injected_requests),
@@ -224,7 +234,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 physical_request.requested_displacement[2],
                 physical_request.bounded_displacement[0],
                 physical_request.bounded_displacement[1],
-                physical_request.bounded_displacement[2]);
+                physical_request.bounded_displacement[2],
+                room_scale_status.enabled ? 1U : 0U,
+                room_scale_camera.valid ? 1U : 0U);
         }
         if (physical_validation.queued_plans != 0 ||
             physical_validation.matched_observations != 0 ||
@@ -235,7 +247,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "queue_failures=%llu pending=%u result=%s expected_body=%p generation=%llu "
                 "requested=[%.5f,%.5f,%.5f] accepted=[%.5f,%.5f,%.5f] "
                 "rejected_distance=%.5f anchor_correction=[%.5f,%.5f,%.5f] "
-                "positional_translation_enabled=0",
+                "positional_translation_enabled=%u room_scale_sample_valid=%u",
                 static_cast<unsigned long long>(physical_validation.queued_plans),
                 static_cast<unsigned long long>(
                     physical_validation.matched_observations),
@@ -255,10 +267,13 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 physical_validation.reconciliation.rejected_distance,
                 physical_validation.reconciliation.anchor_correction[0],
                 physical_validation.reconciliation.anchor_correction[1],
-                physical_validation.reconciliation.anchor_correction[2]);
+                physical_validation.reconciliation.anchor_correction[2],
+                room_scale_status.enabled ? 1U : 0U,
+                room_scale_camera.valid ? 1U : 0U);
         }
     }
     if (frame_number <= 10 || frame_number % 300 == 0 ||
+        (room_scale_status.enabled && frame_number % 30 == 0) ||
         bounded_stereo_activity ||
         jump_burst_complete ||
         render_world.stereo_failed ||
@@ -277,6 +292,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "tracked_head_frames=%lu tracking_anchor_captured=%u "
             "hmd_anchor_m=[%.4f,%.4f,%.4f] hmd_position_m=[%.4f,%.4f,%.4f] "
             "hmd_horizontal_delta_m=%.4f positional_world_units_per_meter=%.3f "
+            "room_scale_enabled=%u room_scale_sample_valid=%u "
+            "positional_translation_applied=%u room_scale_generation=%llu "
+            "room_scale_camera_offset_m=[%.5f,%.5f,%.5f] "
             "persistent_stereo_active=%u monitor_mirror=%u monitor_world_passes=%lu "
             "suppressed_monitor_world_passes=%lu eye_owned_frame_time_frames=%lu "
             "stereo_failed=%u stereo_error=%s "
@@ -326,6 +344,14 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.hmd_tracking_position_m[2],
             render_world.hmd_horizontal_delta_m,
             render_world.positional_world_units_per_meter,
+            render_world.room_scale_enabled ? 1U : 0U,
+            render_world.room_scale_sample_valid ? 1U : 0U,
+            render_world.positional_translation_applied ? 1U : 0U,
+            static_cast<unsigned long long>(
+                render_world.room_scale_body_generation),
+            render_world.room_scale_camera_offset_m[0],
+            render_world.room_scale_camera_offset_m[1],
+            render_world.room_scale_camera_offset_m[2],
             render_world.persistent_stereo_active ? 1U : 0U,
             render_world.monitor_mirror_enabled ? 1U : 0U,
             static_cast<unsigned long>(render_world.monitor_world_passes),
@@ -380,9 +406,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "physical_pre_injection=[%.5f,%.5f,%.5f] "
                 "physical_post_injection=[%.5f,%.5f,%.5f] "
                 "physical_accepted=[%.5f,%.5f,%.5f] "
-                "unapplied_hmd_body_divergence_m=[%.5f,%.5f] "
-                "unapplied_hmd_body_divergence_horizontal_m=%.5f "
-                "positional_translation_enabled=0",
+                "tracked_hmd_anchor_delta_m=[%.5f,%.5f] "
+                "tracked_hmd_anchor_delta_horizontal_m=%.5f "
+                "positional_translation_enabled=%u room_scale_sample_valid=%u "
+                "room_scale_camera_offset=[%.5f,%.5f,%.5f]",
                 static_cast<unsigned long long>(body.character_updates),
                 static_cast<unsigned long long>(
                     body.horizontal_collision_requests),
@@ -429,7 +456,12 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 body.physical_accepted_displacement[1],
                 body.physical_accepted_displacement[2],
                 head_body_x, head_body_z,
-                render_world.hmd_horizontal_delta_m);
+                render_world.hmd_horizontal_delta_m,
+                room_scale_status.enabled ? 1U : 0U,
+                room_scale_camera.valid ? 1U : 0U,
+                room_scale_camera.horizontal_world_offset[0],
+                room_scale_camera.horizontal_world_offset[1],
+                room_scale_camera.horizontal_world_offset[2]);
         }
         if (jump_burst_complete) {
             const auto burst =
@@ -910,6 +942,9 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         const auto physical_validation_status =
             penumbra_vr::backends::black_plague::
                 ReadBlackPlaguePhysicalValidationStatus();
+        const auto room_scale_status =
+            penumbra_vr::backends::black_plague::
+                ReadBlackPlagueRoomScaleStatus();
         const char* shadow_source = "disabled";
         if (shadow_status.source == penumbra_vr::backends::black_plague::
                 BlackPlagueShadowRequestSource::environment) {
@@ -931,14 +966,25 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
                     BlackPlaguePhysicalValidationRequestSource::mutex) {
             physical_validation_source = "mutex";
         }
+        const char* room_scale_source = "disabled";
+        if (room_scale_status.source == penumbra_vr::backends::black_plague::
+                BlackPlagueRoomScaleRequestSource::environment) {
+            room_scale_source = "environment";
+        } else if (room_scale_status.source ==
+                penumbra_vr::backends::black_plague::
+                    BlackPlagueRoomScaleRequestSource::mutex) {
+            room_scale_source = "mutex";
+        }
         penumbra_vr::probe::WriteLog(
             "Black Plague body adapter installed=%u error=%s body_reconciliation_shadow "
             "enabled=%u source=%s physical_displacement_validation enabled=%u source=%s "
-            "positional_translation_enabled=0",
+            "room_scale_validation enabled=%u source=%s positional_translation_enabled=%u",
             body_adapter_ready ? 1U : 0U, hook_error.c_str(),
             shadow_status.enabled ? 1U : 0U, shadow_source,
             physical_validation_status.enabled ? 1U : 0U,
-            physical_validation_source);
+            physical_validation_source,
+            room_scale_status.enabled ? 1U : 0U, room_scale_source,
+            room_scale_status.enabled ? 1U : 0U);
         const bool ownership_probe_ready =
             penumbra_vr::backends::black_plague::InstallMovementOwnershipProbe(hook_error);
         if (ownership_probe_ready) {

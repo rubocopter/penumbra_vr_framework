@@ -192,7 +192,7 @@ PID 8628 demonstrated:
 - approximately 60 native body updates/s at `dt=0.016667`;
 - no evidence of a second `D6E00` call.
 
-`positional_translation_enabled=0` throughout that validation. Therefore the adapter boundary is live-tested, but active room-scale/tracking-body reconciliation, positional HMD translation, VR speed tuning, physical crouch, jump tuning and camera/bob comfort are not.
+`positional_translation_enabled=0` throughout that validation. Therefore the adapter boundary is live-tested, while the later active room-scale consumer still requires its own validation. VR speed tuning, physical crouch, jump tuning and camera/bob comfort remain separate.
 
 ## First shared body policy
 
@@ -200,10 +200,11 @@ PID 8628 demonstrated:
 
 Overture consumes it without changing its proven room-scale/locomotion behavior.
 Black Plague produces it from the native tick; the live-tested validation path
-feeds the matched physical observation into shared reconciliation while active
-positional camera translation remains disabled.
+feeds the matched physical observation into shared reconciliation. A separate
+default-off active consumer can now expose the resulting horizontal anchor/body
+offset to rendering during the next validation gate.
 
-## Current milestone — physical displacement live-tested; active room-scale pending
+## Current milestone — active room-scale implemented; validation pending
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -216,8 +217,9 @@ render boundary. `tools/Start-BlackPlagueShadowValidation.ps1` remains the
 reproducible shadow-only diagnostic. The original
 `PVR_BP_RECONCILIATION_SHADOW=1` mechanism remains supported only when the
 **game process itself** actually inherits that variable. Sampling uses existing
-owners, with periodic logs every 300 swap frames. Positional translation remains
-compile-time zero.
+owners, with periodic logs every 300 swap frames. The shadow-only mode leaves
+positional translation at zero; active translation requires the separate
+room-scale request described below.
 
 On 2026-09-11 the adapter gained one-shot installation telemetry that records
 whether shadow is disabled, requested from the game-process environment, or
@@ -282,16 +284,32 @@ positional translation zero but no physical request telemetry exits with failure
 instead of being counted as live validation. PID 24484 likewise remains
 activation evidence only.
 
-The next gameplay gate is active room-scale/positional HMD translation through
-that live-tested body boundary. Preserve the same single-owner `0xD7281` path,
-body/generation matching and native vertical/jump ownership, then headset-validate
-free movement, blocking/sliding and head/body reconciliation before promoting
-the active integration.
+The active room-scale path is now implemented behind the separate
+`PVR_BP_ROOM_SCALE_VALIDATION=1` or
+`Local\PenumbraVR.BlackPlague.RoomScaleValidation` request. Activation fails
+closed unless physical-displacement validation is also active. The body adapter
+publishes a fresh, body-generation-matched
+`predicted_anchor - body_after` horizontal offset; samples expire after 250 ms.
+The renderer applies the same offset to the yaw-recentered head view,
+HMD-aware visibility and controller game-view basis. It does not scale the raw
+HMD delta a second time, does not apply Y and does not add a native body tick.
+
+This new path and its tests are **implemented**. The affected Release targets
+compile, but no project binary or test executable was run in this pass, so no
+host-test promotion is claimed. The next gate
+is `tools/Start-BlackPlagueRoomScaleValidation.ps1`, which holds both mutexes,
+persists mirror on and requires camera application, a non-zero X/Z offset,
+free/block/slide/stationary outcomes, the native `1.65 -> 0.95 -> 1.65 m`
+crouch shape sequence and a fresh applied camera sample after returning to the
+standing shape, followed by fresh free/block/slide outcomes, before passing.
+Headset observation must additionally cover
+recenter, hands, double motion/drift, focus and menus before promotion.
 
 Two presentation regressions from the earlier headset session remain separate.
-PID 26144 visually confirmed that with monitor mirror disabled the desktop now
-stays black; the growing white-point artifact did not return, so the mirror-off
-clear has headset confirmation. After Alt+Tab/focus loss, main menu/inventory
+PID 19192 refined the mirror-off evidence: gameplay frames reported
+`monitor_mirror=0`, no monitor world pass and one suppressed world pass, while
+native 2D menus remained visible because they do not call `RenderWorld`. This
+matches the intended pass boundary. After Alt+Tab/focus loss, main menu/inventory
 can still render black; that issue is not patched. The
 current tracked-menu capture still depends on the desktop framebuffer/focus and
 needs a better evidenced ownership boundary before changing behavior.

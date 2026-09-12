@@ -40,11 +40,7 @@ constexpr std::array<std::uint8_t, 5> kExpectedUpdateRenderListCall{
     0xE8, 0x67, 0xC9, 0x03, 0x00,
 };
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
-// Positional tracking is deliberately disabled until the exact-build HPL
-// character-body adapter can reconcile requested and collision-resolved motion.
-constexpr float kPositionalWorldUnitsPerMeter = 0.0F;
-static_assert(kPositionalWorldUnitsPerMeter == 0.0F,
-    "Tracking/body shadow validation must not enable positional translation");
+constexpr float kRotationOnlyTranslationScale = 0.0F;
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
 using UpdateRenderList = void(__thiscall*)(
@@ -78,6 +74,32 @@ struct StereoProcessingResult {
     bool suppress_original_world = false;
 };
 
+[[nodiscard]] bool ComposeBlackPlagueTrackedHeadView(
+    const runtime::VrMatrix44& game_head_view,
+    const runtime::VrMatrix34& anchor,
+    const runtime::VrMatrix34& current,
+    const BlackPlagueRoomScaleCameraSample& room_scale,
+    runtime::VrMatrix44& tracked_head_view,
+    bool& positional_translation_applied,
+    std::string& error) noexcept {
+    positional_translation_applied = false;
+    if (!runtime::ComposeYawRecenteredTrackedHeadView(
+            game_head_view, anchor, current, kRotationOnlyTranslationScale,
+            tracked_head_view, error)) {
+        return false;
+    }
+    if (!room_scale.enabled || !room_scale.valid) return true;
+    runtime::VrMatrix44 translated;
+    if (!runtime::ApplyWorldTranslationToView(
+            tracked_head_view, room_scale.horizontal_world_offset,
+            translated, error)) {
+        return false;
+    }
+    tracked_head_view = translated;
+    positional_translation_applied = true;
+    return true;
+}
+
 hooks::Rel32CallHook g_hook;
 hooks::Rel32CallHook g_visibility_hook;
 std::atomic<void*> g_original_target{nullptr};
@@ -104,6 +126,7 @@ bool g_stereo_tracking_anchor_valid = false;
 runtime::VrMatrix34 g_stereo_tracking_anchor{};
 bool g_stereo_latest_pose_valid = false;
 runtime::VrMatrix34 g_stereo_latest_pose{};
+BlackPlagueRoomScaleCameraSample g_stereo_room_scale_sample{};
 bool g_menu_anchor_valid = false;
 runtime::VrMatrix34 g_menu_anchor{};
 SRWLOCK g_menu_pointer_lock = SRWLOCK_INIT;
@@ -329,6 +352,7 @@ void __fastcall HookedUpdateRenderList(
     const auto visibility_active = []() noexcept {
         return g_stereo_persistent.load(std::memory_order_acquire) &&
             g_stereo_track_head_rotation &&
+            !g_recenter_requested.load(std::memory_order_acquire) &&
             g_stereo_tracking_anchor_valid &&
             g_stereo_latest_pose_valid &&
             g_stereo_state.load(std::memory_order_acquire) ==
@@ -359,12 +383,15 @@ void __fastcall HookedUpdateRenderList(
     }
 
     runtime::VrMatrix44 tracked_head_view;
-    if (!runtime::ComposeYawRecenteredTrackedHeadView(
+    bool positional_translation_applied = false;
+    const auto room_scale = g_stereo_room_scale_sample;
+    if (!ComposeBlackPlagueTrackedHeadView(
             camera_snapshot.view,
             g_stereo_tracking_anchor,
             g_stereo_latest_pose,
-            kPositionalWorldUnitsPerMeter,
+            room_scale,
             tracked_head_view,
+            positional_translation_applied,
             error)) {
         RecordHmdVisibilityFailure(
             "Could not compose the HMD visibility view: " + error, true);
@@ -584,6 +611,8 @@ void __fastcall HookedUpdateRenderList(
     }
 
     runtime::VrMatrix44 head_view = camera_snapshot.view;
+    BlackPlagueRoomScaleCameraSample room_scale;
+    bool positional_translation_applied = false;
     if (g_stereo_track_head_rotation) {
         if (g_recenter_requested.exchange(false, std::memory_order_acq_rel))
             g_stereo_tracking_anchor_valid = false;
@@ -592,12 +621,22 @@ void __fastcall HookedUpdateRenderList(
             g_stereo_tracking_anchor = pose.device_to_absolute;
             g_stereo_tracking_anchor_valid = true;
         }
-        if (!runtime::ComposeYawRecenteredTrackedHeadView(
+        room_scale = ReadBlackPlagueRoomScaleCameraSample();
+        if (shadow_recentered) {
+            room_scale.valid = false;
+            room_scale.horizontal_world_offset = {};
+        }
+        // UpdateRenderList runs inside the eye passes below. Cache the same
+        // reconciled sample used by the rendered head so visibility cannot
+        // observe a different body tick halfway through this stereo frame.
+        g_stereo_room_scale_sample = room_scale;
+        if (!ComposeBlackPlagueTrackedHeadView(
                 camera_snapshot.view,
                 g_stereo_tracking_anchor,
                 pose.device_to_absolute,
-                kPositionalWorldUnitsPerMeter,
+                room_scale,
                 head_view,
+                positional_translation_applied,
                 error)) {
             FailStereoMatrixValidation(
                 "Could not compose the yaw-recentered HMD rotation: " + error);
@@ -605,8 +644,17 @@ void __fastcall HookedUpdateRenderList(
         }
         g_stereo_latest_pose = pose.device_to_absolute;
         g_stereo_latest_pose_valid = true;
+        runtime::VrMatrix44 controller_game_view = camera_snapshot.view;
+        if (positional_translation_applied &&
+            !runtime::ApplyWorldTranslationToView(
+                camera_snapshot.view, room_scale.horizontal_world_offset,
+                controller_game_view, error)) {
+            FailStereoMatrixValidation(
+                "Could not compose the room-scale controller basis: " + error);
+            return result;
+        }
         AcquireSRWLockExclusive(&g_world_tracking_lock);
-        g_world_game_view = camera_snapshot.view;
+        g_world_game_view = controller_game_view;
         g_world_anchor = g_stereo_tracking_anchor;
         // Express horizontal HMD forward in the native camera's horizontal
         // basis. Pitch/roll must not steer the walking direction.
@@ -614,9 +662,8 @@ void __fastcall HookedUpdateRenderList(
         const float hx = -head_view.values[8], hz = -head_view.values[10];
         if (std::hypot(gx, gz) > 0.001F && std::hypot(hx, hz) > 0.001F)
             g_world_movement_yaw = std::atan2(-hx * gz + hz * gx, hx * gx + hz * gz);
-        // The world camera currently uses rotation-only head tracking. Keep
-        // hands relative to the current physical head, not its old recenter
-        // position, so leaning cannot detach the palms from the rendered head.
+        // Keep hands relative to the current physical head. The game-view
+        // basis already includes any reconciled room-scale offset above.
         for (const auto index : {3U,7U,11U})
             g_world_anchor.values[index] = pose.device_to_absolute.values[index];
         g_world_tracking_time = GetTickCount64();
@@ -726,7 +773,17 @@ void __fastcall HookedUpdateRenderList(
             pose.device_to_absolute.values[11] -
                 g_stereo_tracking_anchor.values[11]);
         g_telemetry.positional_world_units_per_meter =
-            kPositionalWorldUnitsPerMeter;
+            positional_translation_applied
+                ? runtime::vr_locomotion_policy::kWorldUnitsPerMeter
+                : 0.0F;
+        g_telemetry.room_scale_enabled = room_scale.enabled;
+        g_telemetry.room_scale_sample_valid = room_scale.valid;
+        g_telemetry.positional_translation_applied =
+            positional_translation_applied;
+        g_telemetry.room_scale_body_generation =
+            room_scale.body_generation;
+        g_telemetry.room_scale_camera_offset_m =
+            room_scale.horizontal_world_offset;
     }
     g_telemetry.stereo_camera_restored = true;
     g_telemetry.persistent_stereo_active = persistent_stereo;
@@ -923,6 +980,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_tracking_anchor = {};
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
+    g_stereo_room_scale_sample = {};
     g_stereo_requested_frames.store(0, std::memory_order_release);
     g_stereo_completed_frames.store(0, std::memory_order_release);
     g_stereo_cancel.store(false, std::memory_order_release);
@@ -1210,6 +1268,7 @@ bool ValidateControlledTrackedStereoSubmission(
     g_stereo_tracking_anchor = {};
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
+    g_stereo_room_scale_sample = {};
     const bool result = ValidateControlledStereoMatrices(
         eyes, near_clip, frames, error);
     g_stereo_track_head_rotation = false;
@@ -1217,6 +1276,7 @@ bool ValidateControlledTrackedStereoSubmission(
     g_stereo_tracking_anchor = {};
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
+    g_stereo_room_scale_sample = {};
     g_stereo_session.store(nullptr, std::memory_order_release);
     return result;
 }
@@ -1284,6 +1344,7 @@ bool StartTrackedStereoPresentation(
     g_stereo_tracking_anchor = {};
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
+    g_stereo_room_scale_sample = {};
     g_stereo_persistent.store(true, std::memory_order_release);
     g_menu_anchor_valid = false;
     g_stereo_state.store(StereoMatrixState::pending, std::memory_order_release);
@@ -1309,6 +1370,7 @@ bool StopTrackedStereoPresentation(std::string& error) noexcept {
             g_stereo_tracking_anchor = {};
             g_stereo_latest_pose_valid = false;
             g_stereo_latest_pose = {};
+            g_stereo_room_scale_sample = {};
             g_stereo_persistent.store(false, std::memory_order_release);
             g_stereo_cancel.store(false, std::memory_order_release);
             g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);

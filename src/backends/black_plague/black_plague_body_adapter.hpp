@@ -96,4 +96,32 @@ ReadBlackPlaguePhysicalValidationStatus() noexcept;
 [[nodiscard]] BlackPlaguePhysicalValidationTelemetry
 ConsumeBlackPlaguePhysicalValidationTelemetry() noexcept;
 
+enum class BlackPlagueRoomScaleRequestSource : std::uint8_t {
+    disabled,
+    environment,
+    mutex,
+};
+
+struct BlackPlagueRoomScaleStatus {
+    bool enabled = false;
+    BlackPlagueRoomScaleRequestSource source =
+        BlackPlagueRoomScaleRequestSource::disabled;
+};
+
+struct BlackPlagueRoomScaleCameraSample {
+    bool enabled = false;
+    bool valid = false;
+    std::uint64_t body_generation = 0;
+    std::array<float, 3> horizontal_world_offset{};
+    std::array<float, 3> predicted_head_anchor{};
+    std::array<float, 3> body_position{};
+};
+
+// Default-off active validation boundary. It is enabled only when the
+// collision-aware physical-displacement path is also explicitly requested.
+[[nodiscard]] BlackPlagueRoomScaleStatus
+ReadBlackPlagueRoomScaleStatus() noexcept;
+[[nodiscard]] BlackPlagueRoomScaleCameraSample
+ReadBlackPlagueRoomScaleCameraSample() noexcept;
+
 } // namespace penumbra_vr::backends::black_plague

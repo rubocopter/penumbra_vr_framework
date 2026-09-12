@@ -1056,12 +1056,31 @@ int ConfigureBlackPlagueVrSettings() {
     }
 }
 
+int SetSavedMonitorMirror(bool enabled) {
+    std::wstring error;
+    const auto path = penumbra_vr::launcher::DefaultVrSettingsPath(error);
+    if (path.empty() || !penumbra_vr::launcher::SaveMonitorMirrorSetting(
+            path, enabled, error)) {
+        std::wcerr << L"VR monitor-mirror setting could not be saved: "
+                   << error << L'\n';
+        return 9;
+    }
+    std::wcout << L"Saved VR monitor mirror "
+               << (enabled ? L"on" : L"off") << L" to " << path
+               << L". It will be applied on the next VR start.\n";
+    return 0;
+}
+
 } // namespace
 
 int wmain(int argc, wchar_t** argv) {
     const bool configure_vr = argc == 3 &&
         _wcsicmp(argv[1], L"--configure-vr") == 0 &&
         _wcsicmp(argv[2], L"black-plague") == 0;
+    const bool set_vr_mirror = argc == 3 &&
+        _wcsicmp(argv[1], L"--set-vr-mirror") == 0 &&
+        (_wcsicmp(argv[2], L"on") == 0 ||
+         _wcsicmp(argv[2], L"off") == 0);
     const bool launch_vr = argc == 3 && _wcsicmp(argv[1], L"--launch-vr") == 0;
     const bool check_vr = argc == 3 && _wcsicmp(argv[1], L"--check-vr") == 0;
     const bool attach = argc == 3 && _wcsicmp(argv[1], L"--attach") == 0;
@@ -1090,7 +1109,7 @@ int wmain(int argc, wchar_t** argv) {
         argc == 3 && _wcsicmp(argv[1], L"--vr-mirror-off") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
-    if ((!configure_vr && !attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
+    if ((!configure_vr && !set_vr_mirror && !attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
          !hold_openvr_eye_targets && !validate_world_duplication &&
          !validate_stereo_matrices && !validate_stereo_submission &&
          !validate_tracked_stereo_submission && !start_vr && !stop_vr &&
@@ -1105,6 +1124,7 @@ int wmain(int argc, wchar_t** argv) {
         ((capture_image || inspect_camera) && argc != 4)) {
         std::wcerr << L"Usage:\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --configure-vr black-plague\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --set-vr-mirror <on|off>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --launch-vr <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --check-vr <path-to-Black-Plague-Penumbra.exe>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe <path-to-Black-Plague-Penumbra.exe>\n"
@@ -1129,13 +1149,15 @@ int wmain(int argc, wchar_t** argv) {
 
     const std::filesystem::path probe_path =
         CurrentExecutableDirectory() / L"PenumbraVR.BlackPlague.Probe.dll";
-    if (!configure_vr && !inspect && !inspect_camera && !capture_image &&
+    if (!configure_vr && !set_vr_mirror && !inspect && !inspect_camera && !capture_image &&
         !std::filesystem::is_regular_file(probe_path)) {
         std::wcerr << L"Probe DLL not found beside the launcher: " << probe_path << L'\n';
         return 5;
     }
 
     if (configure_vr) return ConfigureBlackPlagueVrSettings();
+    if (set_vr_mirror) return SetSavedMonitorMirror(
+        _wcsicmp(argv[2], L"on") == 0);
     if (launch_vr || check_vr) return LaunchVr(argv[2], probe_path, check_vr);
 
     if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||

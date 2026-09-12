@@ -21,6 +21,9 @@ constexpr wchar_t kShadowRequestMutexName[] =
     L"Local\\PenumbraVR.BlackPlague.ReconciliationShadow";
 constexpr wchar_t kPhysicalValidationRequestMutexName[] =
     L"Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation";
+constexpr wchar_t kRoomScaleRequestMutexName[] =
+    L"Local\\PenumbraVR.BlackPlague.RoomScaleValidation";
+constexpr std::uint64_t kRoomScaleSampleMaximumAgeMilliseconds = 250;
 
 std::atomic<std::uint8_t*> g_image{nullptr};
 std::atomic<bool> g_installed{false};
@@ -41,6 +44,11 @@ bool g_physical_validation_enabled = false;
 BlackPlaguePhysicalValidationRequestSource g_physical_validation_source =
     BlackPlaguePhysicalValidationRequestSource::disabled;
 BlackPlaguePhysicalValidationTelemetry g_physical_validation_telemetry;
+bool g_room_scale_enabled = false;
+BlackPlagueRoomScaleRequestSource g_room_scale_source =
+    BlackPlagueRoomScaleRequestSource::disabled;
+BlackPlagueRoomScaleCameraSample g_room_scale_camera_sample;
+std::uint64_t g_room_scale_camera_sample_time = 0;
 
 struct PendingPhysicalValidation {
     bool active = false;
@@ -152,6 +160,50 @@ PhysicalValidationRequested() noexcept {
     return BlackPlaguePhysicalValidationRequestSource::mutex;
 }
 
+[[nodiscard]] BlackPlagueRoomScaleRequestSource RoomScaleRequested() noexcept {
+    char option[2]{};
+    if (GetEnvironmentVariableA("PVR_BP_ROOM_SCALE_VALIDATION",
+            option, 2) == 1 && option[0] == '1') {
+        return BlackPlagueRoomScaleRequestSource::environment;
+    }
+    HANDLE request = OpenMutexW(SYNCHRONIZE, FALSE, kRoomScaleRequestMutexName);
+    if (request == nullptr) return BlackPlagueRoomScaleRequestSource::disabled;
+    CloseHandle(request);
+    return BlackPlagueRoomScaleRequestSource::mutex;
+}
+
+void InvalidateRoomScaleCameraSampleLocked() noexcept {
+    g_room_scale_camera_sample = {};
+    g_room_scale_camera_sample.enabled = g_room_scale_enabled;
+    g_room_scale_camera_sample_time = 0;
+}
+
+void PublishRoomScaleCameraSampleLocked(
+    const BodyReconciliationShadowSample& shadow_sample,
+    std::uint64_t now) noexcept {
+    InvalidateRoomScaleCameraSampleLocked();
+    if (!g_room_scale_enabled || !shadow_sample.valid) return;
+    const std::array<float, 3> offset{
+        shadow_sample.predicted_anchor[0] -
+            shadow_sample.native_motion.body_after[0],
+        0.0F,
+        shadow_sample.predicted_anchor[2] -
+            shadow_sample.native_motion.body_after[2],
+    };
+    if (!FiniteVector(offset) || std::hypot(offset[0], offset[2]) >
+            runtime::vr_locomotion_policy::kMaximumHeadBodySeparation) {
+        return;
+    }
+    g_room_scale_camera_sample.valid = true;
+    g_room_scale_camera_sample.body_generation = g_shadow_generation;
+    g_room_scale_camera_sample.horizontal_world_offset = offset;
+    g_room_scale_camera_sample.predicted_head_anchor =
+        shadow_sample.predicted_anchor;
+    g_room_scale_camera_sample.body_position =
+        shadow_sample.native_motion.body_after;
+    g_room_scale_camera_sample_time = now;
+}
+
 void InvalidatePendingPhysicalValidationLocked() noexcept {
     if (g_pending_physical_validation.active) {
         ++g_physical_validation_telemetry.invalidated_plans;
@@ -187,6 +239,13 @@ void InvalidatePendingPhysicalValidationLocked() noexcept {
     g_physical_validation_source = PhysicalValidationRequested();
     g_physical_validation_enabled = g_physical_validation_source !=
         BlackPlaguePhysicalValidationRequestSource::disabled;
+    g_room_scale_source = RoomScaleRequested();
+    g_room_scale_enabled =
+        g_room_scale_source != BlackPlagueRoomScaleRequestSource::disabled &&
+        g_physical_validation_enabled;
+    if (!g_room_scale_enabled) {
+        g_room_scale_source = BlackPlagueRoomScaleRequestSource::disabled;
+    }
     g_shadow_source = ReconciliationShadowRequested();
     g_shadow_enabled = g_shadow_source != BlackPlagueShadowRequestSource::disabled ||
         g_physical_validation_enabled;
@@ -202,6 +261,7 @@ void InvalidatePendingPhysicalValidationLocked() noexcept {
     g_shadow_generation = 0;
     g_physical_validation_telemetry = {};
     g_pending_physical_validation = {};
+    InvalidateRoomScaleCameraSampleLocked();
     ReleaseSRWLockExclusive(&g_lock);
     g_installed.store(true, std::memory_order_release);
     return true;
@@ -248,6 +308,9 @@ bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept {
     g_physical_validation_enabled = false;
     g_physical_validation_source =
         BlackPlaguePhysicalValidationRequestSource::disabled;
+    g_room_scale_enabled = false;
+    g_room_scale_source = BlackPlagueRoomScaleRequestSource::disabled;
+    InvalidateRoomScaleCameraSampleLocked();
     InvalidatePendingPhysicalValidationLocked();
     g_physical_validation_telemetry = {};
     ReleaseSRWLockExclusive(&g_lock);
@@ -300,14 +363,17 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
             g_shadow.Reset();
             g_shadow_telemetry.latest = {};
             InvalidatePendingPhysicalValidationLocked();
+            InvalidateRoomScaleCameraSampleLocked();
         } else {
             if (g_shadow_body_time == 0 || now - g_shadow_body_time > 250) {
                 g_shadow.Reset();
                 InvalidatePendingPhysicalValidationLocked();
+                InvalidateRoomScaleCameraSampleLocked();
             }
             if (g_shadow_body_identity != character_body) {
                 if (g_shadow_body_identity != nullptr)
                     InvalidatePendingPhysicalValidationLocked();
+                InvalidateRoomScaleCameraSampleLocked();
                 g_shadow_body_identity = character_body;
                 ++g_shadow_generation;
             }
@@ -315,6 +381,7 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
             runtime::VrAcceptedBodyMotion physical_motion{};
             runtime::VrPhysicalReconciliationResult physical_reconciliation{};
             bool matched_physical_observation = false;
+            bool room_scale_sample_safe = true;
             if (g_physical_validation_enabled &&
                 g_pending_physical_validation.active) {
                 const bool request_matches = physical_tick.request_injected &&
@@ -335,6 +402,7 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
                             physical_reconciliation);
                 }
                 if (!matched_physical_observation) {
+                    room_scale_sample_safe = false;
                     ++g_physical_validation_telemetry.invalidated_plans;
                     g_physical_validation_telemetry.latest_result =
                         BlackPlaguePhysicalValidationResult::invalidated;
@@ -361,6 +429,7 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
                 g_physical_validation_telemetry.reconciliation =
                     physical_reconciliation;
             } else if (matched_physical_observation && shadow_sample.reset) {
+                room_scale_sample_safe = false;
                 ++g_physical_validation_telemetry.invalidated_plans;
                 g_physical_validation_telemetry.latest_result =
                     BlackPlaguePhysicalValidationResult::invalidated;
@@ -389,10 +458,16 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
                     g_physical_validation_telemetry.requested_displacement =
                         shadow_sample.plan.physical_request;
                 } else {
+                    room_scale_sample_safe = false;
                     ++g_physical_validation_telemetry.queue_failures;
                     g_physical_validation_telemetry.latest_result =
                         BlackPlaguePhysicalValidationResult::queue_failed;
                 }
+            }
+            if (room_scale_sample_safe) {
+                PublishRoomScaleCameraSampleLocked(shadow_sample, now);
+            } else {
+                InvalidateRoomScaleCameraSampleLocked();
             }
         }
         g_shadow_body_time = now;
@@ -415,6 +490,7 @@ void PublishBlackPlagueShadowTracking(const runtime::VrMatrix34& pose,
         if (recentered) {
             g_shadow.Reset();
             InvalidatePendingPhysicalValidationLocked();
+            InvalidateRoomScaleCameraSampleLocked();
         }
         g_shadow_pose = pose;
         g_shadow_yaw = world_yaw;
@@ -430,6 +506,7 @@ void InvalidateBlackPlagueShadowTracking() noexcept {
     g_shadow.Reset();
     g_shadow_telemetry.latest = {};
     InvalidatePendingPhysicalValidationLocked();
+    InvalidateRoomScaleCameraSampleLocked();
     ReleaseSRWLockExclusive(&g_lock);
 }
 
@@ -477,6 +554,29 @@ ConsumeBlackPlaguePhysicalValidationTelemetry() noexcept {
     }
     ReleaseSRWLockExclusive(&g_lock);
     return result;
+}
+
+BlackPlagueRoomScaleStatus ReadBlackPlagueRoomScaleStatus() noexcept {
+    AcquireSRWLockShared(&g_lock);
+    const BlackPlagueRoomScaleStatus status{
+        g_room_scale_enabled, g_room_scale_source};
+    ReleaseSRWLockShared(&g_lock);
+    return status;
+}
+
+BlackPlagueRoomScaleCameraSample
+ReadBlackPlagueRoomScaleCameraSample() noexcept {
+    AcquireSRWLockShared(&g_lock);
+    auto sample = g_room_scale_camera_sample;
+    const auto sample_time = g_room_scale_camera_sample_time;
+    ReleaseSRWLockShared(&g_lock);
+    if (!sample.enabled || !sample.valid || sample_time == 0 ||
+        GetTickCount64() - sample_time >
+            kRoomScaleSampleMaximumAgeMilliseconds) {
+        sample.valid = false;
+        sample.horizontal_world_offset = {};
+    }
+    return sample;
 }
 
 } // namespace penumbra_vr::backends::black_plague

@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$GamePath = (Join-Path ${env:ProgramFiles(x86)} 'Steam\steamapps\common\Penumbra Black Plague\redist\penumbra.exe'),
-    [string]$ImagePath = ''
+    [string]$ImagePath = '',
+    [switch]$EnableRoomScale
 )
 
 Set-StrictMode -Version Latest
@@ -224,12 +225,26 @@ if ($existingGame.Count -ne 0) {
 
 $requestName = 'Local\PenumbraVR.BlackPlague.PhysicalDisplacementValidation'
 $request = New-Object System.Threading.Mutex -ArgumentList $false, $requestName
+$roomScaleRequest = $null
+if ($EnableRoomScale) {
+    & $launcher '--set-vr-mirror' 'on'
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not enable the persisted monitor mirror for room-scale validation."
+    }
+    $roomScaleRequest = New-Object System.Threading.Mutex -ArgumentList $false,
+        'Local\PenumbraVR.BlackPlague.RoomScaleValidation'
+}
 $gameProcess = $null
 $exitCode = 1
 try {
     Write-Host 'Exact-build verifier passed. Starting Black Plague with physical displacement validation requested.'
     Write-Host 'This mode injects only bounded X/Z validation requests through the existing native body tick.'
-    Write-Host 'Positional HMD translation remains disabled.'
+    if ($EnableRoomScale) {
+        Write-Host 'Active room-scale X/Z translation is enabled through the reconciled body path; Y and jump remain native.'
+        Write-Host 'The saved monitor mirror is on so headset behavior can be observed on the PC.'
+    } else {
+        Write-Host 'Positional HMD translation remains disabled.'
+    }
     $launchStartedAt = Get-Date
     & $launcher '--launch-vr' $GamePath
     $launcherExitCode = $LASTEXITCODE
@@ -255,7 +270,7 @@ try {
         Start-Sleep -Milliseconds 100
         if (Test-Path -LiteralPath $probeLog -PathType Leaf) {
             $candidate = Get-Content -LiteralPath $probeLog |
-                Select-String -Pattern 'Black Plague body adapter installed=.*physical_displacement_validation enabled=[01] source=(disabled|environment|mutex).*positional_translation_enabled=[01]' |
+                Select-String -Pattern 'Black Plague body adapter installed=.*physical_displacement_validation enabled=[01] source=(disabled|environment|mutex).*room_scale_validation enabled=[01] source=(disabled|environment|mutex).*positional_translation_enabled=[01]' |
                 Select-Object -Last 1
             if ($null -ne $candidate -and $candidate.Line.Length -ge 23) {
                 $candidateTime = [DateTime]::ParseExact(
@@ -272,13 +287,22 @@ try {
     if ($null -eq $activationLine) {
         throw "Black Plague PID $($gameProcess.Id) did not report physical-displacement activation within 30 seconds. Check '$probeLog'."
     }
-    if ($activationLine -notmatch 'Black Plague body adapter installed=1 .*body_reconciliation_shadow enabled=1 source=physical_validation .*physical_displacement_validation enabled=1 source=mutex .*positional_translation_enabled=0') {
-        throw "Black Plague PID $($gameProcess.Id) did not activate the requested physical displacement validation with positional translation disabled. Probe telemetry: $activationLine"
+    $expectedActivation = if ($EnableRoomScale) {
+        'Black Plague body adapter installed=1 .*body_reconciliation_shadow enabled=1 source=physical_validation .*physical_displacement_validation enabled=1 source=mutex .*room_scale_validation enabled=1 source=mutex positional_translation_enabled=1'
+    } else {
+        'Black Plague body adapter installed=1 .*body_reconciliation_shadow enabled=1 source=physical_validation .*physical_displacement_validation enabled=1 source=mutex .*room_scale_validation enabled=0 source=disabled positional_translation_enabled=0'
+    }
+    if ($activationLine -notmatch $expectedActivation) {
+        throw "Black Plague PID $($gameProcess.Id) did not activate the requested validation mode. Probe telemetry: $activationLine"
     }
 
     Write-Host "Black Plague detected (PID $($gameProcess.Id)); physical displacement validation is active via mutex."
     Write-Host "Probe log: $probeLog"
     Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
+    if ($EnableRoomScale) {
+        Write-Host 'Also test stick locomotion, recenter once, crouch and stand once, then repeat free/block/slide after the native shape swap.'
+        Write-Host 'Observe that the desktop mirror shows gameplay and that head motion, hands and world remain coherent.'
+    }
     Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'
     $reportedScenarios = @{
         Stationary = $false
@@ -317,7 +341,16 @@ try {
     $boundaryVectorObserved = $false
     $bodyInjectionObserved = $false
     $nativeTickObserved = $false
-    foreach ($line in $freshLines) {
+    $roomScaleApplied = $false
+    $nonZeroCameraOffset = $false
+    $mirrorEnabled = $false
+    $standingBodyObserved = $false
+    $crouchedBodyObserved = $false
+    $standingBodyRestored = $false
+    [int]$standingBodyRestoredLineIndex = -1
+    $roomScaleRecoveredAfterCrouch = $false
+    for ($lineIndex = 0; $lineIndex -lt $freshLines.Count; $lineIndex++) {
+        $line = $freshLines[$lineIndex]
         if ($line -like '*physical_displacement_validation *' -and
             (Test-NonZeroHorizontalVector -Line $line -Field 'requested')) {
             $queuedVectorObserved = $true
@@ -336,6 +369,47 @@ try {
             $line -match 'dt=0\.01666[0-9]') {
             $nativeTickObserved = $true
         }
+        if ($line -like '*render_world_calls=*') {
+            if ($line -match 'room_scale_enabled=1 room_scale_sample_valid=1 positional_translation_applied=1') {
+                $roomScaleApplied = $true
+                if ($standingBodyRestored) {
+                    $roomScaleRecoveredAfterCrouch = $true
+                }
+            }
+            if (Test-NonZeroHorizontalVector -Line $line -Field 'room_scale_camera_offset_m') {
+                $nonZeroCameraOffset = $true
+            }
+            if ($line -match 'monitor_mirror=1') {
+                $mirrorEnabled = $true
+            }
+        }
+        if ($EnableRoomScale -and $line -like '*body_collision *') {
+            $characterSize = Get-VectorField -Line $line -Field 'character_size'
+            if ($null -ne $characterSize) {
+                if ([Math]::Abs($characterSize.Y - 1.65) -le 0.05) {
+                    if ($crouchedBodyObserved) {
+                        $standingBodyRestored = $true
+                        if ($standingBodyRestoredLineIndex -lt 0) {
+                            $standingBodyRestoredLineIndex = $lineIndex
+                        }
+                    } else {
+                        $standingBodyObserved = $true
+                    }
+                } elseif ($standingBodyObserved -and
+                    [Math]::Abs($characterSize.Y - 0.95) -le 0.05) {
+                    $crouchedBodyObserved = $true
+                }
+            }
+        }
+    }
+
+    $postCrouchScenarioEvidence = $null
+    if ($EnableRoomScale -and $standingBodyRestoredLineIndex -ge 0 -and
+        $standingBodyRestoredLineIndex -lt $freshLines.Count) {
+        $postCrouchLines = @($freshLines[
+            $standingBodyRestoredLineIndex..($freshLines.Count - 1)])
+        $postCrouchScenarioEvidence = Get-PhysicalScenarioEvidence `
+            -Lines $postCrouchLines
     }
 
     $missingEvidence = @()
@@ -366,6 +440,30 @@ try {
     if (-not $scenarioEvidence.Slide) {
         $missingEvidence += 'slide/partial physical displacement with both accepted and rejected X/Z components'
     }
+    if ($EnableRoomScale -and -not $roomScaleApplied) {
+        $missingEvidence += 'fresh reconciled room-scale sample applied to the rendered camera'
+    }
+    if ($EnableRoomScale -and -not $nonZeroCameraOffset) {
+        $missingEvidence += 'non-zero horizontal room-scale camera offset'
+    }
+    if ($EnableRoomScale -and -not $mirrorEnabled) {
+        $missingEvidence += 'monitor mirror enabled in a gameplay render frame'
+    }
+    if ($EnableRoomScale -and
+        (-not $standingBodyObserved -or -not $crouchedBodyObserved -or
+         -not $standingBodyRestored)) {
+        $missingEvidence += 'native standing -> crouched -> standing shape sequence (1.65 m -> 0.95 m -> 1.65 m)'
+    }
+    if ($EnableRoomScale -and -not $roomScaleRecoveredAfterCrouch) {
+        $missingEvidence += 'fresh room-scale camera application after returning to the standing shape'
+    }
+    if ($EnableRoomScale -and
+        ($null -eq $postCrouchScenarioEvidence -or
+         -not $postCrouchScenarioEvidence.Free -or
+         -not $postCrouchScenarioEvidence.Blocked -or
+         -not $postCrouchScenarioEvidence.Slide)) {
+        $missingEvidence += 'free, blocked and slide/partial physical outcomes after returning to the standing shape'
+    }
 
     if ($missingEvidence.Count -ne 0) {
         throw "Physical displacement live validation is incomplete for PID $($gameProcess.Id). Missing fresh evidence: $($missingEvidence -join '; '). Probe log: '$probeLog'."
@@ -373,9 +471,16 @@ try {
 
     Write-Host "Physical displacement evidence passed: queued=$queuedPlans consumed=$consumedRequests injected=$injectedRequests matched=$matchedObservations."
     Write-Host "Scenario evidence: stationary=$($scenarioEvidence.StationarySamples) free=$($scenarioEvidence.FreeSamples) blocked=$($scenarioEvidence.BlockedSamples) slide_or_partial=$($scenarioEvidence.SlideSamples)."
+    if ($EnableRoomScale) {
+        Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
+        Write-Host "Post-crouch outcomes: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
+    }
     $exitCode = 0
 }
 finally {
+    if ($null -ne $roomScaleRequest) {
+        $roomScaleRequest.Dispose()
+    }
     $request.Dispose()
 }
 

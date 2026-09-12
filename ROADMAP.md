@@ -61,17 +61,22 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [ ] Implement a reliable desktop monitor mirror
 - [ ] Headset-validate medium-distance lamp lighting and scissor-hook performance
 - [ ] Achieve acceptable frame pacing at the headset's target refresh rate
-- [ ] Apply positional tracking with game/body calibration
+- [x] Implement default-off positional tracking from the reconciled game/body boundary
+- [ ] Headset-validate positional tracking with game/body calibration
 - [ ] Live-validate direct VR startup and menu/gameplay transitions
 
 **Current milestone note:** native stereo/head rotation, the player/body boundary,
 the default-off reconciliation shadow path and the bounded collision-aware
 physical X/Z displacement request in metres are now live-tested. PID 26144
 demonstrated queue, injection, native collision and matched reconciliation at
-`0xD7281` while positional HMD translation remained zero. The next body gate is
-headset validation of active room-scale/positional HMD translation through that
-boundary. The desktop mirror remains experimental, although mirror-off clearing
-was visually confirmed black in PID 26144.
+`0xD7281` while positional HMD translation remained zero. The default-off active
+room-scale consumer is now implemented: it applies only a fresh reconciled X/Z
+offset to camera, visibility and controller space and retains native Y/jump.
+Its affected Release targets compile, but tests were not executed; it remains
+`implemented` pending host/live/headset validation.
+The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
+shows 2D menus but suppresses the gameplay world to black, matching the pass
+ownership design; mirror-on remains part of the next validation batch.
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus, with frame pacing and positional tracking explicitly validated before claiming a complete visual MVP.
 
@@ -121,6 +126,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-validate the shadow-only reconciliation path with translation still zero through the exact-build/mutex validation route
 - [x] Implement and host-test a bounded collision-aware physical displacement request separately from native analog movement
 - [x] Live-validate that physical request through stationary/free/block/slide cases before enabling room-scale
+- [x] Implement a transient, fail-closed room-scale consumer through that reconciled request
 - [ ] Headset-validate positional physical movement, blocking/sliding and head/body reconciliation
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work

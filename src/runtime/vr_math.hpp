@@ -68,6 +68,15 @@ struct VrCullFrustum {
     VrMatrix44& tracked_head_view,
     std::string& error) noexcept;
 
+// Applies an already-reconciled world-space translation to a rigid view.
+// The caller owns collision/body reconciliation; this helper only converts
+// the view to a pose, offsets its translation and returns the inverse view.
+[[nodiscard]] bool ApplyWorldTranslationToView(
+    const VrMatrix44& view,
+    const std::array<float, 3>& world_translation,
+    VrMatrix44& translated_view,
+    std::string& error) noexcept;
+
 // Builds the infinite-far OpenGL projection used by the mapped HPL1 camera
 // path from the raw per-eye tangents returned by OpenVR.
 [[nodiscard]] bool BuildHplInfiniteProjection(

@@ -1,5 +1,6 @@
 // Exercise the exact-build observation adapter against a synthetic image.
 // No game process or VR runtime is loaded.
+#include "black_plague_body_adapter.hpp"
 #include "../../src/backends/black_plague/body_collision_probe.cpp"
 
 #include <array>
@@ -438,6 +439,52 @@ int RunBodyCollisionProbeTest() {
     }
     CloseHandle(physical_mutex);
     if (ReadBlackPlaguePhysicalValidationStatus().enabled) return 59;
+
+    // Active room-scale remains a separate opt-in. It must fail closed unless
+    // the already-proven physical request owner is requested at the same time,
+    // then publish only a fresh reconciled horizontal camera offset.
+    HANDLE room_scale_only_mutex = CreateMutexW(nullptr, FALSE,
+        L"Local\\PenumbraVR.BlackPlague.RoomScaleValidation");
+    if (room_scale_only_mutex == nullptr) return 60;
+    if (!InstallBlackPlagueBodyAdapter(error)) {
+        CloseHandle(room_scale_only_mutex);
+        return 61;
+    }
+    if (ReadBlackPlagueRoomScaleStatus().enabled) return 62;
+    if (!RemoveBlackPlagueBodyAdapter(error)) return 63;
+    CloseHandle(room_scale_only_mutex);
+
+    physical_mutex = CreateMutexW(nullptr, FALSE,
+        L"Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation");
+    HANDLE room_scale_mutex = CreateMutexW(nullptr, FALSE,
+        L"Local\\PenumbraVR.BlackPlague.RoomScaleValidation");
+    if (physical_mutex == nullptr || room_scale_mutex == nullptr) return 64;
+    if (!InstallBlackPlagueBodyAdapter(error)) return 65;
+    const auto room_scale_status = ReadBlackPlagueRoomScaleStatus();
+    if (!room_scale_status.enabled || room_scale_status.source !=
+            BlackPlagueRoomScaleRequestSource::mutex) return 66;
+
+    Put(replacement.data(), kCharacterPositionOffset, start);
+    PublishBlackPlagueShadowTracking(head, 0.0F, true);
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    auto room_scale_camera = ReadBlackPlagueRoomScaleCameraSample();
+    if (!room_scale_camera.enabled || !room_scale_camera.valid ||
+        !Near(room_scale_camera.horizontal_world_offset[0], 0.0F) ||
+        !Near(room_scale_camera.horizontal_world_offset[1], 0.0F) ||
+        !Near(room_scale_camera.horizontal_world_offset[2], 0.0F)) return 67;
+
+    head.values[3] += 0.03F;
+    PublishBlackPlagueShadowTracking(head, 0.0F, false);
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    room_scale_camera = ReadBlackPlagueRoomScaleCameraSample();
+    if (!room_scale_camera.valid ||
+        !Near(room_scale_camera.horizontal_world_offset[0], 0.03F) ||
+        !Near(room_scale_camera.horizontal_world_offset[1], 0.0F)) return 68;
+    PublishBlackPlagueShadowTracking(head, 0.0F, true);
+    if (ReadBlackPlagueRoomScaleCameraSample().valid) return 69;
+    if (!RemoveBlackPlagueBodyAdapter(error)) return 70;
+    CloseHandle(room_scale_mutex);
+    CloseHandle(physical_mutex);
     g_stationary_native_update = false;
     g_collision_x_adjustment = -0.15F;
 

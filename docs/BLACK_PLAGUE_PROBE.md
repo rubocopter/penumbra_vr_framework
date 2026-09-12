@@ -276,15 +276,26 @@ The correction hooks that earlier call while continuous stereo is active. After 
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --vr-mirror-off <pid>
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --stop-vr <pid>
 
+# Change the persisted mirror without a running game
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --set-vr-mirror on
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --set-vr-mirror off
+
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
 
-`--vr-mirror-on` and `--vr-mirror-off` persist the successful choice in
-`%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--start-vr` applies that value before
-starting presentation; a missing file or key safely defaults to mirror off.
+`--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
+`%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes
+the same setting offline, without a PID or an in-game VR settings page.
+`--start-vr` applies that value before starting presentation; a missing file
+or key safely defaults to mirror off.
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. Translation remains forced to zero. The continuous mode retains that transform, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Its Rework-derived mirror policy defaults off: the first eye receives the game frame time and the original desktop world pass is skipped, reducing three world renders to two. `--vr-mirror-on` retains the separately timed desktop pass and `--vr-mirror-off` restores the two-pass path. Bounded diagnostics always keep their prior desktop pass. If stereo fails after the first timed eye, the fallback desktop pass receives zero frame time to avoid a double update. Pass ownership and counts are exposed in telemetry. Both continuous schedules have executed with the expected live pass counts and no stereo or camera-restoration errors. PID 26144 visually confirmed that mirror-off leaves the desktop black without the prior growing white-point artifact; a comparable frame-pacing measurement remains pending. Black Plague and Requiem are not Large Address Aware in their currently installed canonical state. The repository now recognizes host-verified exact LAA variants for both builds, but installed-file transformation still belongs to the future known-build-gated transactional installer before heavier Enhanced visuals buffers are enabled.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. The bounded tracked diagnostic keeps translation at zero. The continuous mode retains that transform and can consume the separate default-off room-scale validation sample, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Its Rework-derived scheduling gives the first eye the game frame time and always renders two native eye world passes. Mirror-on copies the left-eye texture to the desktop at swap; mirror-off clears the desktop backbuffer to black. Neither mode adds a third native world pass. Bounded diagnostics always keep their prior desktop pass. If stereo fails after the first timed eye, the fallback desktop pass receives zero frame time to avoid a double update. Pass ownership and counts are exposed in telemetry. Both continuous schedules have executed with the expected live pass counts and no stereo or camera-restoration errors. PID 26144 visually confirmed that mirror-off leaves the desktop black without the prior growing white-point artifact; a comparable frame-pacing measurement remains pending. Black Plague and Requiem are not Large Address Aware in their currently installed canonical state. The repository now recognizes host-verified exact LAA variants for both builds, but installed-file transformation still belongs to the future known-build-gated transactional installer before heavier Enhanced visuals buffers are enabled.
+
+PID 19192 refines the earlier mirror-off observation: gameplay suppresses its
+monitor world pass and appears black, while native 2D menus remain visible
+because they do not call `RenderWorld`. This is consistent with the current
+pass ownership. Mirror-on and comparable frame-pacing evidence remain pending.
 
 Logs are stored under `%LOCALAPPDATA%\PenumbraVR\logs` and include the host path, SHA-256, build ID, frame telemetry and shutdown count.
 Initialization publishes a capability bitmap for matrix telemetry, render/frame
@@ -358,6 +369,19 @@ stationary classifier incorrectly required zero injection, which is incompatible
 with Rework `23c890f` reacting to any non-zero HMD tracking delta. Using the
 corrected 2 mm significance threshold, the same log contains 12 stationary,
 37 free, 2 blocked and 15 slide/partial samples.
+
+The next active consumer is implemented and its affected Release targets compile,
+but no test executable or live/headset validation has run yet. A separate
+`Local\PenumbraVR.BlackPlague.RoomScaleValidation` mutex is accepted only
+while physical validation is active. The adapter exposes a fresh reconciled X/Z
+camera offset for the current body generation; rendering applies it to the head
+view, visibility view and controller game-view basis. Stale or invalid samples
+fall back to rotation-only, and Y/jump remain native. Use
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`; its final check requires
+camera application, a non-zero offset, mirror-on gameplay, the native
+`1.65 -> 0.95 -> 1.65 m` crouch shape sequence, a fresh camera sample after
+standing again, and new free/blocked/slide-or-partial evidence after that shape
+sequence.
 The dedicated live launcher additionally fails closed unless the fresh process
 log proves a non-zero queued plan, consumed/injected boundary request, matched
 reconciliation, non-zero injected body telemetry, the native `dt~=1/60` tick
