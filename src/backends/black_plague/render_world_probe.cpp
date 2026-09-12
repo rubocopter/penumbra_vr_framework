@@ -956,8 +956,9 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
             !rollback_error.empty()) {
             error += "; RenderWorld hook rollback also failed: " + rollback_error;
         }
-        g_original_target.store(nullptr, std::memory_order_release);
-        g_original_visibility_target.store(nullptr, std::memory_order_release);
+        // A RenderWorld wrapper may already have entered before rollback
+        // restored the callsite. Keep its process-resident original targets
+        // available so that an in-flight callback can finish safely.
         return false;
     }
     if (!hooks::InstallOpenGlEyeScissor(error)) {
@@ -998,8 +999,9 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
     constexpr DWORD kQuiescenceTimeoutMilliseconds = 2000;
     for (DWORD elapsed = 0; elapsed < kQuiescenceTimeoutMilliseconds; ++elapsed) {
         if (g_active_calls.load(std::memory_order_acquire) == 0) {
-            g_original_target.store(nullptr, std::memory_order_release);
-            g_original_visibility_target.store(nullptr, std::memory_order_release);
+            // Keep the process-resident native targets published. A thread can
+            // already have branched into a wrapper when its callsite is
+            // restored but before ActiveCall increments the counter.
             return hooks::RemoveOpenGlEyeScissor(error);
         }
         Sleep(1);

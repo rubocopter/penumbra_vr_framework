@@ -7,6 +7,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdio>
@@ -228,12 +229,28 @@ void __fastcall HookBool(void* self, void*, bool value) {
 
 bool Install(std::string& error) noexcept {
     error.clear();
-    if (g_hooks[0].installed()) {
+    const bool complete = std::all_of(g_hooks.begin(), g_hooks.end(),
+        [](const auto& hook) noexcept { return hook.installed(); });
+    const bool any = std::any_of(g_hooks.begin(), g_hooks.end(),
+        [](const auto& hook) noexcept { return hook.installed(); });
+    if (complete) {
         return true;
     }
-    g_image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
-    if (g_image == nullptr) {
+    if (any) {
+        error = "Movement ownership probe is only partially installed";
+        return false;
+    }
+    auto* const image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    if (image == nullptr) {
         error = "The Black Plague image is unavailable";
+        return false;
+    }
+    bool published_image_this_attempt = false;
+    if (g_image == nullptr) {
+        g_image = image;
+        published_image_this_attempt = true;
+    } else if (g_image != image) {
+        error = "The Black Plague image base changed after movement ownership publication";
         return false;
     }
 
@@ -241,7 +258,9 @@ bool Install(std::string& error) noexcept {
     // exact-build fail-closed contract and prevents partial ownership.
     for (const auto& site : kSites) {
         if (!ValidateSite(site, error)) {
-            g_image = nullptr;
+            if (published_image_this_attempt) {
+                g_image = nullptr;
+            }
             return false;
         }
     }
@@ -259,7 +278,9 @@ bool Install(std::string& error) noexcept {
                 static_cast<void>(hooks::RemoveRel32CallHook(
                     g_hooks[index], rollback));
             }
-            g_image = nullptr;
+            // A wrapper may already have entered before rollback restored its
+            // callsite. The module image is process-resident, so keep the base
+            // available until process teardown for any in-flight callback.
             if (!rollback.empty()) {
                 error += "; rollback failed: " + rollback;
             }
@@ -288,9 +309,8 @@ bool RemoveMovementOwnershipProbe(std::string& error) noexcept {
             error += next;
         }
     }
-    if (success) {
-        g_image = nullptr;
-    }
+    // Keep g_image resident for wrappers that entered before their callsites
+    // were restored. The main module remains valid for the process lifetime.
     return success;
 }
 

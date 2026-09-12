@@ -281,20 +281,33 @@ NativeMovementBoundaryStatus ReadNativeMovementBoundaryStatus() noexcept {
     NativeMovementBoundaryStatus result;
     constexpr std::array<std::uintptr_t, 2> sites{0x51CD, 0x5227};
     constexpr std::array<std::uintptr_t, 2> targets{0x9CBC0, 0x9CC60};
-    result.initialized = g_installed.load(std::memory_order_acquire);
+    const std::array<void*, 2> replacements{
+        reinterpret_cast<void*>(&HookedForward),
+        reinterpret_cast<void*>(&HookedSideways)};
+    const bool installed = g_installed.load(std::memory_order_acquire);
+    auto* const image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    result.initialized = installed;
     for (std::size_t index = 0; index < sites.size(); ++index) {
         auto& callsite = result.callsites[index];
         callsite.rva = sites[index];
         callsite.expected = CallBytes(sites[index], targets[index]);
         callsite.expected_target = targets[index];
-        callsite.owner_installed = g_move_hooks[index].installed();
-        if (g_image != nullptr) {
-            static_cast<void>(ReadBytes(g_image + sites[index],
+        callsite.owner_installed = installed;
+        if (image != nullptr) {
+            static_cast<void>(ReadBytes(image + sites[index],
                 callsite.live.data(), callsite.live.size()));
         }
         callsite.live_target = DecodeCallTarget(callsite.live, sites[index]);
+        void* live_target = nullptr;
+        if (callsite.live[0] == 0xE8 && image != nullptr) {
+            std::int32_t displacement = 0;
+            std::memcpy(&displacement, callsite.live.data() + 1,
+                sizeof(displacement));
+            live_target = image + sites[index] + callsite.live.size() +
+                displacement;
+        }
         callsite.owner_matches_live = callsite.owner_installed &&
-            callsite.live == g_move_hooks[index].replacement_instruction;
+            live_target == replacements[index];
         result.initialized = result.initialized && callsite.owner_matches_live;
     }
     return result;
@@ -307,8 +320,43 @@ void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept {
 }
 bool InstallNativeInputBridge(std::string& error) noexcept {
     error.clear();
-    if (g_update_hook.installed()) return true;
-    g_image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    const auto all_installed = [](const auto& hooks) noexcept {
+        return std::all_of(hooks.begin(), hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); });
+    };
+    const auto any_installed = [](const auto& hooks) noexcept {
+        return std::any_of(hooks.begin(), hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); });
+    };
+    const bool complete = g_update_hook.installed() &&
+        all_installed(g_query_hooks) && all_installed(g_move_hooks) &&
+        all_installed(g_pointer_hooks);
+    const bool any = g_update_hook.installed() ||
+        any_installed(g_query_hooks) || any_installed(g_move_hooks) ||
+        any_installed(g_pointer_hooks);
+    if (g_installed.load(std::memory_order_acquire)) {
+        if (complete) return true;
+        error = "Native input bridge installation state is incomplete";
+        return false;
+    }
+    if (any) {
+        error = "Native input bridge is only partially installed";
+        return false;
+    }
+    auto* const image = reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    if (image == nullptr) {
+        error = "The Black Plague image is unavailable";
+        return false;
+    }
+    if (g_image == nullptr) {
+        // Once callbacks have been published, keep the process-resident image
+        // base immutable so a callback from a just-removed installation cannot
+        // race a subsequent installation rewriting the same global pointer.
+        g_image = image;
+    } else if (g_image != image) {
+        error = "The Black Plague image base changed after native input publication";
+        return false;
+    }
     void* update = nullptr;
     if (!ReadBytes(g_image + 0x272A84, &update, sizeof(update)) || update != g_image + 0x3BF0) {
         error = "ButtonHandler Update vtable does not match the exact build"; return false;

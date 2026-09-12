@@ -67,9 +67,12 @@ constexpr std::array<std::uint8_t, 24> kCollisionSignature{
     0x24, 0x34, 0x89, 0x5C, 0x24, 0x38, 0x89, 0x5C};
 
 std::uint8_t* g_image = nullptr;
+std::atomic<std::uint8_t*> g_published_image{nullptr};
 hooks::Rel32CallHook g_update_hook;
 hooks::Rel32CallHook g_collision_hook;
 hooks::Rel32JumpHook g_physical_request_hook;
+std::atomic<bool> g_update_owner_installed{false};
+std::atomic<bool> g_physical_request_owner_installed{false};
 CharacterUpdate g_original_update = nullptr;
 CheckShapeWorldCollision g_original_collision = nullptr;
 void* g_physical_request_resume = nullptr;
@@ -97,6 +100,8 @@ struct TickContext {
     Vec3 physical_position_after{};
 };
 thread_local TickContext g_tick;
+
+void PhysicalRequestGateway() noexcept;
 
 bool ReadBytes(const void* source, void* destination, std::size_t size) noexcept {
     if (source == nullptr || destination == nullptr) {
@@ -146,10 +151,21 @@ T Read(const void* object, std::uintptr_t offset) noexcept {
 }
 
 [[nodiscard]] bool PhysicalRequestOwnerMatchesLive() noexcept {
-    if (!g_physical_request_hook.installed()) return false;
+    if (!g_physical_request_owner_installed.load(std::memory_order_acquire)) {
+        return false;
+    }
+    auto* const image = g_published_image.load(std::memory_order_acquire);
+    if (image == nullptr) return false;
     std::array<std::uint8_t, 5> live{};
-    return ReadBytes(g_physical_request_hook.instruction, live.data(), live.size()) &&
-        live == g_physical_request_hook.replacement_instruction;
+    if (!ReadBytes(image + kPhysicalRequestInjection, live.data(), live.size()) ||
+        live[0] != 0xE9) {
+        return false;
+    }
+    std::int32_t displacement = 0;
+    std::memcpy(&displacement, live.data() + 1, sizeof(displacement));
+    const auto target = reinterpret_cast<std::uintptr_t>(
+        image + kPhysicalRequestInjection + live.size()) + displacement;
+    return target == reinterpret_cast<std::uintptr_t>(&PhysicalRequestGateway);
 }
 
 void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcept {
@@ -429,12 +445,24 @@ template<std::size_t Size>
     std::uint8_t* image,
     std::string& error) noexcept {
     error.clear();
-    if (g_update_hook.installed() || g_collision_hook.installed() ||
-        g_physical_request_hook.installed()) {
+    const bool update_installed = g_update_hook.installed();
+    const bool collision_installed = g_collision_hook.installed();
+    const bool physical_request_installed = g_physical_request_hook.installed();
+    if (update_installed && collision_installed && physical_request_installed) {
         return true;
+    }
+    if (update_installed || collision_installed || physical_request_installed) {
+        error = "Body/collision probe is only partially installed";
+        return false;
     }
     if (image == nullptr) {
         error = "The Black Plague image is unavailable";
+        return false;
+    }
+    const auto* const published_image =
+        g_published_image.load(std::memory_order_acquire);
+    if (published_image != nullptr && published_image != image) {
+        error = "The Black Plague image base changed after body/collision publication";
         return false;
     }
     g_image = image;
@@ -449,22 +477,36 @@ template<std::size_t Size>
     }
 
     // Publish the verified native targets before either live callsite can
-    // dispatch to its wrapper on another game thread.
-    g_original_update = reinterpret_cast<CharacterUpdate>(
-        g_image + kCharacterUpdate);
-    g_original_collision = reinterpret_cast<CheckShapeWorldCollision>(
-        g_image + kCheckShapeWorldCollision);
+    // dispatch to its wrapper on another game thread. Once published, keep
+    // them immutable across reinstallations because an old wrapper can still
+    // be finishing after its callsite has been restored.
+    if ((g_original_update == nullptr) != (g_original_collision == nullptr)) {
+        error = "Body/collision native callback publication is incomplete";
+        return false;
+    }
+    const bool published_targets_this_attempt = g_original_update == nullptr;
+    if (published_targets_this_attempt) {
+        g_original_update = reinterpret_cast<CharacterUpdate>(
+            g_image + kCharacterUpdate);
+        g_original_collision = reinterpret_cast<CheckShapeWorldCollision>(
+            g_image + kCheckShapeWorldCollision);
+    }
+    g_published_image.store(g_image, std::memory_order_release);
     if (!hooks::InstallRel32CallHook(
             g_image + kPhysicsWorldCharacterUpdateCall,
             kUpdateCall,
             reinterpret_cast<void*>(&HookedCharacterUpdate),
             g_update_hook,
             error)) {
-        g_original_update = nullptr;
-        g_original_collision = nullptr;
+        if (published_targets_this_attempt) {
+            g_original_update = nullptr;
+            g_original_collision = nullptr;
+        }
+        g_published_image.store(nullptr, std::memory_order_release);
         g_image = nullptr;
         return false;
     }
+    g_update_owner_installed.store(true, std::memory_order_release);
     if (!hooks::InstallRel32CallHook(
             g_image + kCharacterCollisionCall,
             kCollisionCall,
@@ -472,17 +514,21 @@ template<std::size_t Size>
             g_collision_hook,
             error)) {
         std::string rollback;
-        static_cast<void>(hooks::RemoveRel32CallHook(g_update_hook, rollback));
-        g_original_update = nullptr;
-        g_original_collision = nullptr;
-        g_image = nullptr;
+        if (hooks::RemoveRel32CallHook(g_update_hook, rollback)) {
+            g_update_owner_installed.store(false, std::memory_order_release);
+        }
+        // The hook may already have dispatched on another thread before the
+        // rollback. Keep callback targets resident so that an in-flight wrapper
+        // can complete safely after the callsite is restored.
         if (!rollback.empty()) {
             error += "; rollback failed: " + rollback;
         }
         return false;
     }
-    g_physical_request_resume = g_image + kPhysicalRequestInjection +
-        kPhysicalRequestWindow.size();
+    if (g_physical_request_resume == nullptr) {
+        g_physical_request_resume = g_image + kPhysicalRequestInjection +
+            kPhysicalRequestWindow.size();
+    }
     if (!hooks::InstallRel32JumpHook(
             g_image + kPhysicalRequestInjection,
             kPhysicalRequestWindow,
@@ -493,16 +539,17 @@ template<std::size_t Size>
         std::string update_rollback;
         static_cast<void>(hooks::RemoveRel32CallHook(
             g_collision_hook, collision_rollback));
-        static_cast<void>(hooks::RemoveRel32CallHook(
-            g_update_hook, update_rollback));
-        g_original_update = nullptr;
-        g_original_collision = nullptr;
-        g_physical_request_resume = nullptr;
-        g_image = nullptr;
+        if (hooks::RemoveRel32CallHook(g_update_hook, update_rollback)) {
+            g_update_owner_installed.store(false, std::memory_order_release);
+        }
+        // The published wrappers and gateway can still be in flight after the
+        // callsites are restored. Their exact-build targets remain valid for
+        // the process lifetime and are overwritten by a later installation.
         if (!collision_rollback.empty()) error += "; " + collision_rollback;
         if (!update_rollback.empty()) error += "; " + update_rollback;
         return false;
     }
+    g_physical_request_owner_installed.store(true, std::memory_order_release);
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     g_jump_burst = {};
@@ -527,6 +574,9 @@ bool InstallBodyCollisionProbe(std::string& error) noexcept {
 bool RemoveBodyCollisionProbe(std::string& error) noexcept {
     error.clear();
     bool success = hooks::RemoveRel32JumpHook(g_physical_request_hook, error);
+    if (success) {
+        g_physical_request_owner_installed.store(false, std::memory_order_release);
+    }
     std::string collision_error;
     if (!hooks::RemoveRel32CallHook(g_collision_hook, collision_error)) {
         success = false;
@@ -540,12 +590,14 @@ bool RemoveBodyCollisionProbe(std::string& error) noexcept {
         success = false;
         if (!error.empty()) error += "; ";
         error += update_error;
+    } else {
+        g_update_owner_installed.store(false, std::memory_order_release);
     }
     if (success) {
-        g_original_update = nullptr;
-        g_original_collision = nullptr;
-        g_physical_request_resume = nullptr;
-        g_image = nullptr;
+        // Do not clear g_original_update, g_original_collision,
+        // g_physical_request_resume or g_image here. Removing a callsite stops
+        // new dispatches, but a wrapper/gateway that was already entered can
+        // still need those process-resident targets to return safely.
         InvalidatePhysicalBodyDisplacement();
     }
     return success;
@@ -673,15 +725,19 @@ NativeBodyUpdateBoundaryStatus ReadNativeBodyUpdateBoundaryStatus() noexcept {
     NativeBodyUpdateBoundaryStatus result;
     result.expected = kUpdateCall;
     result.expected_target = kCharacterUpdate;
-    result.owner_installed = g_update_hook.installed();
-    if (g_image != nullptr) {
-        static_cast<void>(ReadBytes(g_image + kPhysicsWorldCharacterUpdateCall,
+    result.owner_installed =
+        g_update_owner_installed.load(std::memory_order_acquire);
+    auto* const image = g_published_image.load(std::memory_order_acquire);
+    if (image != nullptr) {
+        static_cast<void>(ReadBytes(image + kPhysicsWorldCharacterUpdateCall,
             result.live.data(), result.live.size()));
     }
     result.live_target = DecodeCallTarget(result.live,
         kPhysicsWorldCharacterUpdateCall);
     result.owner_matches_live = result.owner_installed &&
-        result.live == g_update_hook.replacement_instruction;
+        result.live[0] == 0xE8 && image != nullptr &&
+        image + result.live_target ==
+            reinterpret_cast<std::uint8_t*>(&HookedCharacterUpdate);
     result.initialized = result.owner_matches_live;
     return result;
 }
@@ -690,13 +746,23 @@ PhysicalBodyDisplacementBoundaryStatus
 ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
     PhysicalBodyDisplacementBoundaryStatus result;
     result.expected = kPhysicalRequestWindow;
-    result.owner_installed = g_physical_request_hook.installed();
-    if (g_image != nullptr) {
-        static_cast<void>(ReadBytes(g_image + kPhysicalRequestInjection,
+    result.owner_installed =
+        g_physical_request_owner_installed.load(std::memory_order_acquire);
+    auto* const image = g_published_image.load(std::memory_order_acquire);
+    if (image != nullptr) {
+        static_cast<void>(ReadBytes(image + kPhysicalRequestInjection,
             result.live.data(), result.live.size()));
     }
-    result.owner_matches_live = result.owner_installed &&
-        result.live == g_physical_request_hook.replacement_instruction;
+    if (result.owner_installed && result.live[0] == 0xE9 && image != nullptr) {
+        std::int32_t displacement = 0;
+        std::memcpy(&displacement, result.live.data() + 1,
+            sizeof(displacement));
+        const auto target = reinterpret_cast<std::uintptr_t>(
+            image + kPhysicalRequestInjection + result.live.size()) +
+            displacement;
+        result.owner_matches_live =
+            target == reinterpret_cast<std::uintptr_t>(&PhysicalRequestGateway);
+    }
     result.initialized = result.owner_matches_live;
     return result;
 }

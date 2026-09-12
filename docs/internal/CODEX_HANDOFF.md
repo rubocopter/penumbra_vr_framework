@@ -10,6 +10,11 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Current hook hardening pass: exact-build Black Plague hook owners now reject
+  incomplete installation states, keep immutable published image bases, and
+  avoid clearing native callback targets while wrappers can still be active.
+  This is Release/build/test validated only; it does not add live or headset
+  evidence.
 - Repository: `rubocopter/penumbra_vr_framework`
 - Default branch: `main`
 - Reviewed feature checkpoint: `18c63ef39adb9d3af6df0a6e9f97d0889df5194c` (`feat: add shared tracking body reconciliation shadow`)

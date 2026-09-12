@@ -7,6 +7,7 @@
 #include <windows.h>
 
 #include <array>
+#include <atomic>
 #include <cmath>
 #include <cstring>
 
@@ -23,8 +24,8 @@ constexpr wchar_t kShadowRequestMutexName[] =
 constexpr wchar_t kPhysicalValidationRequestMutexName[] =
     L"Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation";
 
-std::uint8_t* g_image = nullptr;
-bool g_installed = false;
+std::atomic<std::uint8_t*> g_image{nullptr};
+std::atomic<bool> g_installed{false};
 SRWLOCK g_lock = SRWLOCK_INIT;
 BlackPlagueBodyMotion g_motion;
 bool g_shadow_enabled = false;
@@ -170,17 +171,17 @@ void InvalidatePendingPhysicalValidationLocked() noexcept {
 [[nodiscard]] bool InstallForImage(std::uint8_t* image,
     std::string& error) noexcept {
     error.clear();
-    if (g_installed) return true;
+    if (g_installed.load(std::memory_order_acquire)) return true;
     if (image == nullptr) {
         error = "The Black Plague image is unavailable";
         return false;
     }
-    g_image = image;
+    g_image.store(image, std::memory_order_release);
     // Input and physics hooks own their respective instructions. Each has
     // already validated pristine exact-build bytes before patching; bind only
     // to their live replacement and never attempt a competing patch here.
     if (!MovementOwnerReady(error) || !BodyUpdateOwnerReady(error)) {
-        g_image = nullptr;
+        g_image.store(nullptr, std::memory_order_release);
         return false;
     }
     AcquireSRWLockExclusive(&g_lock);
@@ -204,19 +205,24 @@ void InvalidatePendingPhysicalValidationLocked() noexcept {
     g_physical_validation_telemetry = {};
     g_pending_physical_validation = {};
     ReleaseSRWLockExclusive(&g_lock);
-    g_installed = true;
+    g_installed.store(true, std::memory_order_release);
     return true;
 }
 
 [[nodiscard]] bool Publish(void* player, float amount, float delta_seconds,
     bool sideways) noexcept {
-    if (!g_installed || !MatchesCurrentBody(player) ||
+    if (!g_installed.load(std::memory_order_acquire) ||
+        !MatchesCurrentBody(player) ||
         !ValidIntent(amount, delta_seconds)) return false;
-    reinterpret_cast<Move>(g_image + (sideways ? kMoveSideways : kMoveForward))(
+    auto* const image = g_image.load(std::memory_order_acquire);
+    if (image == nullptr) return false;
+    reinterpret_cast<Move>(image + (sideways ? kMoveSideways : kMoveForward))(
         player, amount, delta_seconds);
     AcquireSRWLockExclusive(&g_lock);
-    g_motion.intent_published = true;
-    g_motion.native_horizontal_intent[sideways ? 1U : 0U] = amount;
+    if (g_installed.load(std::memory_order_acquire)) {
+        g_motion.intent_published = true;
+        g_motion.native_horizontal_intent[sideways ? 1U : 0U] = amount;
+    }
     ReleaseSRWLockExclusive(&g_lock);
     return true;
 }
@@ -229,8 +235,8 @@ bool InstallBlackPlagueBodyAdapter(std::string& error) noexcept {
 
 bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept {
     error.clear();
-    g_installed = false;
-    g_image = nullptr;
+    g_installed.store(false, std::memory_order_release);
+    g_image.store(nullptr, std::memory_order_release);
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
     g_shadow_enabled = false;
@@ -266,7 +272,8 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
     const std::array<float, 3>& feet_after,
     float delta_seconds,
     const BlackPlaguePhysicalTickObservation& physical_tick) noexcept {
-    if (!g_installed || !MatchesCurrentBody(player) ||
+    if (!g_installed.load(std::memory_order_acquire) ||
+        !MatchesCurrentBody(player) ||
         Read<void*>(player, kPlayerCharacterBodyOffset) != character_body) {
         InvalidateBlackPlagueShadowTracking();
         return;

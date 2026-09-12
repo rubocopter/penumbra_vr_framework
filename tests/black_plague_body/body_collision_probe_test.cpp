@@ -199,10 +199,13 @@ int RunBodyCollisionProbeTest() {
     Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
         static_cast<void*>(g_body_storage.data()));
 
-    const auto saved_replacement = g_physical_request_hook.replacement_instruction;
-    ++g_physical_request_hook.replacement_instruction[4];
+    std::array<std::uint8_t, 5> saved_replacement{};
+    std::memcpy(saved_replacement.data(), image + kPhysicalRequestInjection,
+        saved_replacement.size());
+    ++image[kPhysicalRequestInjection + 4];
     if (QueuePhysicalBodyDisplacement({0.01F, 0.0F, 0.0F})) return 46;
-    g_physical_request_hook.replacement_instruction = saved_replacement;
+    std::memcpy(image + kPhysicalRequestInjection, saved_replacement.data(),
+        saved_replacement.size());
     physical = ConsumePhysicalBodyDisplacementTelemetry();
     if (physical.rejected_requests != 1 ||
         physical.latest_result !=

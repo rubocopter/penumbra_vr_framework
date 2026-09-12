@@ -268,7 +268,17 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();
     if (g_enabled.load(std::memory_order_acquire)) return true;
     g_player_collision_filter_ready.store(false,std::memory_order_release);
-    g_image=reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    auto* const image=reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
+    if (!image) { error="The Black Plague image is unavailable"; return false; }
+    if (!g_image) {
+        // Keep the module base immutable after first publication. A wrapper can
+        // already have branched through a restored hook while removal observes
+        // zero active callbacks, so a later install must not rewrite g_image.
+        g_image=image;
+    } else if (g_image!=image) {
+        error="The Black Plague image base changed after spatial hook publication";
+        return false;
+    }
     constexpr std::array<std::uintptr_t,5> slots{0x291BE8,0x27D0D4,0x27D12C,0x27D130,0x27CB70};
     constexpr std::array<std::uintptr_t,5> targets{0x189E30,0xABA90,0xAC900,0xAA4C0,0xA3DE0};
     const auto crt=GetModuleHandleW(L"MSVCP71.dll");

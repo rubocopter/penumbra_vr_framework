@@ -94,6 +94,11 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- Hardened Black Plague exact-build hook lifecycle handling: partial installs are
+  rejected as incomplete, published module identity is kept stable across
+  reinstall attempts, and rollback/removal paths preserve callback targets that
+  in-flight wrappers may still require. Release build and all 30 root CTest
+  tests pass.
 - When the Black Plague monitor mirror is disabled, continuous stereo now clears the desktop backbuffer to black instead of leaving stale desktop contents that produced the reported growing white-point artifact. This path is host-tested and still needs headset confirmation.
 - `PenumbraVR.ProbeLauncher` now waits for the actual owner DLL of forwarded
   `LoadLibraryW` to appear in a freshly Steam-started process instead of failing
