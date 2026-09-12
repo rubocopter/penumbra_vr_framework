@@ -10,6 +10,19 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Working-tree maintenance pass on 2026-09-12: settings writes are transactional,
+  IAT/OpenGL/spatial teardown reports partial state, OpenVR retains a loader
+  handle after unload failure, renderer types and Black Plague body-owner
+  contracts have narrower headers, and the probe/launcher expose installed
+  capabilities explicitly. Stale state documentation is synchronized, `work/`
+  is ignored and the redundant root patch is removed. These changes are
+  `implemented` and statically reviewed only; no build or test executable was
+  run during the pass.
+- Follow-up lifecycle hardening in the same working tree: launcher failures
+  after initialization now compensate with shutdown, while spatial interaction
+  and native input teardown unhook first and then wait for active callbacks.
+  This remains `implemented` and statically reviewed only; no new live or
+  headset evidence exists.
 - Current hook hardening pass: exact-build Black Plague hook owners now reject
   incomplete installation states, keep immutable published image bases, and
   avoid clearing native callback targets while wrappers can still be active.

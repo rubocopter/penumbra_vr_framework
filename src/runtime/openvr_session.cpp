@@ -181,12 +181,12 @@ bool OpenVrSession::Shutdown(std::string& error) noexcept {
     recommended_size_ = {};
 
     HMODULE library = static_cast<HMODULE>(library_);
-    library_ = nullptr;
     if (!FreeLibrary(library)) {
         error = "FreeLibrary(openvr_api.dll) failed with Win32 error " +
             std::to_string(GetLastError());
         return false;
     }
+    library_ = nullptr;
     return true;
 }
 

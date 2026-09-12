@@ -137,7 +137,10 @@ The previous Black Plague proof was establishing the exact body/collision bounda
 
 The tracking/body policy now has shared stateless planning, physical rejection
 and locomotion-carry phases. Overture executes physical requests through its
-source adapter; BP only plans them in a default-off shadow consumer:
+source adapter. Black Plague has two deliberately separate consumers: a
+default-off observation-only shadow and a default-off physical-validation path.
+The shadow path is live-tested; the physical path is implemented and
+host-tested at exact-build RVA `0xD7281`:
 
 ```text
 raw tracking at existing render boundary
@@ -146,23 +149,26 @@ BP shadow input snapshot (pose + aligned yaw)
       ↓
 existing adapter observes the single native tick
       ↓
-shared plan/rebase + native accepted-motion anchor carry
+shared plan/rebase
       ↓
-shadow telemetry only; no camera/body write
+      ├─ shadow: telemetry only
+      └─ physical validation: one bounded X/Z request at 0xD7281
+      ↓
+existing native collision/update owner
+      ↓
+measured accepted motion + reconciliation telemetry
 ```
 
-BP's accepted native movement is not a response to the physical plan: that plan
-was never injected. A collision-aware request in metres, separated from native
-acceleration and owned by the single tick, remains a missing adapter capability.
-Positional translation stays zero; a successful shadow capture alone cannot
-justify enabling it.
+Shadow accepted movement is still not a response to its observation-only plan.
+The separate validation mode can inject a collision-aware request in metres,
+but it has no live evidence yet. Positional translation stays zero until a live
+run proves queue, injection, native collision and matched reconciliation for
+stationary, free, blocked and sliding cases.
 
-The shared extraction and shadow wiring are now **host-tested** on Windows x86.
-GitHub Actions passed metadata validation plus Debug/Release root CTest and a
-clean autonomous Overture Release regression after the extraction. Hosted CI
-still cannot replace the local Black Plague exact-build initialized-image gate.
-After that local verifier passes, the next evidence step is a shadow-only live
-capture with positional translation still zero. See
+The shared extraction is host-tested and the shadow wiring is live-tested in PID
+28172. GitHub Actions passed metadata validation plus Debug/Release root CTest
+and a clean autonomous Overture Release regression after the extraction. Hosted
+CI still cannot replace the Black Plague live physical-validation gate. See
 [`docs/internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md`](docs/internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
 Camera/head-bob/footstep-bob ownership is a separate comfort track. It must not be “fixed” by speculative offsets while the body reconciliation milestone is in progress.
@@ -170,6 +176,12 @@ Camera/head-bob/footstep-bob ownership is a separate comfort track. It must not 
 ## Exact-build hook ownership
 
 A binary callsite has one owner. If multiple subsystems need data from the same boundary, the owner exposes verified status/fan-out instead of allowing independent hook stacking.
+
+Probe initialization also exposes a capability bitmap. Matrix telemetry,
+RenderWorld ownership and the SDL frame hook are required for initialization;
+native input, body/collision, body adapter, movement ownership and spatial
+interaction are reported independently. The launcher displays that result so a
+research-capable partial backend is not presented as a complete gameplay stack.
 
 This rule exists because initialized images legitimately differ from pristine executable bytes after the Framework installs earlier hooks. Validation must distinguish:
 

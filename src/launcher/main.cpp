@@ -1,6 +1,7 @@
 #include "penumbra_vr/build_catalog.hpp"
 #include "pe_memory_inspector.hpp"
 #include "vr_settings_capabilities.hpp"
+#include "penumbra_vr/black_plague_probe_capabilities.hpp"
 #include "vr_settings_editor.hpp"
 #include "vr_settings_store.hpp"
 
@@ -15,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -239,11 +241,19 @@ bool CallRemote(
     return WaitForThread(thread.get(), result, error, finished);
 }
 
+bool ShutdownAndDeactivate(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::wstring& error);
+
 bool InjectAndInitialize(
     HANDLE process,
     DWORD process_id,
     const std::filesystem::path& probe_path,
+    std::uint32_t& capabilities,
     std::wstring& error) {
+    capabilities = 0;
     std::uintptr_t remote_probe_base = FindRemoteModuleBase(
         process_id, L"PenumbraVR.BlackPlague.Probe.dll");
     if (remote_probe_base == 0) {
@@ -304,7 +314,48 @@ bool InjectAndInitialize(
         error = L"PenumbraVR_Initialize rejected the host or could not install the hook";
         return false;
     }
+
+    const auto fail_after_initialize = [&](std::wstring primary_error) {
+        std::wstring shutdown_error;
+        if (!ShutdownAndDeactivate(process, process_id, probe_path, shutdown_error)) {
+            primary_error += L"; cleanup failed: " + shutdown_error;
+        }
+        capabilities = 0;
+        error = std::move(primary_error);
+        return false;
+    };
+
+    LPTHREAD_START_ROUTINE remote_query = nullptr;
+    if (!ResolveRemoteExport(process_id, probe_path, remote_probe_base,
+            "PenumbraVR_QueryCapabilities", remote_query, error)) {
+        return fail_after_initialize(error);
+    }
+    DWORD query_result = 0;
+    if (!CallRemote(process, remote_query, nullptr, query_result, error)) {
+        return fail_after_initialize(error);
+    }
+    capabilities = query_result;
+    if ((capabilities & penumbra_vr::kBlackPlagueProbeRequiredCapabilities) !=
+        penumbra_vr::kBlackPlagueProbeRequiredCapabilities) {
+        return fail_after_initialize(
+            L"The probe initialized without its required render/frame capabilities");
+    }
     return true;
+}
+
+void ReportProbeCapabilities(std::uint32_t capabilities) {
+    using Capability = penumbra_vr::BlackPlagueProbeCapability;
+    const auto state = [capabilities](Capability capability) noexcept {
+        return penumbra_vr::HasBlackPlagueProbeCapability(
+                   capabilities, capability)
+            ? L"ready" : L"unavailable";
+    };
+    std::wcout << L"Probe capabilities: input=" << state(Capability::native_input)
+               << L", body=" << state(Capability::body_collision)
+               << L", adapter=" << state(Capability::body_adapter)
+               << L", ownership=" << state(Capability::movement_ownership)
+               << L", interaction=" << state(Capability::spatial_interaction)
+               << L".\n";
 }
 
 bool ShutdownAndDeactivate(
@@ -870,14 +921,16 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
         return 6;
     }
     std::wcout << L"Waiting for runtime initialization, then enabling VR...\n" << std::flush;
+    std::uint32_t capabilities = 0;
     if (!WaitForRemoteModule(process.get(), pid, L"SDL.dll", 15'000, error) ||
         !WaitForBlackPlagueInitializedCode(process.get(), pid, game, 15'000, error) ||
-        !InjectAndInitialize(process.get(), pid, probe, error) ||
+        !InjectAndInitialize(process.get(), pid, probe, capabilities, error) ||
         !StartRemoteVr(process.get(), pid, probe, error)) {
         // Never kill an existing game or a user's unsaved session on failure.
         std::wcerr << L"VR startup failed; the game has been left running. " << error << L'\n';
         return 8;
     }
+    ReportProbeCapabilities(capabilities);
     std::wcout << L"VR enabled (PID " << pid << L"). Logs: %LOCALAPPDATA%\\PenumbraVR\\logs\n";
     return 0;
 }
@@ -1404,11 +1457,14 @@ int wmain(int argc, wchar_t** argv) {
             return 0;
         }
 
-        if (!InjectAndInitialize(process.get(), parsed_pid, probe_path, error)) {
+        std::uint32_t capabilities = 0;
+        if (!InjectAndInitialize(
+                process.get(), parsed_pid, probe_path, capabilities, error)) {
             std::wcerr << L"Probe initialization failed: " << error << L'\n';
             return 8;
         }
 
+        ReportProbeCapabilities(capabilities);
         std::wcout << L"Attached the frame probe to " << penumbra_vr::GameDisplayName(build->game)
                    << L" (PID " << parsed_pid << L").\n"
                    << L"Logs: %LOCALAPPDATA%\\PenumbraVR\\logs\n";
@@ -1479,13 +1535,16 @@ int wmain(int argc, wchar_t** argv) {
         return 8;
     }
 
-    if (!InjectAndInitialize(process.get(), process_info.dwProcessId, probe_path, error)) {
+    std::uint32_t capabilities = 0;
+    if (!InjectAndInitialize(process.get(), process_info.dwProcessId,
+            probe_path, capabilities, error)) {
         std::wcerr << L"Probe initialization failed: " << error << L'\n';
         TerminateProcess(process.get(), 1);
         WaitForSingleObject(process.get(), 5'000);
         return 9;
     }
 
+    ReportProbeCapabilities(capabilities);
     std::wcout << L"Started " << penumbra_vr::GameDisplayName(build->game)
                << L" with the frame probe (PID " << process_info.dwProcessId << L").\n"
                << L"Logs: %LOCALAPPDATA%\\PenumbraVR\\logs\n";

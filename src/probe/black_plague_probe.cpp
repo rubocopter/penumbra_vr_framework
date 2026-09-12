@@ -1,5 +1,6 @@
 #include "log.hpp"
 #include "penumbra_vr/build_catalog.hpp"
+#include "penumbra_vr/black_plague_probe_capabilities.hpp"
 #include "opengl_matrix_telemetry.hpp"
 #include "openvr_session.hpp"
 #include "render_target_policy.hpp"
@@ -23,9 +24,24 @@ namespace {
 
 volatile LONG g_state = 0;
 volatile LONG g_presentation_state = 0;
+volatile LONG g_capabilities = 0;
 HINSTANCE g_instance = nullptr;
 penumbra_vr::runtime::OpenVrSession g_openvr_session;
 penumbra_vr::runtime::VrSettings g_vr_settings;
+
+void EnableCapability(
+    penumbra_vr::BlackPlagueProbeCapability capability) noexcept {
+    InterlockedOr(&g_capabilities,
+        static_cast<LONG>(
+            penumbra_vr::BlackPlagueProbeCapabilityMask(capability)));
+}
+
+void DisableCapability(
+    penumbra_vr::BlackPlagueProbeCapability capability) noexcept {
+    InterlockedAnd(&g_capabilities,
+        ~static_cast<LONG>(
+            penumbra_vr::BlackPlagueProbeCapabilityMask(capability)));
+}
 
 std::wstring OpenVrLoaderPath() {
     std::wstring path(32768, L'\0');
@@ -769,6 +785,7 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     if (InterlockedCompareExchange(&g_state, 1, 0) != 0) {
         return g_state == 2 ? 1UL : 0UL;
     }
+    InterlockedExchange(&g_capabilities, 0);
 
     std::wstring log_path;
     std::wstring error;
@@ -840,37 +857,51 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         InterlockedExchange(&g_state, 0);
         return 0;
     }
+    EnableCapability(penumbra_vr::BlackPlagueProbeCapability::matrix_telemetry);
     if (!penumbra_vr::backends::black_plague::InstallRenderWorldProbe(hook_error)) {
         penumbra_vr::probe::WriteLog("RenderWorld probe failed: %s", hook_error.c_str());
         std::string ignored;
         static_cast<void>(penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(ignored));
         penumbra_vr::probe::CloseLog();
+        InterlockedExchange(&g_capabilities, 0);
         InterlockedExchange(&g_state, 0);
         return 0;
     }
+    EnableCapability(penumbra_vr::BlackPlagueProbeCapability::render_world);
     if (!penumbra_vr::hooks::InstallSdlSwapHook(&OnFrame, hook_error)) {
         penumbra_vr::probe::WriteLog("SDL frame hook failed: %s", hook_error.c_str());
         std::string ignored;
         static_cast<void>(penumbra_vr::backends::black_plague::RemoveRenderWorldProbe(ignored));
         static_cast<void>(penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(ignored));
         penumbra_vr::probe::CloseLog();
+        InterlockedExchange(&g_capabilities, 0);
         InterlockedExchange(&g_state, 0);
         return 0;
     }
+    EnableCapability(penumbra_vr::BlackPlagueProbeCapability::frame_hook);
 
     const bool native_input_ready = penumbra_vr::backends::black_plague::InstallNativeInputBridge(hook_error);
+    if (native_input_ready) {
+        EnableCapability(penumbra_vr::BlackPlagueProbeCapability::native_input);
+    }
     penumbra_vr::probe::WriteLog("Native controller input bridge installed=%u error=%s",
         native_input_ready ? 1U : 0U, hook_error.c_str());
     if (native_input_ready) {
         const bool body_probe_ready =
             penumbra_vr::backends::black_plague::InstallBodyCollisionProbe(
                 hook_error);
+        if (body_probe_ready) {
+            EnableCapability(penumbra_vr::BlackPlagueProbeCapability::body_collision);
+        }
         penumbra_vr::probe::WriteLog(
             "Body/collision telemetry installed=%u error=%s",
             body_probe_ready ? 1U : 0U, hook_error.c_str());
         const bool body_adapter_ready = body_probe_ready &&
             penumbra_vr::backends::black_plague::InstallBlackPlagueBodyAdapter(
                 hook_error);
+        if (body_adapter_ready) {
+            EnableCapability(penumbra_vr::BlackPlagueProbeCapability::body_adapter);
+        }
         if (!body_probe_ready) {
             hook_error = "body/collision observer was not installed";
         }
@@ -910,19 +941,34 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
             physical_validation_source);
         const bool ownership_probe_ready =
             penumbra_vr::backends::black_plague::InstallMovementOwnershipProbe(hook_error);
+        if (ownership_probe_ready) {
+            EnableCapability(penumbra_vr::BlackPlagueProbeCapability::movement_ownership);
+        }
         penumbra_vr::probe::WriteLog("Movement ownership telemetry installed=%u error=%s",
             ownership_probe_ready ? 1U : 0U, hook_error.c_str());
         const bool spatial_ready = penumbra_vr::backends::black_plague::InstallSpatialInteraction(hook_error);
+        if (spatial_ready) {
+            EnableCapability(penumbra_vr::BlackPlagueProbeCapability::spatial_interaction);
+        }
         penumbra_vr::probe::WriteLog("Spatial interaction installed=%u error=%s",
             spatial_ready ? 1U : 0U, hook_error.c_str());
     }
     penumbra_vr::probe::WriteLog(
-        "Probe initialized build=%.*s log=%s",
+        "Probe initialized build=%.*s capabilities=0x%02lX log=%s",
         static_cast<int>(build->id.size()),
         build->id.data(),
+        static_cast<unsigned long>(InterlockedCompareExchange(
+            &g_capabilities, 0, 0)),
         WideToUtf8(log_path).c_str());
     InterlockedExchange(&g_state, 2);
     return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_QueryCapabilities(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
+        return 0;
+    }
+    return static_cast<DWORD>(InterlockedCompareExchange(&g_capabilities, 0, 0));
 }
 
 extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
@@ -965,48 +1011,57 @@ extern "C" DWORD WINAPI PenumbraVR_Shutdown(void*) {
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::spatial_interaction);
     if (!penumbra_vr::backends::black_plague::RemoveMovementOwnershipProbe(error)) {
         penumbra_vr::probe::WriteLog("Movement ownership telemetry removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::movement_ownership);
     if (!penumbra_vr::backends::black_plague::RemoveBlackPlagueBodyAdapter(error)) {
         penumbra_vr::probe::WriteLog(
             "Black Plague body adapter removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::body_adapter);
     if (!penumbra_vr::backends::black_plague::RemoveBodyCollisionProbe(error)) {
         penumbra_vr::probe::WriteLog(
             "Body/collision telemetry removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::body_collision);
     if (!penumbra_vr::backends::black_plague::RemoveNativeInputBridge(error)) {
         penumbra_vr::probe::WriteLog("Native input bridge removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::native_input);
     if (!penumbra_vr::hooks::RemoveSdlSwapHook(error)) {
         penumbra_vr::probe::WriteLog("SDL frame hook removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::frame_hook);
     if (!penumbra_vr::backends::black_plague::RemoveRenderWorldProbe(error)) {
         penumbra_vr::probe::WriteLog("RenderWorld probe removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::render_world);
     if (!penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(error)) {
         penumbra_vr::probe::WriteLog("OpenGL telemetry removal failed: %s", error.c_str());
         InterlockedExchange(&g_state, 2);
         return 0;
     }
+    DisableCapability(penumbra_vr::BlackPlagueProbeCapability::matrix_telemetry);
 
     penumbra_vr::probe::WriteLog(
         "Probe shut down after %llu observed frames",
         penumbra_vr::hooks::ObservedFrameCount());
     penumbra_vr::probe::CloseLog();
+    InterlockedExchange(&g_capabilities, 0);
     InterlockedExchange(&g_state, 0);
     return 1;
 }

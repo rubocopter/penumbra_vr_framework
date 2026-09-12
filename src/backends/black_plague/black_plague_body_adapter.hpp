@@ -1,5 +1,6 @@
 #pragma once
 
+#include "black_plague_body_callbacks.hpp"
 #include "vr_locomotion.hpp"
 #include "body_reconciliation_shadow.hpp"
 
@@ -22,35 +23,9 @@ struct BlackPlagueBodyMotion {
     runtime::VrAcceptedBodyMotion accepted{};
 };
 
-struct BlackPlaguePhysicalTickObservation {
-    bool request_injected = false;
-    std::array<float, 3> requested_displacement{};
-    std::array<float, 3> position_before_injection{};
-    std::array<float, 3> position_after_injection{};
-};
-
 [[nodiscard]] bool InstallBlackPlagueBodyAdapter(std::string& error) noexcept;
 [[nodiscard]] bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept;
 
-// These are called from the two already-mapped cButtonHandler::Update
-// callsites.  They preserve the native amount/timestep and return false so
-// callers can fall back to the untouched native target if the adapter is not
-// active or the player/body chain has changed.
-[[nodiscard]] bool PublishBlackPlagueForwardIntent(
-    void* player, float amount, float delta_seconds) noexcept;
-[[nodiscard]] bool PublishBlackPlagueSidewaysIntent(
-    void* player, float amount, float delta_seconds) noexcept;
-
-// Called by the existing D460A observation wrapper immediately after the one
-// native Update call returns.  No game memory is written here.
-void ObserveBlackPlagueNativeBodyTick(
-    void* player,
-    void* character_body,
-    const std::array<float, 3>& body_before,
-    const std::array<float, 3>& body_after,
-    const std::array<float, 3>& feet_after,
-    float delta_seconds,
-    const BlackPlaguePhysicalTickObservation& physical_tick = {}) noexcept;
 [[nodiscard]] BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept;
 
 // Optional diagnostics, enabled only by PVR_BP_RECONCILIATION_SHADOW=1 at

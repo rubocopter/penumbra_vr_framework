@@ -40,6 +40,10 @@ int main() {
         std::cerr << "InstallOpenGlMatrixTelemetry failed: " << error << '\n';
         return 1;
     }
+    if (!penumbra_vr::hooks::InstallOpenGlMatrixTelemetry(error)) {
+        std::cerr << "Idempotent telemetry installation failed: " << error << '\n';
+        return 6;
+    }
 
     const std::array<float, 16> projection{
         1.1F, 0.0F, 0.0F, 0.0F,
@@ -102,6 +106,10 @@ int main() {
     if (!penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(error)) {
         std::cerr << "RemoveOpenGlMatrixTelemetry failed: " << error << '\n';
         return 4;
+    }
+    if (!penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry(error)) {
+        std::cerr << "Idempotent telemetry removal failed: " << error << '\n';
+        return 7;
     }
 
     CallOpenGlAfterUnhook(projection);

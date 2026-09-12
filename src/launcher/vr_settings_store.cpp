@@ -7,6 +7,7 @@
 
 #include <string_view>
 #include <vector>
+#include <atomic>
 #include <cerrno>
 #include <cmath>
 #include <cwchar>
@@ -14,6 +15,8 @@
 
 namespace penumbra_vr::launcher {
 namespace {
+
+std::atomic<std::uint64_t> g_settings_transaction_sequence{0};
 
 [[nodiscard]] bool EqualsCaseInsensitive(
     std::wstring_view left,
@@ -119,6 +122,11 @@ namespace {
         version = 0;
         return true;
     }
+    if (text.front() == L'+' || text.front() == L'-') {
+        error = L"VR/SettingsVersion must be a non-negative integer in " +
+            path.wstring();
+        return false;
+    }
     wchar_t* end = nullptr;
     errno = 0;
     const unsigned long parsed = std::wcstoul(text.c_str(), &end, 10);
@@ -140,6 +148,87 @@ namespace {
     SetLastError(ERROR_SUCCESS);
     if (!WritePrivateProfileStringW(L"VR", key, value.c_str(), path.c_str())) {
         error = Win32Error(L"WritePrivateProfileStringW", GetLastError());
+        return false;
+    }
+    return true;
+}
+
+void DiscardSettingsTransaction(const std::filesystem::path& path) noexcept {
+    std::error_code ignored;
+    std::filesystem::remove(path, ignored);
+}
+
+[[nodiscard]] bool BeginSettingsTransaction(
+    const std::filesystem::path& path,
+    std::filesystem::path& transaction_path,
+    std::wstring& error) {
+    if (path.empty() || path.parent_path().empty()) {
+        error = L"The VR settings path has no parent directory";
+        return false;
+    }
+    std::error_code filesystem_error;
+    std::filesystem::create_directories(path.parent_path(), filesystem_error);
+    if (filesystem_error) {
+        const std::string message = filesystem_error.message();
+        error = L"Could not create the VR settings directory: " +
+            std::wstring(message.begin(), message.end());
+        return false;
+    }
+
+    const std::uint64_t sequence =
+        g_settings_transaction_sequence.fetch_add(1, std::memory_order_relaxed);
+    transaction_path = path.parent_path() /
+        (path.filename().wstring() + L".tmp." +
+            std::to_wstring(GetCurrentProcessId()) + L"." +
+            std::to_wstring(GetCurrentThreadId()) + L"." +
+            std::to_wstring(GetTickCount64()) + L"." +
+            std::to_wstring(sequence));
+    DiscardSettingsTransaction(transaction_path);
+
+    const bool exists = std::filesystem::exists(path, filesystem_error);
+    if (filesystem_error) {
+        const std::string message = filesystem_error.message();
+        error = L"Could not inspect the VR settings file: " +
+            std::wstring(message.begin(), message.end());
+        return false;
+    }
+    if (exists) {
+        std::filesystem::copy_file(path, transaction_path,
+            std::filesystem::copy_options::none, filesystem_error);
+        if (filesystem_error) {
+            const std::string message = filesystem_error.message();
+            error = L"Could not prepare the VR settings transaction: " +
+                std::wstring(message.begin(), message.end());
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool CommitSettingsTransaction(
+    const std::filesystem::path& path,
+    const std::filesystem::path& transaction_path,
+    std::wstring& error) {
+    SetLastError(ERROR_SUCCESS);
+    if (!WritePrivateProfileStringW(
+            nullptr, nullptr, nullptr, transaction_path.c_str())) {
+        error = Win32Error(L"Flushing the VR settings transaction", GetLastError());
+        return false;
+    }
+
+    if (ReplaceFileW(path.c_str(), transaction_path.c_str(), nullptr,
+            REPLACEFILE_WRITE_THROUGH, nullptr, nullptr)) {
+        return true;
+    }
+    const DWORD replace_error = GetLastError();
+    if (replace_error != ERROR_FILE_NOT_FOUND &&
+        replace_error != ERROR_PATH_NOT_FOUND) {
+        error = Win32Error(L"ReplaceFileW", replace_error);
+        return false;
+    }
+    if (!MoveFileExW(transaction_path.c_str(), path.c_str(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        error = Win32Error(L"MoveFileExW", GetLastError());
         return false;
     }
     return true;
@@ -244,27 +333,14 @@ bool SaveMonitorMirrorSetting(
     bool enabled,
     std::wstring& error) {
     error.clear();
-    if (path.empty() || path.parent_path().empty()) {
-        error = L"The VR settings path has no parent directory";
+    std::filesystem::path transaction_path;
+    if (!BeginSettingsTransaction(path, transaction_path, error)) {
         return false;
     }
-
-    std::error_code filesystem_error;
-    std::filesystem::create_directories(path.parent_path(), filesystem_error);
-    if (filesystem_error) {
-        const std::string message = filesystem_error.message();
-        error = L"Could not create the VR settings directory: " +
-            std::wstring(message.begin(), message.end());
-        return false;
-    }
-
-    SetLastError(ERROR_SUCCESS);
-    if (!WritePrivateProfileStringW(
-            L"VR",
-            L"MonitorMirror",
-            enabled ? L"true" : L"false",
-            path.c_str())) {
-        error = Win32Error(L"WritePrivateProfileStringW", GetLastError());
+    if (!WriteValue(transaction_path, L"MonitorMirror",
+            enabled ? L"true" : L"false", error) ||
+        !CommitSettingsTransaction(path, transaction_path, error)) {
+        DiscardSettingsTransaction(transaction_path);
         return false;
     }
     return true;
@@ -374,32 +450,24 @@ bool SaveVrSettings(
     const runtime::VrSettings& source,
     std::wstring& error) {
     error.clear();
-    if (path.empty() || path.parent_path().empty()) {
-        error = L"The VR settings path has no parent directory";
-        return false;
-    }
-    std::error_code filesystem_error;
-    std::filesystem::create_directories(path.parent_path(), filesystem_error);
-    if (filesystem_error) {
-        const std::string message = filesystem_error.message();
-        error = L"Could not create the VR settings directory: " +
-            std::wstring(message.begin(), message.end());
+    std::filesystem::path transaction_path;
+    if (!BeginSettingsTransaction(path, transaction_path, error)) {
         return false;
     }
 
     runtime::VrSettings settings = source;
     runtime::NormalizeVrSettings(settings);
     const auto write_float = [&](const wchar_t* key, float value) {
-        return WriteValue(path, key, FloatText(value), error);
+        return WriteValue(transaction_path, key, FloatText(value), error);
     };
     const auto write_bool = [&](const wchar_t* key, bool value) {
-        return WriteValue(path, key, value ? L"true" : L"false", error);
+        return WriteValue(transaction_path, key, value ? L"true" : L"false", error);
     };
 
-    return write_float(L"MoveSpeed", settings.move_speed) &&
+    const bool written = write_float(L"MoveSpeed", settings.move_speed) &&
         write_float(L"MoveDeadZone", settings.move_dead_zone) &&
         write_float(L"HeightOffset", settings.height_offset) &&
-        WriteValue(path, L"TurnMode", ConfigText(runtime::ToConfigValue(settings.turn_mode)), error) &&
+        WriteValue(transaction_path, L"TurnMode", ConfigText(runtime::ToConfigValue(settings.turn_mode)), error) &&
         write_float(L"SnapTurnAngle", settings.snap_turn_angle) &&
         write_float(L"SmoothTurnSpeed", settings.smooth_turn_speed) &&
         write_float(L"TurnDeadZone", settings.turn_dead_zone) &&
@@ -408,15 +476,20 @@ bool SaveVrSettings(
         write_float(L"RenderScale", settings.render_scale) &&
         write_bool(L"EnhancedVisuals", settings.enhanced_visuals) &&
         write_bool(L"MonitorMirror", settings.monitor_mirror) &&
-        WriteValue(path, L"CrouchMode", ConfigText(runtime::ToConfigValue(settings.crouch_mode)), error) &&
+        WriteValue(transaction_path, L"CrouchMode", ConfigText(runtime::ToConfigValue(settings.crouch_mode)), error) &&
         write_float(L"PhysicalCrouchDepth", settings.physical_crouch_depth) &&
         write_float(L"SubtitleScale", settings.subtitle_scale) &&
-        WriteValue(path, L"Handedness", ConfigText(runtime::ToConfigValue(settings.handedness)), error) &&
-        WriteValue(path, L"PlayMode", ConfigText(runtime::ToConfigValue(settings.play_mode)), error) &&
+        WriteValue(transaction_path, L"Handedness", ConfigText(runtime::ToConfigValue(settings.handedness)), error) &&
+        WriteValue(transaction_path, L"PlayMode", ConfigText(runtime::ToConfigValue(settings.play_mode)), error) &&
         write_float(L"PlayerHeight", settings.player_height) &&
-        WriteValue(path, L"HRTF", ConfigText(runtime::ToConfigValue(settings.hrtf_mode)), error) &&
-        WriteValue(path, L"SettingsVersion",
+        WriteValue(transaction_path, L"HRTF", ConfigText(runtime::ToConfigValue(settings.hrtf_mode)), error) &&
+        WriteValue(transaction_path, L"SettingsVersion",
             std::to_wstring(runtime::kCurrentVrSettingsVersion), error);
+    if (!written || !CommitSettingsTransaction(path, transaction_path, error)) {
+        DiscardSettingsTransaction(transaction_path);
+        return false;
+    }
+    return true;
 }
 
 bool LoadVrInputSettings(

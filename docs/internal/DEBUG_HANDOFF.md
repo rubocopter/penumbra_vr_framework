@@ -2,6 +2,24 @@
 
 This file prevents repeated symptom-level fixes from replacing evidence-backed investigation. Read it before revisiting any of these issues.
 
+## 0. Hook and loader lifecycle
+
+The 2026-09-12 maintenance pass made IAT writes transactional when protection
+restoration fails, added complete/partial-state handling to OpenGL matrix
+telemetry and spatial interaction, and retained the OpenVR loader handle after a
+failed `FreeLibrary`. These changes are implemented and statically reviewed but
+were not built or executed in that session.
+
+The follow-up lifecycle hardening adds compensating shutdown after launcher
+initialization failures and moves spatial interaction/native input teardown to
+hook removal followed by callback quiescence waiting. These changes are also
+only statically reviewed and do not change the validation state.
+
+The probe DLL remains process-resident by policy. Active-callback counters only
+cover wrappers after entry and are not proof that a DLL can be unloaded safely.
+A future production bootstrap must retain resident lifetime or introduce a
+stronger dispatch/quiescence protocol before calling `FreeLibrary` on the probe.
+
 ## 1. Black Plague positional head/body movement
 
 ### Observed
@@ -20,7 +38,10 @@ The user previously reported world displacement / collision discomfort while mov
 - The first narrow `BlackPlagueBodyAdapter` is now live-tested. It never calls `D6E00`; it binds to the existing movement/body-update owners and observes accepted displacement after the one native tick.
 - PID 8628 live-observed free movement, total blocking, sliding and body replacement with the adapter active. Native body updates remained ~60 Hz; no second `D6E00` was introduced.
 - `runtime::VrAcceptedBodyMotion` is shared by Overture and Black Plague as the game-neutral accepted-displacement observation.
-- Shared reconciliation planning/rebase, physical-rejection correction and locomotion-anchor carry are implemented in `vr_locomotion.*`; the Black Plague consumer remains shadow-only and default-off.
+- Shared reconciliation planning/rebase, physical-rejection correction and
+  locomotion-anchor carry are implemented in `vr_locomotion.*`. The Black
+  Plague shadow consumer remains observation-only and default-off; a separate
+  default-off physical request exists at `0xD7281` and is host-tested only.
 - PID 28172 live-tested the shadow consumer through the transient mutex with positional translation still zero: stationary/small-head-motion planning, native free/block/slide, recenter/body replacement and the existing ~60 Hz single native tick were observed without a second `D6E00`.
 - GitHub Actions has host-tested the current shared extraction on Windows x86: root metadata/Debug/Release tests pass, and the autonomous Overture Release regression job also passes.
 

@@ -82,9 +82,10 @@ La próxima tanda con visor se divide en dos grupos. La presentación puede
 revalidarse ya: con mirror desactivado el monitor debe permanecer negro sin el
 artefacto del punto blanco creciente; además hay que volver a comprobar
 Alt+Tab/foco porque actualmente menú e inventario pueden quedar negros en el
-visor al perder foco la ventana. La prueba de room-scale debe esperar a que el
-backend implemente y demuestre una petición física X/Z collision-aware en metros;
-hasta entonces la traslación posicional del HMD permanece desactivada.
+visor al perder foco la ventana. El backend ya implementa y ha host-testado la
+petición física X/Z collision-aware en metros. La prueba de room-scale debe
+esperar a que esa ruta se demuestre live; hasta entonces la traslación posicional
+del HMD permanece desactivada.
 
 Los logs se crean automáticamente en `%LOCALAPPDATA%\PenumbraVR\logs`, con un
 `black-plague-probe-<PID>.log` para cada ejecución. La lista ordenada de pruebas

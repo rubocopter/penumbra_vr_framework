@@ -1,7 +1,5 @@
 #include "black_plague_body_adapter.hpp"
 #include "body_adapter_boundary.hpp"
-#include "body_collision_probe.hpp"
-#include "native_input_bridge.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>

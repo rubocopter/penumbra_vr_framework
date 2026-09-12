@@ -17,6 +17,8 @@ Exit criterion: a clean repository in which every implemented feature is testabl
 
 - [x] Confirm Steam launch followed by repeatable process attachment
 - [x] Log and revalidate module identity from inside the process
+- [x] Expose required and optional probe capabilities after initialization so
+  a partial research stack is visible to the launcher
 - [x] Find and validate the imported `SDL_GL_SwapBuffers` frame boundary
 - [x] Document calling convention, modified import slot and teardown
 - [x] Complete three attach/frame/detach cycles in one live process

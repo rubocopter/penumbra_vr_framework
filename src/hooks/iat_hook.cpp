@@ -19,12 +19,46 @@ bool ReplacePointer(void** slot, void* expected, void* replacement, std::string&
     void* previous = InterlockedCompareExchangePointer(
         reinterpret_cast<void* volatile*>(slot), replacement, expected);
 
-    DWORD ignored = 0;
-    VirtualProtect(slot, sizeof(*slot), old_protection, &ignored);
-    FlushInstructionCache(GetCurrentProcess(), slot, sizeof(*slot));
-
     if (previous != expected) {
-        error = "The import slot changed while installing or removing a hook";
+        DWORD ignored = 0;
+        if (!VirtualProtect(slot, sizeof(*slot), old_protection, &ignored)) {
+            error = "The import slot changed while installing or removing a hook, and "
+                "restoring its page protection failed with Win32 error " +
+                std::to_string(GetLastError());
+        } else {
+            error = "The import slot changed while installing or removing a hook";
+        }
+        return false;
+    }
+
+    FlushInstructionCache(GetCurrentProcess(), slot, sizeof(*slot));
+    DWORD ignored = 0;
+    if (!VirtualProtect(slot, sizeof(*slot), old_protection, &ignored)) {
+        const DWORD restore_error = GetLastError();
+
+        // The page is still writable after a failed restoration. Put the slot
+        // back in its expected state so a failed install/remove never reports
+        // a transaction that actually remained applied.
+        void* rollback_previous = InterlockedCompareExchangePointer(
+            reinterpret_cast<void* volatile*>(slot), expected, replacement);
+        FlushInstructionCache(GetCurrentProcess(), slot, sizeof(*slot));
+
+        DWORD rollback_ignored = 0;
+        const bool rollback_protection_restored = VirtualProtect(
+            slot, sizeof(*slot), old_protection, &rollback_ignored) != FALSE;
+        const DWORD rollback_restore_error = rollback_protection_restored
+            ? ERROR_SUCCESS : GetLastError();
+        error = "Restoring the import slot page protection failed with Win32 error " +
+            std::to_string(restore_error);
+        if (rollback_previous != replacement) {
+            error += "; the slot also changed before the pointer update could be rolled back";
+        } else {
+            error += "; the pointer update was rolled back";
+        }
+        if (!rollback_protection_restored) {
+            error += "; restoring protection after rollback failed with Win32 error " +
+                std::to_string(rollback_restore_error);
+        }
         return false;
     }
     return true;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "openvr_session.hpp"
+#include "vr_render_types.hpp"
 #include "vr_settings.hpp"
 
 #include <cstdint>

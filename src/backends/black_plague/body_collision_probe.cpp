@@ -1,6 +1,6 @@
 #include "body_collision_probe.hpp"
 
-#include "black_plague_body_adapter.hpp"
+#include "black_plague_body_callbacks.hpp"
 
 #include "native_input_bridge.hpp"
 #include "rel32_call_hook.hpp"

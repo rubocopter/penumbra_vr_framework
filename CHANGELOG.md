@@ -25,6 +25,39 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ## Unreleased
 
+### Changed
+
+- Split renderer-neutral eye/target types from the OpenVR session API, and
+  narrowed the Black Plague body adapter to explicit owner-status, request and
+  callback headers. RVAs, native ownership and runtime behavior are unchanged.
+- Added an explicit Black Plague probe capability bitmap and launcher report so
+  successful core initialization no longer hides unavailable input, body,
+  adapter, ownership or interaction subsystems.
+- VR settings updates now use a same-directory temporary copy and atomic
+  replacement, preserving unrelated INI sections and avoiding partially saved
+  profiles.
+- Ignored the local `work/` research scratch directory and removed a historical
+  root patch whose changes are already represented by tracked source and
+  documentation.
+
+### Fixed
+
+- Made IAT pointer replacement fail transactionally when page-protection
+  restoration fails instead of reporting success with a writable hook page.
+- Hardened OpenGL telemetry and Black Plague spatial-interaction hook lifecycle:
+  partial installs are reported, rollback errors are retained and every hook is
+  considered during teardown.
+- Hardened shutdown after successful initialization: launcher capability-query
+  and required-capability failures now perform compensating shutdown before
+  returning failure. Black Plague spatial interaction and native input teardown
+  now remove owned hooks before waiting for in-flight callbacks to quiesce.
+- Reject signed `SettingsVersion` values and retain the OpenVR loader handle
+  when `FreeLibrary` fails so shutdown can be retried accurately.
+
+These maintenance changes are implemented and statically reviewed in this
+working tree. No build, test executable, game, SteamVR or headset process was
+run in this session, so they have not advanced beyond `implemented`.
+
 ### Added
 
 - Extracted the demonstrated tool attachment socket composition into shared

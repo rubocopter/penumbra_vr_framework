@@ -8,6 +8,7 @@
 #include <atomic>
 #include <array>
 #include <cstring>
+#include <string_view>
 
 namespace penumbra_vr::hooks {
 namespace {
@@ -62,6 +63,41 @@ void PublishOriginalLoadMatrix(void* original) noexcept {
 
 void PublishOriginalOrtho(void* original) noexcept {
     g_original_ortho.store(original, std::memory_order_release);
+}
+
+[[nodiscard]] bool AllHooksInstalled() noexcept {
+    return g_matrix_mode_hook.installed() && g_load_matrix_hook.installed() &&
+        g_ortho_hook.installed();
+}
+
+[[nodiscard]] bool AnyHookInstalled() noexcept {
+    return g_matrix_mode_hook.installed() || g_load_matrix_hook.installed() ||
+        g_ortho_hook.installed();
+}
+
+void AppendError(std::string& error, std::string_view context,
+    const std::string& next) {
+    if (next.empty()) {
+        return;
+    }
+    if (!error.empty()) {
+        error += "; ";
+    }
+    error.append(context);
+    error += next;
+}
+
+[[nodiscard]] bool RemoveHooks(std::string& error) noexcept {
+    bool success = true;
+    for (auto* hook : {&g_ortho_hook, &g_load_matrix_hook,
+             &g_matrix_mode_hook}) {
+        std::string next;
+        if (!RemoveIatHook(*hook, next)) {
+            success = false;
+            AppendError(error, "hook removal failed: ", next);
+        }
+    }
+    return success;
 }
 
 void RecordModelViewMatrix(const float* matrix) noexcept {
@@ -164,6 +200,13 @@ void APIENTRY HookedGlOrtho(
 
 bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
     error.clear();
+    if (AllHooksInstalled()) {
+        return true;
+    }
+    if (AnyHookInstalled()) {
+        error = "OpenGL matrix telemetry is only partially installed";
+        return false;
+    }
     g_current_matrix_mode.store(kGlModelView, std::memory_order_relaxed);
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
@@ -187,8 +230,11 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
             g_load_matrix_hook,
             error,
             &PublishOriginalLoadMatrix)) {
-        std::string ignored;
-        static_cast<void>(RemoveIatHook(g_matrix_mode_hook, ignored));
+        const std::string install_error = error;
+        std::string rollback_error;
+        static_cast<void>(RemoveHooks(rollback_error));
+        error = install_error;
+        AppendError(error, "rollback failed: ", rollback_error);
         return false;
     }
     if (!InstallIatHook(
@@ -198,22 +244,22 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
             g_ortho_hook,
             error,
             &PublishOriginalOrtho)) {
-        std::string ignored;
-        static_cast<void>(RemoveIatHook(g_load_matrix_hook, ignored));
-        static_cast<void>(RemoveIatHook(g_matrix_mode_hook, ignored));
+        const std::string install_error = error;
+        std::string rollback_error;
+        static_cast<void>(RemoveHooks(rollback_error));
+        error = install_error;
+        AppendError(error, "rollback failed: ", rollback_error);
         return false;
     }
     return true;
 }
 
 bool RemoveOpenGlMatrixTelemetry(std::string& error) noexcept {
-    if (!RemoveIatHook(g_ortho_hook, error)) {
-        return false;
-    }
-    if (!RemoveIatHook(g_load_matrix_hook, error)) {
-        return false;
-    }
-    if (!RemoveIatHook(g_matrix_mode_hook, error)) {
+    error.clear();
+    if (!RemoveHooks(error) || AnyHookInstalled()) {
+        if (error.empty()) {
+            error = "OpenGL matrix telemetry remains partially installed";
+        }
         return false;
     }
 

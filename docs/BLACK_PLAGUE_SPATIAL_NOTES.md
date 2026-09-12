@@ -5,12 +5,13 @@ Base virtual 0x00400000. Los números siguientes son RVAs, nunca offsets del PE
 protegido en disco. Captura local: `artifacts/black-plague-22000-live.bin`.
 Rework de referencia: 23c890f7dbd06b939be9951d282e6e948d9a6623, sin modificar.
 
-## Reconciliación shadow — 2026-09-11
+## Checkpoint histórico de reconciliación shadow — 2026-09-11
 
-Implementada la política compartida de plan/rebase, rechazo físico y arrastre
-por locomoción. BP sólo planifica el paso físico; el desplazamiento nativo
-aceptado alimenta el arrastre de ancla shadow, no simula aceptación del plan.
-No hay inyección física ni cambios de cámara. El diagnóstico está desactivado
+En este checkpoint se había implementado la política compartida de plan/rebase,
+rechazo físico y arrastre por locomoción. BP sólo planificaba el paso físico; el
+desplazamiento nativo aceptado alimentaba el arrastre de ancla shadow y no
+simulaba aceptación del plan. No había inyección física ni cambios de cámara.
+El diagnóstico estaba desactivado
 por defecto y registra un resumen cada 300 swap frames si se habilita mediante
 `PVR_BP_RECONCILIATION_SHADOW=1` en el proceso del juego antes del attach.
 
@@ -20,11 +21,11 @@ se añadió y pasó un gate CI separado que reconstruye Overture Release con
 `Build-OvertureProduct.ps1 -Configuration Release -Full`, conservando sus
 comprobaciones históricas. Esto no promueve ningún estado live/headset de BP.
 
-La traslación posicional continúa a cero. La capability pendiente sigue siendo
-una solicitud física X/Z en metros que resuelva colisiones dentro del tick único
-y cuya aceptación pueda distinguirse de la locomoción nativa. El siguiente gate
-es rerun local del verificador exact-build sobre la captura/binario soportado y,
-después, una captura **shadow-only live**. No ampliar reversing automáticamente.
+Este texto conserva el estado histórico del 11 de septiembre. Después se
+live-testó el shadow en PID 28172 y se implementó y host-testó una solicitud
+física X/Z separada en `0xD7281`. La traslación posicional continúa a cero. El
+gate actual es validar live esa solicitud en stationary/free/block/slide. No
+ampliar reversing automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
 [el seguimiento post-push](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
@@ -120,9 +121,10 @@ solver que no existen en la build binaria.
 
 La segunda extracción común también está hecha: `PlanBodyReconciliation`,
 `ReconcilePhysicalBodyMotion` y `CarryHeadAnchorWithLocomotion` viven en
-`vr_locomotion.*`. Overture los ejecuta en el orden probado; BP usa sólo el plan
-y carry en shadow porque aún carece de una observación física correspondiente a
-un request inyectado. No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
+`vr_locomotion.*`. Overture los ejecuta en el orden probado. BP conserva el
+shadow sólo como observación y dispone de una ruta física separada, host-tested,
+que produce la observación correspondiente a su request inyectado. Esa ruta aún
+no está live-tested. No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
 
 ### Ownership del movimiento plano: estado confirmado
 

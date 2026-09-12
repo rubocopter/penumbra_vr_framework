@@ -1,5 +1,5 @@
 #include "native_input_bridge.hpp"
-#include "black_plague_body_adapter.hpp"
+#include "black_plague_body_callbacks.hpp"
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
 #include "vr_haptics.hpp"
@@ -78,6 +78,11 @@ constexpr PointerEntry kPointers[]{{0x4477,0x797B0,0xA0}, {0x4C70,0x945F0,0x84},
 std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks;
 std::atomic<bool> g_ui{true};
 std::atomic<bool> g_installed{false};
+std::atomic<unsigned> g_active_callbacks{0};
+struct CallbackScope {
+    CallbackScope() { g_active_callbacks.fetch_add(1, std::memory_order_acq_rel); }
+    ~CallbackScope() { g_active_callbacks.fetch_sub(1, std::memory_order_acq_rel); }
+};
 std::atomic<void*> g_player{nullptr};
 SRWLOCK g_session_lock = SRWLOCK_INIT;
 runtime::OpenVrSession* g_session = nullptr;
@@ -124,6 +129,7 @@ bool UiContext(void* handler) {
         Read<bool>(Read<void*>(init, 0x164), 0x5C);
 }
 bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
+    CallbackScope scope;
     const auto return_rva = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) -
                             reinterpret_cast<std::uintptr_t>(g_image);
     for (const auto& entry : kQueries) {
@@ -149,18 +155,21 @@ bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
     return reinterpret_cast<Query>(g_image + Target(Q::pressed))(input, name);
 }
 void __fastcall HookedForward(void* player, void*, float amount, float dt) {
+    CallbackScope scope;
     const float intent = g_intents ? g_intents->Move(amount, false) : amount;
     if (!PublishBlackPlagueForwardIntent(player, intent, dt)) {
         reinterpret_cast<Move>(g_image + 0x9CBC0)(player, intent, dt);
     }
 }
 void __fastcall HookedSideways(void* player, void*, float amount, float dt) {
+    CallbackScope scope;
     const float intent = g_intents ? g_intents->Move(amount, true) : amount;
     if (!PublishBlackPlagueSidewaysIntent(player, intent, dt)) {
         reinterpret_cast<Move>(g_image + 0x9CC60)(player, intent, dt);
     }
 }
 void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* physical_delta) {
+    CallbackScope scope;
     using Pointer = void(__thiscall*)(void*, const std::array<float, 2>*);
     const auto return_rva = reinterpret_cast<std::uintptr_t>(_ReturnAddress()) - reinterpret_cast<std::uintptr_t>(g_image);
     for (const auto& entry : kPointers) {
@@ -182,6 +191,7 @@ void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* phy
     }
 }
 void __fastcall HookedUpdate(void* handler, void*, float dt) {
+    CallbackScope scope;
     const bool ui = UiContext(handler);
     const auto context = ui ? runtime::VrInputContext::ui : runtime::VrInputContext::gameplay;
     g_ui.store(ui, std::memory_order_release);
@@ -417,6 +427,7 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
     return ok;
 }
 bool RemoveNativeInputBridge(std::string& error) noexcept {
+    error.clear();
     g_installed.store(false, std::memory_order_release);
     g_player.store(nullptr, std::memory_order_release);
     ConnectNativeInput(nullptr);
@@ -428,18 +439,48 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
         error = "Waiting for the native update thread to release VR input before detaching";
         return false;
     }
-    bool ok = hooks::RemoveIatHook(g_update_hook, error);
+    const auto append_error = [&](const std::string& next) {
+        if (next.empty()) return;
+        if (!error.empty()) error += "; ";
+        error += next;
+    };
+    bool ok = true;
+    std::string next;
+    if (!hooks::RemoveIatHook(g_update_hook, next)) {
+        ok = false;
+        append_error(next);
+    }
     for (auto& hook : g_query_hooks) {
-        std::string next;
-        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; error += next; }
+        next.clear();
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
     }
     for (auto& hook : g_move_hooks) {
-        std::string next;
-        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; error += next; }
+        next.clear();
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
     }
     for (auto& hook : g_pointer_hooks) {
-        std::string next;
-        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; error += next; }
+        next.clear();
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
+    }
+    const bool any_hook = g_update_hook.installed() ||
+        std::any_of(g_query_hooks.begin(), g_query_hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); }) ||
+        std::any_of(g_move_hooks.begin(), g_move_hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); }) ||
+        std::any_of(g_pointer_hooks.begin(), g_pointer_hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); });
+    if (any_hook) {
+        append_error("Native input bridge remains partially installed");
+        return false;
+    }
+    const auto callback_deadline = GetTickCount64() + 1000;
+    while (g_active_callbacks.load(std::memory_order_acquire) &&
+           GetTickCount64() < callback_deadline) {
+        Sleep(1);
+    }
+    if (g_active_callbacks.load(std::memory_order_acquire)) {
+        ok = false;
+        append_error("Native input callbacks are still active");
     }
     // DLL and original pointers remain resident for callbacks already in flight.
     return ok;

@@ -256,6 +256,24 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     SetVelocity(g_hold.body,0x19C2A0,runtime::LimitTrackedVelocity(velocity,1,9));
     SetVelocity(g_hold.body,0x19C2C0,runtime::LimitTrackedVelocity(angular,0.5F,6));
 }
+
+[[nodiscard]] bool AllSpatialHooksInstalled() noexcept {
+    if (!g_tool_hook.installed()) return false;
+    for (const auto& hook:g_hooks) if (!hook.installed()) return false;
+    return true;
+}
+
+[[nodiscard]] bool AnySpatialHookInstalled() noexcept {
+    if (g_tool_hook.installed()) return true;
+    for (const auto& hook:g_hooks) if (hook.installed()) return true;
+    return false;
+}
+
+void AppendRemovalError(std::string& error, const std::string& next) {
+    if (next.empty()) return;
+    if (!error.empty()) error += "; ";
+    error += next;
+}
 }
 
 SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
@@ -266,7 +284,15 @@ SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
 }
 bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();
-    if (g_enabled.load(std::memory_order_acquire)) return true;
+    if (AllSpatialHooksInstalled()) {
+        g_player_collision_filter_ready.store(true,std::memory_order_release);
+        g_enabled.store(true,std::memory_order_release);
+        return true;
+    }
+    if (AnySpatialHookInstalled()) {
+        error="Spatial interaction is only partially installed";
+        return false;
+    }
     g_player_collision_filter_ready.store(false,std::memory_order_release);
     auto* const image=reinterpret_cast<std::uint8_t*>(GetModuleHandleW(nullptr));
     if (!image) { error="The Black Plague image is unavailable"; return false; }
@@ -333,14 +359,18 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         reinterpret_cast<void*>(&HookedEnter),reinterpret_cast<void*>(&HookedLeave),reinterpret_cast<void*>(&HookedHandsUpdate)};
     for (std::size_t i=0;i<slots.size();++i) {
         if (!hooks::InstallPointerHook(reinterpret_cast<void**>(g_image+slots[i]),g_image+targets[i],replacements[i],g_hooks[i],error)) {
+            const std::string install_error=error;
             std::string rollback; static_cast<void>(RemoveSpatialInteraction(rollback));
-            if (!rollback.empty()) error+="; "+rollback;
+            error=install_error;
+            if (!rollback.empty()) error+="; rollback failed: "+rollback;
             return false;
         }
     }
     if (!hooks::InstallRel32CallHook(g_image+0xA4313,tool_call,reinterpret_cast<void*>(&HookedToolMatrix),g_tool_hook,error)) {
+        const std::string install_error=error;
         std::string rollback; static_cast<void>(RemoveSpatialInteraction(rollback));
-        if (!rollback.empty()) error+="; "+rollback;
+        error=install_error;
+        if (!rollback.empty()) error+="; rollback failed: "+rollback;
         return false;
     }
     g_player_collision_filter_ready.store(true,std::memory_order_release);
@@ -351,13 +381,33 @@ bool RemoveSpatialInteraction(std::string& error) noexcept {
     error.clear();
     g_enabled.store(false,std::memory_order_release);
     g_player_collision_filter_ready.store(false,std::memory_order_release);
-    const auto deadline=GetTickCount64()+1000;
-    while (g_callbacks.load(std::memory_order_acquire) && GetTickCount64()<deadline) Sleep(1);
-    if (g_callbacks.load(std::memory_order_acquire)) { error="Spatial callbacks are still active"; return false; }
     if (g_held.load(std::memory_order_acquire)) { error="Release the tracked body before removing spatial hooks"; return false; }
     bool success=true;
-    if (!hooks::RemoveRel32CallHook(g_tool_hook,error)) success=false;
-    for (auto& hook:g_hooks) { std::string next; if (!hooks::RemoveIatHook(hook,next)) { success=false; error+=next; } }
+    std::string next;
+    if (!hooks::RemoveRel32CallHook(g_tool_hook,next)) {
+        success=false;
+        AppendRemovalError(error,next);
+    }
+    for (auto iterator=g_hooks.rbegin();iterator!=g_hooks.rend();++iterator) {
+        next.clear();
+        if (!hooks::RemoveIatHook(*iterator,next)) {
+            success=false;
+            AppendRemovalError(error,next);
+        }
+    }
+    if (AnySpatialHookInstalled()) {
+        success=false;
+        if (error.empty()) error="Spatial interaction remains partially installed";
+        return false;
+    }
+    // A wrapper may already have branched into our code when its callsite is
+    // restored. Stop new dispatches first, then wait for published callbacks.
+    const auto deadline=GetTickCount64()+1000;
+    while (g_callbacks.load(std::memory_order_acquire) && GetTickCount64()<deadline) Sleep(1);
+    if (g_callbacks.load(std::memory_order_acquire)) {
+        success=false;
+        AppendRemovalError(error,"Spatial callbacks are still active");
+    }
     return success;
 }
 void RefreshVrSelectionBeforeInteract(void* player) noexcept {

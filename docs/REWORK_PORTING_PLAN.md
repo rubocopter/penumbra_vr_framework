@@ -242,11 +242,12 @@ For any reported regression, compare:
 
 The next Black Plague body work should consume existing evidence, not restart it.
 
-## Tracking/body extraction checkpoint (2026-09-11)
+## Historical tracking/body extraction checkpoint (2026-09-11)
 
 The remaining plan/rebase, physical rejection correction and native anchor carry
-phases have moved from `OvertureBackend` to `vr_locomotion.*`. The BP consumer
-is shadow-only and default-off: it cannot inject a physical request. Portable
+phases had moved from `OvertureBackend` to `vr_locomotion.*`. At this dated
+checkpoint the BP consumer was shadow-only and default-off and could not inject
+a physical request. Portable
 tests and the Overture differential trace passed during implementation. Post-push
 Windows CI then passed root metadata/Debug/Release tests and the autonomous
 Overture Release regression gate. The exact Rework sequence, ownership table,
@@ -254,3 +255,8 @@ API and implementation-time test results remain in
 [the internal report](internal/TRACKING_BODY_RECONCILIATION.md); the post-push
 host result and next live gate are recorded in
 [the validation follow-up](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
+
+Subsequent work live-tested that shadow path in PID 28172 and added the separate
+default-off `0xD7281` bounded X/Z request. The request is implemented and
+host-tested; its stationary/free/block/slide live gate remains pending. The
+current priority and validation order are recorded above.

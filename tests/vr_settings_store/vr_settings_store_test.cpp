@@ -101,6 +101,11 @@ int main() {
     expected.play_mode = penumbra_vr::runtime::VrPlayMode::seated;
     expected.player_height = 1.85F;
     expected.hrtf_mode = penumbra_vr::runtime::VrHrtfMode::on;
+    if (!WritePrivateProfileStringW(
+            L"Unrelated", L"Preserved", L"yes", settings_path.c_str())) {
+        std::cerr << "Could not create the unrelated-section fixture\n";
+        return 9;
+    }
     if (!penumbra_vr::launcher::SaveVrSettings(settings_path, expected, error) ||
         !error.empty()) {
         std::wcerr << L"Could not save the complete VR profile: " << error << L'\n';
@@ -127,6 +132,13 @@ int main() {
         std::cerr << "The complete VR profile did not round trip\n";
         return 10;
     }
+    wchar_t preserved[16]{};
+    if (GetPrivateProfileStringW(L"Unrelated",L"Preserved",L"",
+            preserved,static_cast<DWORD>(sizeof(preserved)/sizeof(*preserved)),
+            settings_path.c_str()) == 0 || std::wstring(preserved) != L"yes") {
+        std::cerr << "The settings transaction discarded an unrelated section\n";
+        return 15;
+    }
 
     if (!WritePrivateProfileStringW(L"VR",L"Handedness",L"ambidextrous",settings_path.c_str()) ||
         penumbra_vr::launcher::LoadVrSettings(settings_path,settings,error) || error.empty()) return 11;
@@ -144,6 +156,14 @@ int main() {
         settings.smooth_turn_speed != 90.0F) {
         std::cerr << "The legacy smooth-turn default did not migrate\n";
         return 14;
+    }
+
+    if (!WritePrivateProfileStringW(
+            L"VR",L"SettingsVersion",L"-1",settings_path.c_str()) ||
+        penumbra_vr::launcher::LoadVrSettings(settings_path,settings,error) ||
+        error.empty()) {
+        std::cerr << "A negative settings version was accepted\n";
+        return 16;
     }
 
     std::wstring path_error;

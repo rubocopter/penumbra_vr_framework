@@ -1,5 +1,6 @@
 #pragma once
 
+#include "body_adapter_boundary.hpp"
 #include <array>
 #include <cstdint>
 #include <string>
@@ -53,16 +54,6 @@ struct BodyJumpBurstTelemetry {
     std::size_t count = 0;
 };
 
-struct NativeBodyUpdateBoundaryStatus {
-    bool initialized = false;
-    std::array<std::uint8_t, 5> expected{};
-    std::array<std::uint8_t, 5> live{};
-    std::uintptr_t expected_target = 0;
-    std::uintptr_t live_target = 0;
-    bool owner_installed = false;
-    bool owner_matches_live = false;
-};
-
 enum class PhysicalBodyDisplacementResult : std::uint8_t {
     none,
     injected,
@@ -84,14 +75,6 @@ struct PhysicalBodyDisplacementTelemetry {
     std::array<float, 3> bounded_displacement{};
 };
 
-struct PhysicalBodyDisplacementBoundaryStatus {
-    bool initialized = false;
-    std::array<std::uint8_t, 5> expected{};
-    std::array<std::uint8_t, 5> live{};
-    bool owner_installed = false;
-    bool owner_matches_live = false;
-};
-
 // Exact-build, read-only observation hooks for the initialized FD316F... image.
 // They do not enable positional HMD translation or alter native movement.
 [[nodiscard]] bool InstallBodyCollisionProbe(std::string& error) noexcept;
@@ -106,10 +89,6 @@ void RequestBodyJumpBurst() noexcept;
 // post-original callback rather than installing another rel32 hook.
 [[nodiscard]] NativeBodyUpdateBoundaryStatus
 ReadNativeBodyUpdateBoundaryStatus() noexcept;
-
-// Queue one bounded room-scale X/Z request for the current player body. Y is
-// always discarded so the native jump/gravity pipeline retains vertical
-// ownership. The request is consumed only by that body's existing D6E00 tick.
 [[nodiscard]] bool QueuePhysicalBodyDisplacement(
     const std::array<float, 3>& displacement) noexcept;
 void InvalidatePhysicalBodyDisplacement() noexcept;
