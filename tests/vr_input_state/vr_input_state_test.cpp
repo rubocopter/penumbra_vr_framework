@@ -118,6 +118,13 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
     held.ui_back.just_pressed = false;
     result = router.Update(
         held, VrInputContext::ui, VrHand::right, true, false, 110);
+    if (!result.state.ui_select.pressed || !result.state.ui_drag.pressed ||
+        !result.state.ui_back.pressed) {
+        return false;
+    }
+
+    result = router.Update(
+        held, VrInputContext::ui, VrHand::right, false, false, 120);
     return !result.state.ui_select.pressed &&
         result.state.ui_select.just_released &&
         !result.state.ui_drag.pressed && result.state.ui_drag.just_released &&

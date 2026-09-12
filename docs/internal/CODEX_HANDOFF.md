@@ -87,6 +87,17 @@ descriptive binding text. That check caught and restored the missing left PS VR2
 Sense `L2 -> /actions/ui/in/select` route. Treat this as host-tested static
 profile parity; device behavior remains a live/headset validation gate.
 
+The Rework tracked-menu pointer policy is also now extracted and host-tested.
+Shared runtime selects the configured hand when its grip pose is valid, falls
+back to that hand's grip when aim is unavailable, and lets the opposite tracked
+hand take over when the configured hand loses tracking. Menu-plane projection
+pins out-of-rectangle hits to the nearest edge and applies Rework's `0.40`
+screen-pointer smoothing. Black Plague consumes this policy through its existing
+tracked-menu/native-cursor boundary. All shared controller profiles already bind
+both physical triggers to the active UI `select` action, so off-hand pointer
+takeover retains selection routing without another input owner. Release build
+and all 30 root CTest tests pass. This is not live/headset validation.
+
 ### Player/body and collision
 
 This reverse-engineering milestone is closed unless contradictory evidence appears.

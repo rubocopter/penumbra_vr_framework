@@ -454,11 +454,30 @@ bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
     const float dz = -m[10];
     if (dz >= -0.0001F) return false;
     const float t = (-distance - m[11]) / dz;
-    if (t < 0 || t > 20) return false;
+    if (t <= 0 || t > 10) return false;
     const float x = m[3] - t * m[2], y = m[7] - t * m[6];
     const std::array<float, 2> candidate{x / width + 0.5F, 0.5F - y * aspect / width};
-    if (candidate[0] < 0 || candidate[0] > 1 || candidate[1] < 0 || candidate[1] > 1) return false;
-    uv = candidate; return true;
+    if (!std::isfinite(candidate[0]) || !std::isfinite(candidate[1])) return false;
+    uv = {std::clamp(candidate[0], 0.0F, 1.0F),
+          std::clamp(candidate[1], 0.0F, 1.0F)};
+    return true;
+}
+
+bool SmoothMenuPointerUv(
+    const std::array<float, 2>& current,
+    const std::array<float, 2>& target,
+    float smoothing,
+    std::array<float, 2>& smoothed) noexcept {
+    smoothed = {};
+    if (!std::isfinite(current[0]) || !std::isfinite(current[1]) ||
+        !std::isfinite(target[0]) || !std::isfinite(target[1]) ||
+        !std::isfinite(smoothing) || smoothing < 0.0F || smoothing > 1.0F) {
+        return false;
+    }
+    smoothed = {
+        current[0] + (target[0] - current[0]) * smoothing,
+        current[1] + (target[1] - current[1]) * smoothing};
+    return true;
 }
 
 } // namespace penumbra_vr::runtime

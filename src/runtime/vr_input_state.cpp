@@ -135,7 +135,9 @@ VrInputUpdateResult VrInputRouter::Update(
             ReleaseForLostPose(sample.interact, state_.interact);
         }
     } else if (!PoseIsValid(
-                   handedness, left_pose_valid, right_pose_valid)) {
+                   handedness, left_pose_valid, right_pose_valid) &&
+               !PoseIsValid(
+                   OppositeHand(handedness), left_pose_valid, right_pose_valid)) {
         ReleaseForLostPose(sample.ui_select, state_.ui_select);
         ReleaseForLostPose(sample.ui_drag, state_.ui_drag);
     }

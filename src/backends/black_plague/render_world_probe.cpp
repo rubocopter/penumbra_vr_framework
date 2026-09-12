@@ -1417,9 +1417,9 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 }
 
-bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv) noexcept {
+bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose, std::array<float, 2>& uv) noexcept {
     uv = {};
-    if (!aim.pose_valid || !aim.device_connected) return false;
+    if (!pointer_pose.pose_valid || !pointer_pose.device_connected) return false;
     AcquireSRWLockShared(&g_menu_pointer_lock);
     const auto anchor = g_menu_pointer_anchor;
     const float aspect = g_menu_pointer_aspect;
@@ -1427,7 +1427,7 @@ bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv)
     const float width = g_menu_pointer_width;
     ReleaseSRWLockShared(&g_menu_pointer_lock);
     return runtime::ProjectAimOnMenu(
-        anchor, aim.device_to_absolute, aspect, distance, width, uv);
+        anchor, pointer_pose.device_to_absolute, aspect, distance, width, uv);
 }
 void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::memory_order_release); }
 

@@ -25,6 +25,18 @@ struct VrControllerFrame {
     bool focused = false;
 };
 
+struct VrUiPointerPose {
+    VrHmdPose pose;
+    VrHand hand = VrHand::right;
+    bool valid = false;
+};
+
+// Rework pointer ownership: prefer the configured dominant hand, fall back to
+// the other tracked hand, and use the grip pose when an aim pose is missing.
+[[nodiscard]] VrUiPointerPose SelectUiPointerPose(
+    const VrControllerFrame& frame,
+    VrHand preferred_hand) noexcept;
+
 // SDK-neutral seam: production calls IVRInput; deterministic tests supply a
 // fake device. Handles never escape into a game's entity/physics layer.
 class VrActionBackend {

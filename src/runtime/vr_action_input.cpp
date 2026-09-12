@@ -31,6 +31,26 @@ bool ValidPose(const VrHmdPose& pose) {
 }
 } // namespace
 
+VrUiPointerPose SelectUiPointerPose(
+    const VrControllerFrame& frame,
+    VrHand preferred_hand) noexcept {
+    VrUiPointerPose result;
+    const auto select = [&](VrHand hand) -> bool {
+        const auto index = hand == VrHand::left ? 0U : 1U;
+        const auto& sample = frame.hands[index];
+        if (!sample.grip.device_connected || !sample.grip.pose_valid) return false;
+        result.pose = sample.aim.device_connected && sample.aim.pose_valid
+            ? sample.aim : sample.grip;
+        result.hand = hand;
+        result.valid = true;
+        return true;
+    };
+    if (!select(preferred_hand)) {
+        static_cast<void>(select(OppositeHand(preferred_hand)));
+    }
+    return result;
+}
+
 bool VrActionInput::Initialize(VrActionBackend& backend, const char* manifest, std::string& error) {
     error.clear();
     if (initialized_) { error = "Controller actions are already initialized"; return false; }

@@ -416,8 +416,9 @@ int main() {
             menu_anchor, Translation(0.6F,1.9F,0), 4.0F / 3.0F,
             2.0F, 2.4F, uv) ||
         std::abs(uv[0] - 0.75F) > 0.00001F || std::abs(uv[1] - (1.0F / 3.0F)) > 0.00001F ||
-        penumbra_vr::runtime::ProjectAimOnMenu(
+        !penumbra_vr::runtime::ProjectAimOnMenu(
             menu_anchor, Translation(5,1.6F,0), 1, 2, 2.4F, uv) ||
+        std::abs(uv[0] - 1.0F) > 0.00001F ||
         penumbra_vr::runtime::ProjectAimOnMenu(
             menu_anchor, menu_anchor, 0, 2, 2.4F, uv) ||
         penumbra_vr::runtime::ProjectAimOnMenu(
@@ -428,6 +429,15 @@ int main() {
             menu_anchor, Translation(0.6F,1.9F,0), 4.0F / 3.0F,
             1.5F, 2.4F, uv)) {
         std::cerr << "Menu controller-ray intersection failed\n"; return 2;
+    }
+    std::array<float, 2> smoothed{};
+    if (!penumbra_vr::runtime::SmoothMenuPointerUv(
+            {0.25F, 0.75F}, {0.75F, 0.25F}, 0.40F, smoothed) ||
+        std::abs(smoothed[0] - 0.45F) > 0.00001F ||
+        std::abs(smoothed[1] - 0.55F) > 0.00001F ||
+        penumbra_vr::runtime::SmoothMenuPointerUv(
+            {0.25F, 0.75F}, {0.75F, 0.25F}, 1.1F, smoothed)) {
+        std::cerr << "Menu pointer smoothing failed\n"; return 3;
     }
     if (!TestRigidInverse() || !TestProjection() ||
         !TestConservativeStereoCullFrustum() || !TestEyeViews() ||

@@ -27,6 +27,12 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- Extracted Rework's game-neutral tracked-menu pointer policy into shared runtime
+  helpers and applied it to Black Plague: configured-hand ownership now falls
+  back to the other tracked hand, controller aim falls back to grip when needed,
+  panel-plane hits clamp to the nearest UI edge, and cursor motion uses Rework's
+  `0.40` smoothing factor. Release build and all 30 root CTest tests pass; this
+  is host-tested only and does not claim headset validation.
 - Host-side SteamVR controller-profile parity gate: the shared action manifest
   and all eight functional binding graphs are checked against the preserved
   Overture mappings. The gate caught and restored the Rework-proven left PS VR2
@@ -61,7 +67,7 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Live-characterized Black Plague sprint/crouch/jump ownership: native walk/sprint limits around `3.0/4.5 m/s`, physical crouch shape swap preserving feet height, and a separate native Jump-state vertical pipeline.
 - First narrow `BlackPlagueBodyAdapter`, binding to the already-owned movement/body-update callsites without introducing another hook or second `D6E00` call. It dynamically re-resolves the current body, publishes existing native horizontal intent and observes accepted displacement after the one native update.
 - One-step Black Plague `--launch-vr` / `Start-Black-Plague-VR.cmd` and read-only `--check-vr` preflight.
-- Real OpenVR action/pose/skeleton/haptic reader, exact-build native input bridge and tracked desktop-menu panels with right-controller UI pointing.
+- Real OpenVR action/pose/skeleton/haptic reader, exact-build native input bridge and tracked desktop-menu panels consuming the shared Rework pointer policy.
 - Provisional depth-tested procedural gloves, controller-directed native picking and palm-relative free-body grab/throw adapter. Native physics transitions are preserved; joints, palm collisions and definitive tool/light attachment remain pending.
 - Per-eye light-scissor remapping at the main executable's `glScissor` import, scoped to the eye context, framebuffer and viewport, with per-frame counters.
 

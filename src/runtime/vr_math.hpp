@@ -19,9 +19,15 @@ struct VrCullFrustum {
 
 [[nodiscard]] VrMatrix44 IdentityMatrix() noexcept;
 // Projects a controller ray onto the configurable OpenGlMenuFrame panel;
-// UV origin is top-left.
+// UV origin is top-left. Rays crossing the panel plane outside the rectangle
+// pin to the nearest edge, matching the proven Rework pointer behavior.
 [[nodiscard]] bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
     float aspect, float distance, float width, std::array<float, 2>& uv) noexcept;
+[[nodiscard]] bool SmoothMenuPointerUv(
+    const std::array<float, 2>& current,
+    const std::array<float, 2>& target,
+    float smoothing,
+    std::array<float, 2>& smoothed) noexcept;
 [[nodiscard]] VrMatrix44 ExpandMatrix(const VrMatrix34& matrix) noexcept;
 [[nodiscard]] VrMatrix44 Multiply(
     const VrMatrix44& left,

@@ -95,7 +95,7 @@ struct RenderWorldFrameTelemetry {
 [[nodiscard]] bool TrackedStereoPresentationActive() noexcept;
 void ConfigureTrackedPresentation(const runtime::VrSettings& settings) noexcept;
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept;
-[[nodiscard]] bool TrackedMenuPointer(const runtime::VrHmdPose& aim, std::array<float, 2>& uv) noexcept;
+[[nodiscard]] bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose, std::array<float, 2>& uv) noexcept;
 void RequestTrackedRecenter() noexcept;
 [[nodiscard]] bool TrackedMovementYaw(float& yaw) noexcept;
 [[nodiscard]] bool ControllerWorldPose(const runtime::VrHmdPose& controller,

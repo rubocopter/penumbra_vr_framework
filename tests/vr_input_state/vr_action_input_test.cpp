@@ -108,6 +108,18 @@ int main() {
         frame.input.state.move.active || !frame.hands[0].skeleton_valid ||
         frame.hands[0].finger_curl != std::array<float, 5>{0,0,0.5F,1,1} ||
         frame.interact_source != VrHand::left) return 7;
+    const auto left_pointer = SelectUiPointerPose(frame, VrHand::left);
+    if (!left_pointer.valid || left_pointer.hand != VrHand::left ||
+        left_pointer.pose.device_to_absolute.values != frame.hands[0].aim.device_to_absolute.values) return 25;
+    frame.hands[0].aim = {};
+    const auto grip_pointer = SelectUiPointerPose(frame, VrHand::left);
+    if (!grip_pointer.valid || grip_pointer.hand != VrHand::left ||
+        grip_pointer.pose.device_to_absolute.values != frame.hands[0].grip.device_to_absolute.values) return 26;
+    frame.hands[0].grip = {};
+    const auto offhand_pointer = SelectUiPointerPose(frame, VrHand::left);
+    if (!offhand_pointer.valid || offhand_pointer.hand != VrHand::right) return 27;
+    frame.hands[1].grip = {};
+    if (SelectUiPointerPose(frame, VrHand::left).valid) return 28;
     if (!reader.TriggerHaptic(fake, VrHand::left, 0.02F, 100, 0.3F, error) ||
         fake.last_haptic != fake.handles.at("/actions/global/out/left_haptic") ||
         reader.TriggerHaptic(fake, VrHand::left, 2, 100, 0.3F, error)) return 8;

@@ -169,7 +169,11 @@ void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* phy
         if (std::abs(delta[0]) > 0.01F || std::abs(delta[1]) > 0.01F) g_mouse_override_until = now + 1500;
         if (g_intents && g_pointer_valid && now >= g_mouse_override_until) {
             const float x = Read<float>(menu, entry.cursor), y = Read<float>(menu, entry.cursor + 4);
-            if (std::isfinite(x) && std::isfinite(y)) delta = {g_pointer_uv[0] * 800 - x, g_pointer_uv[1] * 600 - y};
+            std::array<float, 2> smoothed{};
+            if (runtime::SmoothMenuPointerUv(
+                    {x / 800.0F, y / 600.0F}, g_pointer_uv, 0.40F, smoothed)) {
+                delta = {smoothed[0] * 800.0F - x, smoothed[1] * 600.0F - y};
+            }
         }
         reinterpret_cast<Pointer>(g_image + entry.target)(menu, &delta);
         return;
@@ -208,10 +212,9 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     const auto timing=g_update_timing.Update(dt,GetTickCount64(),!ui && frame.focused);
     if (timing.ready) g_timing_sample=timing;
     ReleaseSRWLockExclusive(&g_session_lock);
-    const auto pointer_index =
-        frame.interact_source == runtime::VrHand::left ? 0U : 1U;
+    const auto pointer = runtime::SelectUiPointerPose(frame, frame.interact_source);
     g_pointer_valid = ui && frame.focused &&
-        TrackedMenuPointer(frame.hands[pointer_index].aim, g_pointer_uv);
+        pointer.valid && TrackedMenuPointer(pointer.pose, g_pointer_uv);
     if (frame.input.state.recenter.just_pressed) RequestTrackedRecenter();
     if (ui && !g_pointer_valid) {
         frame.input.state.ui_select.pressed = false;

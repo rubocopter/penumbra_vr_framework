@@ -161,6 +161,12 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
   stable-anchor plan for its tracked menu; Overture consumes the overlay handoff
   for radio/subtitle presentation while draw order, transforms and menu state
   remain game/backend-owned.
+- `src/runtime/vr_action_input.*` and `src/runtime/vr_math.*` now own the
+  demonstrated game-neutral tracked-menu pointer policy: configured-hand
+  preference with off-hand takeover, aim-to-grip fallback, bounded panel-plane
+  projection with edge clamping and Rework's `0.40` screen-pointer smoothing.
+  Black Plague consumes these helpers while the native 800x600 cursor write and
+  tracked-menu anchor remain backend-owned. This extraction is host-tested only.
 - `src/runtime/vr_interaction_policy.hpp` now also owns Rework's demonstrated
   palm collision dimensions, contact/sweep/refinement constants and recovery
   predicates. Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so

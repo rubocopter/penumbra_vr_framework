@@ -76,6 +76,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
   - [x] Host-gate the shared action manifest and all eight functional binding graphs against the proven Overture profile set; remaining parity work is live/headset behavior per hardware/backend
 - [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime
 - [x] Extract stable VR panel anchoring and transient overlay ownership handoff policy with Overture/Black Plague consumers
+- [x] Extract and host-test Rework tracked-menu pointer ownership, aim/grip fallback, off-hand takeover, edge clamping and `0.40` cursor smoothing; Black Plague consumes the shared policy while native menu projection/application remains backend-owned
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
 - [x] Keep Overture's existing build and tests green during extraction
 - [x] Port Rework's tracking space, room-scale rejection and locomotion policy
