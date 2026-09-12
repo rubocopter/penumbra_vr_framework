@@ -7,6 +7,7 @@ $ErrorActionPreference = 'Stop'
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $manifestRoot = Join-Path $repositoryRoot 'manifests'
 $openVrAssetRoot = Join-Path $repositoryRoot 'assets\openvr'
+$overtureOpenVrAssetRoot = Join-Path $openVrAssetRoot 'overture'
 $localizationAssetRoot = Join-Path $repositoryRoot 'assets\localization'
 
 function Read-JsonFile([string]$Path) {
@@ -15,6 +16,22 @@ function Read-JsonFile([string]$Path) {
     } catch {
         throw "Invalid JSON in $Path`: $($_.Exception.Message)"
     }
+}
+
+function ConvertTo-CompactJson($Value) {
+    return $Value | ConvertTo-Json -Depth 100 -Compress
+}
+
+function ConvertTo-FunctionalBindingJson($Binding) {
+    return ConvertTo-CompactJson ([pscustomobject][ordered]@{
+        action_manifest_version = $Binding.action_manifest_version
+        alias_info = $Binding.alias_info
+        bindings = $Binding.bindings
+        controller_type = $Binding.controller_type
+        name = $Binding.name
+        options = $Binding.options
+        simulated_actions = $Binding.simulated_actions
+    })
 }
 
 $jsonFiles = @(
@@ -204,6 +221,12 @@ foreach ($entry in $localizationEntries) {
 
 $actionManifestPath = Join-Path $openVrAssetRoot 'actions.json'
 $actionManifest = Read-JsonFile $actionManifestPath
+$overtureActionManifestPath = Join-Path $overtureOpenVrAssetRoot 'actions.json'
+$overtureActionManifest = Read-JsonFile $overtureActionManifestPath
+if ((ConvertTo-CompactJson $actionManifest) -cne
+    (ConvertTo-CompactJson $overtureActionManifest)) {
+    throw 'Shared SteamVR action manifest has drifted from the proven Overture mapping.'
+}
 $actionNames = @($actionManifest.actions | ForEach-Object { $_.name })
 $actionSetNames = @($actionManifest.action_sets | ForEach-Object { $_.name })
 
@@ -265,6 +288,16 @@ foreach ($defaultBinding in $actionManifest.default_bindings) {
     $binding = Read-JsonFile $bindingPath
     if ($binding.controller_type -ne $defaultBinding.controller_type) {
         throw "SteamVR controller type mismatch in $bindingRelativePath."
+    }
+
+    $overtureBindingPath = Join-Path $overtureOpenVrAssetRoot $bindingRelativePath
+    if (-not (Test-Path -LiteralPath $overtureBindingPath)) {
+        throw "Proven Overture SteamVR binding does not exist: $bindingRelativePath"
+    }
+    $overtureBinding = Read-JsonFile $overtureBindingPath
+    if ((ConvertTo-FunctionalBindingJson $binding) -cne
+        (ConvertTo-FunctionalBindingJson $overtureBinding)) {
+        throw "Shared SteamVR functional mapping has drifted from Overture in $bindingRelativePath."
     }
 
     foreach ($bindingSetProperty in $binding.bindings.PSObject.Properties) {

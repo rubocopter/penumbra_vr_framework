@@ -73,6 +73,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
 - [x] Extract Rework semantic haptic events, profiles, strength scaling and cooldown policy into the shared runtime
 - [ ] Establish and validate controller-profile parity against the proven Overture behavior for PS VR2 Sense, Valve Index/Knuckles, Meta/Oculus Touch, Pico 4, Pico Neo 3, Windows Mixed Reality and HTC Vive, covering action availability, handedness, poses, menu/picking input, haptics and hardware-supported finger articulation
+  - [x] Host-gate the shared action manifest and all eight functional binding graphs against the proven Overture profile set; remaining parity work is live/headset behavior per hardware/backend
 - [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime
 - [x] Extract stable VR panel anchoring and transient overlay ownership handoff policy with Overture/Black Plague consumers
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework

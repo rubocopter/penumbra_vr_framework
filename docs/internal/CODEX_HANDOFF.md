@@ -81,6 +81,12 @@ poses, menu/picking behavior, haptics and hardware-supported finger articulation
 Requiem should inherit this shared matrix and repeat only the backend-specific
 intent/headset validation needed by its exact build.
 
+The host metadata gate now locks the shared action manifest and all eight
+functional binding graphs to the preserved Overture mappings, ignoring only
+descriptive binding text. That check caught and restored the missing left PS VR2
+Sense `L2 -> /actions/ui/in/select` route. Treat this as host-tested static
+profile parity; device behavior remains a live/headset validation gate.
+
 ### Player/body and collision
 
 This reverse-engineering milestone is closed unless contradictory evidence appears.

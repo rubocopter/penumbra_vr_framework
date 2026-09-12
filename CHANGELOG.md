@@ -27,6 +27,11 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- Host-side SteamVR controller-profile parity gate: the shared action manifest
+  and all eight functional binding graphs are checked against the preserved
+  Overture mappings. The gate caught and restored the Rework-proven left PS VR2
+  Sense `L2` UI-select route while leaving hardware behavior for live/headset
+  validation.
 - Imported the existing Spanish localization payloads for Black Plague and
   Requiem under `assets/localization`, preserving their original `leeme.txt`
   attribution notices. A small localization manifest fixes their exact hashes

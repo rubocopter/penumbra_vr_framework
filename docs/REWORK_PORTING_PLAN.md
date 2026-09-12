@@ -184,6 +184,8 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 
 Controller support is a behavioral parity requirement, not an asset-presence check. The shared package currently carries eight default OpenVR profiles: PS VR2 Sense, Vive, Valve Index/Knuckles, Oculus/Meta Touch, Pico 4, Pico Neo 3, Windows Mixed Reality motion controllers and the holographic-controller variant. A profile is only considered at parity after its logical actions, left/right-handed routing, grip/aim poses, menu and picking controls, haptics and any hardware-supported finger articulation behave equivalently to the proven Overture baseline in the target backend. Black Plague must close that matrix before controller parity is claimed; Requiem should inherit the same matrix and repeat only backend-specific validation.
 
+The metadata gate now compares the shared action manifest and the functional graph of every shared controller binding against the preserved Overture profile set. Descriptive text may differ, but action sets, source routing, grip/aim poses, skeleton inputs and haptic outputs cannot silently drift. This host gate also restored the Rework-proven left PS VR2 Sense trigger route for UI select after detecting that it had been dropped from the shared profile. It establishes static/profile parity only; live SteamVR routing, device pose behavior, haptics and finger articulation still require the corresponding hardware/backend evidence.
+
 ## Validation rule
 
 Do not promote a shared behavior merely because it compiles in both backends.
