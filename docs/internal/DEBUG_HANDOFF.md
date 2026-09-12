@@ -165,7 +165,7 @@ Map the exact joint/slider/hinge state and update boundary for one representativ
 
 ### Established facts
 
-Black Plague and Rework use different DAE resources. Rework's exact grip constants therefore cannot be copied blindly. The current BP socket follows the hand but is visibly wrong against provisional hand geometry.
+Black Plague and Rework use different DAE resources. Rework's exact grip constants therefore cannot be copied blindly. The Framework now shares the proven attachment composition rule (local model-to-hand orientation followed by translation of the measured grip point to the hand origin), while Black Plague keeps its own measured flashlight/glowstick points and +90-degree X orientation. Existing exact matrix tests prove that this refactor preserves the prior BP placement numerically. The current BP profile is still visibly wrong against provisional hand geometry, so it is not a definitive placement result.
 
 ### Do not try again
 

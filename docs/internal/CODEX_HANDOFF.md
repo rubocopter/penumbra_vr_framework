@@ -313,6 +313,15 @@ the stable-anchor lifetime plan, while Overture's radio/subtitle path consumes
 the overlay handoff. Placement transforms, renderer calls and game menu state
 remain backend/product-specific. The new policy is host-tested only.
 
+The common tool/attachment socket composition is now Framework-owned in
+`vr_grab_pose.*`: a per-game model-to-hand rotation plus measured model grip
+point is composed onto the resolved hand pose using the same local-orientation
+then `T(-grip point)` principle demonstrated by Rework. Black Plague consumes
+this helper for its measured flashlight and glowstick sockets, and its existing
+exact matrix tests remain unchanged. The shared composition is host-tested;
+the current BP geometry/profile is not promoted to definitive placement until
+final hand geometry and headset/light-direction evidence exist.
+
 The shared spatial-audio reference now contains the complete accepted Overture
 mine-gallery EFX parameter set, including echo, modulation and room-rolloff
 fields. This strengthens the offline reference; Black Plague/Requiem audio hook
@@ -320,7 +329,7 @@ integration still requires game-specific evidence.
 
 1. palm collision adapter and character/body exclusion validation;
 2. jointed mechanisms / doors / levers through native mechanism state;
-3. definitive per-game tool/glowstick grip profiles;
+3. definitive per-game tool/glowstick geometry/profile and headset validation;
 4. inventory, notes, menus, HUD and subtitles;
 5. comfort/haptics and representative chapter-level validation.
 

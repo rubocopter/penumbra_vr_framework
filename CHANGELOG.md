@@ -27,6 +27,13 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- Extracted the demonstrated tool attachment socket composition into shared
+  `vr_grab_pose` policy: per-game model-to-hand orientation and measured model
+  grip points now compose through one runtime helper. Black Plague's flashlight
+  and glowstick consume that helper with their existing measured sockets, while
+  exact matrix tests prove numerical parity with the previous backend-local
+  implementation. Release build and all 30 root CTest tests pass; definitive
+  hand/tool geometry and light direction remain headset validation gates.
 - Extracted Rework's controller-to-finger curl conditioning into shared runtime:
   the measured `0.08` skeletal deadzone, grip/trigger fallback closing windows
   and ~70 ms exponential smoothing now have one host-tested implementation.

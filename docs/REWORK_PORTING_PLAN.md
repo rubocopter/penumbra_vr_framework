@@ -155,7 +155,7 @@ Generic controller picking remains capped to the shared Rework direct physical r
 
 Long bars/tables following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
 
-Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The correct direction is shared grip-profile semantics plus measured per-game sockets.
+Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; definitive placement still requires final hand geometry and headset/light-direction validation.
 
 ## Extracted so far
 
@@ -190,7 +190,7 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
 - `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; the build catalogue/manifests recognize host-verified exact Black Plague/Requiem LAA variants while transactional deployment remains installer work.
 - `src/adapters/hpl1/camera_matrix_override.*` owns the reusable byte-exact camera transaction; exact layouts remain backend-owned.
 - `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit, but the mirror is not supported/validated.
-- `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior.
+- `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior. It also owns the shared attachment-socket composition (`model_to_hand_rotation` plus measured model grip point); Black Plague now consumes it for flashlight/glowstick placement while retaining its resource-specific socket data. The composition and existing BP matrices are host-tested; definitive tool placement is still a headset/geometry gate.
 - `src/runtime/vr_input_state.*` owns logical actions, dead-zone scaling, context/handedness edge latching, pose-loss releases and action-idle grace.
 - `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state; `vr_settings_editor.*` owns the demonstrated 18-row edit/format/dependency policy, and `vr_settings_store.*` persists the complete shared schema.
 - Black Plague exposes an explicit backend capability map for the currently wired editor settings. A dedicated in-game settings page remains game-specific work until a safe native-menu insertion boundary is demonstrated.

@@ -6,6 +6,27 @@ using namespace penumbra_vr::runtime;
 int main() {
     auto palm = IdentityMatrix(), body = IdentityMatrix();
     palm.values[3] = 1; body.values[3] = 3;
+    const VrAttachmentSocketProfile socket{
+        {1,0,0, 0,0,-1, 0,1,0},
+        {1,2,3}};
+    auto attachment_hand = IdentityMatrix();
+    attachment_hand.values[3] = 10;
+    attachment_hand.values[7] = 20;
+    attachment_hand.values[11] = 30;
+    const auto attachment = ComposeAttachmentSocketPose(attachment_hand,socket);
+    const std::array<float,3> mapped_socket{
+        attachment.values[0]*socket.model_grip_point[0] +
+            attachment.values[1]*socket.model_grip_point[1] +
+            attachment.values[2]*socket.model_grip_point[2] + attachment.values[3],
+        attachment.values[4]*socket.model_grip_point[0] +
+            attachment.values[5]*socket.model_grip_point[1] +
+            attachment.values[6]*socket.model_grip_point[2] + attachment.values[7],
+        attachment.values[8]*socket.model_grip_point[0] +
+            attachment.values[9]*socket.model_grip_point[1] +
+            attachment.values[10]*socket.model_grip_point[2] + attachment.values[11]};
+    if (mapped_socket != std::array<float,3>{10,20,30} ||
+        attachment.values[5] != 0 || attachment.values[6] != -1 ||
+        attachment.values[9] != 1 || attachment.values[10] != 0) return 10;
     VrGrabPose grab;
     VrMatrix44 result;
     std::string error;

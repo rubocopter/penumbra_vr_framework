@@ -17,6 +17,25 @@ bool Inverse(const VrMatrix44& matrix, VrMatrix44& inverse, std::string& error) 
     return InvertRigidTransform(Rigid(matrix), inverse, error);
 }
 }
+
+VrMatrix44 ComposeAttachmentSocketPose(
+    const VrMatrix44& hand_pose,
+    const VrAttachmentSocketProfile& profile) noexcept {
+    VrMatrix44 local = IdentityMatrix();
+    for (std::size_t row = 0; row < 3; ++row) {
+        for (std::size_t column = 0; column < 3; ++column) {
+            local.values[row * 4 + column] =
+                profile.model_to_hand_rotation[row * 3 + column];
+        }
+        for (std::size_t column = 0; column < 3; ++column) {
+            local.values[row * 4 + 3] -=
+                local.values[row * 4 + column] *
+                profile.model_grip_point[column];
+        }
+    }
+    return Multiply(hand_pose, local);
+}
+
 bool VrGrabPose::Begin(const VrMatrix44& palm, const VrMatrix44& body,
     const std::array<float, 3>& contact, bool contact_in_palm, std::string& error) noexcept {
     Reset(); error.clear();

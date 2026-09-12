@@ -78,6 +78,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime
 - [x] Extract stable VR panel anchoring and transient overlay ownership handoff policy with Overture/Black Plague consumers
 - [x] Extract and host-test Rework tracked-menu pointer ownership, aim/grip fallback, off-hand takeover, edge clamping and `0.40` cursor smoothing; Black Plague consumes the shared policy while native menu projection/application remains backend-owned
+- [x] Extract and host-test shared attachment-socket composition while retaining measured model grip points/orientation as per-game profile data; Black Plague consumes it for the current flashlight/glowstick sockets
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
 - [x] Keep Overture's existing build and tests green during extraction
 - [x] Port Rework's tracking space, room-scale rejection and locomotion policy
@@ -102,7 +103,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Headset-validate the supported controller profiles on Black Plague and close any per-profile feature gaps before controller parity is claimed
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's `0.18 m` physical reach
-- [ ] Complete palm collision, jointed mechanisms and tool/light attachment
+- [ ] Complete palm collision, jointed mechanisms and definitive tool/light geometry/profile validation
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership

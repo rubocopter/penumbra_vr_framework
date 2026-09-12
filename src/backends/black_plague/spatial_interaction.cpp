@@ -23,6 +23,14 @@ using Matrix = runtime::VrMatrix44;
 using Update = void(__thiscall*)(void*,float);
 using Transition = void(__thiscall*)(void*,void*);
 using Ray = void(__thiscall*)(void*,void*,const Vec*,const Vec*,bool,bool,bool,bool);
+constexpr std::array<float,9> kToolModelToHandRotation{
+    1,0,0,
+    0,0,-1,
+    0,1,0};
+constexpr runtime::VrAttachmentSocketProfile kFlashlightSocket{
+    kToolModelToHandRotation,{0,-0.016669F,0}};
+constexpr runtime::VrAttachmentSocketProfile kGlowstickSocket{
+    kToolModelToHandRotation,{0,0.059722F,0.00504F}};
 std::uint8_t* g_image = nullptr;
 std::array<hooks::IatHook,5> g_hooks;
 hooks::Rel32CallHook g_tool_hook;
@@ -111,15 +119,12 @@ void __fastcall HookedToolMatrix(void* entity, void*, const Matrix* native_matri
             const auto tool_hand=ReadNativeControllerFrame().interact_source==runtime::VrHand::left ?
                 runtime::VrHand::right : runtime::VrHand::left;
             if (!HandPose(tool_hand,false,palm,velocity,angular)) { ++g_invalid_tool_pose; break; }
-            // Native models point along -Y. Rotate +90 degrees around X so the
-            // flashlight beam points along the controller's -Z. These sockets
-            // use the installed model nodes, not Rework's different DAE files.
-            Matrix local=runtime::IdentityMatrix();
-            local.values[5]=0; local.values[6]=-1; local.values[9]=1; local.values[10]=0;
-            const Vec socket=flashlight ? Vec{0,-0.016669F,0} : Vec{0,0.059722F,0.00504F};
-            for (std::size_t row=0;row<3;++row)
-                for (std::size_t col=0;col<3;++col) local.values[row*4+3]-=local.values[row*4+col]*socket[col];
-            destination=runtime::Multiply(palm,local);
+            // Native models point along -Y. The per-game profile rotates +90
+            // degrees around X so the flashlight beam points along controller
+            // -Z, then aligns the measured model socket with the hand origin.
+            // These sockets come from BP's installed nodes, not Rework's DAE.
+            const auto& socket=flashlight ? kFlashlightSocket : kGlowstickSocket;
+            destination=runtime::ComposeAttachmentSocketPose(palm,socket);
             selected=&destination;
             break;
         }

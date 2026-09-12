@@ -1,6 +1,21 @@
 #pragma once
 #include "vr_math.hpp"
 namespace penumbra_vr::runtime {
+// Game-neutral attachment socket semantics. Backends own the measured model
+// point and model-to-hand orientation for their own resources; the runtime
+// composes that profile onto the tracked/collision-resolved hand pose.
+struct VrAttachmentSocketProfile {
+    std::array<float, 9> model_to_hand_rotation{
+        1.0F, 0.0F, 0.0F,
+        0.0F, 1.0F, 0.0F,
+        0.0F, 0.0F, 1.0F};
+    std::array<float, 3> model_grip_point{};
+};
+
+[[nodiscard]] VrMatrix44 ComposeAttachmentSocketPose(
+    const VrMatrix44& hand_pose,
+    const VrAttachmentSocketProfile& profile) noexcept;
+
 // Rework's rigid palm-relative hold, independent of HPL entities and Newton.
 class VrGrabPose final {
 public:
