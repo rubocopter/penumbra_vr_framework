@@ -27,6 +27,15 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Added
 
+- Extracted Rework's controller-to-finger curl conditioning into shared runtime:
+  the measured `0.08` skeletal deadzone, grip/trigger fallback closing windows
+  and ~70 ms exponential smoothing now have one host-tested implementation.
+  Overture consumes the full policy while retaining its rig order, bind poses,
+  handle geometry and forced-grab presentation. Black Plague applies the shared
+  skeletal deadzone/smoothing before its richer per-finger articulation; its
+  non-skeletal fallback remains unchanged until normalized grip/trigger analogs
+  are exposed by the backend. The full Overture Release regression and all 30
+  root CTest tests pass; no new live/headset validation is claimed.
 - Extracted Rework's game-neutral tracked-menu pointer policy into shared runtime
   helpers and applied it to Black Plague: configured-hand ownership now falls
   back to the other tracked hand, controller aim falls back to grip when needed,

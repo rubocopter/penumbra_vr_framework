@@ -26,6 +26,7 @@
 #include "HudModel_Throw.h"
 
 #include "VRHelper.hpp"
+#include "vr_hand_pose.hpp"
 #include "vr_interaction_policy.hpp"
 
 static const char* ksHandBoneNames[] = {
@@ -372,27 +373,6 @@ void iHudModel::DestroyHandAnimation()
 
 //-----------------------------------------------------------------------
 
-//Remap a raw 0..1 input through the [aLead,aFull] closing window of one
-//finger, with an ease-in-out curve. Staggered windows reproduce the natural
-//closing sequence (pinky/ring lead, middle follows, thumb opposes last)
-//instead of every finger folding in lockstep.
-static float CurlFromWindow(float afValue, float afLead, float afFull)
-{
-	float fT = (afFull - afLead) > 0.0001f ? (afValue - afLead) / (afFull - afLead) : afValue;
-	fT = cMath::Clamp(fT, 0.0f, 1.0f);
-	return fT * fT * (3.0f - 2.0f * fT);
-}
-
-//Rescale a raw curl through a soft deadzone: devices report a small
-//constant resting curl (hpl.log showed thumb 0.063, index ~0.10 at rest),
-//which would otherwise leave the hands half-curled while open.
-static float CurlDeadzone(float afValue)
-{
-	const float kfDeadzone = 0.08f;
-	if(afValue <= kfDeadzone) return 0.0f;
-	return (afValue - kfDeadzone) / (1.0f - kfDeadzone);
-}
-
 void iHudModel::UpdateHandAnimation(float afTimeStep)
 {
 	if(!mbHandRigSetup)
@@ -404,44 +384,19 @@ void iHudModel::UpdateHandAnimation(float afTimeStep)
 											   : mpInit->mpGame->vr_right_hand;
 	const TrackedController::HandSummary &summary = hand.GetHandSummary();
 
-	//Per-finger target curl, rig chain order: Middle,Ring,Little,Index,Thumb.
-	float afTarget[kFingerTrackNum] = {0,0,0,0,0};
-	float fGrip = 0.0f;
-	float fTrigger = 0.0f;
-	//Set below from the live grip: many devices without true thumb tracking
-	//report a constant ~0 thumb curl, which would otherwise leave the thumb
-	//frozen while the rest of the hand closes.
-	float fThumbFromGrip = 0.0f;
-
-	if(summary.valid)
-	{
-		fGrip = summary.grip;
-		fTrigger = summary.trigger;
-		fThumbFromGrip = CurlFromWindow(fGrip, 0.15f, 0.98f);
-
-		if(summary.skeletal)
-		{
-			//Controllers with skeletal input drive every finger directly from
-			//its measured curl (VR finger order: Thumb,Index,Middle,Ring,Pinky).
-			afTarget[0] = CurlDeadzone(summary.fingerCurl[vr::VRFinger_Middle]);
-			afTarget[1] = CurlDeadzone(summary.fingerCurl[vr::VRFinger_Ring]);
-			afTarget[2] = CurlDeadzone(summary.fingerCurl[vr::VRFinger_Pinky]);
-			afTarget[3] = CurlDeadzone(summary.fingerCurl[vr::VRFinger_Index]);
-			afTarget[4] = cMath::Max(CurlDeadzone(summary.fingerCurl[vr::VRFinger_Thumb]),
-									 fThumbFromGrip);
-		}
-		else
-		{
-			//Legacy devices only report a grip/trigger pair: synthesize the
-			//natural closing sequence from staggered windows. The index stays
-			//tied to the trigger exactly like before.
-			afTarget[0] = CurlFromWindow(fGrip,    0.10f, 0.95f); //Middle
-			afTarget[1] = CurlFromWindow(fGrip,    0.05f, 0.88f); //Ring
-			afTarget[2] = CurlFromWindow(fGrip,    0.00f, 0.80f); //Little
-			afTarget[3] = CurlFromWindow(fTrigger, 0.00f, 0.85f); //Index
-			afTarget[4] = fThumbFromGrip;                         //Thumb
-		}
-	}
+	penumbra_vr::runtime::VrHandCurlInput curlInput;
+	curlInput.valid = summary.valid;
+	curlInput.skeletal = summary.skeletal;
+	curlInput.grip = summary.grip;
+	curlInput.trigger = summary.trigger;
+	curlInput.finger_curl = {
+		summary.fingerCurl[vr::VRFinger_Thumb],
+		summary.fingerCurl[vr::VRFinger_Index],
+		summary.fingerCurl[vr::VRFinger_Middle],
+		summary.fingerCurl[vr::VRFinger_Ring],
+		summary.fingerCurl[vr::VRFinger_Pinky]
+	};
+	auto vrTarget = penumbra_vr::runtime::BuildVrHandCurlTargets(curlInput);
 
 	//Exponential smoothing toward the targets (~70 ms time constant): removes
 	//sensor jitter and gives the joints a slight inertia without adding
@@ -452,20 +407,26 @@ void iHudModel::UpdateHandAnimation(float afTimeStep)
 		//handle radius: a flashlight keeps the hand more open than a glowstick.
 		const float fForcedWeight = cMath::Clamp(mfForcedGrabPoseWeight,
 			0.72f, 1.0f);
-		for(int f=0; f<kFingerTrackNum; ++f) afTarget[f] = fForcedWeight;
-		afTarget[3] = 0.0f;
+		vrTarget.fill(fForcedWeight);
+		vrTarget[1] = 0.0f; //Index stays on the dedicated hold pose.
 	}
 
-	float fDt = afTimeStep < 0.0f ? 0.0f : (afTimeStep > 0.1f ? 0.1f : afTimeStep);
-	float fBlend = 1.0f - expf(-fDt / 0.07f);
-
-	for(int f=0; f<kFingerTrackNum; ++f)
-	{
-		mfFingerWeight[f] += (afTarget[f] - mfFingerWeight[f]) * fBlend;
-	}
+	//Shared curl order is Thumb,Index,Middle,Ring,Little; the Overture rig is
+	//Middle,Ring,Little,Index,Thumb, so keep that layout conversion local.
+	std::array<float,5> vrCurrent{
+		mfFingerWeight[4], mfFingerWeight[3], mfFingerWeight[0],
+		mfFingerWeight[1], mfFingerWeight[2]
+	};
+	penumbra_vr::runtime::SmoothVrHandCurls(vrCurrent, vrTarget, afTimeStep);
+	mfFingerWeight[0] = vrCurrent[2];
+	mfFingerWeight[1] = vrCurrent[3];
+	mfFingerWeight[2] = vrCurrent[4];
+	mfFingerWeight[3] = vrCurrent[1];
+	mfFingerWeight[4] = vrCurrent[0];
 
 	float fHoldTarget = mbForceGrabPose ?
 		cMath::Clamp(mfForcedGrabPoseWeight, 0.72f, 1.0f) : 0.0f;
+	const float fBlend = penumbra_vr::runtime::VrHandCurlSmoothingBlend(afTimeStep);
 	mfIndexHoldWeight += (fHoldTarget - mfIndexHoldWeight) * fBlend;
 }
 

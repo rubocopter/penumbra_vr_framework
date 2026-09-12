@@ -72,6 +72,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Import the shared OpenVR action manifest and controller bindings as data
 - [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
 - [x] Extract Rework semantic haptic events, profiles, strength scaling and cooldown policy into the shared runtime
+- [x] Extract and host-test shared controller-to-finger curl conditioning (skeletal deadzone, grip/trigger fallback windows and smoothing) while preserving per-game rig/articulation ownership
 - [ ] Establish and validate controller-profile parity against the proven Overture behavior for PS VR2 Sense, Valve Index/Knuckles, Meta/Oculus Touch, Pico 4, Pico Neo 3, Windows Mixed Reality and HTC Vive, covering action availability, handedness, poses, menu/picking input, haptics and hardware-supported finger articulation
   - [x] Host-gate the shared action manifest and all eight functional binding graphs against the proven Overture profile set; remaining parity work is live/headset behavior per hardware/backend
 - [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime

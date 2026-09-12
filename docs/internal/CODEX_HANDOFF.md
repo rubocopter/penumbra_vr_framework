@@ -276,17 +276,19 @@ Camera/head-bob/footstep-bob ownership remains separate comfort work. It is not 
 
 ## Hands/fingers
 
-Black Plague currently provides the better game-neutral articulation semantics: five independent curls, per-joint curves, spread and thumb opposition. Overture contributes rig-specific bind poses, bone axes, measured deadzone/smoothing and handle poses.
+Black Plague provides the better game-neutral articulation semantics: five independent curls, per-joint curves, spread and thumb opposition. Rework's game-neutral controller conditioning has now been extracted into `runtime::vr_hand_pose`: the measured `0.08` skeletal deadzone, grip/trigger fallback closing windows and ~70 ms smoothing are host-tested shared policy.
 
-Future extraction direction:
+Overture consumes the complete shared conditioning path while keeping its rig-specific bind poses, bone axes, hand-chain order, handle geometry and forced-grab presentation local. Black Plague applies the shared skeletal deadzone/smoothing once per native input update before its richer articulation output. Its Framework input frame does not yet expose normalized grip/trigger analogs, so the existing non-skeletal digital visual fallback remains unchanged rather than synthesizing missing analog data.
+
+Current boundary:
 
 ```text
-shared articulation output
+shared input conditioning -> shared articulation output
         ↓
 per-game rig/profile adapter
 ```
 
-Do not degrade Black Plague articulation to match Overture merely because Overture is the historical reference.
+Release validation is host-only: the full autonomous Overture Release regression passes, including 289 `VRTrackingTest` checks, and all 30 root CTest tests pass. Do not mark this extraction live/headset validated until controller hardware is exercised. Do not degrade Black Plague articulation to match Overture merely because Overture is the historical reference.
 
 ## Interaction priorities after body reconciliation
 

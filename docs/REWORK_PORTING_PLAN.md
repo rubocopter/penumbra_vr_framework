@@ -26,8 +26,16 @@ When another backend demonstrates a stronger **game-neutral** implementation, pr
 Current example:
 
 - Black Plague finger articulation preserves independent per-finger curls, per-joint curves, spread and thumb opposition and is the better candidate shared articulation output.
-- Overture contributes rig/profile details such as bind poses, bone axes, deadzone/smoothing and handle poses.
-- Future work should adapt Overture to the shared articulation output, not regress Black Plague to Overture's simpler semantics.
+- Rework's game-neutral input conditioning is now shared: the measured `0.08`
+  skeletal deadzone, grip/trigger fallback closing windows and ~70 ms smoothing
+  live in `vr_hand_pose.*` and are host-tested through both Overture and the
+  Black Plague skeletal path.
+- Overture keeps rig/profile details such as bind poses, bone axes, handle poses
+  and forced-grab presentation. Black Plague keeps its richer shared
+  articulation semantics.
+- Black Plague does not yet expose normalized grip/trigger analogs through the
+  Framework action layer, so its non-skeletal visual fallback remains local
+  instead of inventing analog data.
 
 ## Portability boundary
 

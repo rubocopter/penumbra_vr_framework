@@ -3,6 +3,7 @@
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
 #include "vr_haptics.hpp"
+#include "vr_hand_pose.hpp"
 #include "vr_native_intents.hpp"
 #include "legacy_input_abi.hpp"
 #include "render_world_probe.hpp"
@@ -81,6 +82,7 @@ std::atomic<void*> g_player{nullptr};
 SRWLOCK g_session_lock = SRWLOCK_INIT;
 runtime::OpenVrSession* g_session = nullptr;
 runtime::VrControllerFrame g_frame;
+std::array<std::array<float, 5>, 2> g_hand_curls{};
 runtime::VrInputState g_disconnect_release;
 std::atomic<std::uint64_t> g_release_pending{0};
 std::uint64_t g_release_generation = 0;
@@ -191,6 +193,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         frame.input.state = g_disconnect_release;
         g_disconnect_release = {};
         g_frame = {};
+        g_hand_curls = {};
     } else if (g_session) {
         std::string error;
         g_session->SetControllerMoveDeadZone(g_settings.move_dead_zone);
@@ -198,6 +201,23 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
             runtime::VrHand::left : runtime::VrHand::right;
         static_cast<void>(g_session->ReadControllerInput(context, handedness,
                                                         GetTickCount64(), frame, error));
+        for (std::size_t hand_index = 0; hand_index < frame.hands.size(); ++hand_index) {
+            auto& hand = frame.hands[hand_index];
+            if (!hand.skeleton_valid) {
+                g_hand_curls[hand_index] = {};
+                continue;
+            }
+            runtime::VrHandCurlInput curl_input;
+            curl_input.valid = true;
+            curl_input.skeletal = true;
+            curl_input.finger_curl = hand.finger_curl;
+            // The Framework action layer does not currently expose normalized
+            // grip/trigger analogs, so use only the evidenced skeletal portion
+            // of the shared policy here. Do not synthesize missing analog data.
+            const auto target = runtime::BuildVrHandCurlTargets(curl_input);
+            runtime::SmoothVrHandCurls(g_hand_curls[hand_index], target, dt);
+            hand.finger_curl = g_hand_curls[hand_index];
+        }
         g_frame = frame;
     }
     if (frame.input.state.move.active) {
