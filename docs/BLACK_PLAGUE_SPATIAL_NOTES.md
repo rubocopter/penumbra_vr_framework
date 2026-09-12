@@ -89,9 +89,16 @@ El milestone de probing corporal quedó cerrado después de las capturas PID
 tiene burst live completo y el primer `BlackPlagueBodyAdapter` está live-tested.
 No se deben añadir más sondas corporales por defecto. La reconciliación shadow
 sobre ese adapter ya está live-tested en PID 28172 con traslación HMD a cero. El
-siguiente paso útil es identificar y demostrar una petición física X/Z
-collision-aware en metros, conservando cámara/bob como una pista de comfort
-separada.
+boundary dedicado de petición física X/Z collision-aware en metros ya está
+implementado y host-tested en `0xD7281`, con clamp horizontal de `0,05 m`, Y a
+cero, consumo one-shot ligado al body actual y sin duplicar `D6E00`. El siguiente
+paso útil es validarlo live en stationary/free/block/slide manteniendo la
+traslación HMD posicional a cero. Cámara/bob sigue como pista de comfort separada.
+El launcher dedicado ya exige telemetría fresca de queue/injection/collision/
+reconciliation y clasifica muestras stationary/free/block/slide-or-partial a
+partir del request físico y el desplazamiento aceptado desde la posición previa
+a la inyección; no añade otro hook. PID 18392 confirmó que una sesión que solo
+activa el mutex falla correctamente y no promociona este boundary a live-tested.
 
 ### Comparación concreta con Overture
 
@@ -332,6 +339,7 @@ PowerShell local contrasta la captura inicializada sin modificar procesos.
 
 El boundary corporal/adapter y la reconciliación shadow ya están live-tested,
 pero los hitos amplios de jugabilidad todavía no están certificados. La siguiente
-evidencia de esta pista debe demostrar una petición física X/Z collision-aware en
-metros antes de activar room-scale. Herramientas definitivas, palm collision y
-mecanismos articulados siguen pendientes, además de sus pruebas con visor.
+evidencia de esta pista debe validar live la petición física X/Z collision-aware
+ya host-tested en `0xD7281` antes de activar room-scale. Herramientas definitivas,
+palm collision y mecanismos articulados siguen pendientes, además de sus pruebas
+con visor.

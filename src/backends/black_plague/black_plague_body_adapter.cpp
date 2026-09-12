@@ -20,6 +20,8 @@ constexpr std::uintptr_t kMoveForward = 0x9CBC0;
 constexpr std::uintptr_t kMoveSideways = 0x9CC60;
 constexpr wchar_t kShadowRequestMutexName[] =
     L"Local\\PenumbraVR.BlackPlague.ReconciliationShadow";
+constexpr wchar_t kPhysicalValidationRequestMutexName[] =
+    L"Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation";
 
 std::uint8_t* g_image = nullptr;
 bool g_installed = false;
@@ -36,6 +38,19 @@ std::uint64_t g_shadow_tracking_time = 0;
 std::uint64_t g_shadow_body_time = 0;
 void* g_shadow_body_identity = nullptr; // Comparison only; never dereferenced.
 std::uint64_t g_shadow_generation = 0;
+bool g_physical_validation_enabled = false;
+BlackPlaguePhysicalValidationRequestSource g_physical_validation_source =
+    BlackPlaguePhysicalValidationRequestSource::disabled;
+BlackPlaguePhysicalValidationTelemetry g_physical_validation_telemetry;
+
+struct PendingPhysicalValidation {
+    bool active = false;
+    void* character_body = nullptr;
+    std::uint64_t generation = 0;
+    runtime::VrBodyReconciliationPlan plan{};
+};
+
+PendingPhysicalValidation g_pending_physical_validation;
 
 [[nodiscard]] bool ReadBytes(const void* source, void* destination,
     std::size_t size) noexcept {
@@ -82,6 +97,24 @@ template<class T>
         delta_seconds >= 0.0F && delta_seconds <= 0.25F;
 }
 
+[[nodiscard]] bool FiniteVector(const std::array<float, 3>& value) noexcept {
+    return std::isfinite(value[0]) && std::isfinite(value[1]) &&
+        std::isfinite(value[2]);
+}
+
+[[nodiscard]] bool SameVector(const std::array<float, 3>& left,
+    const std::array<float, 3>& right) noexcept {
+    constexpr float epsilon = 0.00001F;
+    return std::abs(left[0] - right[0]) <= epsilon &&
+        std::abs(left[1] - right[1]) <= epsilon &&
+        std::abs(left[2] - right[2]) <= epsilon;
+}
+
+[[nodiscard]] bool HasHorizontalRequest(
+    const std::array<float, 3>& request) noexcept {
+    return std::hypot(request[0], request[2]) > 0.0F;
+}
+
 [[nodiscard]] bool MatchesCurrentBody(void* player) noexcept {
     return player != nullptr && Read<void*>(player, kPlayerCharacterBodyOffset) != nullptr;
 }
@@ -105,6 +138,35 @@ template<class T>
     return BlackPlagueShadowRequestSource::mutex;
 }
 
+[[nodiscard]] BlackPlaguePhysicalValidationRequestSource
+PhysicalValidationRequested() noexcept {
+    char option[2]{};
+    if (GetEnvironmentVariableA("PVR_BP_PHYSICAL_DISPLACEMENT_VALIDATION",
+            option, 2) == 1 && option[0] == '1') {
+        return BlackPlaguePhysicalValidationRequestSource::environment;
+    }
+    HANDLE request = OpenMutexW(
+        SYNCHRONIZE, FALSE, kPhysicalValidationRequestMutexName);
+    if (request == nullptr)
+        return BlackPlaguePhysicalValidationRequestSource::disabled;
+    CloseHandle(request);
+    return BlackPlaguePhysicalValidationRequestSource::mutex;
+}
+
+void InvalidatePendingPhysicalValidationLocked() noexcept {
+    if (g_pending_physical_validation.active) {
+        ++g_physical_validation_telemetry.invalidated_plans;
+        g_physical_validation_telemetry.latest_result =
+            BlackPlaguePhysicalValidationResult::invalidated;
+    }
+    g_pending_physical_validation = {};
+    g_physical_validation_telemetry.pending = false;
+    g_physical_validation_telemetry.expected_character_body = 0;
+    g_physical_validation_telemetry.expected_generation = 0;
+    g_physical_validation_telemetry.requested_displacement = {};
+    InvalidatePhysicalBodyDisplacement();
+}
+
 [[nodiscard]] bool InstallForImage(std::uint8_t* image,
     std::string& error) noexcept {
     error.clear();
@@ -123,14 +185,24 @@ template<class T>
     }
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
+    g_physical_validation_source = PhysicalValidationRequested();
+    g_physical_validation_enabled = g_physical_validation_source !=
+        BlackPlaguePhysicalValidationRequestSource::disabled;
     g_shadow_source = ReconciliationShadowRequested();
-    g_shadow_enabled = g_shadow_source != BlackPlagueShadowRequestSource::disabled;
+    g_shadow_enabled = g_shadow_source != BlackPlagueShadowRequestSource::disabled ||
+        g_physical_validation_enabled;
+    if (g_shadow_source == BlackPlagueShadowRequestSource::disabled &&
+        g_physical_validation_enabled) {
+        g_shadow_source = BlackPlagueShadowRequestSource::physical_validation;
+    }
     g_shadow = {};
     g_shadow_telemetry = {};
     g_shadow_tracking_time = 0;
     g_shadow_body_time = 0;
     g_shadow_body_identity = nullptr;
     g_shadow_generation = 0;
+    g_physical_validation_telemetry = {};
+    g_pending_physical_validation = {};
     ReleaseSRWLockExclusive(&g_lock);
     g_installed = true;
     return true;
@@ -168,6 +240,12 @@ bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept {
     g_shadow_tracking_time = 0;
     g_shadow_body_time = 0;
     g_shadow_body_identity = nullptr;
+    g_shadow_generation = 0;
+    g_physical_validation_enabled = false;
+    g_physical_validation_source =
+        BlackPlaguePhysicalValidationRequestSource::disabled;
+    InvalidatePendingPhysicalValidationLocked();
+    g_physical_validation_telemetry = {};
     ReleaseSRWLockExclusive(&g_lock);
     return true;
 }
@@ -186,7 +264,8 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,
     const std::array<float, 3>& feet_after,
-    float delta_seconds) noexcept {
+    float delta_seconds,
+    const BlackPlaguePhysicalTickObservation& physical_tick) noexcept {
     if (!g_installed || !MatchesCurrentBody(player) ||
         Read<void*>(player, kPlayerCharacterBodyOffset) != character_body) {
         InvalidateBlackPlagueShadowTracking();
@@ -208,22 +287,108 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
         std::string owner_error;
         const bool owners_ready = MovementOwnerReady(owner_error) &&
             BodyUpdateOwnerReady(owner_error);
-        if (!owners_ready || g_shadow_tracking_time == 0 ||
+        const bool physical_owner_ready = !g_physical_validation_enabled ||
+            ReadPhysicalBodyDisplacementBoundaryStatus().initialized;
+        if (!owners_ready || !physical_owner_ready ||
+            g_shadow_tracking_time == 0 ||
             now - g_shadow_tracking_time > 250) {
             g_shadow.Reset();
             g_shadow_telemetry.latest = {};
+            InvalidatePendingPhysicalValidationLocked();
         } else {
-            if (g_shadow_body_time == 0 || now - g_shadow_body_time > 250)
+            if (g_shadow_body_time == 0 || now - g_shadow_body_time > 250) {
                 g_shadow.Reset();
+                InvalidatePendingPhysicalValidationLocked();
+            }
             if (g_shadow_body_identity != character_body) {
+                if (g_shadow_body_identity != nullptr)
+                    InvalidatePendingPhysicalValidationLocked();
                 g_shadow_body_identity = character_body;
                 ++g_shadow_generation;
             }
-            g_shadow_telemetry.latest = g_shadow.Observe(g_shadow_pose,
+
+            runtime::VrAcceptedBodyMotion physical_motion{};
+            runtime::VrPhysicalReconciliationResult physical_reconciliation{};
+            bool matched_physical_observation = false;
+            if (g_physical_validation_enabled &&
+                g_pending_physical_validation.active) {
+                const bool request_matches = physical_tick.request_injected &&
+                    g_pending_physical_validation.character_body == character_body &&
+                    g_pending_physical_validation.generation == g_shadow_generation &&
+                    SameVector(physical_tick.requested_displacement,
+                        g_pending_physical_validation.plan.physical_request) &&
+                    FiniteVector(physical_tick.position_before_injection) &&
+                    FiniteVector(physical_tick.position_after_injection) &&
+                    runtime::ObserveAcceptedBodyMotion(
+                        physical_tick.position_before_injection, body_after,
+                        physical_motion);
+                if (request_matches) {
+                    physical_reconciliation = runtime::ReconcilePhysicalBodyMotion(
+                        g_pending_physical_validation.plan, physical_motion);
+                    matched_physical_observation = physical_reconciliation.valid &&
+                        g_shadow.ApplyPhysicalReconciliation(
+                            physical_reconciliation);
+                }
+                if (!matched_physical_observation) {
+                    ++g_physical_validation_telemetry.invalidated_plans;
+                    g_physical_validation_telemetry.latest_result =
+                        BlackPlaguePhysicalValidationResult::invalidated;
+                    InvalidatePhysicalBodyDisplacement();
+                }
+                g_pending_physical_validation = {};
+                g_physical_validation_telemetry.pending = false;
+                g_physical_validation_telemetry.expected_character_body = 0;
+                g_physical_validation_telemetry.expected_generation = 0;
+            }
+
+            auto shadow_sample = g_shadow.Observe(g_shadow_pose,
                 g_shadow_yaw, g_shadow_generation, accepted, feet_after,
                 delta_seconds);
+            if (matched_physical_observation && shadow_sample.valid &&
+                !shadow_sample.reset) {
+                shadow_sample.physical_observation_available = true;
+                shadow_sample.physical_motion = physical_motion;
+                shadow_sample.physical_reconciliation = physical_reconciliation;
+                ++g_physical_validation_telemetry.matched_observations;
+                g_physical_validation_telemetry.latest_result =
+                    BlackPlaguePhysicalValidationResult::reconciled;
+                g_physical_validation_telemetry.physical_motion = physical_motion;
+                g_physical_validation_telemetry.reconciliation =
+                    physical_reconciliation;
+            } else if (matched_physical_observation && shadow_sample.reset) {
+                ++g_physical_validation_telemetry.invalidated_plans;
+                g_physical_validation_telemetry.latest_result =
+                    BlackPlaguePhysicalValidationResult::invalidated;
+            }
+            g_shadow_telemetry.latest = shadow_sample;
             ++g_shadow_telemetry.observed_ticks;
             if (g_shadow_telemetry.latest.reset) ++g_shadow_telemetry.resets;
+
+            if (g_physical_validation_enabled && shadow_sample.valid &&
+                !shadow_sample.reset &&
+                HasHorizontalRequest(shadow_sample.plan.physical_request)) {
+                if (QueuePhysicalBodyDisplacement(
+                        shadow_sample.plan.physical_request)) {
+                    g_pending_physical_validation.active = true;
+                    g_pending_physical_validation.character_body = character_body;
+                    g_pending_physical_validation.generation = g_shadow_generation;
+                    g_pending_physical_validation.plan = shadow_sample.plan;
+                    ++g_physical_validation_telemetry.queued_plans;
+                    g_physical_validation_telemetry.pending = true;
+                    g_physical_validation_telemetry.latest_result =
+                        BlackPlaguePhysicalValidationResult::queued;
+                    g_physical_validation_telemetry.expected_character_body =
+                        reinterpret_cast<std::uintptr_t>(character_body);
+                    g_physical_validation_telemetry.expected_generation =
+                        g_shadow_generation;
+                    g_physical_validation_telemetry.requested_displacement =
+                        shadow_sample.plan.physical_request;
+                } else {
+                    ++g_physical_validation_telemetry.queue_failures;
+                    g_physical_validation_telemetry.latest_result =
+                        BlackPlaguePhysicalValidationResult::queue_failed;
+                }
+            }
         }
         g_shadow_body_time = now;
     }
@@ -242,7 +407,10 @@ void PublishBlackPlagueShadowTracking(const runtime::VrMatrix34& pose,
     float world_yaw, bool recentered) noexcept {
     AcquireSRWLockExclusive(&g_lock);
     if (g_shadow_enabled) {
-        if (recentered) g_shadow.Reset();
+        if (recentered) {
+            g_shadow.Reset();
+            InvalidatePendingPhysicalValidationLocked();
+        }
         g_shadow_pose = pose;
         g_shadow_yaw = world_yaw;
         g_shadow_tracking_time = GetTickCount64();
@@ -256,6 +424,7 @@ void InvalidateBlackPlagueShadowTracking() noexcept {
     g_shadow_body_time = 0;
     g_shadow.Reset();
     g_shadow_telemetry.latest = {};
+    InvalidatePendingPhysicalValidationLocked();
     ReleaseSRWLockExclusive(&g_lock);
 }
 
@@ -272,6 +441,37 @@ BlackPlagueShadowStatus ReadBlackPlagueShadowStatus() noexcept {
     const BlackPlagueShadowStatus status{g_shadow_enabled, g_shadow_source};
     ReleaseSRWLockShared(&g_lock);
     return status;
+}
+
+BlackPlaguePhysicalValidationStatus
+ReadBlackPlaguePhysicalValidationStatus() noexcept {
+    AcquireSRWLockShared(&g_lock);
+    const BlackPlaguePhysicalValidationStatus status{
+        g_physical_validation_enabled, g_physical_validation_source};
+    ReleaseSRWLockShared(&g_lock);
+    return status;
+}
+
+BlackPlaguePhysicalValidationTelemetry
+ConsumeBlackPlaguePhysicalValidationTelemetry() noexcept {
+    AcquireSRWLockExclusive(&g_lock);
+    const auto result = g_physical_validation_telemetry;
+    const bool pending = g_physical_validation_telemetry.pending;
+    const auto expected_body =
+        g_physical_validation_telemetry.expected_character_body;
+    const auto expected_generation =
+        g_physical_validation_telemetry.expected_generation;
+    const auto requested =
+        g_physical_validation_telemetry.requested_displacement;
+    g_physical_validation_telemetry = {};
+    if (pending) {
+        g_physical_validation_telemetry.pending = true;
+        g_physical_validation_telemetry.expected_character_body = expected_body;
+        g_physical_validation_telemetry.expected_generation = expected_generation;
+        g_physical_validation_telemetry.requested_displacement = requested;
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+    return result;
 }
 
 } // namespace penumbra_vr::backends::black_plague

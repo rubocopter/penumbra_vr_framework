@@ -17,6 +17,15 @@ void BodyReconciliationShadow::Reset() noexcept {
     *this = {};
 }
 
+bool BodyReconciliationShadow::ApplyPhysicalReconciliation(
+    const runtime::VrPhysicalReconciliationResult& reconciliation) noexcept {
+    if (!initialized_ || !reconciliation.valid ||
+        !Finite(reconciliation.anchor_correction)) return false;
+    anchor_[0] += reconciliation.anchor_correction[0];
+    anchor_[2] += reconciliation.anchor_correction[2];
+    return Finite(anchor_);
+}
+
 BodyReconciliationShadowSample BodyReconciliationShadow::Observe(
     const runtime::VrMatrix34& head_tracking_pose,
     float tracking_world_yaw,

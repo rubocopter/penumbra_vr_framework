@@ -14,6 +14,8 @@ struct BodyReconciliationShadowSample {
     bool physical_observation_available = false;
     runtime::VrBodyReconciliationPlan plan{};
     runtime::VrAcceptedBodyMotion native_motion{};
+    runtime::VrAcceptedBodyMotion physical_motion{};
+    runtime::VrPhysicalReconciliationResult physical_reconciliation{};
     std::array<float, 3> physical_delta{};
     std::array<float, 3> predicted_anchor{};
     std::array<float, 3> native_anchor_correction{};
@@ -23,6 +25,8 @@ struct BodyReconciliationShadowSample {
 class BodyReconciliationShadow final {
 public:
     void Reset() noexcept;
+    [[nodiscard]] bool ApplyPhysicalReconciliation(
+        const runtime::VrPhysicalReconciliationResult& reconciliation) noexcept;
     [[nodiscard]] BodyReconciliationShadowSample Observe(
         const runtime::VrMatrix34& head_tracking_pose,
         float tracking_world_yaw,

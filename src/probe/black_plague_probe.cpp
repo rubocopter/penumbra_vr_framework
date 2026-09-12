@@ -72,6 +72,40 @@ const char* EyeTargetEventName(
     }
 }
 
+const char* PhysicalBodyDisplacementResultName(
+    penumbra_vr::backends::black_plague::PhysicalBodyDisplacementResult result) noexcept {
+    using penumbra_vr::backends::black_plague::PhysicalBodyDisplacementResult;
+    switch (result) {
+        case PhysicalBodyDisplacementResult::injected:
+            return "injected";
+        case PhysicalBodyDisplacementResult::invalid_request:
+            return "invalid_request";
+        case PhysicalBodyDisplacementResult::body_mismatch:
+            return "body_mismatch";
+        case PhysicalBodyDisplacementResult::owner_mismatch:
+            return "owner_mismatch";
+        default:
+            return "none";
+    }
+}
+
+const char* PhysicalValidationResultName(
+    penumbra_vr::backends::black_plague::BlackPlaguePhysicalValidationResult result) noexcept {
+    using penumbra_vr::backends::black_plague::BlackPlaguePhysicalValidationResult;
+    switch (result) {
+        case BlackPlaguePhysicalValidationResult::queued:
+            return "queued";
+        case BlackPlaguePhysicalValidationResult::reconciled:
+            return "reconciled";
+        case BlackPlaguePhysicalValidationResult::invalidated:
+            return "invalidated";
+        case BlackPlaguePhysicalValidationResult::queue_failed:
+            return "queue_failed";
+        default:
+            return "none";
+    }
+}
+
 std::string WideToUtf8(const std::wstring& value) {
     if (value.empty()) {
         return {};
@@ -119,6 +153,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     if (frame_number % 300 == 0) {
         const auto shadow = penumbra_vr::backends::black_plague::
             ConsumeBlackPlagueShadowTelemetry();
+        const auto physical_request = penumbra_vr::backends::black_plague::
+            ConsumePhysicalBodyDisplacementTelemetry();
+        const auto physical_validation = penumbra_vr::backends::black_plague::
+            ConsumeBlackPlaguePhysicalValidationTelemetry();
         if (shadow.observed_ticks != 0) {
             const auto& s = shadow.latest;
             penumbra_vr::probe::WriteLog(
@@ -126,7 +164,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "physical_delta=[%.4f,%.4f] physical_plan=[%.4f,%.4f] "
                 "native_accepted=[%.4f,%.4f,%.4f] body=[%.4f,%.4f,%.4f] "
                 "predicted_anchor=[%.4f,%.4f,%.4f] native_correction=[%.4f,%.4f] "
-                "separation=%.4f rebase=%u physical_observation=0 positional_translation_enabled=0",
+                "separation=%.4f rebase=%u physical_observation=%u "
+                "physical_accepted=[%.5f,%.5f,%.5f] physical_rejected_distance=%.5f "
+                "physical_anchor_correction=[%.5f,%.5f,%.5f] "
+                "positional_translation_enabled=0",
                 static_cast<unsigned long long>(shadow.observed_ticks),
                 static_cast<unsigned long long>(shadow.resets), s.valid ? 1U : 0U,
                 s.physical_delta[0], s.physical_delta[2],
@@ -138,7 +179,67 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 s.native_motion.body_after[2],
                 s.predicted_anchor[0], s.predicted_anchor[1], s.predicted_anchor[2],
                 s.native_anchor_correction[0], s.native_anchor_correction[2],
-                s.separation, s.plan.rebased ? 1U : 0U);
+                s.separation, s.plan.rebased ? 1U : 0U,
+                s.physical_observation_available ? 1U : 0U,
+                s.physical_motion.accepted_displacement[0],
+                s.physical_motion.accepted_displacement[1],
+                s.physical_motion.accepted_displacement[2],
+                s.physical_reconciliation.rejected_distance,
+                s.physical_reconciliation.anchor_correction[0],
+                s.physical_reconciliation.anchor_correction[1],
+                s.physical_reconciliation.anchor_correction[2]);
+        }
+        if (physical_request.queued_requests != 0 ||
+            physical_request.consumed_requests != 0 || physical_request.pending) {
+            penumbra_vr::probe::WriteLog(
+                "physical_displacement_boundary queued=%llu consumed=%llu injected=%llu "
+                "rejected=%llu pending=%u result=%s expected_body=%p "
+                "requested=[%.5f,%.5f,%.5f] bounded=[%.5f,%.5f,%.5f] "
+                "positional_translation_enabled=0",
+                static_cast<unsigned long long>(physical_request.queued_requests),
+                static_cast<unsigned long long>(physical_request.consumed_requests),
+                static_cast<unsigned long long>(physical_request.injected_requests),
+                static_cast<unsigned long long>(physical_request.rejected_requests),
+                physical_request.pending ? 1U : 0U,
+                PhysicalBodyDisplacementResultName(physical_request.latest_result),
+                reinterpret_cast<void*>(physical_request.expected_character_body),
+                physical_request.requested_displacement[0],
+                physical_request.requested_displacement[1],
+                physical_request.requested_displacement[2],
+                physical_request.bounded_displacement[0],
+                physical_request.bounded_displacement[1],
+                physical_request.bounded_displacement[2]);
+        }
+        if (physical_validation.queued_plans != 0 ||
+            physical_validation.matched_observations != 0 ||
+            physical_validation.invalidated_plans != 0 ||
+            physical_validation.queue_failures != 0 || physical_validation.pending) {
+            penumbra_vr::probe::WriteLog(
+                "physical_displacement_validation queued=%llu matched=%llu invalidated=%llu "
+                "queue_failures=%llu pending=%u result=%s expected_body=%p generation=%llu "
+                "requested=[%.5f,%.5f,%.5f] accepted=[%.5f,%.5f,%.5f] "
+                "rejected_distance=%.5f anchor_correction=[%.5f,%.5f,%.5f] "
+                "positional_translation_enabled=0",
+                static_cast<unsigned long long>(physical_validation.queued_plans),
+                static_cast<unsigned long long>(
+                    physical_validation.matched_observations),
+                static_cast<unsigned long long>(
+                    physical_validation.invalidated_plans),
+                static_cast<unsigned long long>(physical_validation.queue_failures),
+                physical_validation.pending ? 1U : 0U,
+                PhysicalValidationResultName(physical_validation.latest_result),
+                reinterpret_cast<void*>(physical_validation.expected_character_body),
+                static_cast<unsigned long long>(physical_validation.expected_generation),
+                physical_validation.requested_displacement[0],
+                physical_validation.requested_displacement[1],
+                physical_validation.requested_displacement[2],
+                physical_validation.physical_motion.accepted_displacement[0],
+                physical_validation.physical_motion.accepted_displacement[1],
+                physical_validation.physical_motion.accepted_displacement[2],
+                physical_validation.reconciliation.rejected_distance,
+                physical_validation.reconciliation.anchor_correction[0],
+                physical_validation.reconciliation.anchor_correction[1],
+                physical_validation.reconciliation.anchor_correction[2]);
         }
     }
     if (frame_number <= 10 || frame_number % 300 == 0 ||
@@ -257,6 +358,12 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "feet_before=[%.4f,%.4f,%.4f] feet_after=[%.4f,%.4f,%.4f] "
                 "collision_sample_valid=%u requested_delta=[%.5f,%.5f,%.5f] "
                 "solver_delta=[%.5f,%.5f,%.5f] accepted_delta=[%.5f,%.5f,%.5f] "
+                "physical_consumed=%u physical_injected=%u "
+                "physical_requested=[%.5f,%.5f,%.5f] "
+                "physical_injected_delta=[%.5f,%.5f,%.5f] "
+                "physical_pre_injection=[%.5f,%.5f,%.5f] "
+                "physical_post_injection=[%.5f,%.5f,%.5f] "
+                "physical_accepted=[%.5f,%.5f,%.5f] "
                 "unapplied_hmd_body_divergence_m=[%.5f,%.5f] "
                 "unapplied_hmd_body_divergence_horizontal_m=%.5f "
                 "positional_translation_enabled=0",
@@ -288,6 +395,23 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 body.accepted_displacement[0],
                 body.accepted_displacement[1],
                 body.accepted_displacement[2],
+                body.physical_request_consumed ? 1U : 0U,
+                body.physical_request_injected ? 1U : 0U,
+                body.physical_requested_displacement[0],
+                body.physical_requested_displacement[1],
+                body.physical_requested_displacement[2],
+                body.physical_injected_displacement[0],
+                body.physical_injected_displacement[1],
+                body.physical_injected_displacement[2],
+                body.physical_position_before_injection[0],
+                body.physical_position_before_injection[1],
+                body.physical_position_before_injection[2],
+                body.physical_position_after_injection[0],
+                body.physical_position_after_injection[1],
+                body.physical_position_after_injection[2],
+                body.physical_accepted_displacement[0],
+                body.physical_accepted_displacement[1],
+                body.physical_accepted_displacement[2],
                 head_body_x, head_body_z,
                 render_world.hmd_horizontal_delta_m);
         }
@@ -752,6 +876,9 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         }
         const auto shadow_status = penumbra_vr::backends::black_plague::
             ReadBlackPlagueShadowStatus();
+        const auto physical_validation_status =
+            penumbra_vr::backends::black_plague::
+                ReadBlackPlaguePhysicalValidationStatus();
         const char* shadow_source = "disabled";
         if (shadow_status.source == penumbra_vr::backends::black_plague::
                 BlackPlagueShadowRequestSource::environment) {
@@ -759,12 +886,28 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         } else if (shadow_status.source == penumbra_vr::backends::black_plague::
                 BlackPlagueShadowRequestSource::mutex) {
             shadow_source = "mutex";
+        } else if (shadow_status.source == penumbra_vr::backends::black_plague::
+                BlackPlagueShadowRequestSource::physical_validation) {
+            shadow_source = "physical_validation";
+        }
+        const char* physical_validation_source = "disabled";
+        if (physical_validation_status.source ==
+                penumbra_vr::backends::black_plague::
+                    BlackPlaguePhysicalValidationRequestSource::environment) {
+            physical_validation_source = "environment";
+        } else if (physical_validation_status.source ==
+                penumbra_vr::backends::black_plague::
+                    BlackPlaguePhysicalValidationRequestSource::mutex) {
+            physical_validation_source = "mutex";
         }
         penumbra_vr::probe::WriteLog(
             "Black Plague body adapter installed=%u error=%s body_reconciliation_shadow "
-            "enabled=%u source=%s",
+            "enabled=%u source=%s physical_displacement_validation enabled=%u source=%s "
+            "positional_translation_enabled=0",
             body_adapter_ready ? 1U : 0U, hook_error.c_str(),
-            shadow_status.enabled ? 1U : 0U, shadow_source);
+            shadow_status.enabled ? 1U : 0U, shadow_source,
+            physical_validation_status.enabled ? 1U : 0U,
+            physical_validation_source);
         const bool ownership_probe_ready =
             penumbra_vr::backends::black_plague::InstallMovementOwnershipProbe(hook_error);
         penumbra_vr::probe::WriteLog("Movement ownership telemetry installed=%u error=%s",

@@ -22,6 +22,13 @@ struct BlackPlagueBodyMotion {
     runtime::VrAcceptedBodyMotion accepted{};
 };
 
+struct BlackPlaguePhysicalTickObservation {
+    bool request_injected = false;
+    std::array<float, 3> requested_displacement{};
+    std::array<float, 3> position_before_injection{};
+    std::array<float, 3> position_after_injection{};
+};
+
 [[nodiscard]] bool InstallBlackPlagueBodyAdapter(std::string& error) noexcept;
 [[nodiscard]] bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept;
 
@@ -42,7 +49,8 @@ void ObserveBlackPlagueNativeBodyTick(
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,
     const std::array<float, 3>& feet_after,
-    float delta_seconds) noexcept;
+    float delta_seconds,
+    const BlackPlaguePhysicalTickObservation& physical_tick = {}) noexcept;
 [[nodiscard]] BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept;
 
 // Optional diagnostics, enabled only by PVR_BP_RECONCILIATION_SHADOW=1 at
@@ -65,11 +73,52 @@ enum class BlackPlagueShadowRequestSource : std::uint8_t {
     disabled,
     environment,
     mutex,
+    physical_validation,
 };
 struct BlackPlagueShadowStatus {
     bool enabled = false;
     BlackPlagueShadowRequestSource source = BlackPlagueShadowRequestSource::disabled;
 };
 [[nodiscard]] BlackPlagueShadowStatus ReadBlackPlagueShadowStatus() noexcept;
+
+enum class BlackPlaguePhysicalValidationRequestSource : std::uint8_t {
+    disabled,
+    environment,
+    mutex,
+};
+
+enum class BlackPlaguePhysicalValidationResult : std::uint8_t {
+    none,
+    queued,
+    reconciled,
+    invalidated,
+    queue_failed,
+};
+
+struct BlackPlaguePhysicalValidationStatus {
+    bool enabled = false;
+    BlackPlaguePhysicalValidationRequestSource source =
+        BlackPlaguePhysicalValidationRequestSource::disabled;
+};
+
+struct BlackPlaguePhysicalValidationTelemetry {
+    std::uint64_t queued_plans = 0;
+    std::uint64_t matched_observations = 0;
+    std::uint64_t invalidated_plans = 0;
+    std::uint64_t queue_failures = 0;
+    bool pending = false;
+    BlackPlaguePhysicalValidationResult latest_result =
+        BlackPlaguePhysicalValidationResult::none;
+    std::uintptr_t expected_character_body = 0;
+    std::uint64_t expected_generation = 0;
+    std::array<float, 3> requested_displacement{};
+    runtime::VrAcceptedBodyMotion physical_motion{};
+    runtime::VrPhysicalReconciliationResult reconciliation{};
+};
+
+[[nodiscard]] BlackPlaguePhysicalValidationStatus
+ReadBlackPlaguePhysicalValidationStatus() noexcept;
+[[nodiscard]] BlackPlaguePhysicalValidationTelemetry
+ConsumeBlackPlaguePhysicalValidationTelemetry() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague

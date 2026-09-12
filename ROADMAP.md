@@ -62,7 +62,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [ ] Apply positional tracking with game/body calibration
 - [ ] Live-validate direct VR startup and menu/gameplay transitions
 
-**Current milestone note:** native stereo/head rotation, the player/body boundary and the default-off reconciliation shadow path are now live-tested. Positional HMD translation remains disabled. The next body milestone is to identify and demonstrate a bounded collision-aware physical X/Z displacement request in metres through the existing single native tick; active room-scale remains gated on that evidence. The desktop mirror remains experimental.
+**Current milestone note:** native stereo/head rotation, the player/body boundary and the default-off reconciliation shadow path are now live-tested. The bounded collision-aware physical X/Z displacement request in metres is implemented and host-tested through the existing single native tick. Positional HMD translation remains disabled until the dedicated request is live-validated through queue, injection, native collision and matched reconciliation. The desktop mirror remains experimental.
 
 Exit criterion: stable in-headset stereo rendering and head tracking in representative gameplay and menus, with frame pacing and positional tracking explicitly validated before claiming a complete visual MVP.
 
@@ -106,7 +106,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-test the narrow `BlackPlagueBodyAdapter` and shared accepted-displacement observation
 - [x] Connect and host-test shared tracking/body reconciliation through the adapter as a default-off shadow path while positional HMD translation remains gated
 - [x] Live-validate the shadow-only reconciliation path with translation still zero through the exact-build/mutex validation route
-- [ ] Demonstrate a collision-aware physical displacement request mechanism separately from native analog movement before enabling room-scale
+- [x] Implement and host-test a bounded collision-aware physical displacement request separately from native analog movement
+- [ ] Live-validate that physical request through stationary/free/block/slide cases before enabling room-scale
 - [ ] Headset-validate positional physical movement, blocking/sliding and head/body reconciliation
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work

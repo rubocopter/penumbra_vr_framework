@@ -165,7 +165,7 @@ PID 8628 demonstrated:
 
 Overture consumes it without changing its proven room-scale/locomotion behavior. Black Plague currently uses it as observation only.
 
-## Current milestone — shadow live-tested; physical displacement boundary missing
+## Current milestone — physical displacement boundary host-tested; live gate pending
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -174,14 +174,12 @@ A same-compiler 512-frame differential trace matches the checkpoint bit-for-bit.
 
 BP feeds a default-off `BodyReconciliationShadow` directly from the existing
 post-native-tick adapter callback, using raw tracking published at the existing
-render boundary. The preferred live-validation entry point is
-`tools/Start-BlackPlagueShadowValidation.ps1`: it runs the local exact-build
-verifier first and then holds a transient named mutex while the normal Steam
-launch path initializes the probe. The original `PVR_BP_RECONCILIATION_SHADOW=1`
-mechanism remains supported only when the **game process itself** actually
-inherits that variable. Sampling uses existing owners, with periodic logs every
-300 swap frames. No native physical request is injected and positional
-translation is still compile-time zero.
+render boundary. `tools/Start-BlackPlagueShadowValidation.ps1` remains the
+reproducible shadow-only diagnostic. The original
+`PVR_BP_RECONCILIATION_SHADOW=1` mechanism remains supported only when the
+**game process itself** actually inherits that variable. Sampling uses existing
+owners, with periodic logs every 300 swap frames. Positional translation remains
+compile-time zero.
 
 On 2026-09-11 the adapter gained one-shot installation telemetry that records
 whether shadow is disabled, requested from the game-process environment, or
@@ -207,18 +205,42 @@ and also passed the new autonomous Overture Release regression job. That root
 configuration contained 27 CTest tests; hosted CI intentionally excluded only
 the real-driver `opengl_eye_targets` pixel test as documented in the workflow.
 
-The current missing capability is a collision-aware physical displacement request
-in metres, distinguishable from native acceleration/locomotion and consumed by
-the single native tick. `MoveForward/MoveSideways` does not establish that
-contract. Do not treat native accepted motion as acceptance/rejection of an
-uninjected physical plan. Do not enable positional translation until a bounded
-physical X/Z request has separate host/live evidence through the existing native
-tick and collision path.
+The collision-aware physical displacement boundary is now implemented and
+**host-tested**. Exact-build RVA `0xD7281` is the pre-comparison injection point:
+a bounded one-shot X/Z request (maximum horizontal step `0.05 m`, Y forced to
+zero) is injected immediately before the native horizontal comparison/collision
+path and is consumed by the existing single `D6E00` tick. The gateway preserves
+the original `fld [edi]` / `fld [esi+54h]` instructions, registers and flags,
+fails closed on owner/body mismatch, and never calls `D6E00` itself. Acceptance
+is measured from the pre-injection body position so earlier native stick
+locomotion in the same tick is excluded.
 
-The next implementation/research step is therefore to identify that physical
-request boundary. `tools/Start-BlackPlagueShadowValidation.ps1` remains a
-reproducible diagnostic for future regression captures, not the next gameplay
-milestone.
+The dedicated path is default-off and can be activated by
+`PVR_BP_PHYSICAL_DISPLACEMENT_VALIDATION=1` or the transient mutex held by
+`tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1`. Local Release build,
+all **30/30** root CTest tests and `tools/Test-BlackPlagueInputMap.ps1` against
+the initialized exact-build capture pass with the new `0xD7281` verification.
+This advances the physical request boundary to **implemented → host-tested**.
+It has not yet been live-tested.
+
+The dedicated launcher is now fail-closed for that promotion. It requires fresh
+telemetry proving a non-zero queued physical plan, consumed/injected boundary
+request, matched reconciliation, body telemetry with the non-zero physical
+request/injection, the existing `dt~=1/60` native body tick and explicit sampled
+stationary/free/block/slide-or-partial outcomes. Classification uses the existing
+pre-injection request and accepted physical displacement, so no extra hook or
+owner was introduced. The helper reports each captured outcome once while the
+game is still running, then performs the complete fail-closed check on exit. PID
+18392 proved the negative case: mutex activation with
+positional translation zero but no physical request telemetry exits with failure
+instead of being counted as live validation. PID 24484 likewise remains
+activation evidence only.
+
+The next gameplay gate is the dedicated live physical-displacement validation:
+prove queued request → one injection → native collision solver → measured
+acceptance/rejection for stationary/free/block/slide cases while retaining the
+existing ~60 Hz single native body tick. Keep
+`positional_translation_enabled=0` until that evidence is complete.
 
 Two presentation regressions from the completed headset session remain separate:
 with monitor mirror disabled the desktop showed a growing white-point artifact,

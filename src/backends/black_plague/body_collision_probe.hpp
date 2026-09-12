@@ -26,6 +26,13 @@ struct BodyCollisionTelemetry {
     std::array<float, 3> requested_displacement{};
     std::array<float, 3> collision_resolved_displacement{};
     std::array<float, 3> accepted_displacement{};
+    bool physical_request_consumed = false;
+    bool physical_request_injected = false;
+    std::array<float, 3> physical_requested_displacement{};
+    std::array<float, 3> physical_injected_displacement{};
+    std::array<float, 3> physical_position_before_injection{};
+    std::array<float, 3> physical_position_after_injection{};
+    std::array<float, 3> physical_accepted_displacement{};
 };
 
 struct BodyJumpBurstSample {
@@ -56,6 +63,35 @@ struct NativeBodyUpdateBoundaryStatus {
     bool owner_matches_live = false;
 };
 
+enum class PhysicalBodyDisplacementResult : std::uint8_t {
+    none,
+    injected,
+    invalid_request,
+    body_mismatch,
+    owner_mismatch,
+};
+
+struct PhysicalBodyDisplacementTelemetry {
+    std::uint64_t queued_requests = 0;
+    std::uint64_t consumed_requests = 0;
+    std::uint64_t injected_requests = 0;
+    std::uint64_t rejected_requests = 0;
+    bool pending = false;
+    PhysicalBodyDisplacementResult latest_result =
+        PhysicalBodyDisplacementResult::none;
+    std::uintptr_t expected_character_body = 0;
+    std::array<float, 3> requested_displacement{};
+    std::array<float, 3> bounded_displacement{};
+};
+
+struct PhysicalBodyDisplacementBoundaryStatus {
+    bool initialized = false;
+    std::array<std::uint8_t, 5> expected{};
+    std::array<std::uint8_t, 5> live{};
+    bool owner_installed = false;
+    bool owner_matches_live = false;
+};
+
 // Exact-build, read-only observation hooks for the initialized FD316F... image.
 // They do not enable positional HMD translation or alter native movement.
 [[nodiscard]] bool InstallBodyCollisionProbe(std::string& error) noexcept;
@@ -70,5 +106,16 @@ void RequestBodyJumpBurst() noexcept;
 // post-original callback rather than installing another rel32 hook.
 [[nodiscard]] NativeBodyUpdateBoundaryStatus
 ReadNativeBodyUpdateBoundaryStatus() noexcept;
+
+// Queue one bounded room-scale X/Z request for the current player body. Y is
+// always discarded so the native jump/gravity pipeline retains vertical
+// ownership. The request is consumed only by that body's existing D6E00 tick.
+[[nodiscard]] bool QueuePhysicalBodyDisplacement(
+    const std::array<float, 3>& displacement) noexcept;
+void InvalidatePhysicalBodyDisplacement() noexcept;
+[[nodiscard]] PhysicalBodyDisplacementTelemetry
+ConsumePhysicalBodyDisplacementTelemetry() noexcept;
+[[nodiscard]] PhysicalBodyDisplacementBoundaryStatus
+ReadPhysicalBodyDisplacementBoundaryStatus() noexcept;
 
 } // namespace penumbra_vr::backends::black_plague

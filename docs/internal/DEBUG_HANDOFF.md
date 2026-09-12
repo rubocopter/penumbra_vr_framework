@@ -41,16 +41,28 @@ race is also live-confirmed past the point that previously failed: the fresh
 Steam-started process installed the bridge/body adapter and activated the shadow
 from the transient mutex.
 
-The shadow path plans a physical displacement but does not inject it. Native
-accepted displacement feeds only native anchor carry. Physical rejection remains
-unknown, not zero or total rejection. Do not infer a physical movement capability
-from `MoveForward/MoveSideways`: those calls drive native acceleration state.
+The shadow-only mode still plans without injection. Separately, the bounded
+physical X/Z request boundary is now implemented and host-tested at exact-build
+RVA `0xD7281`, immediately before the native X/Z comparison/collision path. It
+injects at most `0.05 m` horizontally, forces Y to zero, is one-shot for the
+current body, and is consumed by the existing single native tick without a
+second `D6E00`. `MoveForward/MoveSideways` remains native acceleration state and
+is not used as this metric displacement mechanism.
 
-The next evidence must identify and demonstrate a bounded collision-aware
-physical X/Z displacement request in metres, distinct from native analog
-movement and consumed by the existing single native tick. Keep positional HMD
-translation disabled until that mechanism has separate host/live evidence.
-Camera/bob remains separate comfort work.
+The next evidence is live validation of that dedicated physical path. Require
+queued request → matched injection → native collision solver → measured
+acceptance/rejection for stationary/free/block/slide cases, with the acceptance
+baseline taken immediately before injection. Keep positional HMD translation
+disabled until that mechanism has separate live evidence. Camera/bob remains
+separate comfort work.
+
+`tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1` now enforces that
+gate rather than treating activation as success. It also classifies stationary,
+free, blocked and slide/partial samples from the existing pre-injection physical
+request/accepted-displacement fields. PID 18392 deliberately ended after
+activation only and the helper correctly failed because no queued,
+consumed/injected, reconciled or injected-body telemetry existed. Do not promote
+the boundary from `host-tested` on activation evidence alone.
 
 ## 2. Black Plague locomotion speed / timing
 
@@ -76,7 +88,7 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-Establish the missing physical displacement boundary first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
+Live-validate the host-tested physical displacement boundary first. Then compare a deliberately scoped Black Plague VR locomotion policy against the proven Overture `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement rather than analog scaling as the correctness boundary.
 
 ## 3. Black Plague jump
 

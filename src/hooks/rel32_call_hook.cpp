@@ -109,9 +109,10 @@ private:
     std::vector<HANDLE> handles_;
 };
 
-[[nodiscard]] bool BuildCallInstruction(
+[[nodiscard]] bool BuildRel32Instruction(
     const std::uint8_t* instruction,
     const void* target,
+    std::uint8_t opcode,
     std::array<std::uint8_t, 5>& bytes,
     std::string& error) noexcept {
     const auto next_instruction = reinterpret_cast<std::intptr_t>(instruction + bytes.size());
@@ -124,7 +125,7 @@ private:
         return false;
     }
 
-    bytes[0] = 0xE8;
+    bytes[0] = opcode;
     const std::int32_t encoded_displacement = static_cast<std::int32_t>(displacement);
     std::memcpy(bytes.data() + 1, &encoded_displacement, sizeof(encoded_displacement));
     return true;
@@ -206,9 +207,10 @@ bool InstallRel32CallHook(
     }
 
     std::array<std::uint8_t, 5> replacement_instruction{};
-    if (!BuildCallInstruction(
+    if (!BuildRel32Instruction(
             instruction,
             replacement_target,
+            0xE8,
             replacement_instruction,
             error)) {
         return false;
@@ -229,6 +231,72 @@ bool InstallRel32CallHook(
         hook = {};
         return false;
     }
+    return true;
+}
+
+bool InstallRel32JumpHook(
+    std::uint8_t* instruction,
+    const std::array<std::uint8_t, 5>& expected_instruction,
+    void* replacement_target,
+    Rel32JumpHook& hook,
+    std::string& error) noexcept {
+    error.clear();
+    if (hook.installed()) {
+        error = "The rel32 jump is already hooked";
+        return false;
+    }
+    if (instruction == nullptr || replacement_target == nullptr) {
+        error = "The jump instruction and replacement target must be non-null";
+        return false;
+    }
+    if (!std::equal(expected_instruction.begin(), expected_instruction.end(),
+            instruction)) {
+        error = "The live instruction window does not match the version manifest";
+        return false;
+    }
+
+    std::array<std::uint8_t, 5> replacement_instruction{};
+    if (!BuildRel32Instruction(
+            instruction,
+            replacement_target,
+            0xE9,
+            replacement_instruction,
+            error)) {
+        return false;
+    }
+
+    Rel32JumpHook pending{};
+    pending.instruction = instruction;
+    pending.original_instruction = expected_instruction;
+    pending.replacement_instruction = replacement_instruction;
+    pending.replacement_target = replacement_target;
+    hook = pending;
+    if (!ReplaceInstruction(
+            instruction,
+            pending.original_instruction,
+            pending.replacement_instruction,
+            error)) {
+        hook = {};
+        return false;
+    }
+    return true;
+}
+
+bool RemoveRel32JumpHook(
+    Rel32JumpHook& hook,
+    std::string& error) noexcept {
+    error.clear();
+    if (!hook.installed()) {
+        return true;
+    }
+    if (!ReplaceInstruction(
+            hook.instruction,
+            hook.replacement_instruction,
+            hook.original_instruction,
+            error)) {
+        return false;
+    }
+    hook = {};
     return true;
 }
 

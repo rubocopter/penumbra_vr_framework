@@ -59,14 +59,17 @@ Black Plague body/collision ownership is also no longer an open mapping problem.
 
 The shared tracking/body reconciliation phases and default-off Black Plague shadow consumer are implemented and **live-tested** through the existing adapter. PID 28172 confirmed transient-mutex activation, stationary/small-head-motion planning, native free/block/slide observations, body replacement/recenter handling and the existing ~60 Hz native body tick while positional HMD translation remained zero. The shadow path still performs no body/camera writes.
 
-The next Black Plague gameplay gate is the missing **collision-aware physical X/Z displacement request in metres**:
+The next Black Plague gameplay gate is live validation of the host-tested
+**collision-aware physical X/Z displacement request in metres** at exact-build
+RVA `0xD7281`:
 
 1. preserve the single-owner callsite model;
-2. keep Black Plague positional HMD translation at zero until the physical request boundary has separate evidence;
-3. identify and demonstrate a bounded physical displacement request that is distinct from native `MoveForward/MoveSideways` acceleration and is consumed by the existing single native tick;
-4. do not interpret the shadow plan or native accepted locomotion as acceptance/rejection of an uninjected physical request;
-5. only after that boundary is host/live evidenced should active room-scale and positional HMD translation move to headset validation;
-6. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
+2. keep Black Plague positional HMD translation at zero until the physical request boundary has live evidence;
+3. preserve the bounded one-shot X/Z request, `0.05 m` horizontal clamp, body/generation matching and existing single native tick ownership;
+4. demonstrate queue → injection → native collision resolution → matched reconciliation through stationary/free/block/slide cases;
+5. do not interpret the shadow plan or native accepted locomotion as acceptance/rejection of an uninjected physical request;
+6. only after that boundary is live evidenced should active room-scale and positional HMD translation move to headset validation;
+7. keep jump/vertical state native and keep physical crouch, speed tuning and camera/bob work as separate validation gates.
 
 ## Black Plague constraints
 
@@ -76,7 +79,7 @@ Do not call `iCharacterBody::Update(D6E00)` from the adapter. The native physics
 
 Do not make horizontal VR intent responsible for the native Jump state's vertical pipeline. The live jump burst demonstrates separate ownership.
 
-Do not enable positional HMD translation merely because the adapter and reconciliation shadow are live-tested. The collision-aware physical displacement request boundary is still missing.
+Do not enable positional HMD translation merely because the adapter and reconciliation shadow are live-tested. The collision-aware physical displacement request boundary is host-tested but still lacks the dedicated live stationary/free/block/slide evidence.
 
 Do not force doors, levers, joints or other mechanism bodies through the free-body grab path; map their native state instead.
 

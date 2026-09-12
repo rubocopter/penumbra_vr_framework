@@ -330,3 +330,27 @@ owners: `NativeInputBridge` owns the movement callsites and
 `BodyCollisionProbe` owns `D460A`; the adapter only registers fan-out through
 their verified live status. A future diagnostic names the failing concern, RVA,
 pristine/live five-byte instructions, decoded targets and owner state.
+
+The next physical-body boundary is now implemented and host-tested against the
+supported initialized executable. At RVA `0xD7281`, immediately before the
+native horizontal X/Z comparison, a five-byte `JMP rel32` gateway can inject one
+bounded physical request for the current character body, replay the original
+`fld [edi]` / `fld [esi+54h]`, and resume at `0xD7286`. X/Z is finite and clamped
+to the shared `0.05 m` maximum physical step, Y is forced to zero, body/owner
+mismatch fails closed, and the gateway never invokes `D6E00`.
+
+The dedicated validation mode is default-off and is activated with
+`PVR_BP_PHYSICAL_DISPLACEMENT_VALIDATION=1` or the transient
+`Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation` mutex. Its
+telemetry distinguishes queued, consumed, injected and rejected requests and
+measures accepted displacement from the pre-injection position. Local Release
+build, **30/30** root CTest tests and `tools/Test-BlackPlagueInputMap.ps1` pass.
+This is **host-tested**, not live-tested; positional HMD translation remains zero.
+The dedicated live launcher additionally fails closed unless the fresh process
+log proves a non-zero queued plan, consumed/injected boundary request, matched
+reconciliation, non-zero injected body telemetry, the native `dt~=1/60` tick
+and sampled stationary/free/block/slide-or-partial physical outcomes. The case
+classifier uses the existing pre-injection request/accepted telemetry; it adds
+no hook or second body owner. The launcher reports newly captured scenario
+classes during the live run, then performs the complete evidence check after the
+game exits. PID 18392 verified the negative path: activation alone is rejected.

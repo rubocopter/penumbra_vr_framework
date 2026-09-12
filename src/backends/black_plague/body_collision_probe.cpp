@@ -4,6 +4,7 @@
 
 #include "native_input_bridge.hpp"
 #include "rel32_call_hook.hpp"
+#include "vr_locomotion.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -48,11 +49,14 @@ constexpr std::uintptr_t kPhysicsWorldCharacterUpdateCall = 0xD460A;
 constexpr std::uintptr_t kCharacterUpdate = 0xD6E00;
 constexpr std::uintptr_t kCharacterCollisionCall = 0xD7312;
 constexpr std::uintptr_t kCheckShapeWorldCollision = 0xD4830;
+constexpr std::uintptr_t kPhysicalRequestInjection = 0xD7281;
 
 constexpr std::array<std::uint8_t, 5> kUpdateCall{
     0xE8, 0xF1, 0x27, 0x00, 0x00};
 constexpr std::array<std::uint8_t, 5> kCollisionCall{
     0xE8, 0x19, 0xD5, 0xFF, 0xFF};
+constexpr std::array<std::uint8_t, 5> kPhysicalRequestWindow{
+    0xD9, 0x07, 0xD9, 0x46, 0x54}; // fld [edi]; fld [esi+54h]
 constexpr std::array<std::uint8_t, 24> kUpdateSignature{
     0x81, 0xEC, 0xD4, 0x05, 0x00, 0x00, 0x53, 0x55,
     0x56, 0x8B, 0xF1, 0x8A, 0x46, 0x30, 0x33, 0xDB,
@@ -65,13 +69,19 @@ constexpr std::array<std::uint8_t, 24> kCollisionSignature{
 std::uint8_t* g_image = nullptr;
 hooks::Rel32CallHook g_update_hook;
 hooks::Rel32CallHook g_collision_hook;
+hooks::Rel32JumpHook g_physical_request_hook;
 CharacterUpdate g_original_update = nullptr;
 CheckShapeWorldCollision g_original_collision = nullptr;
+void* g_physical_request_resume = nullptr;
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 BodyCollisionTelemetry g_telemetry;
 BodyJumpBurstTelemetry g_jump_burst;
 std::atomic<std::uint32_t> g_jump_burst_remaining{0};
 std::atomic<std::uint64_t> g_body_update_sequence{0};
+SRWLOCK g_physical_request_lock = SRWLOCK_INIT;
+PhysicalBodyDisplacementTelemetry g_physical_request_telemetry;
+std::array<float, 3> g_pending_physical_request{};
+void* g_pending_physical_body = nullptr;
 
 struct TickContext {
     void* character_body = nullptr;
@@ -79,6 +89,12 @@ struct TickContext {
     Vec3 requested_position{};
     Vec3 collision_position{};
     bool collision_sample_valid = false;
+    bool physical_request_consumed = false;
+    bool physical_request_injected = false;
+    Vec3 physical_requested{};
+    Vec3 physical_injected{};
+    Vec3 physical_position_before{};
+    Vec3 physical_position_after{};
 };
 thread_local TickContext g_tick;
 
@@ -127,6 +143,103 @@ T Read(const void* object, std::uintptr_t offset) noexcept {
     player = NativePlayerPointer();
     return player != nullptr &&
         Read<void*>(player, kPlayerCharacterBodyOffset) == character_body;
+}
+
+[[nodiscard]] bool PhysicalRequestOwnerMatchesLive() noexcept {
+    if (!g_physical_request_hook.installed()) return false;
+    std::array<std::uint8_t, 5> live{};
+    return ReadBytes(g_physical_request_hook.instruction, live.data(), live.size()) &&
+        live == g_physical_request_hook.replacement_instruction;
+}
+
+void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcept {
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    if (g_physical_request_telemetry.pending) {
+        g_physical_request_telemetry.pending = false;
+        ++g_physical_request_telemetry.consumed_requests;
+        ++g_physical_request_telemetry.rejected_requests;
+        g_physical_request_telemetry.latest_result = result;
+        g_pending_physical_request = {};
+        g_pending_physical_body = nullptr;
+    }
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
+}
+
+void __cdecl ApplyQueuedPhysicalDisplacement(
+    void* character_body, Vec3* position) noexcept {
+    if (character_body == nullptr || position == nullptr ||
+        g_tick.character_body != character_body) return;
+
+    void* player = NativePlayerPointer();
+    void* current_body = player == nullptr ? nullptr :
+        Read<void*>(player, kPlayerCharacterBodyOffset);
+
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    if (!g_physical_request_telemetry.pending) {
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return;
+    }
+    if (!PhysicalRequestOwnerMatchesLive()) {
+        g_physical_request_telemetry.pending = false;
+        ++g_physical_request_telemetry.consumed_requests;
+        ++g_physical_request_telemetry.rejected_requests;
+        g_physical_request_telemetry.latest_result =
+            PhysicalBodyDisplacementResult::owner_mismatch;
+        g_pending_physical_request = {};
+        g_pending_physical_body = nullptr;
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return;
+    }
+    if (current_body != g_pending_physical_body) {
+        g_physical_request_telemetry.pending = false;
+        ++g_physical_request_telemetry.consumed_requests;
+        ++g_physical_request_telemetry.rejected_requests;
+        g_physical_request_telemetry.latest_result =
+            PhysicalBodyDisplacementResult::body_mismatch;
+        g_pending_physical_request = {};
+        g_pending_physical_body = nullptr;
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return;
+    }
+    if (character_body != g_pending_physical_body) {
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return; // Another character tick; preserve the player request.
+    }
+
+    const auto request = g_pending_physical_request;
+    g_physical_request_telemetry.pending = false;
+    ++g_physical_request_telemetry.consumed_requests;
+    ++g_physical_request_telemetry.injected_requests;
+    g_physical_request_telemetry.latest_result =
+        PhysicalBodyDisplacementResult::injected;
+    g_pending_physical_request = {};
+    g_pending_physical_body = nullptr;
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
+
+    g_tick.physical_position_before = *position;
+    position->x += request[0];
+    position->z += request[2];
+    g_tick.physical_position_after = *position;
+    g_tick.physical_request_consumed = true;
+    g_tick.physical_request_injected = true;
+    g_tick.physical_requested = {request[0], 0.0F, request[2]};
+    g_tick.physical_injected = g_tick.physical_requested;
+}
+
+__declspec(naked) void PhysicalRequestGateway() noexcept {
+    __asm {
+        pushfd
+        pushad
+        push edi
+        push esi
+        call ApplyQueuedPhysicalDisplacement
+        add esp, 8
+        popad
+        popfd
+        fld dword ptr [edi]
+        fld dword ptr [esi + 54h]
+        jmp dword ptr [g_physical_request_resume]
+    }
 }
 
 bool __fastcall HookedCheckShapeWorldCollision(
@@ -187,7 +300,8 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
 
     const TickContext previous = g_tick;
     if (observe) {
-        g_tick = {character_body, position_before, {}, {}, false};
+        g_tick = {character_body, position_before, {}, {}, false,
+            false, false, {}, {}, {}, {}};
     }
     g_original_update(character_body, delta_seconds);
 
@@ -221,6 +335,20 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
                 FeetPosition(position_after, size));
             sample.accepted_displacement = ToArray(
                 Subtract(position_after, position_before));
+            sample.physical_request_consumed = g_tick.physical_request_consumed;
+            sample.physical_request_injected = g_tick.physical_request_injected;
+            sample.physical_requested_displacement = ToArray(
+                g_tick.physical_requested);
+            sample.physical_injected_displacement = ToArray(
+                g_tick.physical_injected);
+            sample.physical_position_before_injection = ToArray(
+                g_tick.physical_position_before);
+            sample.physical_position_after_injection = ToArray(
+                g_tick.physical_position_after);
+            if (g_tick.physical_request_injected) {
+                sample.physical_accepted_displacement = ToArray(
+                    Subtract(position_after, g_tick.physical_position_before));
+            }
             if (g_tick.collision_sample_valid) {
                 sample.requested_displacement = ToArray(
                     Subtract(g_tick.requested_position, position_before));
@@ -228,10 +356,15 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
                     Subtract(g_tick.collision_position, position_before));
             }
 
+            const BlackPlaguePhysicalTickObservation physical_tick{
+                sample.physical_request_injected,
+                sample.physical_injected_displacement,
+                sample.physical_position_before_injection,
+                sample.physical_position_after_injection};
             ObserveBlackPlagueNativeBodyTick(
                 player, character_body, sample.body_position_before,
                 sample.body_position_after, sample.feet_position_after,
-                delta_seconds);
+                delta_seconds, physical_tick);
 
             AcquireSRWLockExclusive(&g_telemetry_lock);
             sample.character_updates += g_telemetry.character_updates;
@@ -296,7 +429,8 @@ template<std::size_t Size>
     std::uint8_t* image,
     std::string& error) noexcept {
     error.clear();
-    if (g_update_hook.installed() || g_collision_hook.installed()) {
+    if (g_update_hook.installed() || g_collision_hook.installed() ||
+        g_physical_request_hook.installed()) {
         return true;
     }
     if (image == nullptr) {
@@ -307,7 +441,8 @@ template<std::size_t Size>
     if (!Matches(kCharacterUpdate + 0x15, kUpdateSignature) ||
         !Matches(kCheckShapeWorldCollision + 0x15, kCollisionSignature) ||
         !Matches(kPhysicsWorldCharacterUpdateCall, kUpdateCall) ||
-        !Matches(kCharacterCollisionCall, kCollisionCall)) {
+        !Matches(kCharacterCollisionCall, kCollisionCall) ||
+        !Matches(kPhysicalRequestInjection, kPhysicalRequestWindow)) {
         error = "Body/collision boundary does not match the exact initialized build";
         g_image = nullptr;
         return false;
@@ -346,12 +481,39 @@ template<std::size_t Size>
         }
         return false;
     }
+    g_physical_request_resume = g_image + kPhysicalRequestInjection +
+        kPhysicalRequestWindow.size();
+    if (!hooks::InstallRel32JumpHook(
+            g_image + kPhysicalRequestInjection,
+            kPhysicalRequestWindow,
+            reinterpret_cast<void*>(&PhysicalRequestGateway),
+            g_physical_request_hook,
+            error)) {
+        std::string collision_rollback;
+        std::string update_rollback;
+        static_cast<void>(hooks::RemoveRel32CallHook(
+            g_collision_hook, collision_rollback));
+        static_cast<void>(hooks::RemoveRel32CallHook(
+            g_update_hook, update_rollback));
+        g_original_update = nullptr;
+        g_original_collision = nullptr;
+        g_physical_request_resume = nullptr;
+        g_image = nullptr;
+        if (!collision_rollback.empty()) error += "; " + collision_rollback;
+        if (!update_rollback.empty()) error += "; " + update_rollback;
+        return false;
+    }
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     g_jump_burst = {};
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     g_jump_burst_remaining.store(0, std::memory_order_relaxed);
     g_body_update_sequence.store(0, std::memory_order_relaxed);
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    g_physical_request_telemetry = {};
+    g_pending_physical_request = {};
+    g_pending_physical_body = nullptr;
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
     return true;
 }
 
@@ -364,7 +526,7 @@ bool InstallBodyCollisionProbe(std::string& error) noexcept {
 
 bool RemoveBodyCollisionProbe(std::string& error) noexcept {
     error.clear();
-    bool success = hooks::RemoveRel32CallHook(g_update_hook, error);
+    bool success = hooks::RemoveRel32JumpHook(g_physical_request_hook, error);
     std::string collision_error;
     if (!hooks::RemoveRel32CallHook(g_collision_hook, collision_error)) {
         success = false;
@@ -373,12 +535,106 @@ bool RemoveBodyCollisionProbe(std::string& error) noexcept {
         }
         error += collision_error;
     }
+    std::string update_error;
+    if (!hooks::RemoveRel32CallHook(g_update_hook, update_error)) {
+        success = false;
+        if (!error.empty()) error += "; ";
+        error += update_error;
+    }
     if (success) {
         g_original_update = nullptr;
         g_original_collision = nullptr;
+        g_physical_request_resume = nullptr;
         g_image = nullptr;
+        InvalidatePhysicalBodyDisplacement();
     }
     return success;
+}
+
+bool QueuePhysicalBodyDisplacement(
+    const std::array<float, 3>& displacement) noexcept {
+    const float x = displacement[0];
+    const float z = displacement[2];
+    if (!std::isfinite(x) || !std::isfinite(z)) {
+        AcquireSRWLockExclusive(&g_physical_request_lock);
+        ++g_physical_request_telemetry.rejected_requests;
+        g_physical_request_telemetry.latest_result =
+            PhysicalBodyDisplacementResult::invalid_request;
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return false;
+    }
+    if (!PhysicalRequestOwnerMatchesLive()) {
+        RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult::owner_mismatch);
+        AcquireSRWLockExclusive(&g_physical_request_lock);
+        ++g_physical_request_telemetry.rejected_requests;
+        g_physical_request_telemetry.latest_result =
+            PhysicalBodyDisplacementResult::owner_mismatch;
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return false;
+    }
+    void* player = NativePlayerPointer();
+    void* body = player == nullptr ? nullptr :
+        Read<void*>(player, kPlayerCharacterBodyOffset);
+    if (player == nullptr || body == nullptr) {
+        AcquireSRWLockExclusive(&g_physical_request_lock);
+        ++g_physical_request_telemetry.rejected_requests;
+        g_physical_request_telemetry.latest_result =
+            PhysicalBodyDisplacementResult::body_mismatch;
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return false;
+    }
+
+    float bounded_x = x;
+    float bounded_z = z;
+    const float length = std::sqrt(x * x + z * z);
+    const float maximum = runtime::vr_locomotion_policy::kMaximumPhysicalBodyStep;
+    if (length > maximum && length > 0.0F) {
+        const float scale = maximum / length;
+        bounded_x *= scale;
+        bounded_z *= scale;
+    }
+
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    g_pending_physical_request = {bounded_x, 0.0F, bounded_z};
+    g_pending_physical_body = body;
+    ++g_physical_request_telemetry.queued_requests;
+    g_physical_request_telemetry.pending = true;
+    g_physical_request_telemetry.latest_result =
+        PhysicalBodyDisplacementResult::none;
+    g_physical_request_telemetry.expected_character_body =
+        reinterpret_cast<std::uintptr_t>(body);
+    g_physical_request_telemetry.requested_displacement = {x, 0.0F, z};
+    g_physical_request_telemetry.bounded_displacement =
+        g_pending_physical_request;
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
+    return true;
+}
+
+void InvalidatePhysicalBodyDisplacement() noexcept {
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    g_physical_request_telemetry.pending = false;
+    g_pending_physical_request = {};
+    g_pending_physical_body = nullptr;
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
+}
+
+PhysicalBodyDisplacementTelemetry
+ConsumePhysicalBodyDisplacementTelemetry() noexcept {
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    const auto result = g_physical_request_telemetry;
+    const bool pending = g_physical_request_telemetry.pending;
+    const auto expected_body = g_physical_request_telemetry.expected_character_body;
+    const auto requested = g_physical_request_telemetry.requested_displacement;
+    const auto bounded = g_physical_request_telemetry.bounded_displacement;
+    g_physical_request_telemetry = {};
+    if (pending) {
+        g_physical_request_telemetry.pending = true;
+        g_physical_request_telemetry.expected_character_body = expected_body;
+        g_physical_request_telemetry.requested_displacement = requested;
+        g_physical_request_telemetry.bounded_displacement = bounded;
+    }
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
+    return result;
 }
 
 BodyCollisionTelemetry ConsumeBodyCollisionTelemetry() noexcept {
@@ -426,6 +682,21 @@ NativeBodyUpdateBoundaryStatus ReadNativeBodyUpdateBoundaryStatus() noexcept {
         kPhysicsWorldCharacterUpdateCall);
     result.owner_matches_live = result.owner_installed &&
         result.live == g_update_hook.replacement_instruction;
+    result.initialized = result.owner_matches_live;
+    return result;
+}
+
+PhysicalBodyDisplacementBoundaryStatus
+ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
+    PhysicalBodyDisplacementBoundaryStatus result;
+    result.expected = kPhysicalRequestWindow;
+    result.owner_installed = g_physical_request_hook.installed();
+    if (g_image != nullptr) {
+        static_cast<void>(ReadBytes(g_image + kPhysicalRequestInjection,
+            result.live.data(), result.live.size()));
+    }
+    result.owner_matches_live = result.owner_installed &&
+        result.live == g_physical_request_hook.replacement_instruction;
     result.initialized = result.owner_matches_live;
     return result;
 }

@@ -30,8 +30,12 @@ Usa la ruta normal `Start-Black-Plague-VR.cmd`. Los logs se guardan en
 
 ## Gate posterior: room-scale físico
 
-Esta parte solo debe ejecutarse cuando exista una build que implemente y haya
-host-testado la nueva petición física X/Z collision-aware. En ese momento:
+La build actual ya implementa y ha host-testado la petición física X/Z
+collision-aware. Ejecuta primero
+`tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1`: el helper mantiene
+la traslación HMD posicional a cero y solo acepta la sesión si el log fresco
+demuestra plan no nulo, consumo/inyección, reconciliación coincidente y
+telemetría corporal de la petición. Durante esa sesión:
 
 1. baseline quieto y movimientos de cabeza pequeños en espacio libre;
 2. desplazamiento físico hacia delante/atrás/lados sin stick;
