@@ -440,5 +440,35 @@ controller space share the result. Deltas larger than the existing 0.8 m
 discontinuity limit fail closed; Y/jump and the single native body tick are
 unchanged. Frame telemetry now separates `room_scale_reconciled_offset_m`,
 `room_scale_render_prediction_m`, the applied `room_scale_camera_offset_m` and
-`room_scale_head_anchor_m`. Both Release configurations compile; no executable
-or headset validation has been run for this correction.
+`room_scale_head_anchor_m`. Both Release configurations compiled before the next
+live run; at that implementation checkpoint no executable or headset validation
+had yet been run for this correction.
+
+PID 13672 subsequently headset-exercised that render-rate correction. The user
+reported that the previous continuous world shake was gone and that the overall
+feel had improved substantially. The helper observed stationary, free and
+slide/partial cases but finished by claiming that blocked evidence was absent,
+even though the user had performed the wall-block case. The validator had been
+comparing total accepted-vector magnitude. Rework `23c890f` instead projects
+accepted movement onto the requested direction and computes rejection from that
+component. The helper now mirrors that rule, so a lateral native solver
+correction cannot disguise a direct block. This does not alter the native
+collision path.
+
+The same testing later exposed a separate locomotion concern: forward stick can
+feel offset unless the user recenters, as if the native body basis and current
+HMD heading disagree. The probe frame log now records `movement_yaw_valid` and
+`movement_yaw_rad` next to `controller_move`. The next headset run must hold
+forward input before and after a 45-90 degree head turn, then repeat after
+recenter. This evidence should distinguish an incorrect/stale heading from a
+native movement-remap problem before any locomotion behavior is changed.
+Rework `23c890f` applies snap/smooth turning to tracking `world yaw`, whereas the
+Black Plague adapter currently applies the shared turn amount through native
+player yaw and remaps controller movement relative to the tracked head. That
+mechanism difference is now an explicit investigation target, not yet a claimed
+cause.
+
+Physical crouch-by-height is also confirmed not to drive the native crouch state
+yet. Keep that separate from the already live-tested native crouch button and
+body swap; implementing safe physical stand-up still requires the exact Black
+Plague stand-clearance boundary.

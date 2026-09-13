@@ -259,6 +259,11 @@ host result and next live gate are recorded in
 Subsequent work live-tested that shadow path in PID 28172 and the separate
 default-off `0xD7281` bounded X/Z request in PID 26144. Active
 room-scale/positional HMD translation through that boundary is now implemented
-behind a separate transient request. Its affected Release targets compile, but
-it remains at `implemented` pending host/live/headset evidence. The current priority and validation order are
+behind a separate transient request. PID 21548 proved the combined-tick carry
+correction and PID 13672 headset-exercised the later render-rate anchor placement;
+the user reported the prior continuous shake gone. The active path is still not
+headset-validated because stick heading can feel offset unless recentered. That
+remaining issue is being isolated with movement-yaw telemetry before any policy
+change. Physical crouch-by-height remains separate pending an evidenced Black
+Plague stand-clearance boundary. The current priority and validation order are
 recorded above.

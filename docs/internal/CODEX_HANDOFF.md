@@ -21,8 +21,11 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   camera at its VR world anchor and updates tracking at 90 Hz; the Black Plague
   path retained a ~60 Hz body offset on top of the native smoothed/bobbed camera.
   The renderer now places X/Z directly at the reconciled anchor and adds the HMD
-  delta since the observed body sample for render-rate continuity. This compiles
-  in both Release configurations but has not been run live or in a headset.
+  delta since the observed body sample for render-rate continuity. PID 13672
+  subsequently headset-exercised that correction: the user reported the prior
+  continuous world shake gone and comfort substantially improved. Stick heading
+  relative to current HMD orientation remains unresolved, so the complete active
+  room-scale path is still not headset-validated.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -34,8 +37,8 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   carries only its later, separate stick update. The adapter now excludes the
   matched physical component from locomotion carry while retaining the actual
   final body for camera space. PID 21548 confirmed that this removed the
-  tilt-induced walking; the later presentation correction above remains
-  unvalidated.
+  tilt-induced walking; PID 13672 later exercised the presentation correction
+  described above.
 - The first room-scale helper launch exposed a settings-store regression before
   game startup: the all-null private-profile cache flush was incorrectly treated
   as a Boolean success result and reported Win32 error 2. The store now follows
@@ -355,12 +358,32 @@ relative to the native smoothed camera, unlike Rework's 90 Hz VR anchor. The
 render-rate anchor continuation described above addresses that evidenced
 difference and adds `room_scale_reconciled_offset_m`,
 `room_scale_render_prediction_m` and `room_scale_head_anchor_m` telemetry. The
+next headset run, PID 13672, exercised that correction. The user reported that
+the continuous world shake was gone and the overall sensation had improved
+substantially. The helper observed stationary, free and slide/partial but ended
+with a blocked false negative despite the user having performed the wall-block
+case. The classifier was using total accepted-vector magnitude; Rework `23c890f`
+uses accepted displacement projected onto the request direction. The helper now
+uses that same directional rule, so lateral native solver correction cannot mask
+a direct block. Gameplay collision behavior is unchanged.
+
+The remaining reported room-scale issue is stick heading: forward movement can
+feel as if the body is facing another direction unless the user recenters. The
+probe now logs `movement_yaw_valid` and `movement_yaw_rad` beside the existing raw
+controller move. Do not change locomotion policy until a fresh session shows
+whether the yaw itself is wrong, whether the remap is wrong, or whether recenter
+state is stale. Rework applies VR turning to tracking `world yaw`; Black Plague
+currently applies the shared turn amount to native player yaw because its input
+still enters through `MoveForward/MoveSideways`. That is a concrete adaptation
+difference to correlate with the new telemetry, not yet a proven root cause. The
 next gate remains
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must first prove that
 stationary/slow movement has no world shake, rotation/tilt in place causes no
 appreciable locomotion, then retest deliberate
-translated HMD motion, free/block/slide, recenter, crouch recovery, stick
-combinations, hands, mirror/focus and absence of residual drift before promotion.
+translated HMD motion, free/block/slide, explicit head-relative stick direction
+before/after recenter, native crouch recovery, hands, mirror/focus and absence of
+residual drift before promotion. Physical crouch-by-height remains a separate
+milestone because Black Plague's safe stand-clearance boundary is still unknown.
 
 Two presentation regressions from the earlier headset session remain separate.
 PID 19192 refined the mirror-off evidence: gameplay frames reported

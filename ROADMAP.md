@@ -71,14 +71,14 @@ physical X/Z displacement request in metres are now live-tested. PID 26144
 demonstrated queue, injection, native collision and matched reconciliation at
 `0xD7281` while positional HMD translation remained zero. PID 21548 then passed
 the complete active room-scale helper after the combined-tick carry correction;
-in-place head tilt no longer caused locomotion. The visual gate still failed:
-the world shook continuously and wall rejection felt aggressive. Log evidence
-showed centimetre-scale, frequently reversing X/Z presentation changes while
-the stick was idle. Rework places its camera at the VR anchor and updates at 90
-Hz; the Black Plague consumer instead retained a 60 Hz body sample over the
-native smoothed camera. Horizontal render placement now uses the reconciled
-anchor plus the newest HMD delta between body ticks. This remains `implemented`
-and compiled pending another live/headset validation.
+in-place head tilt no longer caused locomotion, but continuous world shake still
+failed comfort. Horizontal render placement was moved to the reconciled anchor
+plus the newest HMD delta between body ticks. PID 13672 headset-exercised that
+correction and the user reported the continuous shake gone with a much improved
+feel. The remaining room-scale blocker is locomotion heading: forward stick can
+feel offset unless recentered. The next gate logs the movement yaw used by the
+native-input remap and compares head-relative forward before/after recenter. The
+physical crouch-by-height feature remains a separate milestone.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.

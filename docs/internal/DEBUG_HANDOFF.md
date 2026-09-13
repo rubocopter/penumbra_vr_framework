@@ -55,15 +55,38 @@ presentation ran near 90 Hz, and it applied the offset relative to Black
 Plague's native smoothed/bobbed camera. Rework places its view from the VR world
 anchor and updates tracking at 90 Hz. The current implementation now predicts
 from the fresh reconciled anchor to the latest render pose and replaces native
-camera X/Z rather than inheriting it. This correction is compile-only.
+camera X/Z rather than inheriting it. At that implementation checkpoint the
+correction was compile-only; PID 13672 below provides the later headset evidence.
+
+PID 13672 headset-exercised that render-placement correction. The user reported
+that the continuous shake was gone and the overall sensation was much improved.
+The helper's final `blocked` failure is now understood as a classifier mismatch:
+it used total accepted-vector magnitude, whereas Rework measures accepted motion
+along the requested direction. A lateral native solver correction could
+therefore make a direct block look like slide/partial. The helper now uses the
+Rework projection rule; no gameplay collision code changed. The remaining user
+report is directional: forward stick can feel offset unless a recenter is done.
+Fresh probe logs now expose the movement yaw consumed by the remap so this can be
+localized before changing locomotion behavior.
+
+There is one demonstrated turn-ownership difference worth testing. Rework
+`23c890f::UpdateVRTurn` applies snap/smooth turn through
+`vr_tracking.AddWorldYaw`, then builds locomotion directly from the current head
+world forward/right vectors. Black Plague currently applies the same shared turn
+policy through native `cPlayer` yaw (`0x9CD00`) and rotates controller movement
+into that native movement basis with `TrackedMovementYaw`. That adaptation is
+required by the current native `MoveForward/MoveSideways` boundary, so the
+difference alone is not proof of a bug. Correlate `movement_yaw_rad` with head
+turn/recenter behavior before changing turn ownership.
 
 ### Established facts
 
 - Framework positional HMD translation remains default-off. PID 21548
   live-exercised its transient active mode and all physical outcomes. The carry
   correction is now live/headset evidenced for removing tilt-induced
-  locomotion, while the subsequent render-placement correction remains
-  compile-only and awaits a repeat session.
+  locomotion. PID 13672 headset-exercised the subsequent render-placement
+  correction and removed the reported continuous shake, but the full path still
+  lacks headset validation because stick heading remains unresolved.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.
@@ -165,12 +188,13 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 Headset-validate the corrected active room-scale/positional HMD translation
 through the live-tested physical displacement boundary first. Require a stable
-world at rest and during slow translation, then free/block/slide, recenter,
-native crouch shape swap/recovery, in-place
-rotation/tilt with no appreciable locomotion, deliberate translated HMD movement
-with/without stick, hands and mirror-on evidence. `locomotion_carry` must exclude
-the already reconciled `physical_accepted` component and no extra camera jump or
-residual drift may remain.
+world at rest and during slow translation, then free/block/slide, explicit
+head-relative forward-stick checks before and after recenter, native crouch shape
+swap/recovery, in-place rotation/tilt with no appreciable locomotion, deliberate
+translated HMD movement with/without stick, hands and mirror-on evidence.
+`movement_yaw_rad` must agree with the user's current horizontal HMD heading;
+`locomotion_carry` must exclude the already reconciled `physical_accepted`
+component and no extra camera jump or residual drift may remain.
 Then compare a deliberately
 scoped Black Plague VR locomotion policy against the proven Overture
 `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement
@@ -209,6 +233,10 @@ None is required for the shadow-only tracking/body validation milestone. Keep na
 - Feet Y remains fixed while body centre changes.
 - The active physics-body pointer changes and restores.
 - The exact Black Plague stand-clearance mechanism remains insufficiently demonstrated.
+- Current headset testing confirms that lowering/raising the user's physical
+  head height does not yet drive Black Plague's native crouch/stand transition.
+  The already live-tested native crouch button and `1.65 -> 0.95 -> 1.65 m`
+  shape swap are separate evidence.
 
 ### Do not try again
 

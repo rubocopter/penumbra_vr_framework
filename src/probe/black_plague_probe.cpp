@@ -285,6 +285,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         render_world.hmd_visibility_failures != 0 ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
+        float movement_yaw = 0.0F;
+        const bool movement_yaw_valid =
+            penumbra_vr::backends::black_plague::TrackedMovementYaw(movement_yaw);
         penumbra_vr::probe::WriteLog(
             "frame=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
@@ -309,7 +312,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "hmd_visibility_camera_restored=%u hmd_visibility_error=%s "
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
-            "controller_grips=%u controller_aims=%u controller_move=[%.3f,%.3f] controller_turn=%.3f controller_error=%s "
+            "controller_grips=%u controller_aims=%u controller_move=[%.3f,%.3f] controller_turn=%.3f "
+            "movement_yaw_valid=%u movement_yaw_rad=%.5f controller_error=%s "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
@@ -392,6 +396,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.controller_frame.input.state.move.x,
             render_world.controller_frame.input.state.move.y,
             render_world.controller_frame.input.state.turn.x,
+            movement_yaw_valid ? 1U : 0U,
+            movement_yaw,
             render_world.controller_error.data(),
             static_cast<unsigned long>(telemetry.matrix_mode_calls),
             static_cast<unsigned long>(telemetry.projection_loads),

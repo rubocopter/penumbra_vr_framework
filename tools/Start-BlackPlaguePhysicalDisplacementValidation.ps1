@@ -144,17 +144,27 @@ function Get-PhysicalScenarioEvidence {
             continue
         }
 
-        $acceptedMagnitude = Get-HorizontalMagnitude -Vector $accepted
-        $residualX = $requested.X - $accepted.X
-        $residualZ = $requested.Z - $accepted.Z
-        $rejectedMagnitude = [Math]::Sqrt(($residualX * $residualX) + ($residualZ * $residualZ))
+        # Match Rework 23c890f's collision-rejection test: only movement
+        # accepted along the requested direction reduces the rejected amount.
+        # A native solver correction along the wall must not turn a direct
+        # block into slide evidence merely because its total magnitude is
+        # non-zero.
+        $requestedDirectionX = $requested.X / $requestedMagnitude
+        $requestedDirectionZ = $requested.Z / $requestedMagnitude
+        $acceptedAlongRequest =
+            ($accepted.X * $requestedDirectionX) +
+            ($accepted.Z * $requestedDirectionZ)
+        $acceptedAlongRequest = [Math]::Max(
+            0.0,
+            [Math]::Min($requestedMagnitude, $acceptedAlongRequest))
+        $rejectedMagnitude = $requestedMagnitude - $acceptedAlongRequest
         $tolerance = [Math]::Max(0.00010, $requestedMagnitude * 0.15)
 
         if ($rejectedMagnitude -le $tolerance) {
             $free = $true
             $freeSamples++
         }
-        elseif ($acceptedMagnitude -le $tolerance) {
+        elseif ($acceptedAlongRequest -le $tolerance) {
             $blocked = $true
             $blockedSamples++
         }
@@ -303,7 +313,8 @@ try {
         Write-Host 'First remain still for 10 seconds, then rotate, look up/down and tilt the head in place without shifting the torso. The world must remain stable and this must not produce visible character locomotion.'
         Write-Host 'Next make slow, continuous horizontal head/torso translations in free space. The view must follow smoothly rather than stepping at the native 60 Hz body cadence.'
         Write-Host 'Then test stick alone and together with a deliberate small horizontal head/torso translation in the same and opposite directions; neither case should amplify or retain motion after you stop.'
-        Write-Host 'Recenter once, crouch and stand once, then take one clear physical step after the native shape has returned to standing.'
+        Write-Host 'For stick heading, face a clear landmark, push forward, rotate your head 45-90 degrees without recentering and push forward again. Movement must follow the current horizontal HMD heading as in Rework; repeat once immediately after recentering.'
+        Write-Host 'Use the normal in-game crouch control once and return to standing, then take one clear physical step after the native shape has returned to standing. Physical crouch-by-height is a separate gate and is not expected here.'
         Write-Host 'Observe that the desktop mirror shows gameplay and that head motion, hands and world remain coherent.'
     }
     Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'

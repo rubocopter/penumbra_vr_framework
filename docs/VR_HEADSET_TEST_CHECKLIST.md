@@ -33,11 +33,24 @@ así que el temblor no dependía únicamente de estar junto a una pared.
 La comparación con Rework `23c890f` encontró la diferencia de presentación:
 Rework coloca la vista desde su ancla VR a 90 Hz y no hereda el suavizado/bob de
 posición de la cámara nativa. Black Plague retenía una muestra corporal de ~60
-Hz y sumaba el offset sobre esa cámara. La nueva corrección coloca X/Z
-directamente en el ancla reconciliada y, entre ticks físicos, la continúa con el
-delta HMD más reciente. Cámara, visibilidad y manos usan la misma colocación. Y,
-salto y altura física siguen siendo nativos. Compila en las dos configuraciones
-Release, pero aún no se ha probado live ni con visor.
+Hz y sumaba el offset sobre esa cámara. La corrección coloca X/Z directamente en
+el ancla reconciliada y, entre ticks físicos, la continúa con el delta HMD más
+reciente. Cámara, visibilidad y manos usan la misma colocación.
+
+PID 13672 ya probó esa corrección con visor. El resultado subjetivo mejoró mucho:
+el “terremoto” continuo anterior desapareció. El helper observó `stationary`,
+`free` y `slide/partial`, pero al final declaró ausente `blocked` aunque la prueba
+contra pared sí se había realizado. El clasificador usaba la magnitud aceptada
+total; ahora usa, como Rework, únicamente el desplazamiento aceptado en la
+dirección solicitada. Una corrección lateral del solver ya no puede convertir un
+bloqueo directo en `slide/partial`.
+
+Quedan dos asuntos distintos. El movimiento hacia delante con stick puede dar la
+sensación de ir desviado si no se ha recentrado; la nueva telemetría registra
+`movement_yaw_valid` y `movement_yaw_rad` para aislarlo. Y agacharse/levantarse
+solo con la altura física del visor todavía no activa el crouch nativo. Ese
+crouch físico por altura sigue siendo un gate independiente y no forma parte de
+esta tanda.
 
 ## Siguiente tanda — room-scale activo, colisiones y mirror encendido
 
@@ -87,18 +100,26 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 5. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
    conservarse la componente tangencial y rechazarse la componente que entra en
    la geometría. Espera a que la consola anuncie `slide/partial`.
-6. **Partición stick/traslación HMD.** Primero camina solo con stick y detente.
+6. **Rumbo del stick y partición stick/traslación HMD.** Mira de frente a una
+   referencia clara y pulsa stick hacia delante durante varios segundos. Después
+   gira solo la cabeza 45–90 grados sin recentrar y vuelve a pulsar hacia
+   delante: el desplazamiento debe seguir el rumbo horizontal actual del HMD,
+   como en Rework, no el rumbo antiguo del cuerpo. Vuelve a mirar al frente,
+   recentra mirando en otra dirección y repite. Mantén cada caso varios segundos
+   para que el log capture `controller_move`, `movement_yaw_valid` y
+   `movement_yaw_rad`. Después camina solo con stick y detente.
    Después mantén el stick hacia delante y desplaza deliberadamente cabeza y
    torso unos centímetros hacia delante; repite trasladándolos hacia atrás. Solo
    aquí existen dos desplazamientos reales que pueden combinarse. No debe
    aparecer un tercer aporte, salto de cámara ni movimiento residual al detener
    ambos. La telemetría debe mostrar `native_accepted` combinado y
    `locomotion_carry` sin la parte `physical_accepted` ya reconciliada.
-7. **Recenter.** Ejecuta un recenter, espera unos segundos y repite `free` y
-   `blocked`. No debe aparecer un salto persistente, offset antiguo ni pérdida de
-   manos.
-8. **Cambio nativo de forma.** Agáchate, mantén la postura unos segundos y vuelve
-   a levantarte mediante el control normal del juego. El `character_body` se
+7. **Recenter.** Además de la comparación de rumbo del punto 6, ejecuta un
+   recenter, espera unos segundos y repite `free` y `blocked`. No debe aparecer
+   un salto persistente, offset antiguo ni pérdida de manos.
+8. **Cambio nativo de forma.** Usa el botón/control normal de crouch del juego,
+   mantén el estado unos segundos y vuelve a levantarte con ese mismo control.
+   No intentes validar aquí el crouch físico bajando el visor. El `character_body` se
    conserva mientras su cuerpo físico cambia de `1.65 m` a `0.95 m` y vuelve a
    `1.65 m`. Después da un paso físico claro en cualquier dirección; el helper
    exige la secuencia completa, una muestra room-scale fresca y movimiento
@@ -162,7 +183,9 @@ Conserva y comunica:
 - si las manos siguieron a la cabeza;
 - resultado del mirror en gameplay y menús;
 - resultado de Alt+Tab y recuperación de foco;
-- cualquier diferencia antes y después de crouch/stand y recenter.
+- si el stick hacia delante siguió el rumbo del HMD antes y después de girar la
+  cabeza y de recentrar;
+- cualquier diferencia antes y después del crouch nativo y del recenter.
 
 Si el helper falla, no repitas a ciegas. El mensaje enumera la evidencia ausente;
 conserva ese texto y el log del PID para separar un escenario no capturado de un
