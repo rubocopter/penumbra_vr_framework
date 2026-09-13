@@ -370,18 +370,16 @@ with Rework `23c890f` reacting to any non-zero HMD tracking delta. Using the
 corrected 2 mm significance threshold, the same log contains 12 stationary,
 37 free, 2 blocked and 15 slide/partial samples.
 
-The next active consumer is implemented and its affected Release targets compile,
-but no test executable or live/headset validation has run yet. A separate
-`Local\PenumbraVR.BlackPlague.RoomScaleValidation` mutex is accepted only
-while physical validation is active. The adapter exposes a fresh reconciled X/Z
+The active consumer is implemented behind a separate
+`Local\PenumbraVR.BlackPlague.RoomScaleValidation` mutex, accepted only while
+physical validation is active. The adapter exposes a fresh reconciled X/Z
 camera offset for the current body generation; rendering applies it to the head
 view, visibility view and controller game-view basis. Stale or invalid samples
 fall back to rotation-only, and Y/jump remain native. Use
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; its final check requires
 camera application, a non-zero offset, mirror-on gameplay, the native
-`1.65 -> 0.95 -> 1.65 m` crouch shape sequence, a fresh camera sample after
-standing again, and new free/blocked/slide-or-partial evidence after that shape
-sequence.
+`1.65 -> 0.95 -> 1.65 m` crouch shape sequence, a fresh camera sample and
+meaningful physical movement after standing again.
 The dedicated live launcher additionally fails closed unless the fresh process
 log proves a non-zero queued plan, consumed/injected boundary request, matched
 reconciliation, non-zero injected body telemetry, the native `dt~=1/60` tick
@@ -390,3 +388,21 @@ classifier uses the existing pre-injection request/accepted telemetry; it adds
 no hook or second body owner. The launcher reports newly captured scenario
 classes during the live run, then performs the complete evidence check after the
 game exits. PID 18392 verified the negative path: activation alone is rejected.
+
+PID 24956 live-exercised that active path and produced 1159 body summaries: 90
+stationary/jitter, 963 free, 10 blocked and 95 slide/partial classifications.
+The crouch sequence recovered at 12:02:00.758 and was followed by 414 free and
+25 slide/partial samples. The helper's only final complaint was the redundant
+absence of another blocked sample after recovery; the global standing-shape
+block was already present, so post-recovery now requires meaningful movement
+rather than all three collision outcomes again.
+
+The headset report nevertheless found a real sequence defect. Rework `23c890f`
+performs physical reconciliation in one character update, then carries the head
+anchor only with a separate accepted stick update. Black Plague keeps one native
+`D6E00` and injects the prior physical request into the tick that also contains
+native locomotion. The shadow had passed that combined accepted displacement to
+locomotion carry after already reconciling the physical part. It now subtracts
+the matched physical X/Z component for carry, preserves actual whole-tick
+`body_after` for camera space and logs the result as `locomotion_carry`. The
+correction is compiled but still requires a repeat live/headset session.

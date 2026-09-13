@@ -6,11 +6,13 @@ CI hardening checkpoint: `ea12955f494976ed7e3fb2913a3da6221d7dcff8`.
 
 This file follows up `TRACKING_BODY_RECONCILIATION.md`. That report is an implementation-time snapshot from the Linux editing environment and intentionally records the Windows gates that could not be run there. The post-push GitHub state below supersedes only those pending-host statements; it does not rewrite the historical evidence or promote any live/headset claim.
 
-Later checkpoint: PID 26144 subsequently live-tested the physical request at
-`0xD7281`. A default-off active room-scale consumer was then implemented on
-2026-09-12 behind a separate transient request; its affected Release targets
-compile, but no test executable was run and it remains `implemented`. Statements below that positional translation is compile-time zero describe
-this earlier shadow-only checkpoint.
+Later checkpoints: PID 26144 subsequently live-tested the physical request at
+`0xD7281`. PID 24956 then live-exercised the default-off active room-scale
+consumer and native crouch recovery, but exposed reuse of the combined tick's
+already reconciled physical component in locomotion carry. The corrected
+partition compiles and awaits repeat live/headset validation. Statements below
+that positional translation is compile-time zero describe this earlier
+shadow-only checkpoint.
 
 ## Host result
 

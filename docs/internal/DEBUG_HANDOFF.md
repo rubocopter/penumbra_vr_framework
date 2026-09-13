@@ -34,11 +34,21 @@ stronger dispatch/quiescence protocol before calling `FreeLibrary` on the probe.
 
 The user previously reported world displacement / collision discomfort while moving physically in VR. Leaning the HMD can move the view while the native body remains elsewhere, producing substantial discomfort.
 
+PID 24956 then reported that stick and small physical HMD displacement combine
+in the same direction and can cancel in opposite directions, with motion that
+felt too large. Vector addition/cancellation itself matches Rework's sequential
+physical-then-stick behavior. The log also proved a Framework-only amplification
+source: the combined tick's physical component was reconciled and then reused by
+the locomotion-only anchor carry. Movements caused while partially removing the
+headset reached the existing `0.05 m` per-tick clamp and are unsuitable for
+comfort tuning, but did not cause the diagnosed sequence difference.
+
 ### Established facts
 
-- Framework positional HMD translation remains default-off. A transient active
-  room-scale mode is implemented and its affected Release targets compile, but
-  no test executable was run and it has no host, live or headset evidence yet.
+- Framework positional HMD translation remains default-off. PID 24956
+  live-exercised its transient active mode and all physical outcomes, but the
+  session failed headset validation because of the double carry described above.
+  The corrected partition is compiled and awaits a repeat session.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.
@@ -53,6 +63,9 @@ The user previously reported world displacement / collision discomfort while mov
   Plague shadow consumer remains observation-only and default-off; a separate
   default-off physical request exists at `0xD7281` and is now live-tested in
   PID 26144.
+- Rework resolves physical movement and stick movement in two ordered body
+  updates. Black Plague must keep one native `D6E00`, so it combines them at
+  `0xD7281`; only the non-physical remainder may feed Rework's locomotion carry.
 - PID 28172 live-tested the shadow consumer through the transient mutex with positional translation still zero: stationary/small-head-motion planning, native free/block/slide, recenter/body replacement and the existing ~60 Hz single native tick were observed without a second `D6E00`.
 - GitHub Actions has host-tested the current shared extraction on Windows x86: root metadata/Debug/Release tests pass, and the autonomous Overture Release regression job also passes.
 
@@ -133,10 +146,13 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-Headset-validate the implemented active room-scale/positional HMD translation
+Headset-validate the corrected active room-scale/positional HMD translation
 through the live-tested physical displacement boundary first. Require
-free/block/slide, recenter, native crouch shape swap/recovery, hands and
-mirror-on evidence.
+free/block/slide, recenter, native crouch shape swap/recovery, same/opposed stick
+plus small HMD movement, hands and mirror-on evidence. The combined body vector
+may add or cancel physically; `locomotion_carry` must exclude the already
+reconciled `physical_accepted` component and no extra camera jump or residual
+drift may remain.
 Then compare a deliberately
 scoped Black Plague VR locomotion policy against the proven Overture
 `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement

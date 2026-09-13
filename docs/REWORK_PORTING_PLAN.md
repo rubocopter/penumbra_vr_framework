@@ -130,7 +130,7 @@ The first shared contract exists to separate **policy** from **native mechanism*
 
 ## Current priority — Black Plague active room-scale validation
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. The separate active room-scale consumer is now implemented behind a transient double opt-in; affected Release targets compile, but test executables were not run.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 24956 live-exercised the active room-scale consumer and crouch recovery, then exposed that Black Plague's combined single tick was feeding its already reconciled physical displacement into Rework's locomotion-only anchor carry. That partition is corrected and compiled, but the revised path is not yet live/headset-validated.
 
 Current order:
 
@@ -139,8 +139,8 @@ Current order:
 3. Preserve the live-tested shared reconciliation/shadow implementation and keep active Black Plague translation default-off outside its dedicated validation request.
 4. Preserve shadow-only mode as observation-only; its plan is not evidence that the dedicated physical request was injected.
 5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
-6. Host-test the implemented active room-scale consumer, which applies only a fresh reconciled X/Z offset to camera, visibility and controller space.
-7. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to headset-validate active free movement, blocking/sliding, recenter, the native crouch shape swap/recovery and head/hand reconciliation before promoting the integration.
+6. Preserve the corrected combined-tick partition: reconcile matched physical X/Z once, then carry the anchor only with the remaining native locomotion while retaining actual `body_after` for camera space.
+7. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to headset-validate active free movement, blocking/sliding, recenter, the native crouch shape swap/recovery, same/opposed stick plus HMD movement and head/hand reconciliation before promoting the integration.
 8. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
 9. Keep physical crouch and jump comfort/tuning as separate milestones.
 10. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.

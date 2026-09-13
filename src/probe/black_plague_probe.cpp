@@ -183,6 +183,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "body_reconciliation_shadow ticks=%llu resets=%llu valid=%u "
                 "physical_delta=[%.4f,%.4f] physical_plan=[%.4f,%.4f] "
                 "native_accepted=[%.4f,%.4f,%.4f] body=[%.4f,%.4f,%.4f] "
+                "locomotion_carry=[%.4f,%.4f,%.4f] "
                 "predicted_anchor=[%.4f,%.4f,%.4f] native_correction=[%.4f,%.4f] "
                 "separation=%.4f rebase=%u physical_observation=%u "
                 "physical_accepted=[%.5f,%.5f,%.5f] physical_rejected_distance=%.5f "
@@ -198,6 +199,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 s.native_motion.accepted_displacement[2],
                 s.native_motion.body_after[0], s.native_motion.body_after[1],
                 s.native_motion.body_after[2],
+                s.locomotion_carry_displacement[0],
+                s.locomotion_carry_displacement[1],
+                s.locomotion_carry_displacement[2],
                 s.predicted_anchor[0], s.predicted_anchor[1], s.predicted_anchor[2],
                 s.native_anchor_correction[0], s.native_anchor_correction[2],
                 s.separation, s.plan.rebased ? 1U : 0U,

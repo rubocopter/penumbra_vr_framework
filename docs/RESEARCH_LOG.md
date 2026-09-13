@@ -500,3 +500,23 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
 - State: `implemented`. Affected Release targets compile, but no project binary
   or test executable was run during this pass; host/live/headset evidence
   remains pending.
+
+### 2026-09-13 — Active room-scale first headset run and carry correction
+
+- PID 24956 produced 1159 body summaries and captured 90 stationary/jitter, 963
+  free, 10 blocked and 95 slide/partial classifications. It also proved the
+  native `1.65 -> 0.95 -> 1.65 m` shape sequence, room-scale camera recovery and
+  mirror-on gameplay frames.
+- The helper failed only because no second blocked sample appeared after standing
+  recovery; 414 free and 25 slide/partial samples did. The redundant repetition
+  was replaced with a requirement for meaningful post-recovery movement while
+  retaining all four global outcome gates.
+- Comparison with Rework `23c890f` found the reported movement amplification at
+  the sequence boundary. Rework reconciles physical movement in one update and
+  carries the anchor with a later stick-only update. Black Plague's one owned
+  tick combines both, and the shadow had reused its physical accepted component
+  in locomotion carry after reconciliation.
+- The adapter now subtracts matched physical X/Z from locomotion carry, preserves
+  actual whole-tick `body_after` for camera space and logs `locomotion_carry`.
+  Both Release configurations compile. No test executable or new live/headset
+  session was run, so the correction remains `implemented`.

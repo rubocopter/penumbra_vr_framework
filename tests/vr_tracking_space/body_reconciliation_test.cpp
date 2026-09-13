@@ -93,6 +93,43 @@ int main() {
     CHECK(s.valid && !s.reset && Near(s.predicted_anchor[0],0.05F));
     CHECK(s.plan.physical_request == V{} && s.native_anchor_correction[1] == 0);
     CHECK(Near(s.predicted_anchor[1],0.1F) && Near(s.native_motion.accepted_displacement[1],0.1F));
+    // Black Plague's one owned tick contains the previously accepted physical
+    // request and native locomotion. Excluding the physical part must preserve
+    // the real body position while carrying the anchor only with locomotion.
+    shadow.Reset();
+    s = shadow.Observe(Pose(),0,1,Motion(body,body),anchor,0.016F);
+    s = shadow.Observe(Pose(0.05F),0,1,Motion(body,body),anchor,0.016F);
+    auto physical = Motion(body,{0.05F,0.825F,0});
+    CHECK(shadow.ApplyPhysicalReconciliation(
+        rt::ReconcilePhysicalBodyMotion(s.plan,physical)));
+    s = shadow.Observe(Pose(0.05F),0,1,Motion(body,{0.05F,0.825F,0}),
+        {0.05F,0,0},0.016F,physical.accepted_displacement);
+    CHECK(Near(s.native_motion.body_after[0],0.05F));
+    CHECK(Near(s.locomotion_carry_displacement[0],0.0F));
+    CHECK(Near(s.predicted_anchor[0],0.05F));
+    // Same-direction native locomotion carries only its own contribution.
+    shadow.Reset();
+    s = shadow.Observe(Pose(),0,1,Motion(body,body),anchor,0.016F);
+    s = shadow.Observe(Pose(0.05F),0,1,Motion(body,body),anchor,0.016F);
+    physical = Motion({0.02F,0.825F,0},{0.07F,0.825F,0});
+    CHECK(shadow.ApplyPhysicalReconciliation(
+        rt::ReconcilePhysicalBodyMotion(s.plan,physical)));
+    s = shadow.Observe(Pose(0.05F),0,1,Motion(body,{0.07F,0.825F,0}),
+        {0.07F,0,0},0.016F,physical.accepted_displacement);
+    CHECK(Near(s.native_motion.body_after[0],0.07F));
+    CHECK(Near(s.locomotion_carry_displacement[0],0.02F));
+    CHECK(Near(s.predicted_anchor[0],0.07F));
+    // Opposing native locomotion likewise carries only its own contribution.
+    shadow.Reset();
+    s = shadow.Observe(Pose(),0,1,Motion(body,body),anchor,0.016F);
+    s = shadow.Observe(Pose(0.05F),0,1,Motion(body,body),anchor,0.016F);
+    physical = Motion({-0.02F,0.825F,0},{0.03F,0.825F,0});
+    CHECK(shadow.ApplyPhysicalReconciliation(
+        rt::ReconcilePhysicalBodyMotion(s.plan,physical)));
+    s = shadow.Observe(Pose(0.05F),0,1,Motion(body,{0.03F,0.825F,0}),
+        {0.03F,0,0},0.016F,physical.accepted_displacement);
+    CHECK(Near(s.locomotion_carry_displacement[0],-0.02F));
+    CHECK(Near(s.predicted_anchor[0],0.03F));
     // Native crouch changes centre, preserves feet; no generation change needed.
     s = shadow.Observe(Pose(),0,1,Motion({0.05F,0.575F,0},{0.05F,0.575F,0}),{0.05F,0.1F,0},0.016F);
     CHECK(s.valid && !s.reset && Near(s.predicted_anchor[1],0.1F));

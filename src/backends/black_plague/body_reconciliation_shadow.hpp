@@ -17,6 +17,7 @@ struct BodyReconciliationShadowSample {
     runtime::VrAcceptedBodyMotion physical_motion{};
     runtime::VrPhysicalReconciliationResult physical_reconciliation{};
     std::array<float, 3> physical_delta{};
+    std::array<float, 3> locomotion_carry_displacement{};
     std::array<float, 3> predicted_anchor{};
     std::array<float, 3> native_anchor_correction{};
     float separation = 0.0F;
@@ -33,7 +34,8 @@ public:
         std::uint64_t body_generation,
         const runtime::VrAcceptedBodyMotion& native_motion,
         const std::array<float, 3>& feet_after,
-        float delta_seconds) noexcept;
+        float delta_seconds,
+        const std::array<float, 3>& reconciled_physical_displacement = {}) noexcept;
 private:
     bool initialized_ = false;
     std::uint64_t generation_ = 0;

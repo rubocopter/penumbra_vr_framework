@@ -10,6 +10,15 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- PID 24956 live-exercised active Black Plague room-scale and exposed a real
+  Rework-sequence regression. Its log captured 1159 body summaries, all four
+  physical outcome classes, the native crouch/stand shape sequence and camera
+  recovery. Black Plague's one owned body tick combined native movement with the
+  prior physical request, but `BodyReconciliationShadow` carried that whole
+  vector after physical reconciliation. Rework `23c890f` carries only its later,
+  separate stick update. The adapter now excludes the matched physical component
+  from locomotion carry while retaining the actual final body for camera space.
+  The correction compiles but still requires live/headset validation.
 - The first room-scale helper launch exposed a settings-store regression before
   game startup: the all-null private-profile cache flush was incorrectly treated
   as a Boolean success result and reported Win32 error 2. The store now follows
@@ -210,7 +219,7 @@ feeds the matched physical observation into shared reconciliation. A separate
 default-off active consumer can now expose the resulting horizontal anchor/body
 offset to rendering during the next validation gate.
 
-## Current milestone — active room-scale implemented; validation pending
+## Current milestone — active room-scale correction awaiting repeat validation
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -290,7 +299,7 @@ positional translation zero but no physical request telemetry exits with failure
 instead of being counted as live validation. PID 24484 likewise remains
 activation evidence only.
 
-The active room-scale path is now implemented behind the separate
+The active room-scale path is implemented behind the separate
 `PVR_BP_ROOM_SCALE_VALIDATION=1` or
 `Local\PenumbraVR.BlackPlague.RoomScaleValidation` request. Activation fails
 closed unless physical-displacement validation is also active. The body adapter
@@ -300,16 +309,25 @@ The renderer applies the same offset to the yaw-recentered head view,
 HMD-aware visibility and controller game-view basis. It does not scale the raw
 HMD delta a second time, does not apply Y and does not add a native body tick.
 
-This new path and its tests are **implemented**. The affected Release targets
-compile, but no project binary or test executable was run in this pass, so no
-host-test promotion is claimed. The next gate
-is `tools/Start-BlackPlagueRoomScaleValidation.ps1`, which holds both mutexes,
-persists mirror on and requires camera application, a non-zero X/Z offset,
-free/block/slide/stationary outcomes, the native `1.65 -> 0.95 -> 1.65 m`
-crouch shape sequence and a fresh applied camera sample after returning to the
-standing shape, followed by fresh free/block/slide outcomes, before passing.
-Headset observation must additionally cover
-recenter, hands, double motion/drift, focus and menus before promotion.
+PID 24956 live-exercised this path. The log contains 90 stationary/jitter, 963
+free, 10 blocked and 95 slide/partial samples; it also captured the native
+`1.65 -> 0.95 -> 1.65 m` crouch sequence, 414 free and 25 slide/partial samples
+after recovery, camera application after standing and mirror-on gameplay frames.
+The final helper failure only lacked another blocked sample after standing; that
+requirement was redundant with the already captured standing-shape block and is
+now replaced by meaningful post-recovery physical movement.
+
+The user's combined stick/head test exposed the actual blocker. Black Plague's
+single tick reported total accepted movement including the prior physical
+request; after that request had been reconciled, the shadow passed the same
+physical component into `CarryHeadAnchorWithLocomotion`. Rework performs a
+physical body update first and carries the anchor only with a second stick body
+update. The corrected shadow receives the matched physical accepted vector,
+subtracts X/Z from locomotion carry, keeps the real whole-tick `body_after` for
+camera offset, and logs `locomotion_carry` separately. The next gate remains
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must retest free/block/slide,
+recenter, crouch recovery, same/opposed stick plus small HMD movement, hands,
+mirror/focus and absence of residual drift before promotion.
 
 Two presentation regressions from the earlier headset session remain separate.
 PID 19192 refined the mirror-off evidence: gameplay frames reported

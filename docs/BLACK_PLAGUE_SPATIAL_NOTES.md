@@ -24,11 +24,14 @@ comprobaciones históricas. Esto no promueve ningún estado live/headset de BP.
 Este texto conserva el estado histórico del 11 de septiembre. Después se
 live-testó el shadow en PID 28172 y la solicitud física X/Z separada en
 `0xD7281` quedó live-tested en PID 26144. La traslación posicional estuvo a
-cero en esa sesión. El consumidor room-scale X/Z activo ya está implementado
-tras un doble opt-in transitorio: obtiene `predicted_anchor - body_after` del
-shadow reconciliado, caduca a los 250 ms y aplica la misma base a cámara,
-visibilidad y controladores. Sus targets Release afectados compilan, pero
-permanece `implemented`, sin pruebas host, live ni con visor. El siguiente gate es
+cero en esa sesión. PID 24956 ejercitó después el consumidor room-scale X/Z
+activo mediante doble opt-in: obtuvo `predicted_anchor - body_after`, aplicó la
+misma base a cámara, visibilidad y controladores, capturó las cuatro clases de
+colisión y recuperó cámara tras `1.65 -> 0.95 -> 1.65 m`. La prueba reveló que el
+tick único de Black Plague mezclaba locomoción y petición física, y el shadow
+volvía a arrastrar el ancla con la parte física ya reconciliada. Ahora esa parte
+se resta antes del carry de locomoción, conservando el `body_after` real. La
+corrección compila, pero aún no está live/headset-validated. El siguiente gate es
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
@@ -349,8 +352,10 @@ PowerShell local contrasta la captura inicializada sin modificar procesos.
 
 El boundary corporal/adapter, la reconciliación shadow y la petición física X/Z
 collision-aware en `0xD7281` ya están live-tested, pero los hitos amplios de
-jugabilidad todavía no están certificados. La siguiente evidencia de esta pista
-debe validar con visor room-scale/traslación HMD activa a través de ese boundary.
+jugabilidad todavía no están certificados. PID 24956 live-ejercitó room-scale
+activo y encontró la doble contabilización del carry; la siguiente evidencia
+debe validar con visor la partición corregida, incluyendo stick y HMD en el mismo
+sentido y en sentidos opuestos.
 Herramientas definitivas,
 palm collision y mecanismos articulados siguen pendientes, además de sus pruebas
 con visor.

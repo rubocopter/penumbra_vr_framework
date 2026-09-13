@@ -414,9 +414,13 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
                 g_physical_validation_telemetry.expected_generation = 0;
             }
 
+            const auto reconciled_physical_displacement =
+                matched_physical_observation
+                ? physical_motion.accepted_displacement
+                : std::array<float, 3>{};
             auto shadow_sample = g_shadow.Observe(g_shadow_pose,
                 g_shadow_yaw, g_shadow_generation, accepted, feet_after,
-                delta_seconds);
+                delta_seconds, reconciled_physical_displacement);
             if (matched_physical_observation && shadow_sample.valid &&
                 !shadow_sample.reset) {
                 shadow_sample.physical_observation_available = true;

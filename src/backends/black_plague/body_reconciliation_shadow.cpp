@@ -32,7 +32,8 @@ BodyReconciliationShadowSample BodyReconciliationShadow::Observe(
     std::uint64_t body_generation,
     const runtime::VrAcceptedBodyMotion& native_motion,
     const std::array<float, 3>& feet_after,
-    float delta_seconds) noexcept {
+    float delta_seconds,
+    const std::array<float, 3>& reconciled_physical_displacement) noexcept {
     runtime::VrTrackingSpace tracking;
     tracking.SetHeadTrackingPose(head_tracking_pose);
     runtime::VrMatrix44 validated_head;
@@ -41,6 +42,7 @@ BodyReconciliationShadowSample BodyReconciliationShadow::Observe(
     if (body_generation == 0 || !std::isfinite(delta_seconds) ||
         delta_seconds <= 0.0F || delta_seconds > 0.25F ||
         !std::isfinite(tracking_world_yaw) || !Finite(feet_after) ||
+        !Finite(reconciled_physical_displacement) ||
         !tracking.HeadWorldPose(validated_head, error) ||
         !runtime::ObserveAcceptedBodyMotion(native_motion.body_before,
             native_motion.body_after, checked) ||
@@ -73,12 +75,25 @@ BodyReconciliationShadowSample BodyReconciliationShadow::Observe(
             Reset();
             return {};
         }
-        // This native tick is NOT an observation of plan.physical_request.
-        // No request was injected; physical acceptance/rejection is unknown.
-        // Preserve Rework's 3D carry comparison but strip native jump Y from
-        // horizontal locomotion. Feet Y is observed separately below.
+        // Black Plague resolves native locomotion and the previously queued
+        // physical request in one owned body tick. Rework resolves those in
+        // sequence and only carries the anchor with the later stick movement.
+        // Remove the already-reconciled physical part before applying that
+        // carry policy or physical head motion is counted a second time.
+        // Keep the actual whole-tick body observation in sample.native_motion
+        // because the camera offset must still use the real body position.
         auto horizontal_motion = checked;
+        for (const auto axis : {0U, 2U}) {
+            horizontal_motion.accepted_displacement[axis] -=
+                reconciled_physical_displacement[axis];
+            horizontal_motion.body_after[axis] =
+                horizontal_motion.body_before[axis] +
+                horizontal_motion.accepted_displacement[axis];
+        }
         horizontal_motion.accepted_displacement[1] = 0.0F;
+        horizontal_motion.body_after[1] = horizontal_motion.body_before[1];
+        sample.locomotion_carry_displacement =
+            horizontal_motion.accepted_displacement;
         anchor_ = runtime::CarryHeadAnchorWithLocomotion(
             sample.plan.head_anchor, horizontal_motion);
         for (const auto axis : {0U, 2U})

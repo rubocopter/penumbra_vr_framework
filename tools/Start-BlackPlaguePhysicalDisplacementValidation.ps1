@@ -300,7 +300,8 @@ try {
     Write-Host "Probe log: $probeLog"
     Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
     if ($EnableRoomScale) {
-        Write-Host 'Also test stick locomotion, recenter once, crouch and stand once, then repeat free/block/slide after the native shape swap.'
+        Write-Host 'Also test stick locomotion alone and together with a small head step in the same and opposite directions; neither case should amplify or retain motion after you stop.'
+        Write-Host 'Recenter once, crouch and stand once, then take one clear physical step after the native shape has returned to standing.'
         Write-Host 'Observe that the desktop mirror shows gameplay and that head motion, hands and world remain coherent.'
     }
     Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'
@@ -459,10 +460,10 @@ try {
     }
     if ($EnableRoomScale -and
         ($null -eq $postCrouchScenarioEvidence -or
-         -not $postCrouchScenarioEvidence.Free -or
-         -not $postCrouchScenarioEvidence.Blocked -or
-         -not $postCrouchScenarioEvidence.Slide)) {
-        $missingEvidence += 'free, blocked and slide/partial physical outcomes after returning to the standing shape'
+         (-not $postCrouchScenarioEvidence.Free -and
+          -not $postCrouchScenarioEvidence.Blocked -and
+          -not $postCrouchScenarioEvidence.Slide))) {
+        $missingEvidence += 'meaningful physical movement after returning to the standing shape'
     }
 
     if ($missingEvidence.Count -ne 0) {
@@ -473,7 +474,7 @@ try {
     Write-Host "Scenario evidence: stationary=$($scenarioEvidence.StationarySamples) free=$($scenarioEvidence.FreeSamples) blocked=$($scenarioEvidence.BlockedSamples) slide_or_partial=$($scenarioEvidence.SlideSamples)."
     if ($EnableRoomScale) {
         Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
-        Write-Host "Post-crouch outcomes: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
+        Write-Host "Post-crouch recovery samples: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
     }
     $exitCode = 0
 }
