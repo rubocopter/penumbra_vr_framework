@@ -300,7 +300,8 @@ try {
     Write-Host "Probe log: $probeLog"
     Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
     if ($EnableRoomScale) {
-        Write-Host 'Also test stick locomotion alone and together with a small head step in the same and opposite directions; neither case should amplify or retain motion after you stop.'
+        Write-Host 'First rotate, look up/down and tilt the head in place without shifting the torso. This must not produce visible character locomotion.'
+        Write-Host 'Then test stick alone and together with a deliberate small horizontal head/torso translation in the same and opposite directions; neither case should amplify or retain motion after you stop.'
         Write-Host 'Recenter once, crouch and stand once, then take one clear physical step after the native shape has returned to standing.'
         Write-Host 'Observe that the desktop mirror shows gameplay and that head motion, hands and world remain coherent.'
     }

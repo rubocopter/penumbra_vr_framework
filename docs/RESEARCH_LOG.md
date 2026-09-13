@@ -511,12 +511,15 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
   recovery; 414 free and 25 slide/partial samples did. The redundant repetition
   was replaced with a requirement for meaningful post-recovery movement while
   retaining all four global outcome gates.
-- Comparison with Rework `23c890f` found the reported movement amplification at
-  the sequence boundary. Rework reconciles physical movement in one update and
-  carries the anchor with a later stick-only update. Black Plague's one owned
-  tick combines both, and the shadow had reused its physical accepted component
-  in locomotion carry after reconciliation.
+- The qualitative failure was character walking during in-place head tilt;
+  stick then added to or opposed that unintended motion. Comparison with Rework
+  `23c890f` found a concrete sequence difference that can amplify it. Rework
+  reconciles physical movement in one update and carries the anchor with a later
+  stick-only update. Black Plague's one owned tick combines both, and the shadow
+  had reused its physical accepted component in locomotion carry after
+  reconciliation.
 - The adapter now subtracts matched physical X/Z from locomotion carry, preserves
   actual whole-tick `body_after` for camera space and logs `locomotion_carry`.
   Both Release configurations compile. No test executable or new live/headset
-  session was run, so the correction remains `implemented`.
+  session was run, so the correction remains `implemented` and is not yet
+  claimed to resolve tilt-induced walking.

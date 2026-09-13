@@ -140,7 +140,7 @@ Current order:
 4. Preserve shadow-only mode as observation-only; its plan is not evidence that the dedicated physical request was injected.
 5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
 6. Preserve the corrected combined-tick partition: reconcile matched physical X/Z once, then carry the anchor only with the remaining native locomotion while retaining actual `body_after` for camera space.
-7. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to headset-validate active free movement, blocking/sliding, recenter, the native crouch shape swap/recovery, same/opposed stick plus HMD movement and head/hand reconciliation before promoting the integration.
+7. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to prove that in-place head rotation/tilt does not cause locomotion, then headset-validate deliberate physical translation, blocking/sliding, recenter, the native crouch shape swap/recovery, stick combinations and head/hand reconciliation before promoting the integration.
 8. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
 9. Keep physical crouch and jump comfort/tuning as separate milestones.
 10. Treat camera/head-bob/footstep-bob ownership as a separate comfort track rather than a prerequisite for the initial body contract.

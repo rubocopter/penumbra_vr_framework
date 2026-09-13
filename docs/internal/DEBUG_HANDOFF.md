@@ -34,12 +34,13 @@ stronger dispatch/quiescence protocol before calling `FreeLibrary` on the probe.
 
 The user previously reported world displacement / collision discomfort while moving physically in VR. Leaning the HMD can move the view while the native body remains elsewhere, producing substantial discomfort.
 
-PID 24956 then reported that stick and small physical HMD displacement combine
-in the same direction and can cancel in opposite directions, with motion that
-felt too large. Vector addition/cancellation itself matches Rework's sequential
-physical-then-stick behavior. The log also proved a Framework-only amplification
-source: the combined tick's physical component was reconciled and then reused by
-the locomotion-only anchor carry. Movements caused while partially removing the
+PID 24956 then reported that rotating/tilting the head while physically staying
+in place made the character walk in that direction. Stick movement added to or
+opposed that unintended locomotion. Do not normalize this as expected vector
+addition: only a deliberate horizontal head/torso translation is room-scale
+movement. Static comparison also found a Framework-only amplification source:
+the combined tick's physical component was reconciled and then reused by the
+locomotion-only anchor carry. Movements caused while partially removing the
 headset reached the existing `0.05 m` per-tick clamp and are unsuitable for
 comfort tuning, but did not cause the diagnosed sequence difference.
 
@@ -148,11 +149,11 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 Headset-validate the corrected active room-scale/positional HMD translation
 through the live-tested physical displacement boundary first. Require
-free/block/slide, recenter, native crouch shape swap/recovery, same/opposed stick
-plus small HMD movement, hands and mirror-on evidence. The combined body vector
-may add or cancel physically; `locomotion_carry` must exclude the already
-reconciled `physical_accepted` component and no extra camera jump or residual
-drift may remain.
+free/block/slide, recenter, native crouch shape swap/recovery, in-place
+rotation/tilt with no appreciable locomotion, deliberate translated HMD movement
+with/without stick, hands and mirror-on evidence. `locomotion_carry` must exclude
+the already reconciled `physical_accepted` component and no extra camera jump or
+residual drift may remain.
 Then compare a deliberately
 scoped Black Plague VR locomotion policy against the proven Overture
 `1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement

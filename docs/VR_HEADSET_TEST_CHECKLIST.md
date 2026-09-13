@@ -23,14 +23,19 @@ cámara tras volver de pie y frames gameplay con `monitor_mirror=1`. El helper
 falló únicamente porque exigía repetir también un bloqueo después de levantarse;
 después de recuperar la forma sí registró 414 free y 25 slide/partial.
 
-La sesión no valida todavía el resultado visual. El movimiento comunicado
-permitió localizar una diferencia respecto a Rework `23c890f`: Black Plague
-resuelve stick y petición física dentro de su único tick nativo, y el shadow
-arrastraba el ancla con el vector combinado después de haber reconciliado ya la
-parte física. La corrección conserva el body final real, resta la parte física
-emparejada antes del arrastre reservado a locomoción y expone
-`locomotion_carry` en telemetría. Está implementada y compilada; falta repetirla
-en juego y visor.
+La sesión no valida todavía el resultado visual. El problema comunicado fue más
+concreto: inclinar o rotar la cabeza manteniendo el cuerpo en el sitio hacía que
+el personaje anduviese hacia esa dirección. Al usar stick, ese movimiento no
+deseado se sumaba o se oponía. Eso no se considera comportamiento room-scale
+aceptable ni paridad con Overture Rework.
+
+La revisión localizó además una diferencia respecto a Rework `23c890f`: Black
+Plague resuelve stick y petición física dentro de su único tick nativo, y el
+shadow arrastraba el ancla con el vector combinado después de haber reconciliado
+ya la parte física. La corrección conserva el body final real, resta la parte
+física emparejada antes del arrastre reservado a locomoción y expone
+`locomotion_carry` en telemetría. Está implementada y compilada, pero todavía no
+se ha probado con visor y no se afirma que haya resuelto el andar al inclinar.
 
 ## Siguiente tanda — room-scale activo, colisiones y mirror encendido
 
@@ -58,43 +63,48 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 1. **Baseline quieto.** Ya dentro de una partida y en una zona despejada, no
    uses sticks durante 5–10 segundos. Mantén una postura normal; el movimiento
    mínimo del visor es esperado. Confirma que el mundo no deriva ni tiembla.
-2. **Free X/Z.** Desplaza la cabeza y el torso unos centímetros hacia delante,
+2. **Rotación e inclinación en el sitio.** Sin desplazar pies ni torso, mira a
+   izquierda/derecha, arriba/abajo e inclina lateralmente la cabeza. El mundo y
+   la cámara deben rotar, pero el personaje no debe empezar a andar, avanzar,
+   retroceder ni desplazarse lateralmente de forma apreciable. Anota por separado
+   cualquier bob, paso, deriva o movimiento corporal. Esta es la regresión
+   principal de la tanda.
+3. **Free X/Z deliberado.** Desplaza físicamente cabeza y torso unos centímetros hacia delante,
    atrás y ambos lados, sin stick. El punto de vista debe acompañar el movimiento
    de forma natural y el personaje debe recuperar la separación mediante su
    cuerpo nativo sin saltos visibles.
-3. **Blocked.** Acércate a una pared y desplázate físicamente hacia ella. La
+4. **Blocked.** Acércate a una pared y desplázate físicamente hacia ella. La
    cámara no debe atravesarla ni permitir que la cabeza gane distancia ilimitada
    respecto al cuerpo. Mantén el caso varios segundos hasta que la consola
    anuncie `blocked`.
-4. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
+5. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
    conservarse la componente tangencial y rechazarse la componente que entra en
    la geometría. Espera a que la consola anuncie `slide/partial`.
-5. **Regresión de partición stick/HMD.** Primero camina solo con stick y detente.
-   Después mantén el stick hacia delante y desplaza la cabeza unos centímetros
-   hacia delante; repite con la cabeza hacia atrás. En el comportamiento de
-   referencia los dos vectores reales pueden sumarse si coinciden y reducir el
-   avance si se oponen. No debe aparecer un salto adicional de cámara, una
-   amplificación mayor que esos dos aportes ni movimiento residual al detener
-   ambos. La telemetría nueva debe mostrar `native_accepted` combinado y
+6. **Partición stick/traslación HMD.** Primero camina solo con stick y detente.
+   Después mantén el stick hacia delante y desplaza deliberadamente cabeza y
+   torso unos centímetros hacia delante; repite trasladándolos hacia atrás. Solo
+   aquí existen dos desplazamientos reales que pueden combinarse. No debe
+   aparecer un tercer aporte, salto de cámara ni movimiento residual al detener
+   ambos. La telemetría debe mostrar `native_accepted` combinado y
    `locomotion_carry` sin la parte `physical_accepted` ya reconciliada.
-6. **Recenter.** Ejecuta un recenter, espera unos segundos y repite `free` y
+7. **Recenter.** Ejecuta un recenter, espera unos segundos y repite `free` y
    `blocked`. No debe aparecer un salto persistente, offset antiguo ni pérdida de
    manos.
-7. **Cambio nativo de forma.** Agáchate, mantén la postura unos segundos y vuelve
+8. **Cambio nativo de forma.** Agáchate, mantén la postura unos segundos y vuelve
    a levantarte mediante el control normal del juego. El `character_body` se
    conserva mientras su cuerpo físico cambia de `1.65 m` a `0.95 m` y vuelve a
    `1.65 m`. Después da un paso físico claro en cualquier dirección; el helper
    exige la secuencia completa, una muestra room-scale fresca y movimiento
    físico significativo tras volver de pie. Las cuatro clases de colisión solo
    se exigen una vez en el conjunto de la sesión.
-8. **Manos y coherencia espacial.** Mira ambas manos mientras inclinas la cabeza
+9. **Manos y coherencia espacial.** Mira ambas manos mientras inclinas la cabeza
    y durante un movimiento lateral. Las palmas no deben quedarse en el anclaje
    anterior ni separarse del punto de vista.
-9. **Mirror y menús.** Confirma que el monitor muestra gameplay con mirror
+10. **Mirror y menús.** Confirma que el monitor muestra gameplay con mirror
    encendido. Abre pausa, inventario/libreta y vuelve al juego. Haz un Alt+Tab,
    abre esos menús antes de devolver el foco y anota qué superficie queda negra,
    si ocurre. Devuelve el foco y comprueba si se recupera.
-10. **Estabilidad breve.** Juega 2–3 minutos y vigila tirones, world wobble,
+11. **Estabilidad breve.** Juega 2–3 minutos y vigila tirones, world wobble,
     clipping, pérdida de tracking, desajuste de manos o colisiones distintas de
     las observadas antes.
 
@@ -121,7 +131,7 @@ Al cerrar el juego, el helper solo termina con éxito si el log fresco demuestra
 
 La aprobación automática demuestra que el camino técnico estuvo activo y dejó
 evidencia. Para promoverlo a **headset-validated** también necesito tu resultado
-visual de los puntos 1–10.
+visual de los puntos 1–11.
 
 ## Qué devolver después de la prueba
 
@@ -131,9 +141,11 @@ Conserva y comunica:
 - salida final completa del helper;
 - si `free`, `blocked` y `slide` se sintieron correctos;
 - si hubo doble movimiento, salto del mundo o deriva;
-- qué ocurrió al combinar stick y desplazamiento de cabeza en el mismo sentido
-  y en sentidos opuestos, y si el movimiento cesó al soltar el stick y volver a
-  la postura inicial;
+- si rotar/inclinar la cabeza en el sitio produjo cualquier desplazamiento del
+  personaje, separado del lean/step deliberado;
+- qué ocurrió al combinar stick y traslación física deliberada en el mismo
+  sentido y en sentidos opuestos, y si el movimiento cesó al soltar el stick y
+  volver a la postura inicial;
 - si las manos siguieron a la cabeza;
 - resultado del mirror en gameplay y menús;
 - resultado de Alt+Tab y recuperación de foco;
@@ -146,7 +158,7 @@ fallo real de cámara, reconciliación, ownership o presentación.
 Los movimientos grandes causados al quitarse parcialmente el visor no sirven
 para juzgar sensibilidad ni comfort, pero tampoco invalidan las muestras
 collision-aware: el límite sigue acotando cada petición a `0.05 m`. Para la
-prueba del punto 5 usa movimientos pequeños y continuos; los pasos completos ya
+prueba del punto 6 usa movimientos pequeños y continuos; los pasos completos ya
 aparecen impresos en la propia terminal para evitar consultar otra pantalla.
 
 ## Gate anterior — repetir solo ante regresión

@@ -71,19 +71,22 @@ PID 24956 live-exercised the default-off Black Plague active room-scale
 consumer. It captured 90 stationary/jitter, 963 free, 10 blocked and 95
 slide/partial telemetry samples, the native `1.65 -> 0.95 -> 1.65 m` crouch
 shape sequence, camera application after recovery and mirror-on gameplay
-frames. The session did not pass headset validation: combined stick and HMD
-movement exposed that the single Black Plague body tick fed its already
-reconciled physical displacement back into Rework's locomotion-only anchor
-carry phase. The implementation now subtracts that matched physical component
-before locomotion carry while retaining the real whole-tick body position for
-camera space. This correction is implemented and compiled, but is not yet
-live-tested or headset-validated.
+frames. The session did not pass headset validation: the user reported that
+rotating/tilting the head in place made the character walk, with stick adding or
+opposing that unintended motion. Static comparison also found that the single
+Black Plague body tick fed its already reconciled physical displacement back
+into Rework's locomotion-only anchor carry phase. The implementation now
+subtracts that matched physical component before locomotion carry while
+retaining the real whole-tick body position for camera space. This correction
+may remove amplification but has not yet been tested in the headset; do not
+treat tilt-induced walking as expected room-scale behavior.
 
 The next Black Plague gameplay gate is
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must validate active
 physical movement, blocking/sliding, recenter, the native crouch shape swap and
-recovery, combined/opposed stick plus small HMD movement, head/hand coherence
-and mirror-on presentation before promotion. Keep physical
+recovery, rotation/tilt in place without locomotion, deliberate translated HMD
+movement with/without stick, head/hand coherence and mirror-on presentation
+before promotion. Keep physical
 crouch-by-height, speed tuning and camera/bob as separate validation gates.
 
 ## Black Plague constraints

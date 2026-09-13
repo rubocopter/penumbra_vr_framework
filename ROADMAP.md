@@ -71,10 +71,12 @@ physical X/Z displacement request in metres are now live-tested. PID 26144
 demonstrated queue, injection, native collision and matched reconciliation at
 `0xD7281` while positional HMD translation remained zero. PID 24956 exercised
 the active room-scale consumer, all physical outcomes and native crouch recovery
-in a headset, but failed the validation gate because the combined native tick
-also carried its already reconciled physical component as locomotion. That
-Rework-sequence difference is corrected and compiled; the revised active path
-remains `implemented` pending a repeat live/headset validation.
+in a headset, but reported unintended character walking during in-place head
+tilt. Static comparison also found that the combined native tick carried its
+already reconciled physical component as locomotion. That Rework-sequence
+difference is corrected and compiled, but it is not yet proven to explain the
+reported tilt behavior; the revised active path remains `implemented` pending a
+repeat live/headset validation.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.

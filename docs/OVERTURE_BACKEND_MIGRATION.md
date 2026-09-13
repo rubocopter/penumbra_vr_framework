@@ -250,11 +250,13 @@ The probe measures before/requested/solver/final positions. Those mappings,
 jump ownership and the narrow body adapter are live-characterized. The separate
 default-off X/Z injection boundary at `0xD7281` is live-tested in PID 26144;
 PID 24956 live-exercised the default-off active room-scale consumer through that
-boundary and exposed a Black Plague-only sequencing defect: its combined native
-tick reused already reconciled physical displacement in locomotion carry. The
-adapter/shadow partition is corrected and compiles in the affected Release
-targets, but the revision still requires live/headset validation. Overture's
-proven two-update sequence was not changed.
+boundary and reported character locomotion during in-place head tilt. Static
+comparison also exposed a Black Plague-only sequencing defect: its combined
+native tick reused already reconciled physical displacement in locomotion carry.
+The adapter/shadow partition is corrected and compiles in the affected Release
+targets, but it is not yet proven to resolve the reported symptom and still
+requires live/headset validation. Overture's proven two-update sequence was not
+changed.
 
 Finger articulation points in the other direction. BP's existing shared
 `VrHandArticulation` output (independent curls, three joint curves, spread and

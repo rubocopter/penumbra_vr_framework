@@ -397,12 +397,16 @@ absence of another blocked sample after recovery; the global standing-shape
 block was already present, so post-recovery now requires meaningful movement
 rather than all three collision outcomes again.
 
-The headset report nevertheless found a real sequence defect. Rework `23c890f`
-performs physical reconciliation in one character update, then carries the head
-anchor only with a separate accepted stick update. Black Plague keeps one native
-`D6E00` and injects the prior physical request into the tick that also contains
-native locomotion. The shadow had passed that combined accepted displacement to
-locomotion carry after already reconciling the physical part. It now subtracts
-the matched physical X/Z component for carry, preserves actual whole-tick
-`body_after` for camera space and logs the result as `locomotion_carry`. The
-correction is compiled but still requires a repeat live/headset session.
+The qualitative failure was unintended character walking during in-place head
+tilt; stick then added to or opposed that motion. This must remain distinct from
+deliberate horizontal head/torso translation. Static comparison also found a
+real sequence defect. Rework `23c890f` performs physical reconciliation in one
+character update, then carries the head anchor only with a separate accepted
+stick update. Black Plague keeps one native `D6E00` and injects the prior
+physical request into the tick that also contains native locomotion. The shadow
+had passed that combined accepted displacement to locomotion carry after already
+reconciling the physical part. It now subtracts the matched physical X/Z
+component for carry, preserves actual whole-tick `body_after` for camera space
+and logs the result as `locomotion_carry`. The correction is compiled but has not
+yet been tested in a headset, so it is not claimed to resolve tilt-induced
+walking.

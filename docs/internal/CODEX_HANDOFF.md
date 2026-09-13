@@ -13,12 +13,15 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
-  recovery. Black Plague's one owned body tick combined native movement with the
-  prior physical request, but `BodyReconciliationShadow` carried that whole
-  vector after physical reconciliation. Rework `23c890f` carries only its later,
-  separate stick update. The adapter now excludes the matched physical component
-  from locomotion carry while retaining the actual final body for camera space.
-  The correction compiles but still requires live/headset validation.
+  recovery. The user specifically reported that in-place head tilt made the
+  character walk; stick then added to or opposed that unintended motion. Static
+  comparison also found that Black Plague's one owned body tick combined native
+  movement with the prior physical request, but `BodyReconciliationShadow`
+  carried that whole vector after physical reconciliation. Rework `23c890f`
+  carries only its later, separate stick update. The adapter now excludes the
+  matched physical component from locomotion carry while retaining the actual
+  final body for camera space. The correction compiles, but has not been tested
+  with a headset and is not yet proven to resolve tilt-induced walking.
 - The first room-scale helper launch exposed a settings-store regression before
   game startup: the all-null private-profile cache flush was incorrectly treated
   as a Boolean success result and reported Win32 error 2. The store now follows
@@ -317,17 +320,21 @@ The final helper failure only lacked another blocked sample after standing; that
 requirement was redundant with the already captured standing-shape block and is
 now replaced by meaningful post-recovery physical movement.
 
-The user's combined stick/head test exposed the actual blocker. Black Plague's
-single tick reported total accepted movement including the prior physical
-request; after that request had been reconciled, the shadow passed the same
-physical component into `CarryHeadAnchorWithLocomotion`. Rework performs a
+The user's actual blocker is character locomotion from in-place head tilt; the
+reported stick addition/cancellation described interaction with that unintended
+motion, not an acceptable deliberate room-scale step. Static analysis found a
+concrete contributor: Black Plague's single tick reported total accepted
+movement including the prior physical request; after that request had been
+reconciled, the shadow passed the same physical component into
+`CarryHeadAnchorWithLocomotion`. Rework performs a
 physical body update first and carries the anchor only with a second stick body
 update. The corrected shadow receives the matched physical accepted vector,
 subtracts X/Z from locomotion carry, keeps the real whole-tick `body_after` for
 camera offset, and logs `locomotion_carry` separately. The next gate remains
-`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must retest free/block/slide,
-recenter, crouch recovery, same/opposed stick plus small HMD movement, hands,
-mirror/focus and absence of residual drift before promotion.
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must first prove that
+rotation/tilt in place causes no appreciable locomotion, then retest deliberate
+translated HMD motion, free/block/slide, recenter, crouch recovery, stick
+combinations, hands, mirror/focus and absence of residual drift before promotion.
 
 Two presentation regressions from the earlier headset session remain separate.
 PID 19192 refined the mirror-off evidence: gameplay frames reported

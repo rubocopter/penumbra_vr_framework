@@ -353,9 +353,10 @@ PowerShell local contrasta la captura inicializada sin modificar procesos.
 El boundary corporal/adapter, la reconciliación shadow y la petición física X/Z
 collision-aware en `0xD7281` ya están live-tested, pero los hitos amplios de
 jugabilidad todavía no están certificados. PID 24956 live-ejercitó room-scale
-activo y encontró la doble contabilización del carry; la siguiente evidencia
-debe validar con visor la partición corregida, incluyendo stick y HMD en el mismo
-sentido y en sentidos opuestos.
+activo, reportó locomoción al inclinar la cabeza sin trasladar el cuerpo y
+permitió encontrar la doble contabilización del carry. La siguiente evidencia
+debe probar primero inclinación/rotación sin locomoción apreciable y después la
+partición corregida con traslación HMD deliberada y stick.
 Herramientas definitivas,
 palm collision y mecanismos articulados siguen pendientes, además de sus pruebas
 con visor.

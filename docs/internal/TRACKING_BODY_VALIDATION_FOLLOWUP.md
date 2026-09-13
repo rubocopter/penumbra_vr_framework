@@ -8,9 +8,11 @@ This file follows up `TRACKING_BODY_RECONCILIATION.md`. That report is an implem
 
 Later checkpoints: PID 26144 subsequently live-tested the physical request at
 `0xD7281`. PID 24956 then live-exercised the default-off active room-scale
-consumer and native crouch recovery, but exposed reuse of the combined tick's
-already reconciled physical component in locomotion carry. The corrected
-partition compiles and awaits repeat live/headset validation. Statements below
+consumer and native crouch recovery. The user reported unintended character
+walking during in-place head tilt; static comparison also exposed reuse of the
+combined tick's already reconciled physical component in locomotion carry. The
+corrected partition compiles, but it is not yet proven to resolve that symptom
+and awaits repeat live/headset validation. Statements below
 that positional translation is compile-time zero describe this earlier
 shadow-only checkpoint.
 
