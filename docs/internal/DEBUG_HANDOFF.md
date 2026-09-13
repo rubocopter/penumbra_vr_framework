@@ -187,6 +187,15 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 - The transient active room-scale path now ports Rework's direct `1.5 / 2.25
   m/s` policy through the existing `0xD7281` owner. It is host-tested only. The
   default path still preserves native tuning.
+- PID 17612 proved the first direct-locomotion permission gate was impossible:
+  full left-stick analog reached the controller frame, but all `locomotion_*`
+  fields stayed zero. `MoveForward/MoveSideways` test `amount == 0` before their
+  later `+0x264 = 1` write, so clearing the VR native axis prevented that byte
+  from ever becoming the intended permission signal. The corrected path invokes
+  only the exact pre-Move state gates and checks `+0x268/+0x26C`, then queues the
+  metric request through the existing collision owner and mirrors `+0x264` after
+  successful publication. Do not reintroduce `+0x264` as a pre-publication
+  oracle.
 
 ### Do not try again
 

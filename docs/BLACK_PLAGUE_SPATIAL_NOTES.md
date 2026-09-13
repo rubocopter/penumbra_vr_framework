@@ -154,7 +154,7 @@ crouch físico, jump, bob, estados o efectos de pasos dentro de la política com
 |---|---|---|---|
 | Intento plano | `cButtonHandler::Update`: `51CD/5227 -> cPlayer::MoveForward/MoveSideways` (`9CBC0/9CC60`) | Antes | Live-tested a través del adapter |
 | Aceleración/objetivo | `cPlayer` comprueba state/ground y llama `iCharacterBody::Move(D4F50)`; éste suma `amount * acc * dt` en `+70..+7C`, marca `+88/+89` y limita por `+60..+6C` | Consumido por `D6E00` | Mapeado + comportamiento live |
-| Locomoción VR directa transitoria | Runtime construye dirección HMD y `1.5/2.25 m/s`; `NativeInputBridge` exige permiso nativo `cPlayer+0x264`; `BodyCollisionProbe` combina y acota físico+stick en `0xD7281` | Una inyección dentro del único `D6E00` | Implemented + host-tested; visor pendiente |
+| Locomoción VR directa transitoria | Runtime construye dirección HMD y `1.5/2.25 m/s`; `NativeInputBridge` replica solo el predicate pre-Move exact-build (dos gates de state + `+268/+26C`) y `BodyCollisionProbe` combina/acota físico+stick en `0xD7281` | Una inyección dentro del único `D6E00` | Implemented + host-tested; PID 17612 diagnosticó el gate anterior; repetir visor |
 | Deceleración y velocidad final | `D6E00` consume flags, aplica deacc y convierte los campos de velocidad en request horizontal antes de `D7312` | Dentro, antes de colisión | Mapeado |
 | Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan al move-state actual; inicialización de state aplica los límites por setters nativos | Antes | Live-characterized; ~3.0/4.5 m/s efectivos |
 | Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` gestiona hold `+1FC/+200/+204` | La fuerza/estado vertical se publica antes de `D6E00`; horizontal mantiene Y=0 y la vertical se aplica después | Live-characterized: ~5.53 m/s inicial, apex ~0.95 m, landing nativo y 3→0 |
@@ -163,13 +163,23 @@ crouch físico, jump, bob, estados o efectos de pasos dentro de la política com
 | `D790C/D7913` | Sync sólo de la rama con gravedad desactivada | Después | No son composición general de cámara; el player activo los evita |
 | Head/footstep bob | No hay evidencia suficiente para atribuir todavía el efecto visual concreto | Pista de comfort separada | Pendiente, no bloquea el adapter/reconciliation inicial |
 
-La captura exact-build respalda también el gate usado por la locomoción directa:
-`MoveForward` (`0x9CBC0`) y `MoveSideways` (`0x9CC60`) contienen
-`C6 86 64 02 00 00 01` (`cPlayer+0x264 = 1`) únicamente después de superar los
-checks de estado/suelo y de entrar en la ruta que llama `iCharacterBody::Move`.
-Los saltos de rechazo salen antes de esa escritura. Por eso `+0x264` puede
-usarse como confirmación binaria de que el estado activo aceptó movimiento sin
-reimplementar la lógica de estados en el Framework.
+La captura exact-build fija también el gate usado por la locomoción directa.
+`MoveForward` (`0x9CBC0`) y `MoveSideways` (`0x9CC60`) consultan primero el
+move-state indexado por `+BC/+C4` (slots `+4C/+50`), después el indexado por
+`+D0/+D8` (slots `+0C/+10`), y requieren `+268 > 0` o `+26C != 0`. Solo después
+comparan el `amount` con `0.0`, llaman `iCharacterBody::Move` y finalmente
+escriben `C6 86 64 02 00 00 01` (`cPlayer+0x264 = 1`).
+
+PID 17612 demostró por qué `+0x264` no puede usarse como oracle de permiso una
+vez que la locomoción VR se separa de los ejes nativos: el stick llegaba con
+deflexión completa al runtime, pero el bridge entregaba `amount=0` a los métodos
+nativos; éstos salían por su branch de cero antes de escribir el byte y nunca se
+publicaba `locomotion_requested`. La adaptación corregida evalúa únicamente el
+predicate anterior al `amount == 0`, conserva prioridad para cualquier eje
+nativo real, publica el desplazamiento métrico por el owner `0xD7281` y refleja
+`+0x264` después de una publicación directa correcta. El verificador exact-build
+ancla esas instrucciones para que esta equivalencia no se convierta en una
+suposición HPL genérica.
 
 PID 29672 cerró el burst de salto: `+204=0.3` es umbral para la lógica de hold,
 no máximo de `+200`; el contador alcanzó 2.233332 y al soltar volvió a 0.3.

@@ -142,10 +142,13 @@ Current order:
 5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
 6. Preserve the corrected combined-tick partition: reconcile matched physical X/Z once, then carry the anchor only with the remaining native locomotion while retaining actual `body_after` for camera space.
 7. Preserve the new direct locomotion adaptation: game-neutral HMD direction and
-   `1.5/2.25 m/s` policy stay in runtime; the exact movement-permission byte,
-   single-tick `0xD7281` injection and accepted-component partition stay in the
-   Black Plague backend. This differs from Rework's two sequential body updates
-   because the target exposes only one live-tested native update owner.
+   `1.5/2.25 m/s` policy stay in runtime; the exact pre-Move state predicate,
+   single-tick `0xD7281` injection, `+0x264` post-publication state mirror and
+   accepted-component partition stay in the Black Plague backend. PID 17612
+   proved that `+0x264` cannot be used as the pre-publication permission oracle
+   after the VR native axis is zeroed. This differs from Rework's two sequential
+   body updates because the target exposes only one live-tested native update
+   owner.
 8. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to prove stationary and slow physical motion are visually stable at render rate, preserve the confirmed no-locomotion result for in-place rotation/tilt, then headset-validate blocking/sliding, recenter, equal directional walk/sprint speed, physical/stick combinations, native movement-state rejection and head/hand reconciliation before promoting the integration.
 9. Keep physical crouch and jump comfort/tuning as separate milestones.
 10. Preserve the now-evidenced horizontal VR-anchor placement in this gate. Keep vertical camera/head-bob, footstep-bob and physical-height ownership as the separate comfort track.

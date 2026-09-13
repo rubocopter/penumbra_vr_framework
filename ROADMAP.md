@@ -82,7 +82,13 @@ acceleration from a differently oriented hidden body. Rework's direct
 `1.5/2.25 m/s` displacement is now implemented for the transient room-scale
 gate through the existing `0xD7281` owner. Physical and stick requests share one
 bounded `0.05 m` tick and their accepted components are partitioned before
-anchor reconciliation. This is host-tested and awaits the next headset gate.
+anchor reconciliation. PID 17612 showed that the first publication gate blocked
+the route completely even though full left-stick analog reached the runtime:
+zeroing the VR native axis made `MoveForward/MoveSideways` return before their
+later `+0x264` write. The bridge now evaluates the exact pre-Move state predicate
+instead and mirrors `+0x264` only after a direct request is queued. The exact
+image verifier and x86 Release build pass; the correction remains host-tested
+and awaits the next headset gate.
 Physical crouch by height and tracking-world-yaw turn ownership remain separate
 milestones.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off

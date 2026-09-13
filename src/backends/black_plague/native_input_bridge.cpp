@@ -69,6 +69,7 @@ using LegacyString = adapters::hpl1::LegacyInputString;
 using Query = adapters::hpl1::LegacyInputQuery;
 using Update = void(__thiscall*)(void*, float);
 using Move = void(__thiscall*)(void*, float, float);
+using MoveStateGate = bool(__thiscall*)(void*, float, float);
 using Yaw = void(__thiscall*)(void*, float);
 std::uint8_t* g_image = nullptr;
 hooks::IatHook g_update_hook;
@@ -97,7 +98,12 @@ thread_local runtime::VrNativeIntents* g_intents = nullptr;
 thread_local void* g_input_player = nullptr;
 thread_local bool g_direct_locomotion = false;
 thread_local bool g_direct_native_axis_observed = false;
-thread_local std::array<float, 3> g_direct_locomotion_displacement{};
+thread_local bool g_direct_forward_allowed = false;
+thread_local bool g_direct_sideways_allowed = false;
+thread_local runtime::VrAnalogState g_direct_move{};
+thread_local runtime::VrMatrix44 g_direct_head_world_pose{};
+thread_local float g_direct_move_scale = 1.0F;
+thread_local bool g_direct_sprinting = false;
 thread_local bool g_pointer_valid = false;
 thread_local std::array<float, 2> g_pointer_uv{};
 thread_local std::uint64_t g_mouse_override_until = 0;
@@ -111,6 +117,69 @@ template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
     T result{};
     if (object) static_cast<void>(ReadBytes(static_cast<const std::uint8_t*>(object) + offset, &result, sizeof(result)));
     return result;
+}
+
+[[nodiscard]] void* CurrentMoveState(
+    void* player, std::uintptr_t table_offset,
+    std::uintptr_t index_offset) noexcept {
+    auto* const table = Read<void*>(player, table_offset);
+    const auto index = Read<std::int32_t>(player, index_offset);
+    if (table == nullptr || index < 0) return nullptr;
+    return Read<void*>(table,
+        static_cast<std::uintptr_t>(index) * sizeof(void*));
+}
+
+[[nodiscard]] bool CallMoveStateGate(
+    void* state, std::uintptr_t slot,
+    float amount, float delta_seconds) noexcept {
+    if (state == nullptr) return false;
+    auto* const vtable = Read<void*>(state, 0);
+    auto* const target = Read<void*>(vtable, slot);
+    if (target == nullptr) return false;
+    __try {
+        return reinterpret_cast<MoveStateGate>(target)(
+            state, amount, delta_seconds);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+// Exact FD316F... MoveForward/MoveSideways prefix. Both native methods call
+// these two state gates, then require +0x268 > 0 or +0x26C != 0, before their
+// final amount != 0 branch reaches iCharacterBody::Move and writes +0x264.
+// Direct VR locomotion cannot use +0x264 as a permission oracle after removing
+// its analog amount from the native axis, because amount == 0 returns before
+// that write. Re-evaluate only the proven pre-Move predicate at the original
+// axis callback and leave the body write to the single 0xD7281 owner.
+[[nodiscard]] bool NativeMoveAxisAllowsDirectLocomotion(
+    void* player, float amount, float delta_seconds,
+    bool sideways) noexcept {
+    if (player == nullptr || !std::isfinite(amount) ||
+        !std::isfinite(delta_seconds) ||
+        std::abs(amount) <= 0.00001F || delta_seconds <= 0.0F) {
+        return false;
+    }
+
+    auto* const primary = CurrentMoveState(player, 0xBC, 0xC4);
+    if (!CallMoveStateGate(primary, sideways ? 0x50 : 0x4C,
+                           amount, delta_seconds)) {
+        return false;
+    }
+    auto* const secondary = CurrentMoveState(player, 0xD0, 0xD8);
+    if (!CallMoveStateGate(secondary, sideways ? 0x10 : 0x0C,
+                           amount, delta_seconds)) {
+        return false;
+    }
+    return Read<std::int32_t>(player, 0x268) > 0 ||
+           Read<std::uint8_t>(player, 0x26C) != 0;
+}
+
+void MarkDirectLocomotionAccepted(void* player) noexcept {
+    if (player == nullptr) return;
+    __try {
+        *(static_cast<std::uint8_t*>(player) + 0x264) = 1;
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+    }
 }
 [[nodiscard]] std::uintptr_t DecodeCallTarget(
     const std::array<std::uint8_t, 5>& bytes, std::uintptr_t call) noexcept {
@@ -162,6 +231,12 @@ void __fastcall HookedForward(void* player, void*, float amount, float dt) {
     CallbackScope scope;
     if (g_direct_locomotion && std::abs(amount) > 0.00001F)
         g_direct_native_axis_observed = true;
+    if (g_direct_locomotion && !g_direct_native_axis_observed &&
+        std::abs(g_direct_move.y) > 0.00001F) {
+        g_direct_forward_allowed = NativeMoveAxisAllowsDirectLocomotion(
+            player, g_direct_move.y * g_direct_move_scale, dt, false);
+        return;
+    }
     const float intent = g_direct_locomotion
         ? amount : (g_intents ? g_intents->Move(amount, false) : amount);
     if (!PublishBlackPlagueForwardIntent(player, intent, dt)) {
@@ -172,18 +247,35 @@ void __fastcall HookedSideways(void* player, void*, float amount, float dt) {
     CallbackScope scope;
     if (g_direct_locomotion && std::abs(amount) > 0.00001F)
         g_direct_native_axis_observed = true;
-    const float intent = g_direct_locomotion
-        ? amount : (g_intents ? g_intents->Move(amount, true) : amount);
-    if (!PublishBlackPlagueSidewaysIntent(player, intent, dt)) {
-        reinterpret_cast<Move>(g_image + 0x9CC60)(player, intent, dt);
-    }
-    // Both native axis calls have now run. +0x264 is set by the exact
-    // MoveForward/MoveSideways implementation only when the active player
-    // state accepted movement. Keyboard input takes precedence for this tick.
     if (g_direct_locomotion && !g_direct_native_axis_observed &&
-        Read<std::uint8_t>(player, 0x264) != 0) {
-        static_cast<void>(PublishBlackPlagueDirectLocomotion(
-            player, g_direct_locomotion_displacement));
+        std::abs(g_direct_move.x) > 0.00001F) {
+        g_direct_sideways_allowed = NativeMoveAxisAllowsDirectLocomotion(
+            player, g_direct_move.x * g_direct_move_scale, dt, true);
+    } else {
+        const float intent = g_direct_locomotion
+            ? amount : (g_intents ? g_intents->Move(amount, true) : amount);
+        if (!PublishBlackPlagueSidewaysIntent(player, intent, dt)) {
+            reinterpret_cast<Move>(g_image + 0x9CC60)(player, intent, dt);
+        }
+    }
+
+    // Both native axis callbacks have now run. Native keyboard/controller axes
+    // retain priority. Otherwise apply only the VR components whose exact-build
+    // state predicate accepted them, then publish one metric request.
+    if (g_direct_locomotion && !g_direct_native_axis_observed) {
+        auto permitted = g_direct_move;
+        if (std::abs(permitted.y) > 0.00001F && !g_direct_forward_allowed)
+            permitted.y = 0.0F;
+        if (std::abs(permitted.x) > 0.00001F && !g_direct_sideways_allowed)
+            permitted.x = 0.0F;
+        const auto direction = runtime::HeadRelativeMoveDirection(
+            g_direct_head_world_pose, permitted);
+        const auto displacement = runtime::LocomotionDisplacement(
+            direction, dt, g_direct_move_scale, false, g_direct_sprinting);
+        if (std::hypot(displacement[0], displacement[2]) > 0.0F &&
+            PublishBlackPlagueDirectLocomotion(player, displacement)) {
+            MarkDirectLocomotionAccepted(player);
+        }
     }
 }
 void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* physical_delta) {
@@ -282,20 +374,21 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     g_player.store(g_input_player, std::memory_order_release);
     g_direct_locomotion = false;
     g_direct_native_axis_observed = false;
-    g_direct_locomotion_displacement = {};
+    g_direct_forward_allowed = false;
+    g_direct_sideways_allowed = false;
+    g_direct_move = {};
+    g_direct_head_world_pose = {};
+    g_direct_move_scale = 1.0F;
+    g_direct_sprinting = false;
     runtime::VrMatrix44 head_world_pose;
     if (!ui && frame.focused && raw_move.active &&
         BlackPlagueDirectLocomotionAvailable(g_input_player) &&
         TrackedHeadWorldPose(head_world_pose)) {
-        const auto direction = runtime::HeadRelativeMoveDirection(
-            head_world_pose, raw_move);
-        g_direct_locomotion_displacement =
-            runtime::LocomotionDisplacement(
-                direction, dt, move_scale, false,
-                frame.input.state.sprint.pressed);
-        g_direct_locomotion = std::hypot(
-            g_direct_locomotion_displacement[0],
-            g_direct_locomotion_displacement[2]) > 0.0F;
+        g_direct_move = raw_move;
+        g_direct_head_world_pose = head_world_pose;
+        g_direct_move_scale = move_scale;
+        g_direct_sprinting = frame.input.state.sprint.pressed;
+        g_direct_locomotion = std::hypot(raw_move.x, raw_move.y) > 0.0F;
     }
     if (g_direct_locomotion) {
         // Buttons and sprint still enter their native owners; only the VR
@@ -320,7 +413,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     g_input_player = previous_player;
     g_direct_locomotion = false;
     g_direct_native_axis_observed = false;
-    g_direct_locomotion_displacement = {};
+    g_direct_forward_allowed = false;
+    g_direct_sideways_allowed = false;
+    g_direct_move = {};
+    g_direct_head_world_pose = {};
+    g_direct_move_scale = 1.0F;
+    g_direct_sprinting = false;
     if (consumed_release != 0) static_cast<void>(g_release_pending.compare_exchange_strong(
         consumed_release, 0, std::memory_order_acq_rel));
     // A button can open an inventory/menu during this update. Publish the new

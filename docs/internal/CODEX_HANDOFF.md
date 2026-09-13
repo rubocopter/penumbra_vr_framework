@@ -31,7 +31,16 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   backward response. The next build therefore uses Rework's shared direct
   `1.5/2.25 m/s` displacement and queues it through the existing exact-build
   `0xD7281` collision owner. Physical and stick components share one bounded
-  request and are partitioned for reconciliation. This new path is host-tested
+  request and are partitioned for reconciliation. PID 17612 then proved that
+  full left-stick analog reached frame telemetry while direct locomotion never
+  reached the queue. The first adaptation zeroed the VR analog before native
+  `MoveForward/MoveSideways` and then waited for `cPlayer+0x264`; exact-image
+  decoding shows those methods return on `amount == 0` before the later
+  `+0x264` write. The corrected backend evaluates their exact pre-Move predicate
+  (two indexed state vtable calls plus `+0x268/+0x26C`), keeps real native axes
+  higher priority, queues only accepted VR components through `0xD7281`, and
+  mirrors `+0x264` after successful direct publication. The verifier pins this
+  boundary and x86 Release compilation passes. This correction is host-tested
   only, so the complete active room-scale path is still not headset-validated.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
@@ -390,9 +399,14 @@ cannot produce isotropic Rework speed. The transient room-scale path now builds
 the movement vector directly from the current tracked head world pose using the
 shared `HeadRelativeMoveDirection` and `LocomotionDisplacement` policy, then
 queues `1.5 m/s` normal or `2.25 m/s` sprint displacement through the already
-owned `0xD7281` pre-collision injection. The native player movement-permission
-byte at `+0x264` must still confirm that the active state accepted movement;
-keyboard axes retain their original route and take priority for that tick.
+owned `0xD7281` pre-collision injection. PID 17612 disproved the first attempt to
+use native player byte `+0x264` as the final movement-permission confirmation:
+direct VR axes were deliberately zeroed before the native calls, and exact
+decoding shows `amount == 0` returns before the later `+0x264` write. The
+corrected path evaluates the same two native state gates and `+0x268/+0x26C`
+condition that precede that zero check, without entering native acceleration;
+keyboard/native axes still take priority. `+0x264` is mirrored only after the
+direct metric request has been successfully queued.
 
 Directly copying Rework's two sequential body updates is unsafe here because the
 binary backend has one live-tested native `D6E00` owner per tick. The adaptation

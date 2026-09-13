@@ -42,6 +42,17 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- Fixed the Black Plague direct metric locomotion gate exposed by PID 17612.
+  Full left-stick deflection reached OpenVR frame telemetry while every
+  `locomotion_*` field remained zero. Exact-build decoding showed that native
+  `MoveForward/MoveSideways` return on `amount == 0` before their later
+  `cPlayer+0x264 = 1` write, so that byte cannot be a permission oracle after VR
+  analog is removed from the native axes. The bridge now evaluates only the
+  exact pre-Move state predicate, preserves real native-axis priority, queues
+  accepted VR motion through the existing `0xD7281` owner and mirrors `+0x264`
+  after successful direct publication. The exact-image verifier pins the
+  relevant instructions and x86 Release compilation passes. Headset validation
+  remains pending.
 - Replaced Black Plague's direction-dependent native VR acceleration during the
   transient room-scale gate with Rework's direct metric locomotion policy. PID
   11804 confirmed that tracking-only heading chose the correct visual direction

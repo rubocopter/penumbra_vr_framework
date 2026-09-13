@@ -66,6 +66,17 @@ física y conserva teclado, salto y rechazo de movimiento por estados nativos.
 Esta adaptación está **implementada y host-tested**; todavía no está
 live-tested ni validada con visor.
 
+PID 17612 sirvió para aislar un fallo de esa primera adaptación. El stick
+izquierdo sí llegaba a OpenVR con deflexión completa, pero no producía ningún
+movimiento y toda la telemetría `locomotion_*` permanecía a cero. La causa era
+el gate usado antes de publicar: al quitar el componente VR de los ejes nativos,
+`MoveForward/MoveSideways` recibían `amount=0` y retornaban antes de escribir
+`cPlayer+0x264`, de modo que ese byte nunca podía confirmar permiso. El bridge
+corregido replica únicamente el predicate pre-Move exact-build (dos gates de
+estado y `+0x268/+0x26C`), mantiene prioridad para un eje nativo real y publica
+la locomoción métrica por `0xD7281`. La corrección compila en x86 Release y el
+verificador exact-build pasa, pero aún necesita una nueva prueba con visor.
+
 El visor de 90 Hz y el cuerpo nativo de 60 Hz son frecuencias esperadas y sí
 importan para el confort: tracking, cámara y presentación deben continuar a 90
 Hz, mientras cuerpo y colisiones se reconcilian a 60 Hz. PID 11804 mostró esa
@@ -123,16 +134,22 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 5. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
    conservarse la componente tangencial y rechazarse la componente que entra en
    la geometría. Espera a que la consola anuncie `slide/partial`.
-6. **Rumbo y velocidad métrica del stick.** No
-   hagas recenter antes de esta prueba. Mira de frente a una referencia clara y
-   pulsa el stick completamente hacia delante durante varios segundos. Después gira físicamente
+6. **Rumbo, movimiento y sprint del stick sin caminar físicamente.** Quédate de
+   pie o sentado en el mismo sitio durante toda esta prueba; no hace falta andar
+   por la habitación para validar sprint. No hagas recenter antes de empezar.
+   Mira de frente a una referencia clara y pulsa el stick completamente hacia
+   delante durante varios segundos. El personaje debe moverse solo por el stick.
+   Después gira físicamente
    cabeza/torso 45–90 grados sin recentrar y vuelve a pulsar hacia delante: el
    desplazamiento debe seguir el rumbo horizontal actual del HMD, como en
    Rework, y debe conservar aproximadamente la misma velocidad que antes del
    giro. Repite delante, atrás, izquierda y derecha desde esa nueva orientación.
    Ningún eje o signo debe ser perceptiblemente más lento por coincidir con el
-   antiguo frente corporal. Repite la comparación manteniendo sprint: el cambio
-   debe ser uniforme en las cuatro direcciones. La política solicitada es
+   antiguo frente corporal. Sin mover pies ni torso, mantén ahora el mismo stick
+   hacia delante y activa sprint con el control normal: debe aumentar claramente
+   la velocidad del personaje. Repite una comparación corta de sprint en otra
+   orientación; no necesitas recorrer distancia física real. El cambio debe ser
+   uniforme. La política solicitada es
    `1.5 m/s` normal y `2.25 m/s` con sprint, multiplicada por `MoveSpeed`.
    Mantén cada caso varios segundos para que el log capture
    `locomotion_requested`, `locomotion_accepted` y la petición combinada.

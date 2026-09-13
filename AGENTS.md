@@ -92,7 +92,16 @@ Rework's direct `1.5/2.25 m/s` horizontal displacement during the transient
 room-scale gate, merges it with the physical request at the existing `0xD7281`
 owner, bounds the combined step to `0.05 m`, and partitions accepted physical
 and locomotion motion before reconciliation. This is implemented and host-tested
-only. Y and jump remain native. Active room-scale is still **not
+only. PID 17612 then proved that full left-stick analog reached the runtime but
+the first direct-locomotion gate never queued it. Clearing the VR amount from
+native `MoveForward/MoveSideways` made those methods return on `amount == 0`
+before their later `cPlayer+0x264` write, so that byte could not be the intended
+permission oracle. The backend now evaluates their exact pre-Move predicate
+(two current-state virtual gates plus `+0x268/+0x26C`) without entering native
+acceleration, keeps any real native axis higher priority, queues accepted metric
+motion through `0xD7281`, and mirrors `+0x264` only after successful publication.
+The exact-image verifier pins this boundary and x86 Release compilation passes.
+This correction is host-tested only. Y and jump remain native. Active room-scale is still **not
 headset-validated**.
 
 The next Black Plague gameplay gate is

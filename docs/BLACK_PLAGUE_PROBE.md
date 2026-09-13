@@ -471,17 +471,40 @@ old body-forward axis retained normal speed. Static inspection shows why.
 signed per-axis acceleration and caps. A heading remap can choose the right world
 direction but cannot make those four signed responses isotropic.
 
-The next transient room-scale build therefore uses the already shared Rework
-policy directly. `NativeInputBridge` builds a world displacement from the fresh
-tracked head pose, raw analog input, `MoveSpeed` and normal/sprint speed
-`1.5/2.25 m/s`. It still calls the native axes with keyboard-only input so native
-buttons/state processing remains active, requires exact-build player flag
-`+0x264` to confirm that the active state accepted movement, and then publishes
-the VR displacement to `BlackPlagueBodyAdapter`. `BodyCollisionProbe` merges it
+The transient room-scale build therefore uses the already shared Rework policy
+directly. `NativeInputBridge` builds a world displacement from the fresh tracked
+head pose, raw analog input, `MoveSpeed` and normal/sprint speed `1.5/2.25 m/s`.
+`BodyCollisionProbe` merges it
 with any pending physical request, bounds the combined vector to `0.05 m`, and
 injects it once at the already owned `0xD7281` gateway. Telemetry separates
 `physical_requested`, `locomotion_requested`, `combined_injected`,
 `physical_accepted` and `locomotion_accepted`.
+
+PID 17612 exposed a gate defect before this path could be live-validated. The
+OpenVR frame telemetry contained full left-stick values including
+`[-0.462,0.887]`, `[-1.000,0.027]` and `[0.067,0.998]`, while every sampled
+`locomotion_consumed`, `locomotion_injected` and `locomotion_requested` field
+remained zero. Physical room-scale requests continued to queue/inject normally,
+and right-stick snap turn plus native crouch still worked. The failure was after
+action sampling and before direct-locomotion publication.
+
+Static decoding of the initialized exact image identified the cause. Both
+`MoveForward` and `MoveSideways` execute two current-move-state virtual gates,
+then require `cPlayer+0x268 > 0` or `cPlayer+0x26C != 0`, and only then test the
+axis amount against `0.0`. Their `cPlayer+0x264 = 1` write occurs later, after
+the path entering `iCharacterBody::Move`. Because the direct route deliberately
+removed the VR amount from the native axes, `amount == 0` returned before
+`+0x264` could be written. The byte was therefore not a valid permission oracle
+for this adaptation.
+
+The corrected bridge evaluates only that proven pre-Move predicate at the
+original axis callbacks, without entering native acceleration. A real native
+axis retains priority for the tick. Accepted VR components are converted to the
+Rework metric displacement and queued through the existing `0xD7281` owner;
+`+0x264` is mirrored only after that queue succeeds. The exact-image verifier
+now pins the state-gate, grounded/alternate-ground, zero-axis and `+0x264`
+instruction boundaries. This correction compiles in x86 Release and remains
+**host-tested only** until the next headset run.
 
 This composition differs narrowly from Rework because the source backend can
 perform physical and stick body updates sequentially, whereas the exact Black
