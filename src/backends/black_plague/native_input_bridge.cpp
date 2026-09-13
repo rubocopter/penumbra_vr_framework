@@ -160,12 +160,17 @@ template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
         return false;
     }
 
-    auto* const primary = CurrentMoveState(player, 0xBC, 0xC4);
+    // MoveForward/MoveSideways load the current interaction state as
+    //   vector = player+0x2C4, index = player+0x2BC
+    // before dispatching OnMoveForward/OnMoveSideways.
+    auto* const primary = CurrentMoveState(player, 0x2C4, 0x2BC);
     if (!CallMoveStateGate(primary, sideways ? 0x50 : 0x4C,
                            amount, delta_seconds)) {
         return false;
     }
-    auto* const secondary = CurrentMoveState(player, 0xD0, 0xD8);
+    // They then load the current locomotion state as
+    //   vector = player+0x2D8, index = player+0x2D0.
+    auto* const secondary = CurrentMoveState(player, 0x2D8, 0x2D0);
     if (!CallMoveStateGate(secondary, sideways ? 0x10 : 0x0C,
                            amount, delta_seconds)) {
         return false;

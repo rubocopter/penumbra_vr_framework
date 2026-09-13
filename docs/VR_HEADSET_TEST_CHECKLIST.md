@@ -63,8 +63,8 @@ backend introduce ese desplazamiento en el owner collision-aware `0xD7281`, una
 sola vez por tick nativo, junto con la petición física. Mantiene la petición
 combinada dentro de `0.05 m`, da prioridad de reconciliación a la traslación
 física y conserva teclado, salto y rechazo de movimiento por estados nativos.
-Esta adaptación está **implementada y host-tested**; todavía no está
-live-tested ni validada con visor.
+Esta adaptación ya tiene evidencia de visor tras la corrección final descrita
+abajo.
 
 PID 17612 sirvió para aislar un fallo de esa primera adaptación. El stick
 izquierdo sí llegaba a OpenVR con deflexión completa, pero no producía ningún
@@ -76,6 +76,19 @@ corregido replica únicamente el predicate pre-Move exact-build (dos gates de
 estado y `+0x268/+0x26C`), mantiene prioridad para un eje nativo real y publica
 la locomoción métrica por `0xD7281`. La corrección compila en x86 Release y el
 verificador exact-build pasa, pero aún necesita una nueva prueba con visor.
+
+PID 28996 demostró que ese primer predicate corregido aún resolvía mal los dos
+estados indexados: se había perdido el `0x200` de los campos y se habían
+intercambiado vector e índice. La implementación actual usa exactamente
+`vector +0x2C4 / index +0x2BC` y `vector +0x2D8 / index +0x2D0`.
+
+PID 8092 validó esa corrección con visor. El usuario confirmó que el stick vuelve
+a mover correctamente al personaje y que la sensación general es mucho mejor.
+El helper cerró además `direct_locomotion=True`, los cuatro outcomes físicos,
+queue/consume/inject/match `201/201/201/201`, mirror activo y recuperación tras
+el cambio nativo de forma crouch/stand. Esta tanda de room-scale queda cerrada
+como evidencia de investigación; el siguiente gate es el crouch físico por
+altura HMD.
 
 El visor de 90 Hz y el cuerpo nativo de 60 Hz son frecuencias esperadas y sí
 importan para el confort: tracking, cámara y presentación deben continuar a 90

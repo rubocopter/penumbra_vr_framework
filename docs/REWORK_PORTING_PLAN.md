@@ -131,7 +131,7 @@ The first shared contract exists to separate **policy** from **native mechanism*
 
 ## Current priority — Black Plague active room-scale validation
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading now chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is now adapted to Black Plague's one native tick and is host-tested only.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is adapted to Black Plague's one native tick. PID 28996 exposed the final indexed-state mapping defect in its permission predicate, and PID 8092 headset-validated the corrected route plus the full room-scale technical gate. Physical crouch by tracked height is now the next Rework behavior to adapt.
 
 Current order:
 
@@ -149,8 +149,8 @@ Current order:
    after the VR native axis is zeroed. This differs from Rework's two sequential
    body updates because the target exposes only one live-tested native update
    owner.
-8. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to prove stationary and slow physical motion are visually stable at render rate, preserve the confirmed no-locomotion result for in-place rotation/tilt, then headset-validate blocking/sliding, recenter, equal directional walk/sprint speed, physical/stick combinations, native movement-state rejection and head/hand reconciliation before promoting the integration.
-9. Keep physical crouch and jump comfort/tuning as separate milestones.
+8. Preserve PID 8092 as the headset evidence for the corrected direct-locomotion and active room-scale technical gate; do not reopen that path without a concrete regression.
+9. Port Rework's physical-crouch height policy into shared runtime policy and feed it through Black Plague's existing native crouch-input owner. Keep jump comfort/tuning separate.
 10. Preserve the now-evidenced horizontal VR-anchor placement in this gate. Keep vertical camera/head-bob, footstep-bob and physical-height ownership as the separate comfort track.
 11. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
 12. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.

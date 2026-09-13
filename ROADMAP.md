@@ -86,9 +86,13 @@ anchor reconciliation. PID 17612 showed that the first publication gate blocked
 the route completely even though full left-stick analog reached the runtime:
 zeroing the VR native axis made `MoveForward/MoveSideways` return before their
 later `+0x264` write. The bridge now evaluates the exact pre-Move state predicate
-instead and mirrors `+0x264` only after a direct request is queued. The exact
-image verifier and x86 Release build pass; the correction remains host-tested
-and awaits the next headset gate.
+instead and mirrors `+0x264` only after a direct request is queued. PID 28996
+then exposed incorrect indexed-state field mapping in that predicate; the exact
+`+0x2BC/+0x2C4` and `+0x2D0/+0x2D8` vector/index ownership is now pinned by the
+verifier. PID 8092 headset-validated the corrected path: direct locomotion was
+observed, all four physical outcomes passed and queue/consume/inject/match was
+`201/201/201/201`. The user reports correct stick locomotion and substantially
+improved overall feel.
 Physical crouch by height and tracking-world-yaw turn ownership remain separate
 milestones.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
@@ -144,7 +148,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Implement and host-test a bounded collision-aware physical displacement request separately from native analog movement
 - [x] Live-validate that physical request through stationary/free/block/slide cases before enabling room-scale
 - [x] Implement a transient, fail-closed room-scale consumer through that reconciled request
-- [ ] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset
+- [x] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset (PID 8092 technical gate)
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
 - [ ] Implement/validate physical crouch without assuming Overture stand-clearance semantics

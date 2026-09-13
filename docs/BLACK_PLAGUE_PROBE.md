@@ -504,7 +504,23 @@ Rework metric displacement and queued through the existing `0xD7281` owner;
 `+0x264` is mirrored only after that queue succeeds. The exact-image verifier
 now pins the state-gate, grounded/alternate-ground, zero-axis and `+0x264`
 instruction boundaries. This correction compiles in x86 Release and remains
-**host-tested only** until the next headset run.
+**host-tested only** at this stage.
+
+PID 28996 then supplied a more precise contradiction. Controller input again
+reached full deflection while every direct-locomotion field stayed zero. Full
+function decoding showed that the first predicate replication had truncated and
+reversed the indexed-state layout: native code loads
+`vector +0x2C4 / index +0x2BC`, followed by
+`vector +0x2D8 / index +0x2D0`. The bridge and exact-image verifier now use and
+pin those exact loads.
+
+PID 8092 headset-validated the corrected path. The user reported correct stick
+locomotion and a much better overall feel. The validation helper recorded
+`direct_locomotion=True`, stationary/free/blocked/slide-or-partial evidence,
+queue/consume/inject/match `201/201/201/201`, mirror-on camera application and
+native standing -> crouched -> standing recovery. Physical crouch driven by HMD
+height is still a separate behavior and is not implied by that native
+button-crouch sequence.
 
 This composition differs narrowly from Rework because the source backend can
 perform physical and stick body updates sequentially, whereas the exact Black

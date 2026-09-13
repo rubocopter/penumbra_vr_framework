@@ -40,8 +40,16 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   (two indexed state vtable calls plus `+0x268/+0x26C`), keeps real native axes
   higher priority, queues only accepted VR components through `0xD7281`, and
   mirrors `+0x264` after successful direct publication. The verifier pins this
-  boundary and x86 Release compilation passes. This correction is host-tested
-  only, so the complete active room-scale path is still not headset-validated.
+  boundary and x86 Release compilation passes. PID 28996 then proved the first
+  indexed-state lookup was still wrong: it dropped the `0x200` high portion and
+  swapped vector/index ownership. The bridge now follows exact
+  `vector +0x2C4 / index +0x2BC` and `vector +0x2D8 / index +0x2D0` loads.
+  PID 8092 headset-validated the corrected route: the user reports correct stick
+  locomotion and substantially better overall feel, while the helper recorded
+  `direct_locomotion=True`, all four physical outcomes and
+  queue/consume/inject/match `201/201/201/201`. The active room-scale core is
+  therefore headset-validated for the research build. Physical crouch by
+  tracked height remains the next separate gate.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -412,12 +420,14 @@ Directly copying Rework's two sequential body updates is unsafe here because the
 binary backend has one live-tested native `D6E00` owner per tick. The adaptation
 merges physical tracking and stick displacement into that one request, preserves
 physical reconciliation priority, bounds the combined X/Z step to `0.05 m`, and
-partitions the accepted result into physical and locomotion telemetry/carry. It
-is host-tested only. Simultaneous physical/stick movement, uniform directional
-speed, native state rejection and the presence of footsteps/bob/animation are
-explicit headset gates. Rework still applies VR turning to tracking `world yaw`,
+partitions the accepted result into physical and locomotion telemetry/carry.
+PID 28996 exposed and PID 8092 validated the corrected indexed-state mapping
+described above. Directional stick locomotion and the combined room-scale
+technical gate now have headset evidence. The presence of footsteps/bob/body
+animation under every direct-locomotion case still needs explicit observation.
+Rework still applies VR turning to tracking `world yaw`,
 whereas Black Plague currently applies the shared turn amount to native player
-yaw; that separate owner remains unchanged. The next gate remains
+yaw; that separate owner remains unchanged. The next gate is
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must first prove that
 stationary/slow movement has no world shake, rotation/tilt in place causes no
 appreciable locomotion, then retest deliberate

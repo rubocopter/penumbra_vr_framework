@@ -53,6 +53,17 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
   after successful direct publication. The exact-image verifier pins the
   relevant instructions and x86 Release compilation passes. Headset validation
   remains pending.
+- Corrected the indexed-state layout used by that pre-Move predicate after PID
+  28996 showed the first fix still could not publish locomotion. Full controller
+  analog continued to reach the runtime, but the replicated lookup had dropped
+  the `0x200` portion of both field pairs and swapped vector/index ownership.
+  The bridge now follows the exact image: `vector +0x2C4 / index +0x2BC` and
+  `vector +0x2D8 / index +0x2D0`; the exact-build verifier pins those loads.
+  PID 8092 headset-validated the corrected path: stick locomotion worked in all
+  directions, the helper reported `direct_locomotion=True`, all four physical
+  outcome classes and `201/201/201/201` queue/consume/inject/match evidence,
+  with native crouch-shape recovery also passing. Physical crouch by tracked
+  height remains a separate feature gate.
 - Replaced Black Plague's direction-dependent native VR acceleration during the
   transient room-scale gate with Rework's direct metric locomotion policy. PID
   11804 confirmed that tracking-only heading chose the correct visual direction
@@ -240,7 +251,13 @@ yet been live/headset-tested in Black Plague.
 
 - Overture now builds entirely from this repository. `pvr_overture_backend` preserves the proven Rework tracking-space, room-scale rejection/reconciliation and `1.5/2.25 m/s` locomotion policy behind an Overture-specific HPL body/jump adapter. The exact autonomous Release artifact has been deployed and functionally exercised in a headset; exhaustive equivalence remains a separate evidence gate. The autonomous Release pipeline is also now a dedicated CI regression job.
 - The migration audit records the explicit `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` comparison and remains the authoritative reference for what was ported versus what still requires game-specific mechanism.
-- Black Plague active positional HMD translation remains default-off and is not headset-validated. Its transient validation implementation consumes the live-tested `0xD7281` route. PID 21548 live-tested the carry partition, PID 13672 headset-exercised stable render-rate horizontal placement, and PID 11804 confirmed correct HMD-relative stick direction while exposing native-axis speed asymmetry. Direct Rework `1.5/2.25 m/s` locomotion through the same single collision owner is host-tested and awaits the next headset run.
+- Black Plague active positional HMD translation remains default-off outside its
+  validation request. PID 21548 live-tested the carry partition, PID 13672
+  headset-exercised stable render-rate horizontal placement, PID 11804 confirmed
+  correct HMD-relative direction, and PID 8092 headset-validated the corrected
+  direct Rework `1.5/2.25 m/s` locomotion plus the room-scale technical gate
+  through the same single `0xD7281` collision owner. This is still a research
+  validation state rather than a supported-release claim.
 - Black Plague native jump/vertical ownership remains separate from shared horizontal intent. Physical crouch and final camera/bob/footstep behavior are also separate milestones.
 - The desktop monitor mirror remains experimental and is not a current supported gameplay feature. PID 19192 confirmed mirror-off gameplay black plus visible native menus. Mirror-on and Alt+Tab/focus recovery remain in the next headset batch because the tracked-menu capture path depends on the desktop framebuffer/focus.
 - Rework revision `23c890f` remains the immutable Overture behavioral baseline. Its working tree is not a Framework build or packaging dependency.

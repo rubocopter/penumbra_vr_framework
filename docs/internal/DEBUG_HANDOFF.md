@@ -196,6 +196,14 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
   metric request through the existing collision owner and mirrors `+0x264` after
   successful publication. Do not reintroduce `+0x264` as a pre-publication
   oracle.
+- PID 28996 proved that the first replacement predicate still decoded the two
+  indexed state containers incorrectly. The exact functions load
+  `vector +0x2C4 / index +0x2BC` first and `vector +0x2D8 / index +0x2D0`
+  second. The earlier code omitted the `0x200` portion and reversed the
+  vector/index arguments, so both state gates failed before publication.
+  PID 8092 then headset-validated the corrected mapping: stick locomotion works,
+  `direct_locomotion=True`, all physical outcome classes were captured and
+  queue/consume/inject/match was `201/201/201/201`.
 
 ### Do not try again
 
@@ -206,18 +214,15 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-Headset-validate the direct metric path together with the corrected active
-room-scale translation. Require a stable world at rest and during slow
-translation, free/block/slide, equal full-stick speed for forward/back/left/right
-before and after physical turn and recenter, normal/sprint comparison, native
-crouch shape recovery, in-place rotation/tilt with no locomotion, deliberate
-translated HMD movement with/without stick, hands and mirror-on evidence.
-Telemetry must show non-zero direct locomotion queued, injected and accepted;
-`locomotion_carry` must exclude the reconciled physical component and no extra
-camera jump or residual drift may remain. Explicitly record whether native
-footsteps, bob and body animation still trigger, because Rework owns footsteps
-by travelled distance and the binary backend has not yet ported that game-side
-effect.
+The direct metric path and corrected active room-scale core now have PID 8092
+headset evidence. The next comfort feature is physical crouch by HMD height.
+Reuse Rework's standing-height baseline, `0.25 m` default crouch depth, `0.08 m`
+exit hysteresis and plausible `(0.90, 2.20) m` height range. Feed the resulting
+effective crouch state through Black Plague's existing native crouch-input owner
+so the native move state, capsule swap and stand-clearance behavior remain
+game-owned. Explicitly record whether native footsteps, bob and body animation
+still trigger during direct locomotion, because that remains a separate
+presentation/effects observation.
 
 ## 3. Black Plague jump
 
