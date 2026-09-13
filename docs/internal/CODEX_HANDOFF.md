@@ -24,8 +24,11 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   delta since the observed body sample for render-rate continuity. PID 13672
   subsequently headset-exercised that correction: the user reported the prior
   continuous world shake gone and comfort substantially improved. Stick heading
-  relative to current HMD orientation remains unresolved, so the complete active
-  room-scale path is still not headset-validated.
+  relative to current HMD orientation then remained unresolved. The next build
+  replaces the camera-derived remap yaw with raw tracking-anchor -> current-HMD
+  horizontal yaw, matching Rework's head-relative direction boundary. That
+  change is implemented/host-tested only, so the complete active room-scale path
+  is still not headset-validated.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -367,16 +370,20 @@ uses accepted displacement projected onto the request direction. The helper now
 uses that same directional rule, so lateral native solver correction cannot mask
 a direct block. Gameplay collision behavior is unchanged.
 
-The remaining reported room-scale issue is stick heading: forward movement can
-feel as if the body is facing another direction unless the user recenters. The
-probe now logs `movement_yaw_valid` and `movement_yaw_rad` beside the existing raw
-controller move. Do not change locomotion policy until a fresh session shows
-whether the yaw itself is wrong, whether the remap is wrong, or whether recenter
-state is stale. Rework applies VR turning to tracking `world yaw`; Black Plague
-currently applies the shared turn amount to native player yaw because its input
-still enters through `MoveForward/MoveSideways`. That is a concrete adaptation
-difference to correlate with the new telemetry, not yet a proven root cause. The
-next gate remains
+The remaining reported room-scale issue is stick heading: forward movement had
+felt as if the body was facing another direction unless the user recenters. The
+previous remap derived its relative yaw through the rendered/native camera.
+Rework `23c890f` instead derives locomotion from current HMD world heading. The
+next build now measures horizontal yaw directly from the recenter tracking anchor
+to the current raw HMD orientation and fails closed when that heading is invalid;
+the shared math and native-intent path are host-tested, but Black Plague has not
+yet live/headset-tested this correction. The probe continues to log
+`movement_yaw_valid` and `movement_yaw_rad` beside raw controller input so the
+next run can verify it. Rework still applies VR turning to tracking `world yaw`,
+whereas Black Plague currently applies the shared turn amount to native player
+yaw because its input still enters through `MoveForward/MoveSideways`. Do not
+change that owner or fake the `1.5/2.25 m/s` direct-displacement policy until a
+separate boundary is justified. The next gate remains
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must first prove that
 stationary/slow movement has no world shake, rotation/tilt in place causes no
 appreciable locomotion, then retest deliberate

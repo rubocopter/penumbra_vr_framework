@@ -37,7 +37,7 @@ physics ticks. It is not evidence that the whole simulation runs at 2x.
 | System | Runtime | Overture backend / adapter | Black Plague backend |
 |---|---|---|---|
 | Tracking space | `VrTrackingSpace`: metres, yaw, calibration, posture/seated offsets and tracking-to-world | supplies source HPL body/feet pose | exact-build body, shadow reconciliation and physical-request boundary are live-tested; active positional translation awaits its headset gate |
-| Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | native movement/speed ownership is live-characterized; the separate bounded X/Z request is live-tested |
+| Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | native movement/speed ownership is live-characterized; HMD-relative remap now uses the raw tracking anchor/current pose and is host-tested; the separate bounded X/Z request is live-tested |
 | Collision | requested/accepted displacement reconciliation | `OvertureBodyAdapter::MoveBodyBy` owns `iCharacterBody::Update` and static-only mode | cylinder/body/update/solver ownership and injected request reconciliation are live-tested |
 | Jump | edge/held semantics | adapter calls native `Jump` and `SetJumpButtonDown` | native Jump-state vertical ownership and the unique body tick are live-characterized |
 | Turn | shared neutral-arm and dead-zone policy | changes tracking-space world yaw | currently changes native player yaw |

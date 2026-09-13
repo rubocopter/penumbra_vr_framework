@@ -65,9 +65,14 @@ it used total accepted-vector magnitude, whereas Rework measures accepted motion
 along the requested direction. A lateral native solver correction could
 therefore make a direct block look like slide/partial. The helper now uses the
 Rework projection rule; no gameplay collision code changed. The remaining user
-report is directional: forward stick can feel offset unless a recenter is done.
-Fresh probe logs now expose the movement yaw consumed by the remap so this can be
-localized before changing locomotion behavior.
+report was directional: forward stick could feel offset unless a recenter was
+done. Static comparison found that the remap was deriving heading through the
+rendered/native camera even though Rework derives movement from current HMD world
+orientation. The next build now measures horizontal yaw directly from the
+recenter tracking anchor to the current raw HMD pose. The shared math and input
+remap are host-tested; Black Plague headset validation is still pending. Fresh
+probe logs retain the consumed movement yaw so the next run can verify this
+boundary before any further locomotion change.
 
 There is one demonstrated turn-ownership difference worth testing. Rework
 `23c890f::UpdateVRTurn` applies snap/smooth turn through
@@ -85,8 +90,9 @@ turn/recenter behavior before changing turn ownership.
   live-exercised its transient active mode and all physical outcomes. The carry
   correction is now live/headset evidenced for removing tilt-induced
   locomotion. PID 13672 headset-exercised the subsequent render-placement
-  correction and removed the reported continuous shake, but the full path still
-  lacks headset validation because stick heading remains unresolved.
+  correction and removed the reported continuous shake. The subsequent
+  tracking-only stick-heading correction is host-tested but not yet exercised in
+  a headset, so the full path still lacks headset validation.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.

@@ -83,9 +83,11 @@ the wall-block case. The helper had classified rejection from total accepted
 vector magnitude; Rework `23c890f` uses accepted displacement projected onto the
 requested direction. The classifier now follows that proven rule. This is a
 validation-tool correction, not a gameplay collision change. The remaining
-room-scale concern is stick heading: forward movement can feel offset unless the
-user recenters. Probe frame telemetry now records the movement yaw consumed by
-the native-input remap so the next session can isolate heading/remap state. Y and
+room-scale concern is stick heading: forward movement had felt offset unless the
+user recenters. The next build now derives that remap yaw directly from the
+recenter tracking anchor and current raw HMD orientation, matching Rework's
+head-relative direction boundary instead of feeding the rendered/native camera
+back into movement. This correction is implemented and host-tested only. Y and
 jump remain native. Active room-scale is still **not headset-validated**.
 
 The next Black Plague gameplay gate is
@@ -94,9 +96,12 @@ stationary visual stability, smooth render-rate physical movement,
 blocking/sliding, recenter, the native crouch shape swap and recovery,
 rotation/tilt in place without locomotion, deliberate translated HMD movement
 with/without stick, explicit head-relative stick-heading checks before/after
-recenter, head/hand coherence and mirror-on presentation before promotion. Use
+physical head/body rotation, several VR turns and recenter, head/hand coherence
+and mirror-on presentation before promotion. Recenter must not be required to
+restore correct forward stick direction. Use
 the native crouch control only for the body-shape gate. Keep physical
-crouch-by-height, speed tuning and vertical
+crouch-by-height, direct `1.5/2.25 m/s` locomotion, tracking-world-yaw turn
+ownership and vertical
 camera/footstep-bob as separate validation gates.
 
 ## Black Plague constraints

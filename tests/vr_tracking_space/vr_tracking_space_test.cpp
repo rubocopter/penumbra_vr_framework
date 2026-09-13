@@ -62,6 +62,13 @@ using penumbra_vr::runtime::VrTrackingSpace;
     if (!Near(direction[0], -1.0F) || !Near(direction[2], 0.0F)) {
         return false;
     }
+    float relative_yaw = 0.0F;
+    if (!penumbra_vr::runtime::HorizontalTrackingYawDelta(
+            Pose(0.0F, 1.7F, 0.0F),
+            Pose(0.3F, 1.2F, -0.4F, 0.75F), relative_yaw) ||
+        !Near(relative_yaw, -0.75F)) {
+        return false;
+    }
 
     tracking = {};
     tracking.SetHeadTrackingPose(Pose(0.0F, 1.7F, 0.0F, 0.6F));

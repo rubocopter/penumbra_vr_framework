@@ -310,12 +310,15 @@ try {
     Write-Host "Probe log: $probeLog"
     Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
     if ($EnableRoomScale) {
-        Write-Host 'First remain still for 10 seconds, then rotate, look up/down and tilt the head in place without shifting the torso. The world must remain stable and this must not produce visible character locomotion.'
-        Write-Host 'Next make slow, continuous horizontal head/torso translations in free space. The view must follow smoothly rather than stepping at the native 60 Hz body cadence.'
-        Write-Host 'Then test stick alone and together with a deliberate small horizontal head/torso translation in the same and opposite directions; neither case should amplify or retain motion after you stop.'
-        Write-Host 'For stick heading, face a clear landmark, push forward, rotate your head 45-90 degrees without recentering and push forward again. Movement must follow the current horizontal HMD heading as in Rework; repeat once immediately after recentering.'
-        Write-Host 'Use the normal in-game crouch control once and return to standing, then take one clear physical step after the native shape has returned to standing. Physical crouch-by-height is a separate gate and is not expected here.'
-        Write-Host 'Observe that the desktop mirror shows gameplay and that head motion, hands and world remain coherent.'
+        Write-Host '1. Do NOT recenter at the start. Remain still for 10 seconds, then rotate/look up/down/tilt in place. The world must stay stable and head rotation must not move the character.'
+        Write-Host '2. Face a clear landmark and push stick forward. Then physically turn your head/body 45-90 degrees WITHOUT recentering and push forward again. Forward must follow the new horizontal HMD heading, not the old body/camera heading.'
+        Write-Host '3. Repeat forward/left/right/back at the new physical heading. Then use several normal VR turns and test forward again. Recenter must not be required to recover the correct stick direction.'
+        Write-Host '4. Recenter once while facing a different direction and repeat the heading test. Direction must remain correct immediately before and after recenter.'
+        Write-Host '5. Make slow continuous horizontal head/torso translations in free space with no stick. The view must follow smoothly rather than stepping at the native 60 Hz body cadence.'
+        Write-Host '6. Test a deliberate physical wall block and diagonal slide/partial. Hold each case for several seconds so the log captures it; wall rejection should prevent passage without repeated violent world kicks.'
+        Write-Host '7. Test stick alone, then combine stick with a small deliberate physical translation in the same direction and then the opposite direction. Stop both inputs: there must be no retained drift, amplification or renewed shake.'
+        Write-Host '8. Use the normal in-game crouch control once and return to standing, then take one clear physical step. Physical crouch-by-height is still a separate gate.'
+        Write-Host '9. Check both hands/controllers during head turn, translation and recenter; confirm the desktop mirror shows gameplay and menu/game transitions recover normally.'
     }
     Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'
     $reportedScenarios = @{

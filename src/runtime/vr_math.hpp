@@ -68,6 +68,13 @@ struct VrCullFrustum {
     VrMatrix44& tracked_head_view,
     std::string& error) noexcept;
 
+// Signed horizontal yaw from one tracking pose to another. Pitch and roll are
+// discarded so looking up/down or tilting the HMD cannot steer locomotion.
+[[nodiscard]] bool HorizontalTrackingYawDelta(
+    const VrMatrix34& reference_device_to_absolute,
+    const VrMatrix34& current_device_to_absolute,
+    float& yaw_radians) noexcept;
+
 // Applies an already-reconciled world-space translation to a rigid view.
 // The caller owns collision/body reconciliation; this helper only converts
 // the view to a pose, offsets its translation and returns the inverse view.

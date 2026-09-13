@@ -42,6 +42,13 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- Replaced Black Plague's camera-derived stick-heading remap with the proven
+  Rework tracking boundary: horizontal locomotion yaw is now measured directly
+  from the recenter HMD anchor to the current raw HMD orientation. Pitch/roll
+  cannot steer walking, invalid/near-vertical samples fail closed, and recenter
+  no longer needs to repair a stale rendered-camera basis. The shared tracking
+  math has a host test; the Black Plague behavior is implemented/host-tested and
+  still awaits the next headset run before any validation-state promotion.
 - Corrected the Black Plague physical-displacement helper's blocked/slide
   classification after PID 13672 produced a false-negative blocked result even
   though the wall-block case had been performed. The helper now mirrors Rework
@@ -98,8 +105,8 @@ These maintenance changes and both room-scale corrections compile in both
 Release configurations. No test executable, game, SteamVR or headset process was
 run while preparing the presentation correction; PID 13672 later
 headset-exercised it and the user reported the prior continuous world shake gone.
-The validator-classifier and movement-yaw telemetry changes in this Unreleased
-entry have only been statically inspected in this maintenance pass.
+The heading correction compiles in Release and its shared tracking/native-intent
+host tests pass. It has not yet been live/headset-tested in Black Plague.
 
 ### Added
 
@@ -107,10 +114,10 @@ entry have only been statically inspected in this maintenance pass.
   native-input stick remap. PID 13672 headset-exercised the render-rate anchor
   correction and the user reported the prior continuous world shake gone, but
   later testing found that forward stick direction can feel offset unless
-  recentered. The next headset gate uses `movement_yaw_valid` and
-  `movement_yaw_rad` with the existing raw controller move to distinguish a
-  heading/recenter problem from the native movement boundary before changing
-  locomotion behavior.
+  recentered. That evidence led to the tracking-only heading correction above.
+  The next headset gate keeps `movement_yaw_valid` and `movement_yaw_rad` beside
+  raw controller input to verify the new basis before further locomotion or turn
+  ownership changes.
 - Extracted the demonstrated tool attachment socket composition into shared
   `vr_grab_pose` policy: per-game model-to-hand orientation and measured model
   grip points now compose through one runtime helper. Black Plague's flashlight

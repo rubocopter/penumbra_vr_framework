@@ -100,14 +100,21 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 5. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
    conservarse la componente tangencial y rechazarse la componente que entra en
    la geometría. Espera a que la consola anuncie `slide/partial`.
-6. **Rumbo del stick y partición stick/traslación HMD.** Mira de frente a una
-   referencia clara y pulsa stick hacia delante durante varios segundos. Después
-   gira solo la cabeza 45–90 grados sin recentrar y vuelve a pulsar hacia
-   delante: el desplazamiento debe seguir el rumbo horizontal actual del HMD,
-   como en Rework, no el rumbo antiguo del cuerpo. Vuelve a mirar al frente,
-   recentra mirando en otra dirección y repite. Mantén cada caso varios segundos
-   para que el log capture `controller_move`, `movement_yaw_valid` y
-   `movement_yaw_rad`. Después camina solo con stick y detente.
+6. **Rumbo del stick desde tracking real y partición stick/traslación HMD.** No
+   hagas recenter antes de esta prueba. Mira de frente a una referencia clara y
+   pulsa stick hacia delante durante varios segundos. Después gira físicamente
+   cabeza/torso 45–90 grados sin recentrar y vuelve a pulsar hacia delante: el
+   desplazamiento debe seguir el rumbo horizontal actual del HMD, como en
+   Rework, no una cámara/body antiguos. Repite izquierda/derecha/atrás desde esa
+   nueva orientación. La implementación de esta tanda calcula el yaw del stick
+   directamente entre el ancla de tracking capturada y la pose HMD actual; la
+   cámara renderizada ya no participa en ese cálculo. Mantén cada caso varios
+   segundos para que el log capture `controller_move`, `movement_yaw_valid` y
+   `movement_yaw_rad`.
+   Usa después varios giros VR normales y vuelve a probar stick hacia delante
+   sin recentrar. Finalmente recentra mirando en otra dirección y repite. El
+   recenter puede redefinir el cero, pero no debe ser necesario para que
+   "delante" vuelva a ser correcto.
    Después mantén el stick hacia delante y desplaza deliberadamente cabeza y
    torso unos centímetros hacia delante; repite trasladándolos hacia atrás. Solo
    aquí existen dos desplazamientos reales que pueden combinarse. No debe
@@ -139,9 +146,12 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 
 No uses esta tanda para juzgar velocidad final `1.5/2.25 m/s`, crouch físico por
 altura real, salto VR, bob vertical/altura, agarres, mecanismos o Enhanced
-Visuals. Siguen siendo gates independientes. La estabilidad horizontal de cámara
-sí pertenece a esta tanda porque es la corrección que se valida. Debes usar el
-crouch nativo una vez para probar la sustitución del body bajo room-scale.
+Visuals. Siguen siendo gates independientes. Tampoco promociones todavía el
+giro VR de Black Plague a equivalencia Rework: esta tanda conserva su owner
+nativo y comprueba que el nuevo heading basado en tracking sigue siendo correcto
+antes y después de usarlo. La estabilidad horizontal de cámara sí pertenece a
+esta tanda porque es la corrección que se valida. Debes usar el crouch nativo una
+vez para probar la sustitución del body bajo room-scale.
 
 ### Resultado automático exigido
 

@@ -244,11 +244,13 @@ SRWLOCK g_world_tracking_lock = SRWLOCK_INIT;
 runtime::VrMatrix44 g_world_game_view;
 runtime::VrMatrix34 g_world_anchor;
 float g_world_movement_yaw = 0;
+bool g_world_movement_yaw_valid = false;
 std::uint64_t g_world_tracking_time = 0;
 void InvalidateWorldTracking() {
     InvalidateBlackPlagueShadowTracking();
     AcquireSRWLockExclusive(&g_world_tracking_lock);
     g_world_tracking_time = 0;
+    g_world_movement_yaw_valid = false;
     ReleaseSRWLockExclusive(&g_world_tracking_lock);
 }
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
@@ -771,12 +773,14 @@ void __fastcall HookedUpdateRenderList(
         AcquireSRWLockExclusive(&g_world_tracking_lock);
         g_world_game_view = controller_game_view;
         g_world_anchor = g_stereo_tracking_anchor;
-        // Express horizontal HMD forward in the native camera's horizontal
-        // basis. Pitch/roll must not steer the walking direction.
-        const float gx = -camera_snapshot.view.values[8], gz = -camera_snapshot.view.values[10];
-        const float hx = -head_view.values[8], hz = -head_view.values[10];
-        if (std::hypot(gx, gz) > 0.001F && std::hypot(hx, hz) > 0.001F)
-            g_world_movement_yaw = std::atan2(-hx * gz + hz * gx, hx * gx + hz * gz);
+        // Rework steers from the current HMD world heading. Keep the same
+        // tracking-only basis here instead of feeding the rendered game camera
+        // back into the native-input remap.
+        g_world_movement_yaw_valid = runtime::HorizontalTrackingYawDelta(
+            g_stereo_tracking_anchor, pose.device_to_absolute,
+            g_world_movement_yaw);
+        const float gx = -camera_snapshot.view.values[8];
+        const float gz = -camera_snapshot.view.values[10];
         // Keep hands relative to the current physical head. The game-view
         // basis already includes any reconciled room-scale offset above.
         for (const auto index : {3U,7U,11U})
@@ -1619,9 +1623,10 @@ void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::m
 bool TrackedMovementYaw(float& yaw) noexcept {
     AcquireSRWLockShared(&g_world_tracking_lock);
     yaw = g_world_movement_yaw;
+    const bool valid = g_world_movement_yaw_valid;
     const auto time = g_world_tracking_time;
     ReleaseSRWLockShared(&g_world_tracking_lock);
-    return time != 0 && GetTickCount64() - time <= 250 && std::isfinite(yaw);
+    return valid && time != 0 && GetTickCount64() - time <= 250 && std::isfinite(yaw);
 }
 bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
     std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {

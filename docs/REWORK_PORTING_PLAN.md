@@ -262,8 +262,11 @@ room-scale/positional HMD translation through that boundary is now implemented
 behind a separate transient request. PID 21548 proved the combined-tick carry
 correction and PID 13672 headset-exercised the later render-rate anchor placement;
 the user reported the prior continuous shake gone. The active path is still not
-headset-validated because stick heading can feel offset unless recentered. That
-remaining issue is being isolated with movement-yaw telemetry before any policy
-change. Physical crouch-by-height remains separate pending an evidenced Black
-Plague stand-clearance boundary. The current priority and validation order are
-recorded above.
+headset-validated because stick heading could feel offset unless recentered. The
+next build now follows Rework's tracking-only direction boundary: horizontal
+movement yaw is measured from the recenter HMD anchor to the current raw HMD
+orientation instead of being derived through the rendered/native camera. This is
+implemented and host-tested only; the next headset run must validate it before
+promotion. Physical crouch-by-height remains separate pending an evidenced Black
+Plague stand-clearance boundary. Direct `1.5/2.25 m/s` locomotion and Rework
+tracking-world-yaw turn ownership also remain separate gates.

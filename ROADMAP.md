@@ -75,10 +75,14 @@ in-place head tilt no longer caused locomotion, but continuous world shake still
 failed comfort. Horizontal render placement was moved to the reconciled anchor
 plus the newest HMD delta between body ticks. PID 13672 headset-exercised that
 correction and the user reported the continuous shake gone with a much improved
-feel. The remaining room-scale blocker is locomotion heading: forward stick can
-feel offset unless recentered. The next gate logs the movement yaw used by the
-native-input remap and compares head-relative forward before/after recenter. The
-physical crouch-by-height feature remains a separate milestone.
+feel. The remaining room-scale blocker is locomotion heading: forward stick had
+felt offset unless recentered. The next build now derives the native-input remap
+yaw directly from the recenter tracking anchor and current raw HMD orientation,
+matching Rework's head-relative direction boundary instead of using the rendered
+camera as an intermediate basis. This is implemented and host-tested; the next
+headset gate must prove it before room-scale can advance. Physical crouch by
+height, direct `1.5/2.25 m/s` Rework locomotion and tracking-world-yaw turn
+ownership remain separate milestones.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.

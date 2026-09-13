@@ -473,6 +473,38 @@ bool BuildConservativeStereoCullFrustum(
     return true;
 }
 
+bool HorizontalTrackingYawDelta(
+    const VrMatrix34& reference_device_to_absolute,
+    const VrMatrix34& current_device_to_absolute,
+    float& yaw_radians) noexcept {
+    yaw_radians = 0.0F;
+    if (!IsFinite(reference_device_to_absolute) ||
+        !IsFinite(current_device_to_absolute)) {
+        return false;
+    }
+
+    float reference_x = -reference_device_to_absolute.values[2];
+    float reference_z = -reference_device_to_absolute.values[10];
+    float current_x = -current_device_to_absolute.values[2];
+    float current_z = -current_device_to_absolute.values[10];
+    const float reference_length = std::hypot(reference_x, reference_z);
+    const float current_length = std::hypot(current_x, current_z);
+    if (!std::isfinite(reference_length) || !std::isfinite(current_length) ||
+        reference_length < kMinimumHorizontalForwardLength ||
+        current_length < kMinimumHorizontalForwardLength) {
+        return false;
+    }
+
+    reference_x /= reference_length;
+    reference_z /= reference_length;
+    current_x /= current_length;
+    current_z /= current_length;
+    const float cosine = reference_x * current_x + reference_z * current_z;
+    const float sine = reference_x * current_z - reference_z * current_x;
+    yaw_radians = std::atan2(sine, cosine);
+    return std::isfinite(yaw_radians);
+}
+
 bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
                       float aspect, float distance, float width,
                       std::array<float, 2>& uv) noexcept {

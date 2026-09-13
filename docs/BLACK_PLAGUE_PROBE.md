@@ -457,11 +457,14 @@ collision path.
 
 The same testing later exposed a separate locomotion concern: forward stick can
 feel offset unless the user recenters, as if the native body basis and current
-HMD heading disagree. The probe frame log now records `movement_yaw_valid` and
-`movement_yaw_rad` next to `controller_move`. The next headset run must hold
-forward input before and after a 45-90 degree head turn, then repeat after
-recenter. This evidence should distinguish an incorrect/stale heading from a
-native movement-remap problem before any locomotion behavior is changed.
+HMD heading disagree. Static comparison with Rework found that Black Plague was
+deriving the remap yaw through the rendered/native camera, while Rework derives
+movement from current HMD world orientation. The next build now measures the
+horizontal remap yaw directly from the recenter tracking anchor to the current
+raw HMD pose. The shared math is host-tested; Black Plague has not yet exercised
+this correction live or in a headset. The probe frame log retains
+`movement_yaw_valid` and `movement_yaw_rad` next to `controller_move` so the next
+run can verify it before and after a 45-90 degree physical turn and recenter.
 Rework `23c890f` applies snap/smooth turning to tracking `world yaw`, whereas the
 Black Plague adapter currently applies the shared turn amount through native
 player yaw and remaps controller movement relative to the tracked head. That
