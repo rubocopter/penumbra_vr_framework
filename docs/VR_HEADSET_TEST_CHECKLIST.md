@@ -45,12 +45,35 @@ total; ahora usa, como Rework, únicamente el desplazamiento aceptado en la
 dirección solicitada. Una corrección lateral del solver ya no puede convertir un
 bloqueo directo en `slide/partial`.
 
-Quedan dos asuntos distintos. El movimiento hacia delante con stick puede dar la
-sensación de ir desviado si no se ha recentrado; la nueva telemetría registra
-`movement_yaw_valid` y `movement_yaw_rad` para aislarlo. Y agacharse/levantarse
-solo con la altura física del visor todavía no activa el crouch nativo. Ese
-crouch físico por altura sigue siendo un gate independiente y no forma parte de
-esta tanda.
+PID 11804 probó después el rumbo basado en tracking. La estabilidad general se
+mantuvo y el stick pasó a mover al personaje en la dirección horizontal indicada
+por el HMD sin exigir recenter. La prueba descubrió una diferencia nueva: la
+velocidad seguía dependiendo de si ese vector coincidía con el frente, atrás o
+lateral del cuerpo nativo oculto. Mirar hacia una dirección nueva y pulsar
+delante podía sentirse como caminar hacia atrás, más lento, mientras el antiguo
+frente corporal conservaba la velocidad normal. El helper terminó correctamente
+marcando evidencia incompleta porque esa sesión solo capturó `stationary` y
+`free`; no capturó `blocked` ni `slide/partial`.
+
+La causa está aislada. El remap corregía el rumbo, pero todavía alimentaba los
+ejes `MoveForward/MoveSideways` de Black Plague, cuyas aceleraciones y límites
+son distintos por eje y signo. La siguiente build usa la dirección HMD probada y
+la política métrica de Rework: `1.5 m/s` al caminar y `2.25 m/s` al esprintar. El
+backend introduce ese desplazamiento en el owner collision-aware `0xD7281`, una
+sola vez por tick nativo, junto con la petición física. Mantiene la petición
+combinada dentro de `0.05 m`, da prioridad de reconciliación a la traslación
+física y conserva teclado, salto y rechazo de movimiento por estados nativos.
+Esta adaptación está **implementada y host-tested**; todavía no está
+live-tested ni validada con visor.
+
+El visor de 90 Hz y el cuerpo nativo de 60 Hz son frecuencias esperadas y sí
+importan para el confort: tracking, cámara y presentación deben continuar a 90
+Hz, mientras cuerpo y colisiones se reconcilian a 60 Hz. PID 11804 mostró esa
+división sin recuperar el terremoto anterior. No explica la asimetría de
+velocidad; esa procedía de los ejes nativos descritos arriba.
+
+Agacharse/levantarse solo con la altura física del visor todavía no activa el
+crouch nativo. Ese crouch físico por altura sigue siendo un gate independiente.
 
 ## Siguiente tanda — room-scale activo, colisiones y mirror encendido
 
@@ -100,17 +123,19 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 5. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
    conservarse la componente tangencial y rechazarse la componente que entra en
    la geometría. Espera a que la consola anuncie `slide/partial`.
-6. **Rumbo del stick desde tracking real y partición stick/traslación HMD.** No
+6. **Rumbo y velocidad métrica del stick.** No
    hagas recenter antes de esta prueba. Mira de frente a una referencia clara y
-   pulsa stick hacia delante durante varios segundos. Después gira físicamente
+   pulsa el stick completamente hacia delante durante varios segundos. Después gira físicamente
    cabeza/torso 45–90 grados sin recentrar y vuelve a pulsar hacia delante: el
    desplazamiento debe seguir el rumbo horizontal actual del HMD, como en
-   Rework, no una cámara/body antiguos. Repite izquierda/derecha/atrás desde esa
-   nueva orientación. La implementación de esta tanda calcula el yaw del stick
-   directamente entre el ancla de tracking capturada y la pose HMD actual; la
-   cámara renderizada ya no participa en ese cálculo. Mantén cada caso varios
-   segundos para que el log capture `controller_move`, `movement_yaw_valid` y
-   `movement_yaw_rad`.
+   Rework, y debe conservar aproximadamente la misma velocidad que antes del
+   giro. Repite delante, atrás, izquierda y derecha desde esa nueva orientación.
+   Ningún eje o signo debe ser perceptiblemente más lento por coincidir con el
+   antiguo frente corporal. Repite la comparación manteniendo sprint: el cambio
+   debe ser uniforme en las cuatro direcciones. La política solicitada es
+   `1.5 m/s` normal y `2.25 m/s` con sprint, multiplicada por `MoveSpeed`.
+   Mantén cada caso varios segundos para que el log capture
+   `locomotion_requested`, `locomotion_accepted` y la petición combinada.
    Usa después varios giros VR normales y vuelve a probar stick hacia delante
    sin recentrar. Finalmente recentra mirando en otra dirección y repite. El
    recenter puede redefinir el cero, pero no debe ser necesario para que
@@ -144,14 +169,17 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
     clipping, pérdida de tracking, desajuste de manos o colisiones distintas de
     las observadas antes.
 
-No uses esta tanda para juzgar velocidad final `1.5/2.25 m/s`, crouch físico por
-altura real, salto VR, bob vertical/altura, agarres, mecanismos o Enhanced
+Esta tanda sí juzga dirección y velocidad relativa de la nueva locomoción
+`1.5/2.25 m/s`. Anota también si al mover el cuerpo deja de sonar el paso, se
+pierde la animación corporal o cambia el bob, porque Rework genera sus pasos por
+distancia y Black Plague todavía conserva ese comportamiento detrás de un límite
+específico del juego. No uses esta tanda para validar crouch físico por altura
+real, salto VR, bob vertical/altura final, agarres, mecanismos o Enhanced
 Visuals. Siguen siendo gates independientes. Tampoco promociones todavía el
 giro VR de Black Plague a equivalencia Rework: esta tanda conserva su owner
-nativo y comprueba que el nuevo heading basado en tracking sigue siendo correcto
-antes y después de usarlo. La estabilidad horizontal de cámara sí pertenece a
-esta tanda porque es la corrección que se valida. Debes usar el crouch nativo una
-vez para probar la sustitución del body bajo room-scale.
+nativo y comprueba que la locomoción métrica sigue siendo correcta antes y
+después de usarlo. Debes usar el crouch nativo una vez para probar la sustitución
+del body bajo room-scale.
 
 ### Resultado automático exigido
 
@@ -159,6 +187,8 @@ Al cerrar el juego, el helper solo termina con éxito si el log fresco demuestra
 
 - plan físico X/Z no nulo encolado;
 - petición consumida e inyectada en `0xD7281`;
+- petición de locomoción directa no nula consumida, inyectada y aceptada;
+- petición física y locomoción combinadas sin superar `0.05 m` por tick;
 - reconciliación emparejada con el mismo body y generación;
 - tick nativo aproximado `dt=1/60`;
 - muestras `stationary`, `free`, `blocked` y `slide/partial`;
@@ -195,6 +225,9 @@ Conserva y comunica:
 - resultado de Alt+Tab y recuperación de foco;
 - si el stick hacia delante siguió el rumbo del HMD antes y después de girar la
   cabeza y de recentrar;
+- si delante/atrás/izquierda/derecha conservaron la misma velocidad a stick
+  completo, tanto normal como con sprint;
+- si hubo pasos, animación corporal y bob al usar la locomoción directa;
 - cualquier diferencia antes y después del crouch nativo y del recenter.
 
 Si el helper falla, no repitas a ciegas. El mensaje enumera la evidencia ausente;
@@ -220,5 +253,6 @@ regresión en `0xD7281`. No es la siguiente tanda normal porque PID 26144 ya la
 promocionó a **live-tested**.
 
 Mantén separados los estados `implemented`, `host-tested`, `live-tested`,
-`headset-validated` y `supported`. El código nuevo permanece en `implemented`
-hasta ejecutar las pruebas host y completar la sesión con visor descrita arriba.
+`headset-validated` y `supported`. La locomoción directa nueva está
+`host-tested`; solo puede promocionarse después de completar la sesión con visor
+descrita arriba.

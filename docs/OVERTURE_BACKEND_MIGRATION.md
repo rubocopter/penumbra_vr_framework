@@ -37,7 +37,7 @@ physics ticks. It is not evidence that the whole simulation runs at 2x.
 | System | Runtime | Overture backend / adapter | Black Plague backend |
 |---|---|---|---|
 | Tracking space | `VrTrackingSpace`: metres, yaw, calibration, posture/seated offsets and tracking-to-world | supplies source HPL body/feet pose | exact-build body, shadow reconciliation and physical-request boundary are live-tested; active positional translation awaits its headset gate |
-| Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | native movement/speed ownership is live-characterized; HMD-relative remap now uses the raw tracking anchor/current pose and is host-tested; the separate bounded X/Z request is live-tested |
+| Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | PID 11804 headset-exercised correct HMD direction; transient direct `1.5/2.25 m/s` displacement through the single `0xD7281` owner is host-tested only; native/default movement remains unchanged |
 | Collision | requested/accepted displacement reconciliation | `OvertureBodyAdapter::MoveBodyBy` owns `iCharacterBody::Update` and static-only mode | cylinder/body/update/solver ownership and injected request reconciliation are live-tested |
 | Jump | edge/held semantics | adapter calls native `Jump` and `SetJumpButtonDown` | native Jump-state vertical ownership and the unique body tick are live-characterized |
 | Turn | shared neutral-arm and dead-zone policy | changes tracking-space world yaw | currently changes native player yaw |
@@ -255,8 +255,24 @@ locomotion from in-place head tilt. That session still failed comfort because
 horizontal presentation shook continuously. The Black Plague renderer now
 follows Rework's camera ownership more closely by placing X/Z at the reconciled
 VR anchor and continuing it with the latest HMD delta between 60 Hz body ticks.
-This second correction compiles but still requires live/headset validation.
-Overture's proven two-update and camera paths were not changed.
+PID 13672 headset-exercised this second correction and reported the continuous
+shake gone. PID 11804 then confirmed the tracking-only HMD direction correction,
+but showed that remapping into native signed axes retained unequal
+forward/back/side speed. The transient room-scale path now applies the shared
+Rework `1.5/2.25 m/s` displacement directly through the one existing `0xD7281`
+collision request. Physical translation receives reconciliation priority and
+the combined X/Z request remains bounded to `0.05 m`.
+
+This is a narrow incompatible-interface adaptation. Rework owns two sequential
+source-level body updates, while the exact Black Plague build has one
+live-tested `D6E00` update owner and must not receive a second call. The backend
+therefore merges both components into that single solver request and partitions
+the accepted result. Runtime still owns direction and speed policy; the
+movement-permission field, RVA, queue and partition remain exact-build backend
+details. The direct path is host-tested only, and the next headset run must check
+equal directional speed, normal/sprint behavior, simultaneous physical motion,
+state rejection and footsteps/bob/animation. Overture's proven two-update and
+camera paths were not changed.
 
 Finger articulation points in the other direction. BP's existing shared
 `VrHandArticulation` output (independent curls, three joint curves, spread and

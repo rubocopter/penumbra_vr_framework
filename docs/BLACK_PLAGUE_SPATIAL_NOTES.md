@@ -32,9 +32,13 @@ fallando por temblor continuo y rechazo agresivo junto a paredes. El log mostró
 cambios X/Z centimétricos e inversiones frecuentes aun sin stick. Rework coloca
 la vista desde su ancla VR a 90 Hz y no conserva el suavizado/bob horizontal de
 la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
-esa cámara. Ahora el render coloca X/Z en el ancla reconciliada y la continúa
-con el delta HMD posterior a la muestra. La corrección compila, pero aún no está
-live/headset-validated. El siguiente gate es
+  esa cámara. Ahora el render coloca X/Z en el ancla reconciliada y la continúa
+  con el delta HMD posterior a la muestra. PID 13672 confirmó con visor que el
+  temblor continuo desapareció. PID 11804 confirmó después que la dirección del
+  stick sigue el HMD sin recenter, pero expuso que el remap conservaba las
+  velocidades distintas de los ejes/signos del cuerpo nativo. La ruta transitoria
+  usa ahora la política directa `1.5/2.25 m/s` de Rework dentro del único request
+  `0xD7281`; está host-tested, no live/headset-validated. El siguiente gate es
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
@@ -57,7 +61,7 @@ iCharacterBody::Update -> posición deseada
                        -> step/gravedad/attachments -> posición final aceptada
 ```
 
-`Move` no acepta todavía un desplazamiento: integra `amount * acceleration *
+El `Move` nativo no acepta un desplazamiento: integra `amount * acceleration *
 frameTime` en los campos de velocidad direccional `+0x70/+0x74`, usa
 aceleración `+0x78/+0x7C`, flags `+0x88/+0x89` y límites nativos
 `+0x60..+0x6C`. El timestep físico relevante es el que `iPhysicsWorld::Update`
@@ -129,16 +133,20 @@ La primera extracción común ya existe: `runtime::VrAcceptedBodyMotion` recibe
 posición antes/después y desplazamiento aceptado sin conocer RVAs, layouts ni
 ownership del tick. Overture lo consume dentro de su comportamiento probado y
 `BlackPlagueBodyAdapter` lo produce después del único tick nativo `D460A ->
-D6E00`. BP conserva sus límites 3.0/4.5 m/s y su vertical/jump nativo en este
-checkpoint; no se emulan `vr_velocity`, `vr_stepstaticonly` ni argumentos de
-solver que no existen en la build binaria.
+D6E00`. La ruta normal de BP conserva sus límites 3.0/4.5 m/s y su vertical/jump
+nativo. El gate room-scale transitorio evita esos ejes solo para el analog VR y
+encola la política compartida `1.5/2.25 m/s` en `0xD7281`; no se emulan
+`vr_velocity`, `vr_stepstaticonly` ni argumentos de solver que no existen en la
+build binaria.
 
 La segunda extracción común también está hecha: `PlanBodyReconciliation`,
 `ReconcilePhysicalBodyMotion` y `CarryHeadAnchorWithLocomotion` viven en
 `vr_locomotion.*`. Overture los ejecuta en el orden probado. BP conserva el
 shadow sólo como observación y dispone de una ruta física separada, live-tested
 en PID 26144, que produce la observación correspondiente a su request inyectado.
-No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
+La locomoción directa reutiliza esas primitivas runtime y el mismo owner, pero su
+composición single-tick y su partición de aceptación son mecanismo BP. No mezclar
+crouch físico, jump, bob, estados o efectos de pasos dentro de la política común.
 
 ### Ownership del movimiento plano: estado confirmado
 
@@ -146,6 +154,7 @@ No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
 |---|---|---|---|
 | Intento plano | `cButtonHandler::Update`: `51CD/5227 -> cPlayer::MoveForward/MoveSideways` (`9CBC0/9CC60`) | Antes | Live-tested a través del adapter |
 | Aceleración/objetivo | `cPlayer` comprueba state/ground y llama `iCharacterBody::Move(D4F50)`; éste suma `amount * acc * dt` en `+70..+7C`, marca `+88/+89` y limita por `+60..+6C` | Consumido por `D6E00` | Mapeado + comportamiento live |
+| Locomoción VR directa transitoria | Runtime construye dirección HMD y `1.5/2.25 m/s`; `NativeInputBridge` exige permiso nativo `cPlayer+0x264`; `BodyCollisionProbe` combina y acota físico+stick en `0xD7281` | Una inyección dentro del único `D6E00` | Implemented + host-tested; visor pendiente |
 | Deceleración y velocidad final | `D6E00` consume flags, aplica deacc y convierte los campos de velocidad en request horizontal antes de `D7312` | Dentro, antes de colisión | Mapeado |
 | Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan al move-state actual; inicialización de state aplica los límites por setters nativos | Antes | Live-characterized; ~3.0/4.5 m/s efectivos |
 | Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` gestiona hold `+1FC/+200/+204` | La fuerza/estado vertical se publica antes de `D6E00`; horizontal mantiene Y=0 y la vertical se aplica después | Live-characterized: ~5.53 m/s inicial, apex ~0.95 m, landing nativo y 3→0 |
@@ -153,6 +162,14 @@ No mezclar tuning 1.5/2.25, crouch físico, jump, bob o cámara.
 | Colisión/step/gravedad | `D6E00`, primer solver `D7312`, fases posteriores de step/gravedad | Dentro | Live-tested para el límite |
 | `D790C/D7913` | Sync sólo de la rama con gravedad desactivada | Después | No son composición general de cámara; el player activo los evita |
 | Head/footstep bob | No hay evidencia suficiente para atribuir todavía el efecto visual concreto | Pista de comfort separada | Pendiente, no bloquea el adapter/reconciliation inicial |
+
+La captura exact-build respalda también el gate usado por la locomoción directa:
+`MoveForward` (`0x9CBC0`) y `MoveSideways` (`0x9CC60`) contienen
+`C6 86 64 02 00 00 01` (`cPlayer+0x264 = 1`) únicamente después de superar los
+checks de estado/suelo y de entrar en la ruta que llama `iCharacterBody::Move`.
+Los saltos de rechazo salen antes de esa escritura. Por eso `+0x264` puede
+usarse como confirmación binaria de que el estado activo aceptó movimiento sin
+reimplementar la lógica de estados en el Framework.
 
 PID 29672 cerró el burst de salto: `+204=0.3` es umbral para la lógica de hold,
 no máximo de `+200`; el contador alcanzó 2.233332 y al soltar volvió a 0.3.

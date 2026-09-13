@@ -311,14 +311,15 @@ try {
     Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
     if ($EnableRoomScale) {
         Write-Host '1. Do NOT recenter at the start. Remain still for 10 seconds, then rotate/look up/down/tilt in place. The world must stay stable and head rotation must not move the character.'
-        Write-Host '2. Face a clear landmark and push stick forward. Then physically turn your head/body 45-90 degrees WITHOUT recentering and push forward again. Forward must follow the new horizontal HMD heading, not the old body/camera heading.'
-        Write-Host '3. Repeat forward/left/right/back at the new physical heading. Then use several normal VR turns and test forward again. Recenter must not be required to recover the correct stick direction.'
-        Write-Host '4. Recenter once while facing a different direction and repeat the heading test. Direction must remain correct immediately before and after recenter.'
-        Write-Host '5. Make slow continuous horizontal head/torso translations in free space with no stick. The view must follow smoothly rather than stepping at the native 60 Hz body cadence.'
-        Write-Host '6. Test a deliberate physical wall block and diagonal slide/partial. Hold each case for several seconds so the log captures it; wall rejection should prevent passage without repeated violent world kicks.'
-        Write-Host '7. Test stick alone, then combine stick with a small deliberate physical translation in the same direction and then the opposite direction. Stop both inputs: there must be no retained drift, amplification or renewed shake.'
-        Write-Host '8. Use the normal in-game crouch control once and return to standing, then take one clear physical step. Physical crouch-by-height is still a separate gate.'
-        Write-Host '9. Check both hands/controllers during head turn, translation and recenter; confirm the desktop mirror shows gameplay and menu/game transitions recover normally.'
+        Write-Host '2. Face a clear landmark and push stick forward at full deflection. Then physically turn your head/body 45-90 degrees WITHOUT recentering and push forward again. Direction and speed must stay the same: the new path uses Rework metric locomotion instead of native forward/back/side acceleration.'
+        Write-Host '3. Repeat forward/left/right/back at the new physical heading, then hold sprint briefly. Walk should feel isotropic at 1.5 m/s x MoveSpeed and sprint at 2.25 m/s x MoveSpeed regardless of the hidden native body orientation. At MoveSpeed=1.0 those are 1.5/2.25 m/s; the current 0.85 test profile yields 1.275/1.9125 m/s. Note any missing footstep/bob or sliding animation separately.'
+        Write-Host '4. Use several normal VR turns and test forward again. Recenter must not be required to recover direction or speed.'
+        Write-Host '5. Recenter once while facing a different direction and repeat the heading/speed test. Direction and speed must remain correct immediately before and after recenter.'
+        Write-Host '6. Make slow continuous horizontal head/torso translations in free space with no stick. The 90 Hz rendered view must remain smooth over the native ~60 Hz body/collision tick.'
+        Write-Host '7. Test a deliberate physical wall block and diagonal slide/partial. Hold each case for several seconds so the log captures it; wall rejection should prevent passage without repeated violent world kicks.'
+        Write-Host '8. Test stick alone, then combine stick with a small deliberate physical translation in the same direction and then the opposite direction. Stop both inputs: there must be no retained drift, amplification or renewed shake.'
+        Write-Host '9. Use the normal in-game crouch control once and return to standing, then take one clear physical step. Physical crouch-by-height is still a separate gate.'
+        Write-Host '10. Check both hands/controllers during head turn, translation and recenter; confirm the desktop mirror shows gameplay and menu/game transitions recover normally.'
     }
     Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'
     $reportedScenarios = @{
@@ -357,6 +358,7 @@ try {
     $queuedVectorObserved = $false
     $boundaryVectorObserved = $false
     $bodyInjectionObserved = $false
+    $directLocomotionObserved = $false
     $nativeTickObserved = $false
     $roomScaleApplied = $false
     $nonZeroCameraOffset = $false
@@ -383,6 +385,12 @@ try {
             (Test-NonZeroHorizontalVector -Line $line -Field 'physical_requested') -and
             (Test-NonZeroHorizontalVector -Line $line -Field 'physical_injected_delta')) {
             $bodyInjectionObserved = $true
+        }
+        if ($line -like '*body_collision *' -and
+            $line -match 'locomotion_consumed=1 locomotion_injected=1' -and
+            (Test-NonZeroHorizontalVector -Line $line -Field 'locomotion_requested') -and
+            (Test-NonZeroHorizontalVector -Line $line -Field 'locomotion_accepted')) {
+            $directLocomotionObserved = $true
         }
         if ($line -like '*body_collision *' -and
             $line -match 'dt=0\.01666[0-9]') {
@@ -450,6 +458,9 @@ try {
     if (-not $bodyInjectionObserved) {
         $missingEvidence += 'body telemetry with physical_consumed=1, physical_injected=1 and non-zero request/injection'
     }
+    if ($EnableRoomScale -and -not $directLocomotionObserved) {
+        $missingEvidence += 'Rework-style metric stick locomotion injected and accepted through the existing collision tick'
+    }
     if (-not $nativeTickObserved) {
         $missingEvidence += 'existing native body tick at dt~=1/60'
     }
@@ -503,7 +514,7 @@ try {
     Write-Host "Physical displacement evidence passed: queued=$queuedPlans consumed=$consumedRequests injected=$injectedRequests matched=$matchedObservations."
     Write-Host "Scenario evidence: stationary=$($scenarioEvidence.StationarySamples) free=$($scenarioEvidence.FreeSamples) blocked=$($scenarioEvidence.BlockedSamples) slide_or_partial=$($scenarioEvidence.SlideSamples)."
     if ($EnableRoomScale) {
-        Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset reconciled_offset=$nonZeroReconciledOffset render_prediction=$renderPredictionObserved mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
+        Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset reconciled_offset=$nonZeroReconciledOffset render_prediction=$renderPredictionObserved direct_locomotion=$directLocomotionObserved mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
         Write-Host "Post-crouch recovery samples: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
     }
     $exitCode = 0

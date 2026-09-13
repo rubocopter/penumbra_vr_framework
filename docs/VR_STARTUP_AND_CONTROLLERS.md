@@ -27,8 +27,11 @@ mejora visual validada hasta una nueva prueba.
 - **Pendiente de nueva prueba:** mirror activado desde el ojo izquierdo, propiedad diestra
   y L2/R2, movimiento relativo al HMD, adquisición de agarre tras confirmar el
   estado nativo, ciclo L1 Rework y anclaje de herramientas.
-- **Implementado y pendiente de visor:** room-scale X/Z activo detrás del helper
-  transitorio `Start-BlackPlagueRoomScaleValidation.ps1`.
+- **Ejercitado parcialmente en visor:** room-scale X/Z activo detrás del helper
+  transitorio `Start-BlackPlagueRoomScaleValidation.ps1`. PID 13672 eliminó el
+  temblor continuo y PID 11804 confirmó dirección HMD correcta. La nueva
+  locomoción métrica que corrige la velocidad por eje está host-tested y requiere
+  otra tanda.
 - **Deliberadamente no terminado:** colisión de palmas, puertas/
   palancas/joints, modelos HPL de Rework y Enhanced visuals GPU.
 
@@ -87,9 +90,11 @@ realmente esa variable.
 PID 26144 cerró la petición física X/Z collision-aware en `0xD7281` con
 positional translation a cero. PID 19192 confirmó que mirror-off conserva los
 menús 2D pero deja negro el gameplay, de acuerdo con el ownership de pases. El
-room-scale X/Z activo ya está implementado, sus targets Release afectados
-compilan y sigue default-off, pendiente de pruebas host, live y con visor mediante
-`tools/Start-BlackPlagueRoomScaleValidation.ps1`. El helper fuerza mirror
+  room-scale X/Z activo sigue default-off. PID 13672 confirmó estabilidad visual
+  y PID 11804 confirmó heading HMD, pero este último expuso velocidad desigual
+  según el eje corporal nativo. La locomoción directa `1.5/2.25 m/s` está ahora
+  host-tested y pendiente de prueba live/con visor mediante
+  `tools/Start-BlackPlagueRoomScaleValidation.ps1`. El helper fuerza mirror
 activado para la tanda. En presentación siguen pendientes mirror-on y Alt+Tab/foco,
 porque menú e inventario pueden quedar negros en el visor al perder foco la
 ventana.
@@ -126,14 +131,17 @@ Comprobación sin abrir el juego ni SteamVR:
    el hardware lo exponga, articulación de dedos. Esta matriz debe cerrarse en
    Black Plague antes de declarar paridad de controles y reutilizarse después en
    Requiem con validación específica de su backend.
-2. Puente nativo exacto: movimiento analógico combinado con teclado, giro por
+2. Puente nativo exacto: movimiento analógico, teclado, giro por
    pasos configurable o suave integrado por tiempo, salto, correr, agacharse,
    interactuar, examinar, guardar objeto, inventario, libreta, pausa y ciclo de
    luz rápido apagado → glowstick → linterna → apagado, como Rework. El stick
    sigue el yaw horizontal del HMD; velocidad/deadzone, modo/ángulo de giro y
-   mano dominante se leen del INI del framework. El teclado conserva sus ejes
-   nativos. Tracking obsoleto inhibe movimiento VR. No equivale a cuerpo completo
-   ni room-scale. No usa emulación de teclas de Windows. Los nombres de acción
+   mano dominante se leen del INI del framework. En el gate room-scale
+   transitorio, el analog VR usa además la política directa `1.5/2.25 m/s` de
+   Rework a través del único request collision-aware; el teclado conserva sus
+   ejes nativos y tiene prioridad si ambos se usan en el mismo tick. Tracking
+   obsoleto inhibe movimiento VR. La ruta general todavía no equivale a cuerpo
+   completo ni a room-scale validado. No usa emulación de teclas de Windows. Los nombres de acción
    conservan su ABI antiguo y siempre se ejecuta la consulta original del juego.
 3. Menú inicial, pausa/inventario/libreta: captura del escritorio presentada en
    ambos ojos como panel configurable (2,4 metros de ancho a 1,75 metros con el

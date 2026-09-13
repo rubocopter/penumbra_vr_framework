@@ -29,11 +29,17 @@ struct BodyCollisionTelemetry {
     std::array<float, 3> accepted_displacement{};
     bool physical_request_consumed = false;
     bool physical_request_injected = false;
+    bool locomotion_request_consumed = false;
+    bool locomotion_request_injected = false;
     std::array<float, 3> physical_requested_displacement{};
     std::array<float, 3> physical_injected_displacement{};
+    std::array<float, 3> locomotion_requested_displacement{};
+    std::array<float, 3> locomotion_injected_displacement{};
+    std::array<float, 3> combined_injected_displacement{};
     std::array<float, 3> physical_position_before_injection{};
     std::array<float, 3> physical_position_after_injection{};
     std::array<float, 3> physical_accepted_displacement{};
+    std::array<float, 3> locomotion_accepted_displacement{};
 };
 
 struct BodyJumpBurstSample {
@@ -90,6 +96,11 @@ void RequestBodyJumpBurst() noexcept;
 [[nodiscard]] NativeBodyUpdateBoundaryStatus
 ReadNativeBodyUpdateBoundaryStatus() noexcept;
 [[nodiscard]] bool QueuePhysicalBodyDisplacement(
+    const std::array<float, 3>& displacement) noexcept;
+// Adds Rework-style metric stick locomotion to the request already owned by
+// this exact-build boundary. The final combined X/Z step remains bounded to
+// 0.05 m and preserves the physical component first.
+[[nodiscard]] bool QueueLocomotionBodyDisplacement(
     const std::array<float, 3>& displacement) noexcept;
 void InvalidatePhysicalBodyDisplacement() noexcept;
 [[nodiscard]] PhysicalBodyDisplacementTelemetry

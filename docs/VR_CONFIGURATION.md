@@ -81,9 +81,12 @@ HRTF=Auto
 `Handedness` accepts `Right` or `Left`; it selects the matching action/UI set,
 aim pointer and interaction hand, while flashlight/glowstick use the opposite
 hand. `TurnMode` accepts `Disabled`, `Snap` or `Smooth`. Angles and smooth speed
-are degrees and degrees/second. `MoveSpeed` scales analog input only and remains
-clamped by the native full-stick range; it does not alter physics or game time.
-The current local profile uses `0.85` to retest the reported excessive speed.
+are degrees and degrees/second. `MoveSpeed` is the Rework movement multiplier.
+The normal Black Plague path still applies it to analog input; the transient
+room-scale gate applies it to the direct metric `1.5/2.25 m/s` walk/sprint
+policy. It does not alter physics or game time. The current local profile uses
+`0.85`, so that gate requests `1.275/1.9125 m/s` at full stick; set `1.0` when
+comparing the absolute Rework default speeds.
 `UiDistance` is the menu distance in metres, `UiScale` changes the physical
 panel size while keeping its aspect ratio, and `RenderScale` scales the OpenVR
 recommended per-eye dimensions before the existing allocation fallback. The

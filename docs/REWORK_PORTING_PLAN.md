@@ -117,7 +117,8 @@ The adapter dynamically re-resolves the current body, publishes the existing nat
 
 Do not force these into the first common body contract:
 
-- Overture `1.5 / 2.25 m/s` speed constants into Black Plague before a dedicated VR locomotion gate;
+- Black Plague game-state, footstep, bob or animation effects into shared
+  locomotion policy;
 - BP native `3.0 / 4.5 m/s` limits into shared policy;
 - Black Plague jump/vertical state;
 - Black Plague crouch transition/stand-clearance mechanism;
@@ -130,7 +131,7 @@ The first shared contract exists to separate **policy** from **native mechanism*
 
 ## Current priority — Black Plague active room-scale validation
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt and passed the full technical room-scale gate, but continuous world shake still failed headset comfort. The log and Rework comparison exposed a second sequence boundary: Black Plague retained a 60 Hz offset over its native smoothed camera, whereas Rework places the view from a 90 Hz VR anchor. Horizontal rendering now uses the fresh reconciled anchor plus the latest post-sample HMD delta; this is compiled but not yet live/headset-validated.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading now chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is now adapted to Black Plague's one native tick and is host-tested only.
 
 Current order:
 
@@ -140,8 +141,12 @@ Current order:
 4. Preserve shadow-only mode as observation-only; its plan is not evidence that the dedicated physical request was injected.
 5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
 6. Preserve the corrected combined-tick partition: reconcile matched physical X/Z once, then carry the anchor only with the remaining native locomotion while retaining actual `body_after` for camera space.
-7. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to prove stationary and slow physical motion are visually stable at render rate, preserve the confirmed no-locomotion result for in-place rotation/tilt, then headset-validate blocking/sliding, recenter, the native crouch shape swap/recovery, stick combinations and head/hand reconciliation before promoting the integration.
-8. Decide Black Plague VR walk/sprint tuning separately; do not use analog scaling as a substitute for Rework-equivalent displacement policy.
+7. Preserve the new direct locomotion adaptation: game-neutral HMD direction and
+   `1.5/2.25 m/s` policy stay in runtime; the exact movement-permission byte,
+   single-tick `0xD7281` injection and accepted-component partition stay in the
+   Black Plague backend. This differs from Rework's two sequential body updates
+   because the target exposes only one live-tested native update owner.
+8. Use `tools/Start-BlackPlagueRoomScaleValidation.ps1` to prove stationary and slow physical motion are visually stable at render rate, preserve the confirmed no-locomotion result for in-place rotation/tilt, then headset-validate blocking/sliding, recenter, equal directional walk/sprint speed, physical/stick combinations, native movement-state rejection and head/hand reconciliation before promoting the integration.
 9. Keep physical crouch and jump comfort/tuning as separate milestones.
 10. Preserve the now-evidenced horizontal VR-anchor placement in this gate. Keep vertical camera/head-bob, footstep-bob and physical-height ownership as the separate comfort track.
 11. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
@@ -257,16 +262,17 @@ host result and next live gate are recorded in
 [the validation follow-up](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
 
 Subsequent work live-tested that shadow path in PID 28172 and the separate
-default-off `0xD7281` bounded X/Z request in PID 26144. Active
-room-scale/positional HMD translation through that boundary is now implemented
-behind a separate transient request. PID 21548 proved the combined-tick carry
-correction and PID 13672 headset-exercised the later render-rate anchor placement;
-the user reported the prior continuous shake gone. The active path is still not
-headset-validated because stick heading could feel offset unless recentered. The
-next build now follows Rework's tracking-only direction boundary: horizontal
-movement yaw is measured from the recenter HMD anchor to the current raw HMD
-orientation instead of being derived through the rendered/native camera. This is
-implemented and host-tested only; the next headset run must validate it before
-promotion. Physical crouch-by-height remains separate pending an evidenced Black
-Plague stand-clearance boundary. Direct `1.5/2.25 m/s` locomotion and Rework
-tracking-world-yaw turn ownership also remain separate gates.
+default-off `0xD7281` bounded X/Z request in PID 26144. PID 21548 proved the
+combined-tick carry correction and PID 13672 headset-exercised the later
+render-rate anchor placement; the user reported the prior continuous shake gone.
+PID 11804 then confirmed that tracking-only HMD direction fixes stick heading
+without recenter while retaining stable presentation. It also proved that a
+world-vector remap through native `MoveForward/MoveSideways` is insufficient:
+speed still followed the signed hidden body axes. The transient room-scale path
+now requests Rework's direct `1.5/2.25 m/s` displacement through the existing
+single `0xD7281` collision owner. Because Black Plague cannot safely copy
+Rework's two source-level body updates, physical and stick requests are combined
+within the proven `0.05 m` boundary and the accepted result is partitioned for
+physical reconciliation and locomotion carry. This is host-tested only. Physical
+crouch-by-height and Rework tracking-world-yaw turn ownership remain separate
+gates.

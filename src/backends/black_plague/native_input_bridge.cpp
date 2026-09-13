@@ -4,6 +4,7 @@
 #include "rel32_call_hook.hpp"
 #include "vr_haptics.hpp"
 #include "vr_hand_pose.hpp"
+#include "vr_locomotion.hpp"
 #include "vr_native_intents.hpp"
 #include "legacy_input_abi.hpp"
 #include "render_world_probe.hpp"
@@ -94,6 +95,9 @@ std::uint64_t g_release_generation = 0;
 runtime::VrSnapTurn g_turn;
 thread_local runtime::VrNativeIntents* g_intents = nullptr;
 thread_local void* g_input_player = nullptr;
+thread_local bool g_direct_locomotion = false;
+thread_local bool g_direct_native_axis_observed = false;
+thread_local std::array<float, 3> g_direct_locomotion_displacement{};
 thread_local bool g_pointer_valid = false;
 thread_local std::array<float, 2> g_pointer_uv{};
 thread_local std::uint64_t g_mouse_override_until = 0;
@@ -156,16 +160,30 @@ bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
 }
 void __fastcall HookedForward(void* player, void*, float amount, float dt) {
     CallbackScope scope;
-    const float intent = g_intents ? g_intents->Move(amount, false) : amount;
+    if (g_direct_locomotion && std::abs(amount) > 0.00001F)
+        g_direct_native_axis_observed = true;
+    const float intent = g_direct_locomotion
+        ? amount : (g_intents ? g_intents->Move(amount, false) : amount);
     if (!PublishBlackPlagueForwardIntent(player, intent, dt)) {
         reinterpret_cast<Move>(g_image + 0x9CBC0)(player, intent, dt);
     }
 }
 void __fastcall HookedSideways(void* player, void*, float amount, float dt) {
     CallbackScope scope;
-    const float intent = g_intents ? g_intents->Move(amount, true) : amount;
+    if (g_direct_locomotion && std::abs(amount) > 0.00001F)
+        g_direct_native_axis_observed = true;
+    const float intent = g_direct_locomotion
+        ? amount : (g_intents ? g_intents->Move(amount, true) : amount);
     if (!PublishBlackPlagueSidewaysIntent(player, intent, dt)) {
         reinterpret_cast<Move>(g_image + 0x9CC60)(player, intent, dt);
+    }
+    // Both native axis calls have now run. +0x264 is set by the exact
+    // MoveForward/MoveSideways implementation only when the active player
+    // state accepted movement. Keyboard input takes precedence for this tick.
+    if (g_direct_locomotion && !g_direct_native_axis_observed &&
+        Read<std::uint8_t>(player, 0x264) != 0) {
+        static_cast<void>(PublishBlackPlagueDirectLocomotion(
+            player, g_direct_locomotion_displacement));
     }
 }
 void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* physical_delta) {
@@ -196,6 +214,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     const auto context = ui ? runtime::VrInputContext::ui : runtime::VrInputContext::gameplay;
     g_ui.store(ui, std::memory_order_release);
     runtime::VrControllerFrame frame;
+    runtime::VrAnalogState raw_move;
+    float move_scale = 1.0F;
     std::uint64_t consumed_release = 0;
     AcquireSRWLockExclusive(&g_session_lock);
     if (g_release_pending.load(std::memory_order_acquire)) {
@@ -230,6 +250,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         }
         g_frame = frame;
     }
+    raw_move = frame.input.state.move;
+    move_scale = g_settings.move_speed;
     if (frame.input.state.move.active) {
         frame.input.state.move.x *= g_settings.move_speed;
         frame.input.state.move.y *= g_settings.move_speed;
@@ -254,12 +276,35 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     }
     runtime::VrNativeIntents intents;
     float movement_yaw = 0;
-    if (!ui && !TrackedMovementYaw(movement_yaw)) frame.input.state.move = {};
-    intents.Begin(frame.input.state, context, movement_yaw);
     auto* previous = g_intents;
     auto* previous_player = g_input_player;
     g_input_player = Read<void*>(handler, 0x38);
     g_player.store(g_input_player, std::memory_order_release);
+    g_direct_locomotion = false;
+    g_direct_native_axis_observed = false;
+    g_direct_locomotion_displacement = {};
+    runtime::VrMatrix44 head_world_pose;
+    if (!ui && frame.focused && raw_move.active &&
+        BlackPlagueDirectLocomotionAvailable(g_input_player) &&
+        TrackedHeadWorldPose(head_world_pose)) {
+        const auto direction = runtime::HeadRelativeMoveDirection(
+            head_world_pose, raw_move);
+        g_direct_locomotion_displacement =
+            runtime::LocomotionDisplacement(
+                direction, dt, move_scale, false,
+                frame.input.state.sprint.pressed);
+        g_direct_locomotion = std::hypot(
+            g_direct_locomotion_displacement[0],
+            g_direct_locomotion_displacement[2]) > 0.0F;
+    }
+    if (g_direct_locomotion) {
+        // Buttons and sprint still enter their native owners; only the VR
+        // analog move is replaced by the collision-aware metric request.
+        frame.input.state.move = {};
+    } else if (!ui && !TrackedMovementYaw(movement_yaw)) {
+        frame.input.state.move = {};
+    }
+    intents.Begin(frame.input.state, context, movement_yaw);
     g_intents = &intents;
     // Release spatial ownership even when a UI context filters gameplay edges.
     ServiceSpatialInteraction(g_input_player, ui);
@@ -273,6 +318,9 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     ServiceSpatialInteraction(g_input_player, UiContext(handler));
     g_intents = previous;
     g_input_player = previous_player;
+    g_direct_locomotion = false;
+    g_direct_native_axis_observed = false;
+    g_direct_locomotion_displacement = {};
     if (consumed_release != 0) static_cast<void>(g_release_pending.compare_exchange_strong(
         consumed_release, 0, std::memory_order_acq_rel));
     // A button can open an inventory/menu during this update. Publish the new

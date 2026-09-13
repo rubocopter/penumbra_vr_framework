@@ -7,7 +7,10 @@ namespace penumbra_vr::backends::black_plague {
 
 struct BlackPlaguePhysicalTickObservation {
     bool request_injected = false;
-    std::array<float, 3> requested_displacement{};
+    std::array<float, 3> physical_requested_displacement{};
+    std::array<float, 3> locomotion_requested_displacement{};
+    std::array<float, 3> physical_accepted_displacement{};
+    std::array<float, 3> locomotion_accepted_displacement{};
     std::array<float, 3> position_before_injection{};
     std::array<float, 3> position_after_injection{};
 };
@@ -22,6 +25,13 @@ struct BlackPlaguePhysicalTickObservation {
     void* player, float amount, float delta_seconds) noexcept;
 [[nodiscard]] bool PublishBlackPlagueSidewaysIntent(
     void* player, float amount, float delta_seconds) noexcept;
+// Available only for the transient active room-scale gate. The input owner
+// computes game-neutral metric displacement; the adapter binds it to the
+// existing collision request without adding another body update.
+[[nodiscard]] bool BlackPlagueDirectLocomotionAvailable(void* player) noexcept;
+[[nodiscard]] bool PublishBlackPlagueDirectLocomotion(
+    void* player,
+    const std::array<float, 3>& displacement) noexcept;
 // Called immediately after the one native D460A -> D6E00 update returns. No
 // game memory is written here.
 void ObserveBlackPlagueNativeBodyTick(

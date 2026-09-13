@@ -328,6 +328,23 @@ bool PublishBlackPlagueSidewaysIntent(void* player, float amount,
     return Publish(player, amount, delta_seconds, true);
 }
 
+bool BlackPlagueDirectLocomotionAvailable(void* player) noexcept {
+    if (!g_installed.load(std::memory_order_acquire) ||
+        !MatchesCurrentBody(player)) return false;
+    AcquireSRWLockShared(&g_lock);
+    const bool enabled = g_room_scale_enabled;
+    ReleaseSRWLockShared(&g_lock);
+    return enabled &&
+        ReadPhysicalBodyDisplacementBoundaryStatus().initialized;
+}
+
+bool PublishBlackPlagueDirectLocomotion(void* player,
+    const std::array<float, 3>& displacement) noexcept {
+    return BlackPlagueDirectLocomotionAvailable(player) &&
+        FiniteVector(displacement) &&
+        QueueLocomotionBodyDisplacement(displacement);
+}
+
 void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
     const std::array<float, 3>& body_before,
     const std::array<float, 3>& body_after,
@@ -388,13 +405,22 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
                 const bool request_matches = physical_tick.request_injected &&
                     g_pending_physical_validation.character_body == character_body &&
                     g_pending_physical_validation.generation == g_shadow_generation &&
-                    SameVector(physical_tick.requested_displacement,
+                    SameVector(physical_tick.physical_requested_displacement,
                         g_pending_physical_validation.plan.physical_request) &&
                     FiniteVector(physical_tick.position_before_injection) &&
                     FiniteVector(physical_tick.position_after_injection) &&
-                    runtime::ObserveAcceptedBodyMotion(
-                        physical_tick.position_before_injection, body_after,
-                        physical_motion);
+                    FiniteVector(physical_tick.physical_accepted_displacement);
+                if (request_matches) {
+                    physical_motion.body_before =
+                        physical_tick.position_before_injection;
+                    physical_motion.accepted_displacement =
+                        physical_tick.physical_accepted_displacement;
+                    physical_motion.body_after = physical_motion.body_before;
+                    for (const auto axis : {0U, 1U, 2U}) {
+                        physical_motion.body_after[axis] +=
+                            physical_motion.accepted_displacement[axis];
+                    }
+                }
                 if (request_matches) {
                     physical_reconciliation = runtime::ReconcilePhysicalBodyMotion(
                         g_pending_physical_validation.plan, physical_motion);

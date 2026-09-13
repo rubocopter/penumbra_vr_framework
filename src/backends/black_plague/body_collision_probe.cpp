@@ -84,6 +84,8 @@ std::atomic<std::uint64_t> g_body_update_sequence{0};
 SRWLOCK g_physical_request_lock = SRWLOCK_INIT;
 PhysicalBodyDisplacementTelemetry g_physical_request_telemetry;
 std::array<float, 3> g_pending_physical_request{};
+std::array<float, 3> g_pending_locomotion_request{};
+bool g_pending_body_request_active = false;
 void* g_pending_physical_body = nullptr;
 
 struct TickContext {
@@ -94,8 +96,13 @@ struct TickContext {
     bool collision_sample_valid = false;
     bool physical_request_consumed = false;
     bool physical_request_injected = false;
+    bool locomotion_request_consumed = false;
+    bool locomotion_request_injected = false;
     Vec3 physical_requested{};
     Vec3 physical_injected{};
+    Vec3 locomotion_requested{};
+    Vec3 locomotion_injected{};
+    Vec3 combined_injected{};
     Vec3 physical_position_before{};
     Vec3 physical_position_after{};
 };
@@ -136,6 +143,64 @@ T Read(const void* object, std::uintptr_t offset) noexcept {
     return {value.x - origin.x, value.y - origin.y, value.z - origin.z};
 }
 
+[[nodiscard]] Vec3 Add(const Vec3& left, const Vec3& right) noexcept {
+    return {left.x + right.x, left.y + right.y, left.z + right.z};
+}
+
+[[nodiscard]] Vec3 Scale(const Vec3& value, float scale) noexcept {
+    return {value.x * scale, value.y * scale, value.z * scale};
+}
+
+[[nodiscard]] float HorizontalLength(const Vec3& value) noexcept {
+    return std::hypot(value.x, value.z);
+}
+
+[[nodiscard]] Vec3 PhysicalAcceptedFromCombined(
+    const Vec3& physical_request,
+    const Vec3& locomotion_request,
+    const Vec3& accepted_combined) noexcept {
+    if (HorizontalLength(locomotion_request) <= 1.0e-6F) {
+        return {accepted_combined.x, 0.0F, accepted_combined.z};
+    }
+    const float physical_length = HorizontalLength(physical_request);
+    if (physical_length <= 1.0e-6F) return {};
+    // Black Plague exposes one native collision solve where Rework can run
+    // physical tracking and stick displacement in sequence. Attribute only
+    // the rejected part of the combined solve to the physical request. This
+    // preserves the full physical component in free space, including when an
+    // opposing stick request cancels the final body delta.
+    const Vec3 rejected_combined = Subtract(
+        Add(physical_request, locomotion_request), accepted_combined);
+    const float rejected_along = std::max(0.0F,
+        (rejected_combined.x * physical_request.x +
+            rejected_combined.z * physical_request.z) / physical_length);
+    const float later_locomotion_along = std::max(0.0F,
+        (locomotion_request.x * physical_request.x +
+            locomotion_request.z * physical_request.z) / physical_length);
+    const float physical_rejected = std::clamp(
+        rejected_along - later_locomotion_along, 0.0F, physical_length);
+    return Scale(physical_request,
+        (physical_length - physical_rejected) / physical_length);
+}
+
+[[nodiscard]] Vec3 LocomotionWithinCombinedLimit(
+    const Vec3& physical,
+    const Vec3& locomotion) noexcept {
+    const float maximum = runtime::vr_locomotion_policy::kMaximumPhysicalBodyStep;
+    const Vec3 combined = Add(physical, locomotion);
+    if (HorizontalLength(combined) <= maximum) return locomotion;
+    const float a = locomotion.x * locomotion.x + locomotion.z * locomotion.z;
+    if (a <= 1.0e-12F) return {};
+    const float b = 2.0F *
+        (physical.x * locomotion.x + physical.z * locomotion.z);
+    const float c = physical.x * physical.x + physical.z * physical.z -
+        maximum * maximum;
+    const float discriminant = std::max(0.0F, b * b - 4.0F * a * c);
+    const float scale = std::clamp(
+        (-b + std::sqrt(discriminant)) / (2.0F * a), 0.0F, 1.0F);
+    return Scale(locomotion, scale);
+}
+
 [[nodiscard]] std::array<float, 3> ToArray(const Vec3& value) noexcept {
     return {value.x, value.y, value.z};
 }
@@ -170,12 +235,16 @@ T Read(const void* object, std::uintptr_t offset) noexcept {
 
 void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcept {
     AcquireSRWLockExclusive(&g_physical_request_lock);
-    if (g_physical_request_telemetry.pending) {
+    if (g_pending_body_request_active) {
+        if (g_physical_request_telemetry.pending) {
+            ++g_physical_request_telemetry.consumed_requests;
+            ++g_physical_request_telemetry.rejected_requests;
+            g_physical_request_telemetry.latest_result = result;
+        }
         g_physical_request_telemetry.pending = false;
-        ++g_physical_request_telemetry.consumed_requests;
-        ++g_physical_request_telemetry.rejected_requests;
-        g_physical_request_telemetry.latest_result = result;
         g_pending_physical_request = {};
+        g_pending_locomotion_request = {};
+        g_pending_body_request_active = false;
         g_pending_physical_body = nullptr;
     }
     ReleaseSRWLockExclusive(&g_physical_request_lock);
@@ -191,28 +260,36 @@ void __cdecl ApplyQueuedPhysicalDisplacement(
         Read<void*>(player, kPlayerCharacterBodyOffset);
 
     AcquireSRWLockExclusive(&g_physical_request_lock);
-    if (!g_physical_request_telemetry.pending) {
+    if (!g_pending_body_request_active) {
         ReleaseSRWLockExclusive(&g_physical_request_lock);
         return;
     }
     if (!PhysicalRequestOwnerMatchesLive()) {
+        if (g_physical_request_telemetry.pending) {
+            ++g_physical_request_telemetry.consumed_requests;
+            ++g_physical_request_telemetry.rejected_requests;
+        }
         g_physical_request_telemetry.pending = false;
-        ++g_physical_request_telemetry.consumed_requests;
-        ++g_physical_request_telemetry.rejected_requests;
         g_physical_request_telemetry.latest_result =
             PhysicalBodyDisplacementResult::owner_mismatch;
         g_pending_physical_request = {};
+        g_pending_locomotion_request = {};
+        g_pending_body_request_active = false;
         g_pending_physical_body = nullptr;
         ReleaseSRWLockExclusive(&g_physical_request_lock);
         return;
     }
     if (current_body != g_pending_physical_body) {
+        if (g_physical_request_telemetry.pending) {
+            ++g_physical_request_telemetry.consumed_requests;
+            ++g_physical_request_telemetry.rejected_requests;
+        }
         g_physical_request_telemetry.pending = false;
-        ++g_physical_request_telemetry.consumed_requests;
-        ++g_physical_request_telemetry.rejected_requests;
         g_physical_request_telemetry.latest_result =
             PhysicalBodyDisplacementResult::body_mismatch;
         g_pending_physical_request = {};
+        g_pending_locomotion_request = {};
+        g_pending_body_request_active = false;
         g_pending_physical_body = nullptr;
         ReleaseSRWLockExclusive(&g_physical_request_lock);
         return;
@@ -222,13 +299,24 @@ void __cdecl ApplyQueuedPhysicalDisplacement(
         return; // Another character tick; preserve the player request.
     }
 
-    const auto request = g_pending_physical_request;
+    const auto physical_request = g_pending_physical_request;
+    const auto locomotion_request = g_pending_locomotion_request;
+    const std::array<float, 3> request{
+        physical_request[0] + locomotion_request[0], 0.0F,
+        physical_request[2] + locomotion_request[2]};
+    const bool physical_pending = g_physical_request_telemetry.pending;
+    const bool locomotion_pending =
+        std::hypot(locomotion_request[0], locomotion_request[2]) > 0.0F;
     g_physical_request_telemetry.pending = false;
-    ++g_physical_request_telemetry.consumed_requests;
-    ++g_physical_request_telemetry.injected_requests;
-    g_physical_request_telemetry.latest_result =
-        PhysicalBodyDisplacementResult::injected;
+    if (physical_pending) {
+        ++g_physical_request_telemetry.consumed_requests;
+        ++g_physical_request_telemetry.injected_requests;
+        g_physical_request_telemetry.latest_result =
+            PhysicalBodyDisplacementResult::injected;
+    }
     g_pending_physical_request = {};
+    g_pending_locomotion_request = {};
+    g_pending_body_request_active = false;
     g_pending_physical_body = nullptr;
     ReleaseSRWLockExclusive(&g_physical_request_lock);
 
@@ -236,10 +324,17 @@ void __cdecl ApplyQueuedPhysicalDisplacement(
     position->x += request[0];
     position->z += request[2];
     g_tick.physical_position_after = *position;
-    g_tick.physical_request_consumed = true;
-    g_tick.physical_request_injected = true;
-    g_tick.physical_requested = {request[0], 0.0F, request[2]};
+    g_tick.physical_request_consumed = physical_pending;
+    g_tick.physical_request_injected = physical_pending;
+    g_tick.locomotion_request_consumed = locomotion_pending;
+    g_tick.locomotion_request_injected = locomotion_pending;
+    g_tick.physical_requested = {
+        physical_request[0], 0.0F, physical_request[2]};
     g_tick.physical_injected = g_tick.physical_requested;
+    g_tick.locomotion_requested = {
+        locomotion_request[0], 0.0F, locomotion_request[2]};
+    g_tick.locomotion_injected = g_tick.locomotion_requested;
+    g_tick.combined_injected = {request[0], 0.0F, request[2]};
 }
 
 __declspec(naked) void PhysicalRequestGateway() noexcept {
@@ -316,8 +411,9 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
 
     const TickContext previous = g_tick;
     if (observe) {
-        g_tick = {character_body, position_before, {}, {}, false,
-            false, false, {}, {}, {}, {}};
+        g_tick = {};
+        g_tick.character_body = character_body;
+        g_tick.position_before = position_before;
     }
     g_original_update(character_body, delta_seconds);
 
@@ -353,17 +449,37 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
                 Subtract(position_after, position_before));
             sample.physical_request_consumed = g_tick.physical_request_consumed;
             sample.physical_request_injected = g_tick.physical_request_injected;
+            sample.locomotion_request_consumed =
+                g_tick.locomotion_request_consumed;
+            sample.locomotion_request_injected =
+                g_tick.locomotion_request_injected;
             sample.physical_requested_displacement = ToArray(
                 g_tick.physical_requested);
             sample.physical_injected_displacement = ToArray(
                 g_tick.physical_injected);
+            sample.locomotion_requested_displacement = ToArray(
+                g_tick.locomotion_requested);
+            sample.locomotion_injected_displacement = ToArray(
+                g_tick.locomotion_injected);
+            sample.combined_injected_displacement = ToArray(
+                g_tick.combined_injected);
             sample.physical_position_before_injection = ToArray(
                 g_tick.physical_position_before);
             sample.physical_position_after_injection = ToArray(
                 g_tick.physical_position_after);
-            if (g_tick.physical_request_injected) {
+            if (g_tick.physical_request_injected ||
+                g_tick.locomotion_request_injected) {
+                const Vec3 accepted_combined = Subtract(
+                    position_after, g_tick.physical_position_before);
+                const Vec3 physical_accepted = PhysicalAcceptedFromCombined(
+                    g_tick.physical_requested, g_tick.locomotion_requested,
+                    accepted_combined);
+                const Vec3 locomotion_accepted = Subtract(
+                    accepted_combined, physical_accepted);
                 sample.physical_accepted_displacement = ToArray(
-                    Subtract(position_after, g_tick.physical_position_before));
+                    physical_accepted);
+                sample.locomotion_accepted_displacement = ToArray(
+                    locomotion_accepted);
             }
             if (g_tick.collision_sample_valid) {
                 sample.requested_displacement = ToArray(
@@ -373,8 +489,12 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
             }
 
             const BlackPlaguePhysicalTickObservation physical_tick{
-                sample.physical_request_injected,
+                sample.physical_request_injected ||
+                    sample.locomotion_request_injected,
                 sample.physical_injected_displacement,
+                sample.locomotion_injected_displacement,
+                sample.physical_accepted_displacement,
+                sample.locomotion_accepted_displacement,
                 sample.physical_position_before_injection,
                 sample.physical_position_after_injection};
             ObserveBlackPlagueNativeBodyTick(
@@ -559,6 +679,8 @@ template<std::size_t Size>
     AcquireSRWLockExclusive(&g_physical_request_lock);
     g_physical_request_telemetry = {};
     g_pending_physical_request = {};
+    g_pending_locomotion_request = {};
+    g_pending_body_request_active = false;
     g_pending_physical_body = nullptr;
     ReleaseSRWLockExclusive(&g_physical_request_lock);
     return true;
@@ -647,7 +769,21 @@ bool QueuePhysicalBodyDisplacement(
     }
 
     AcquireSRWLockExclusive(&g_physical_request_lock);
+    const Vec3 pending_locomotion{
+        g_pending_locomotion_request[0], 0.0F,
+        g_pending_locomotion_request[2]};
+    const bool preserve_locomotion = g_pending_body_request_active &&
+        g_pending_physical_body == body;
     g_pending_physical_request = {bounded_x, 0.0F, bounded_z};
+    if (preserve_locomotion) {
+        const Vec3 physical{bounded_x, 0.0F, bounded_z};
+        const Vec3 bounded_locomotion = LocomotionWithinCombinedLimit(
+            physical, pending_locomotion);
+        g_pending_locomotion_request = ToArray(bounded_locomotion);
+    } else {
+        g_pending_locomotion_request = {};
+    }
+    g_pending_body_request_active = true;
     g_pending_physical_body = body;
     ++g_physical_request_telemetry.queued_requests;
     g_physical_request_telemetry.pending = true;
@@ -662,10 +798,40 @@ bool QueuePhysicalBodyDisplacement(
     return true;
 }
 
+bool QueueLocomotionBodyDisplacement(
+    const std::array<float, 3>& displacement) noexcept {
+    const Vec3 requested{displacement[0], 0.0F, displacement[2]};
+    if (!Finite(requested) || !PhysicalRequestOwnerMatchesLive()) return false;
+    void* player = NativePlayerPointer();
+    void* body = player == nullptr ? nullptr :
+        Read<void*>(player, kPlayerCharacterBodyOffset);
+    if (player == nullptr || body == nullptr) return false;
+
+    AcquireSRWLockExclusive(&g_physical_request_lock);
+    if (g_pending_body_request_active && g_pending_physical_body != body) {
+        ReleaseSRWLockExclusive(&g_physical_request_lock);
+        return false;
+    }
+    if (!g_pending_body_request_active) {
+        g_pending_physical_request = {};
+        g_pending_physical_body = body;
+        g_pending_body_request_active = true;
+    }
+    const Vec3 physical{
+        g_pending_physical_request[0], 0.0F,
+        g_pending_physical_request[2]};
+    const Vec3 bounded = LocomotionWithinCombinedLimit(physical, requested);
+    g_pending_locomotion_request = {bounded.x, 0.0F, bounded.z};
+    ReleaseSRWLockExclusive(&g_physical_request_lock);
+    return true;
+}
+
 void InvalidatePhysicalBodyDisplacement() noexcept {
     AcquireSRWLockExclusive(&g_physical_request_lock);
     g_physical_request_telemetry.pending = false;
     g_pending_physical_request = {};
+    g_pending_locomotion_request = {};
+    g_pending_body_request_active = false;
     g_pending_physical_body = nullptr;
     ReleaseSRWLockExclusive(&g_physical_request_lock);
 }

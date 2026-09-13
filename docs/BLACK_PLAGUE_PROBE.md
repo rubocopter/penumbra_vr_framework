@@ -455,21 +455,45 @@ component. The helper now mirrors that rule, so a lateral native solver
 correction cannot disguise a direct block. This does not alter the native
 collision path.
 
-The same testing later exposed a separate locomotion concern: forward stick can
-feel offset unless the user recenters, as if the native body basis and current
-HMD heading disagree. Static comparison with Rework found that Black Plague was
-deriving the remap yaw through the rendered/native camera, while Rework derives
-movement from current HMD world orientation. The next build now measures the
-horizontal remap yaw directly from the recenter tracking anchor to the current
-raw HMD pose. The shared math is host-tested; Black Plague has not yet exercised
-this correction live or in a headset. The probe frame log retains
-`movement_yaw_valid` and `movement_yaw_rad` next to `controller_move` so the next
-run can verify it before and after a 45-90 degree physical turn and recenter.
-Rework `23c890f` applies snap/smooth turning to tracking `world yaw`, whereas the
-Black Plague adapter currently applies the shared turn amount through native
-player yaw and remaps controller movement relative to the tracked head. That
-mechanism difference is now an explicit investigation target, not yet a claimed
-cause.
+PID 11804 subsequently headset-exercised the tracking-only direction correction.
+The user reported stable general presentation and correct movement direction
+relative to the current HMD without recenter. The log records body updates at
+`dt=0.016667` while stereo frame intervals commonly fall around 9--12 ms, which
+is the expected 60 Hz physics / 90 Hz headset split. That split matters for
+render continuity but does not explain movement speed changing with direction.
+The helper observed stationary and free only, then correctly reported missing
+blocked and slide/partial evidence.
+
+The remaining symptom followed the hidden body basis: visual forward became
+slow when the remapped vector entered native backward, while movement along the
+old body-forward axis retained normal speed. Static inspection shows why.
+`cPlayer::MoveForward/MoveSideways -> iCharacterBody::Move(D4F50)` integrates
+signed per-axis acceleration and caps. A heading remap can choose the right world
+direction but cannot make those four signed responses isotropic.
+
+The next transient room-scale build therefore uses the already shared Rework
+policy directly. `NativeInputBridge` builds a world displacement from the fresh
+tracked head pose, raw analog input, `MoveSpeed` and normal/sprint speed
+`1.5/2.25 m/s`. It still calls the native axes with keyboard-only input so native
+buttons/state processing remains active, requires exact-build player flag
+`+0x264` to confirm that the active state accepted movement, and then publishes
+the VR displacement to `BlackPlagueBodyAdapter`. `BodyCollisionProbe` merges it
+with any pending physical request, bounds the combined vector to `0.05 m`, and
+injects it once at the already owned `0xD7281` gateway. Telemetry separates
+`physical_requested`, `locomotion_requested`, `combined_injected`,
+`physical_accepted` and `locomotion_accepted`.
+
+This composition differs narrowly from Rework because the source backend can
+perform physical and stick body updates sequentially, whereas the exact Black
+Plague binary exposes one live-tested native `D6E00` update owner. Adding a
+second update would duplicate native deacceleration, step, gravity and state
+work. The backend instead attributes combined rejection to the later locomotion
+component first when both requests share a direction, then partitions any
+remaining rejection into physical reconciliation. The path is host-tested only.
+Opposing/same-direction combinations, native state rejection, equal directional
+speed, sprint, footsteps/bob/animation and repeated turns are required in the
+next headset run. Rework's tracking-world-yaw turn owner remains a separate
+milestone; Black Plague still applies VR turn through native player yaw.
 
 Physical crouch-by-height is also confirmed not to drive the native crouch state
 yet. Keep that separate from the already live-tested native crouch button and

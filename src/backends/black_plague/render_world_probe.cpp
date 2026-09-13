@@ -243,14 +243,17 @@ std::atomic<bool> g_recenter_requested{false};
 SRWLOCK g_world_tracking_lock = SRWLOCK_INIT;
 runtime::VrMatrix44 g_world_game_view;
 runtime::VrMatrix34 g_world_anchor;
+runtime::VrMatrix44 g_world_head_pose;
 float g_world_movement_yaw = 0;
 bool g_world_movement_yaw_valid = false;
+bool g_world_head_pose_valid = false;
 std::uint64_t g_world_tracking_time = 0;
 void InvalidateWorldTracking() {
     InvalidateBlackPlagueShadowTracking();
     AcquireSRWLockExclusive(&g_world_tracking_lock);
     g_world_tracking_time = 0;
     g_world_movement_yaw_valid = false;
+    g_world_head_pose_valid = false;
     ReleaseSRWLockExclusive(&g_world_tracking_lock);
 }
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
@@ -770,9 +773,16 @@ void __fastcall HookedUpdateRenderList(
                 "Could not compose the room-scale controller basis: " + error);
             return result;
         }
+        runtime::VrMatrix44 movement_head_pose;
+        std::string movement_pose_error;
+        const bool movement_head_pose_valid = runtime::InvertRigidTransform(
+            CollapseMatrix(head_view), movement_head_pose,
+            movement_pose_error);
         AcquireSRWLockExclusive(&g_world_tracking_lock);
         g_world_game_view = controller_game_view;
         g_world_anchor = g_stereo_tracking_anchor;
+        g_world_head_pose = movement_head_pose;
+        g_world_head_pose_valid = movement_head_pose_valid;
         // Rework steers from the current HMD world heading. Keep the same
         // tracking-only basis here instead of feeding the rendered game camera
         // back into the native-input remap.
@@ -1627,6 +1637,14 @@ bool TrackedMovementYaw(float& yaw) noexcept {
     const auto time = g_world_tracking_time;
     ReleaseSRWLockShared(&g_world_tracking_lock);
     return valid && time != 0 && GetTickCount64() - time <= 250 && std::isfinite(yaw);
+}
+bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept {
+    AcquireSRWLockShared(&g_world_tracking_lock);
+    pose = g_world_head_pose;
+    const bool valid = g_world_head_pose_valid;
+    const auto time = g_world_tracking_time;
+    ReleaseSRWLockShared(&g_world_tracking_lock);
+    return valid && time != 0 && GetTickCount64() - time <= 250;
 }
 bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
     std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {

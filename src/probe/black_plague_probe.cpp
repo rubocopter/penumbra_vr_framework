@@ -425,9 +425,14 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "physical_consumed=%u physical_injected=%u "
                 "physical_requested=[%.5f,%.5f,%.5f] "
                 "physical_injected_delta=[%.5f,%.5f,%.5f] "
+                "locomotion_consumed=%u locomotion_injected=%u "
+                "locomotion_requested=[%.5f,%.5f,%.5f] "
+                "locomotion_injected_delta=[%.5f,%.5f,%.5f] "
+                "combined_injected_delta=[%.5f,%.5f,%.5f] "
                 "physical_pre_injection=[%.5f,%.5f,%.5f] "
                 "physical_post_injection=[%.5f,%.5f,%.5f] "
                 "physical_accepted=[%.5f,%.5f,%.5f] "
+                "locomotion_accepted=[%.5f,%.5f,%.5f] "
                 "tracked_hmd_anchor_delta_m=[%.5f,%.5f] "
                 "tracked_hmd_anchor_delta_horizontal_m=%.5f "
                 "positional_translation_enabled=%u room_scale_sample_valid=%u "
@@ -468,6 +473,17 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 body.physical_injected_displacement[0],
                 body.physical_injected_displacement[1],
                 body.physical_injected_displacement[2],
+                body.locomotion_request_consumed ? 1U : 0U,
+                body.locomotion_request_injected ? 1U : 0U,
+                body.locomotion_requested_displacement[0],
+                body.locomotion_requested_displacement[1],
+                body.locomotion_requested_displacement[2],
+                body.locomotion_injected_displacement[0],
+                body.locomotion_injected_displacement[1],
+                body.locomotion_injected_displacement[2],
+                body.combined_injected_displacement[0],
+                body.combined_injected_displacement[1],
+                body.combined_injected_displacement[2],
                 body.physical_position_before_injection[0],
                 body.physical_position_before_injection[1],
                 body.physical_position_before_injection[2],
@@ -477,6 +493,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 body.physical_accepted_displacement[0],
                 body.physical_accepted_displacement[1],
                 body.physical_accepted_displacement[2],
+                body.locomotion_accepted_displacement[0],
+                body.locomotion_accepted_displacement[1],
+                body.locomotion_accepted_displacement[2],
                 head_body_x, head_body_z,
                 render_world.hmd_horizontal_delta_m,
                 room_scale_status.enabled ? 1U : 0U,

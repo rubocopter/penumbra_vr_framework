@@ -68,6 +68,8 @@ ReadNativeBodyUpdateBoundaryStatus() noexcept;
 // always discarded so the native jump/gravity pipeline retains ownership.
 [[nodiscard]] bool QueuePhysicalBodyDisplacement(
     const std::array<float, 3>& displacement) noexcept;
+[[nodiscard]] bool QueueLocomotionBodyDisplacement(
+    const std::array<float, 3>& displacement) noexcept;
 void InvalidatePhysicalBodyDisplacement() noexcept;
 [[nodiscard]] PhysicalBodyDisplacementBoundaryStatus
 ReadPhysicalBodyDisplacementBoundaryStatus() noexcept;

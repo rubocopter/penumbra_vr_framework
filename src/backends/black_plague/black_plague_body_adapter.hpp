@@ -10,10 +10,11 @@
 
 namespace penumbra_vr::backends::black_plague {
 
-// Exact-build boundary for the native Black Plague character body.  It only
-// forwards horizontal intent through cPlayer::MoveForward/MoveSideways and
-// observes the result around the game's existing D460A -> D6E00 tick.  It
-// never invokes iCharacterBody::Update itself.
+// Exact-build boundary for the native Black Plague character body. It forwards
+// ordinary horizontal intent through cPlayer::MoveForward/MoveSideways and can
+// bind transient direct VR displacement to the existing collision-request
+// owner. It observes the result around the game's D460A -> D6E00 tick and never
+// invokes iCharacterBody::Update itself.
 struct BlackPlagueBodyMotion {
     bool valid = false;
     bool intent_published = false;
@@ -28,9 +29,10 @@ struct BlackPlagueBodyMotion {
 
 [[nodiscard]] BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept;
 
-// Optional diagnostics, enabled only by PVR_BP_RECONCILIATION_SHADOW=1 at
-// adapter installation. The renderer publishes raw tracking; the existing
-// native body callback consumes it. Neither path writes player/camera state.
+// Optional reconciliation path enabled by an explicit environment or transient
+// validation request. The renderer publishes raw tracking and the existing
+// native body callback consumes it. Shadow-only mode remains observation-only;
+// room-scale validation can publish through the separate bounded request.
 void PublishBlackPlagueShadowTracking(const runtime::VrMatrix34& pose,
     float world_yaw, bool recentered) noexcept;
 void InvalidateBlackPlagueShadowTracking() noexcept;

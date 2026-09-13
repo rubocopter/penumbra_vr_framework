@@ -184,6 +184,74 @@ int RunBodyCollisionProbeTest() {
         !Near(injected_position.x, injected_once.x) ||
         !Near(injected_position.z, injected_once.z)) return 43;
 
+    // Rework locomotion shares the one exact-build injection point. The
+    // physical component keeps priority and the combined request never
+    // exceeds the proven 0.05 m step.
+    if (!QueuePhysicalBodyDisplacement({0.02F, 0.0F, 0.0F}) ||
+        !QueueLocomotionBodyDisplacement({0.04F, 0.0F, 0.0F})) return 71;
+    g_tick = {};
+    g_tick.character_body = g_body_storage.data();
+    injected_position = start;
+    ApplyQueuedPhysicalDisplacement(g_body_storage.data(), &injected_position);
+    if (!g_tick.physical_request_injected ||
+        !g_tick.locomotion_request_injected ||
+        !Near(g_tick.physical_injected.x, 0.02F) ||
+        !Near(g_tick.locomotion_injected.x, 0.03F) ||
+        !Near(g_tick.combined_injected.x, 0.05F) ||
+        !Near(injected_position.x, start.x + 0.05F)) return 72;
+    const Vec3 accepted_partition = PhysicalAcceptedFromCombined(
+        g_tick.physical_injected, g_tick.locomotion_injected,
+        {0.035F, 0.0F, 0.0F});
+    if (!Near(accepted_partition.x, 0.02F)) return 73;
+    g_tick = {};
+    static_cast<void>(ConsumePhysicalBodyDisplacementTelemetry());
+
+    // With opposite free-space requests the combined body delta can be zero.
+    // Rework still accepts the physical phase before locomotion moves the body
+    // back, so the partition must retain the physical component.
+    const Vec3 opposite_partition = PhysicalAcceptedFromCombined(
+        {0.02F, 0.0F, 0.0F}, {-0.02F, 0.0F, 0.0F}, {});
+    if (!Near(opposite_partition.x, 0.02F)) return 78;
+
+    // Queue order is not an ownership contract. A physical plan published
+    // after input must retain and re-bound the already queued locomotion.
+    if (!QueueLocomotionBodyDisplacement({0.04F, 0.0F, 0.0F}) ||
+        !QueuePhysicalBodyDisplacement({0.02F, 0.0F, 0.0F})) return 79;
+    g_tick.character_body = g_body_storage.data();
+    injected_position = start;
+    ApplyQueuedPhysicalDisplacement(g_body_storage.data(), &injected_position);
+    if (!g_tick.physical_request_injected ||
+        !g_tick.locomotion_request_injected ||
+        !Near(g_tick.physical_injected.x, 0.02F) ||
+        !Near(g_tick.locomotion_injected.x, 0.03F) ||
+        !Near(g_tick.combined_injected.x, 0.05F)) return 80;
+    g_tick = {};
+    static_cast<void>(ConsumePhysicalBodyDisplacementTelemetry());
+
+    if (!QueueLocomotionBodyDisplacement({0.0F, 0.0F, -0.025F})) return 74;
+    g_tick.character_body = g_body_storage.data();
+    injected_position = start;
+    ApplyQueuedPhysicalDisplacement(g_body_storage.data(), &injected_position);
+    if (g_tick.physical_request_injected ||
+        !g_tick.locomotion_request_injected ||
+        !Near(g_tick.combined_injected.z, -0.025F) ||
+        !Near(injected_position.z, start.z - 0.025F)) return 75;
+    g_tick = {};
+
+    // cButtonHandler can publish more than once before the single native body
+    // tick. The pending metric displacement is a latest-state request, not an
+    // accumulator, so duplicate input callbacks must not double locomotion.
+    if (!QueueLocomotionBodyDisplacement({0.0F, 0.0F, 0.025F}) ||
+        !QueueLocomotionBodyDisplacement({0.0F, 0.0F, 0.025F})) return 81;
+    g_tick.character_body = g_body_storage.data();
+    injected_position = start;
+    ApplyQueuedPhysicalDisplacement(g_body_storage.data(), &injected_position);
+    if (!g_tick.locomotion_request_injected ||
+        !Near(g_tick.locomotion_injected.z, 0.025F) ||
+        !Near(g_tick.combined_injected.z, 0.025F) ||
+        !Near(injected_position.z, start.z + 0.025F)) return 82;
+    g_tick = {};
+
     if (!QueuePhysicalBodyDisplacement({0.01F, 0.0F, 0.0F})) return 44;
     std::array<std::uint8_t, 0x300> mismatch_body{};
     Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
@@ -480,6 +548,20 @@ int RunBodyCollisionProbeTest() {
     if (!room_scale_camera.valid ||
         !Near(room_scale_camera.horizontal_world_offset[0], 0.03F) ||
         !Near(room_scale_camera.horizontal_world_offset[1], 0.0F)) return 68;
+    if (!QueueLocomotionBodyDisplacement({0.0F, 0.0F, 0.02F})) return 76;
+    PublishBlackPlagueShadowTracking(head, 0.0F, false);
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    const auto combined_body = ConsumeBodyCollisionTelemetry();
+    const auto combined_shadow = ConsumeBlackPlagueShadowTelemetry();
+    if (!combined_body.physical_request_injected ||
+        !combined_body.locomotion_request_injected ||
+        !Near(combined_body.physical_requested_displacement[0], 0.03F) ||
+        !Near(combined_body.locomotion_requested_displacement[2], 0.02F) ||
+        !Near(combined_body.physical_accepted_displacement[0], 0.03F) ||
+        !Near(combined_body.locomotion_accepted_displacement[2], 0.02F) ||
+        !combined_shadow.latest.physical_reconciliation.valid ||
+        !Near(combined_shadow.latest.locomotion_carry_displacement[2], 0.02F))
+        return 77;
     PublishBlackPlagueShadowTracking(head, 0.0F, true);
     if (ReadBlackPlagueRoomScaleCameraSample().valid) return 69;
     if (!RemoveBlackPlagueBodyAdapter(error)) return 70;

@@ -65,24 +65,24 @@ it used total accepted-vector magnitude, whereas Rework measures accepted motion
 along the requested direction. A lateral native solver correction could
 therefore make a direct block look like slide/partial. The helper now uses the
 Rework projection rule; no gameplay collision code changed. The remaining user
-report was directional: forward stick could feel offset unless a recenter was
-done. Static comparison found that the remap was deriving heading through the
-rendered/native camera even though Rework derives movement from current HMD world
-orientation. The next build now measures horizontal yaw directly from the
-recenter tracking anchor to the current raw HMD pose. The shared math and input
-remap are host-tested; Black Plague headset validation is still pending. Fresh
-probe logs retain the consumed movement yaw so the next run can verify this
-boundary before any further locomotion change.
+  report was directional: forward stick could feel offset unless a recenter was
+  done. Static comparison found that the remap was deriving heading through the
+  rendered/native camera even though Rework derives movement from current HMD world
+  orientation. PID 11804 exercised the tracking-only correction and confirmed
+  that the direction now follows the HMD without recenter while presentation
+  remains stable. It also exposed signed native-axis speed asymmetry: corrected
+  visual forward could still inherit the slower native backward speed. The run
+  did not capture blocked or slide/partial, so the helper correctly left those
+  outcome classes incomplete.
 
 There is one demonstrated turn-ownership difference worth testing. Rework
 `23c890f::UpdateVRTurn` applies snap/smooth turn through
 `vr_tracking.AddWorldYaw`, then builds locomotion directly from the current head
-world forward/right vectors. Black Plague currently applies the same shared turn
-policy through native `cPlayer` yaw (`0x9CD00`) and rotates controller movement
-into that native movement basis with `TrackedMovementYaw`. That adaptation is
-required by the current native `MoveForward/MoveSideways` boundary, so the
-difference alone is not proof of a bug. Correlate `movement_yaw_rad` with head
-turn/recenter behavior before changing turn ownership.
+world forward/right vectors. Black Plague still applies the shared turn amount
+through native `cPlayer` yaw (`0x9CD00`), while the transient direct locomotion
+path now builds direction from the tracked head world pose. That mixed ownership
+must be exercised over several VR turns before changing turn ownership; the
+difference alone is not proof of a bug.
 
 ### Established facts
 
@@ -90,9 +90,11 @@ turn/recenter behavior before changing turn ownership.
   live-exercised its transient active mode and all physical outcomes. The carry
   correction is now live/headset evidenced for removing tilt-induced
   locomotion. PID 13672 headset-exercised the subsequent render-placement
-  correction and removed the reported continuous shake. The subsequent
-  tracking-only stick-heading correction is host-tested but not yet exercised in
-  a headset, so the full path still lacks headset validation.
+  correction and removed the reported continuous shake. PID 11804
+  headset-exercised the subsequent tracking-only stick heading and confirmed its
+  direction, but exposed native-axis speed asymmetry. The direct metric
+  locomotion correction described below is host-tested only, so the full path
+  still lacks headset validation.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.
@@ -182,29 +184,31 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 - Rework uses direct VR displacement policy of `1.5 / 2.25 m/s`, with `0.05 m` physical steps.
 - Scaling analog input only changes native input/acceleration magnitude; it is not equivalent to Rework's locomotion policy.
 - The earlier ratio≈2 timing diagnostic measured `cButtonHandler::Update` callbacks, not physics. The body probe consistently observes the real body tick at ~60 Hz.
-- The first adapter intentionally preserves native tuning. Speed policy has not yet been ported to Black Plague.
+- The transient active room-scale path now ports Rework's direct `1.5 / 2.25
+  m/s` policy through the existing `0xD7281` owner. It is host-tested only. The
+  default path still preserves native tuning.
 
 ### Do not try again
 
 - Do not declare the issue fixed by changing `MoveSpeed` alone.
 - Do not alter simulation rate or gravity to compensate for perceived speed.
-- Do not combine speed retuning with the first tracking/body reconciliation live gate.
+- Do not route direct VR movement through a second `D6E00` body update. Black
+  Plague owns one native update and one exact-build pre-collision request.
 
 ### Next evidence
 
-Headset-validate the corrected active room-scale/positional HMD translation
-through the live-tested physical displacement boundary first. Require a stable
-world at rest and during slow translation, then free/block/slide, explicit
-head-relative forward-stick checks before and after recenter, native crouch shape
-swap/recovery, in-place rotation/tilt with no appreciable locomotion, deliberate
+Headset-validate the direct metric path together with the corrected active
+room-scale translation. Require a stable world at rest and during slow
+translation, free/block/slide, equal full-stick speed for forward/back/left/right
+before and after physical turn and recenter, normal/sprint comparison, native
+crouch shape recovery, in-place rotation/tilt with no locomotion, deliberate
 translated HMD movement with/without stick, hands and mirror-on evidence.
-`movement_yaw_rad` must agree with the user's current horizontal HMD heading;
-`locomotion_carry` must exclude the already reconciled `physical_accepted`
-component and no extra camera jump or residual drift may remain.
-Then compare a deliberately
-scoped Black Plague VR locomotion policy against the proven Overture
-`1.5 / 2.25 m/s` behavior through the adapter, using accepted displacement
-rather than analog scaling as the correctness boundary.
+Telemetry must show non-zero direct locomotion queued, injected and accepted;
+`locomotion_carry` must exclude the reconciled physical component and no extra
+camera jump or residual drift may remain. Explicitly record whether native
+footsteps, bob and body animation still trigger, because Rework owns footsteps
+by travelled distance and the binary backend has not yet ported that game-side
+effect.
 
 ## 3. Black Plague jump
 

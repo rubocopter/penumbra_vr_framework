@@ -23,12 +23,16 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   The renderer now places X/Z directly at the reconciled anchor and adds the HMD
   delta since the observed body sample for render-rate continuity. PID 13672
   subsequently headset-exercised that correction: the user reported the prior
-  continuous world shake gone and comfort substantially improved. Stick heading
-  relative to current HMD orientation then remained unresolved. The next build
-  replaces the camera-derived remap yaw with raw tracking-anchor -> current-HMD
-  horizontal yaw, matching Rework's head-relative direction boundary. That
-  change is implemented/host-tested only, so the complete active room-scale path
-  is still not headset-validated.
+  continuous world shake gone and comfort substantially improved. PID 11804 then
+  headset-exercised the tracking-only heading correction: general stability was
+  retained and stick direction followed current HMD heading without recenter.
+  It exposed a second, separate difference: speed still depended on the hidden
+  native body axis/sign, so visual forward could inherit Black Plague's slower
+  backward response. The next build therefore uses Rework's shared direct
+  `1.5/2.25 m/s` displacement and queues it through the existing exact-build
+  `0xD7281` collision owner. Physical and stick components share one bounded
+  request and are partitioned for reconciliation. This new path is host-tested
+  only, so the complete active room-scale path is still not headset-validated.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -230,7 +234,7 @@ PID 8628 demonstrated:
 - approximately 60 native body updates/s at `dt=0.016667`;
 - no evidence of a second `D6E00` call.
 
-`positional_translation_enabled=0` throughout that validation. Therefore the adapter boundary is live-tested, while the later active room-scale consumer still requires its own validation. VR speed tuning, physical crouch, jump tuning and camera/bob comfort remain separate.
+`positional_translation_enabled=0` throughout that validation. Therefore the adapter boundary is live-tested, while the later active room-scale consumer still requires its own validation. At that PID 8628 checkpoint, VR speed tuning, physical crouch, jump tuning and camera/bob comfort were still separate; the current direct-locomotion status is recorded in the repository checkpoint above.
 
 ## First shared body policy
 
@@ -370,27 +374,44 @@ uses accepted displacement projected onto the request direction. The helper now
 uses that same directional rule, so lateral native solver correction cannot mask
 a direct block. Gameplay collision behavior is unchanged.
 
-The remaining reported room-scale issue is stick heading: forward movement had
-felt as if the body was facing another direction unless the user recenters. The
-previous remap derived its relative yaw through the rendered/native camera.
-Rework `23c890f` instead derives locomotion from current HMD world heading. The
-next build now measures horizontal yaw directly from the recenter tracking anchor
-to the current raw HMD orientation and fails closed when that heading is invalid;
-the shared math and native-intent path are host-tested, but Black Plague has not
-yet live/headset-tested this correction. The probe continues to log
-`movement_yaw_valid` and `movement_yaw_rad` beside raw controller input so the
-next run can verify it. Rework still applies VR turning to tracking `world yaw`,
+PID 11804 headset-exercised the tracking-only heading correction. The reported
+direction now followed current HMD heading before recenter, after a physical
+turn and after recenter, while the general presentation remained stable. The
+run captured only stationary/free classes, so its helper failure for missing
+blocked and slide/partial is valid evidence incompleteness rather than a shutdown
+failure. The user also identified that visual forward retained the speed of the
+underlying native axis: movement was slow when the corrected vector mapped to
+native backward and normal when it mapped to the old body forward.
+
+Static comparison explains the distinction. Black Plague's
+`MoveForward/MoveSideways -> iCharacterBody::Move` path owns signed per-axis
+acceleration and caps; rotating a world vector into those axes fixes heading but
+cannot produce isotropic Rework speed. The transient room-scale path now builds
+the movement vector directly from the current tracked head world pose using the
+shared `HeadRelativeMoveDirection` and `LocomotionDisplacement` policy, then
+queues `1.5 m/s` normal or `2.25 m/s` sprint displacement through the already
+owned `0xD7281` pre-collision injection. The native player movement-permission
+byte at `+0x264` must still confirm that the active state accepted movement;
+keyboard axes retain their original route and take priority for that tick.
+
+Directly copying Rework's two sequential body updates is unsafe here because the
+binary backend has one live-tested native `D6E00` owner per tick. The adaptation
+merges physical tracking and stick displacement into that one request, preserves
+physical reconciliation priority, bounds the combined X/Z step to `0.05 m`, and
+partitions the accepted result into physical and locomotion telemetry/carry. It
+is host-tested only. Simultaneous physical/stick movement, uniform directional
+speed, native state rejection and the presence of footsteps/bob/animation are
+explicit headset gates. Rework still applies VR turning to tracking `world yaw`,
 whereas Black Plague currently applies the shared turn amount to native player
-yaw because its input still enters through `MoveForward/MoveSideways`. Do not
-change that owner or fake the `1.5/2.25 m/s` direct-displacement policy until a
-separate boundary is justified. The next gate remains
+yaw; that separate owner remains unchanged. The next gate remains
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must first prove that
 stationary/slow movement has no world shake, rotation/tilt in place causes no
 appreciable locomotion, then retest deliberate
 translated HMD motion, free/block/slide, explicit head-relative stick direction
-before/after recenter, native crouch recovery, hands, mirror/focus and absence of
-residual drift before promotion. Physical crouch-by-height remains a separate
-milestone because Black Plague's safe stand-clearance boundary is still unknown.
+and equal speed before/after physical turn and recenter, native crouch recovery,
+hands, mirror/focus and absence of residual drift before promotion. Physical
+crouch-by-height remains a separate milestone because Black Plague's safe
+stand-clearance boundary is still unknown.
 
 Two presentation regressions from the earlier headset session remain separate.
 PID 19192 refined the mirror-off evidence: gameplay frames reported
