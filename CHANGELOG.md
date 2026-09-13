@@ -42,6 +42,12 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- Corrected the VR settings transaction flush. The documented all-null
+  `WritePrivateProfileStringW` cache-flush call returns zero even when it
+  performs the flush, so treating that value as failure rejected mirror/config
+  saves and surfaced `ERROR_FILE_NOT_FOUND`. The transaction now performs that
+  cache flush without interpreting its return and then durably flushes the
+  temporary file handle before atomic replacement.
 - Made IAT pointer replacement fail transactionally when page-protection
   restoration fails instead of reporting success with a writable hook page.
 - Hardened OpenGL telemetry and Black Plague spatial-interaction hook lifecycle:

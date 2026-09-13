@@ -64,6 +64,14 @@ int main() {
         std::wcerr << L"Could not persist the disabled mirror: " << error << L'\n';
         return 4;
     }
+    for (const auto& entry :
+            std::filesystem::directory_iterator(settings_path.parent_path())) {
+        if (entry.path().filename().wstring().rfind(
+                L"settings.ini.tmp.", 0) == 0) {
+            std::cerr << "A completed settings transaction left a temporary file\n";
+            return 17;
+        }
+    }
     enabled = true;
     if (!penumbra_vr::launcher::LoadMonitorMirrorSetting(
             settings_path, enabled, error) || enabled || !error.empty()) {

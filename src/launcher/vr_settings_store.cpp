@@ -209,10 +209,36 @@ void DiscardSettingsTransaction(const std::filesystem::path& path) noexcept {
     const std::filesystem::path& path,
     const std::filesystem::path& transaction_path,
     std::wstring& error) {
-    SetLastError(ERROR_SUCCESS);
-    if (!WritePrivateProfileStringW(
-            nullptr, nullptr, nullptr, transaction_path.c_str())) {
-        error = Win32Error(L"Flushing the VR settings transaction", GetLastError());
+    // Win32 documents zero as the expected return value when this special
+    // all-null call flushes the private-profile cache. It is therefore not a
+    // success/failure result and GetLastError must not be interpreted here.
+    static_cast<void>(WritePrivateProfileStringW(
+        nullptr, nullptr, nullptr, transaction_path.c_str()));
+
+    HANDLE transaction = CreateFileW(
+        transaction_path.c_str(),
+        GENERIC_READ | GENERIC_WRITE,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    if (transaction == INVALID_HANDLE_VALUE) {
+        error = Win32Error(
+            L"Opening the VR settings transaction for durable flush",
+            GetLastError());
+        return false;
+    }
+    if (!FlushFileBuffers(transaction)) {
+        const DWORD flush_error = GetLastError();
+        CloseHandle(transaction);
+        error = Win32Error(
+            L"Flushing the VR settings transaction file", flush_error);
+        return false;
+    }
+    if (!CloseHandle(transaction)) {
+        error = Win32Error(
+            L"Closing the flushed VR settings transaction", GetLastError());
         return false;
     }
 

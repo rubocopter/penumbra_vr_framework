@@ -10,6 +10,12 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- The first room-scale helper launch exposed a settings-store regression before
+  game startup: the all-null private-profile cache flush was incorrectly treated
+  as a Boolean success result and reported Win32 error 2. The store now follows
+  the documented zero-return flush contract, flushes the temporary file through
+  a writable file handle, and retains same-directory atomic replacement. This
+  fix requires a rebuilt launcher before retrying the headset gate.
 - Working-tree maintenance pass on 2026-09-12: settings writes are transactional,
   IAT/OpenGL/spatial teardown reports partial state, OpenVR retains a loader
   handle after unload failure, renderer types and Black Plague body-owner

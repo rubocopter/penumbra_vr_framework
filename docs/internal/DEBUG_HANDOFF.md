@@ -4,6 +4,14 @@ This file prevents repeated symptom-level fixes from replacing evidence-backed i
 
 ## 0. Hook and loader lifecycle
 
+The first 2026-09-13 room-scale helper attempt stopped before launching the game
+with `Flushing the VR settings transaction failed with Win32 error 2`. The
+all-null `WritePrivateProfileStringW` cache-flush form returns zero when it
+flushes; that return is not a normal success Boolean. The settings store now
+ignores that special return, opens the temporary file with write access, calls
+`FlushFileBuffers`, and only then performs the existing atomic replacement.
+Do not diagnose a repeat from an old launcher: rebuild before retrying.
+
 The 2026-09-12 maintenance pass made IAT writes transactional when protection
 restoration fails, added complete/partial-state handling to OpenGL matrix
 telemetry and spatial interaction, and retained the OpenVR loader handle after a
