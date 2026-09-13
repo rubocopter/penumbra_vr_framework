@@ -2,11 +2,16 @@
 param(
     [string]$GamePath = (Join-Path ${env:ProgramFiles(x86)} 'Steam\steamapps\common\Penumbra Black Plague\redist\penumbra.exe'),
     [string]$ImagePath = '',
-    [switch]$EnableRoomScale
+    [switch]$EnableRoomScale,
+    [switch]$PhysicalCrouchFocus
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($PhysicalCrouchFocus -and -not $EnableRoomScale) {
+    throw 'PhysicalCrouchFocus requires EnableRoomScale so tracked Y and native stance can be validated together.'
+}
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $launcher = Join-Path $repoRoot 'build\bin\Release\PenumbraVR.ProbeLauncher.exe'
@@ -308,8 +313,20 @@ try {
 
     Write-Host "Black Plague detected (PID $($gameProcess.Id)); physical displacement validation is active via mutex."
     Write-Host "Probe log: $probeLog"
-    Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
-    if ($EnableRoomScale) {
+    if ($EnableRoomScale -and $PhysicalCrouchFocus) {
+        Write-Host 'Validate physical crouch/native-shape synchronization and short-range comfort while keeping this window open. Hold each stance for several seconds so periodic telemetry captures it.'
+        Write-Host 'PID 20520 exposed a false automatic pass: policy exits were not synchronized with the native standing body. This run validates the corrected Rework-style owner and vertical tracking.'
+        Write-Host '1. Start fully STANDING and do not press crouch. Stay naturally upright for 10 seconds so the raw HMD standing-height baseline calibrates.'
+        Write-Host '2. Without crouching or using sticks, move head/torso only 5-10 cm forward, back and sideways, returning to the same spot each time. The world must follow continuously and must not pull you back, oscillate or lurch.'
+        Write-Host '3. Without pressing crouch, lower your real head/body by at least 25 cm and hold for 5-6 seconds. Height must follow continuously; crossing the threshold must change the native body to 0.95 m without an extra deep camera drop.'
+        Write-Host '4. Rise slightly near the threshold and hold briefly; the 8 cm hysteresis must prevent rapid toggling. Then stand fully upright for 5-6 seconds. The view and native 1.65 m body must stand immediately, without another crouching gesture.'
+        Write-Host '5. Repeat one complete physical crouch/stand cycle. The helper requires two policy entries/exits synchronized with two native body entries/exits.'
+        Write-Host '6. Test the RIGHT-stick crouch click as a Rework toggle: one click crouches and a second click stands. A button release by itself must not invert the stance.'
+        Write-Host '7. In Hybrid mode, crouch physically, click crouch once, then stand physically: the button latch should keep you crouched. Click once more and the body/view must stand.'
+        Write-Host '8. Use a short LEFT-stick move while standing and while physically crouched. Then combine a small 5-10 cm physical translation with stick and stop both; direction must remain HMD-relative with no retained pull or shake.'
+        Write-Host '9. Check both hands and the desktop mirror throughout. No sprint, wall block or room-scale walking is required in a small play area. Close the game normally when finished.'
+    } elseif ($EnableRoomScale) {
+        Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
         Write-Host '1. Do NOT recenter at the start. Remain still for 10 seconds, then rotate/look up/down/tilt in place. The world must stay stable and head rotation must not move the character.'
         Write-Host '2. Stay physically in the same spot. Face a clear landmark and push the LEFT stick forward at full deflection. The character must move from stick input alone. Then turn only your head/torso 45-90 degrees WITHOUT recentering and push forward again. Direction and speed must follow the new HMD heading.'
         Write-Host '3. Still without walking around the room, repeat forward/left/right/back, then hold the normal sprint control together with full forward stick. Walk should be isotropic at 1.5 m/s x MoveSpeed and sprint clearly faster at 2.25 m/s x MoveSpeed. At MoveSpeed=1.0 those are 1.5/2.25 m/s. Note any missing footstep/bob or sliding animation separately.'
@@ -320,8 +337,14 @@ try {
         Write-Host '8. Test stick alone, then combine stick with a small deliberate physical translation in the same direction and then the opposite direction. Stop both inputs: there must be no retained drift, amplification or renewed shake.'
         Write-Host '9. Use the normal in-game crouch control once and return to standing, then take one clear physical step. Physical crouch-by-height is still a separate gate.'
         Write-Host '10. Check both hands/controllers during head turn, translation and recenter; confirm the desktop mirror shows gameplay and menu/game transitions recover normally.'
+    } else {
+        Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
     }
-    Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'
+    if ($PhysicalCrouchFocus) {
+        Write-Host 'This run will pass only after the fresh log proves synchronized physical/native crouch cycles, continuous tracked Y, direct locomotion and room-scale recovery.'
+    } else {
+        Write-Host 'This run will only pass after the fresh log proves all four cases plus queue -> injection -> native collision consumption -> matched reconciliation.'
+    }
     $reportedScenarios = @{
         Stationary = $false
         Free = $false
@@ -333,18 +356,20 @@ try {
         Start-Sleep -Milliseconds 500
         $progressLines = Get-FreshProbeLines -Path $probeLog -StartedAt $launchStartedAt
         $progress = Get-PhysicalScenarioEvidence -Lines $progressLines
-        foreach ($scenario in @('Stationary', 'Free', 'Blocked', 'Slide')) {
-            if ($progress.$scenario -and -not $reportedScenarios[$scenario]) {
-                $reportedScenarios[$scenario] = $true
-                $label = if ($scenario -eq 'Slide') { 'slide/partial' } else { $scenario.ToLowerInvariant() }
-                Write-Host "Observed physical validation case: $label."
+        if (-not $PhysicalCrouchFocus) {
+            foreach ($scenario in @('Stationary', 'Free', 'Blocked', 'Slide')) {
+                if ($progress.$scenario -and -not $reportedScenarios[$scenario]) {
+                    $reportedScenarios[$scenario] = $true
+                    $label = if ($scenario -eq 'Slide') { 'slide/partial' } else { $scenario.ToLowerInvariant() }
+                    Write-Host "Observed physical validation case: $label."
+                }
             }
-        }
-        if (-not $allScenariosReported -and
-            $reportedScenarios.Stationary -and $reportedScenarios.Free -and
-            $reportedScenarios.Blocked -and $reportedScenarios.Slide) {
-            $allScenariosReported = $true
-            Write-Host 'All four physical outcome classes are captured. Close the game when the session is complete; final queue/injection/reconciliation evidence will then be checked.'
+            if (-not $allScenariosReported -and
+                $reportedScenarios.Stationary -and $reportedScenarios.Free -and
+                $reportedScenarios.Blocked -and $reportedScenarios.Slide) {
+                $allScenariosReported = $true
+                Write-Host 'All four physical outcome classes are captured. Close the game when the session is complete; final queue/injection/reconciliation evidence will then be checked.'
+            }
         }
     }
 
@@ -370,8 +395,61 @@ try {
     $standingBodyRestored = $false
     [int]$standingBodyRestoredLineIndex = -1
     $roomScaleRecoveredAfterCrouch = $false
+    $physicalCrouchCalibrated = $false
+    [uint64]$physicalCrouchEntries = 0
+    [uint64]$physicalCrouchExits = 0
+    [uint64]$nativeCrouchEntries = 0
+    [uint64]$nativeCrouchExits = 0
+    [uint64]$nativeStandRetries = 0
+    [uint64]$crouchMismatchFrames = 0
+    $alignedPhysicalCrouchObserved = $false
+    $alignedPhysicalStandObserved = $false
+    $finalNativeShapeKnown = $false
+    $finalNativeCrouched = $true
+    $finalVrCrouchOwned = $true
+    [double]$minimumTrackedHeadY = [double]::PositiveInfinity
+    [double]$maximumTrackedHeadY = [double]::NegativeInfinity
     for ($lineIndex = 0; $lineIndex -lt $freshLines.Count; $lineIndex++) {
         $line = $freshLines[$lineIndex]
+        if ($EnableRoomScale -and $line -like '*physical_crouch *') {
+            if ($line -match 'standing_known=1') {
+                $physicalCrouchCalibrated = $true
+            }
+            if ($line -match 'entries=(\d+)') {
+                $physicalCrouchEntries = [Math]::Max(
+                    $physicalCrouchEntries, [uint64]$Matches[1])
+            }
+            if ($line -match 'exits=(\d+)') {
+                $physicalCrouchExits = [Math]::Max(
+                    $physicalCrouchExits, [uint64]$Matches[1])
+            }
+            if ($line -match 'native_entries=(\d+)') {
+                $nativeCrouchEntries = [Math]::Max(
+                    $nativeCrouchEntries, [uint64]$Matches[1])
+            }
+            if ($line -match 'native_exits=(\d+)') {
+                $nativeCrouchExits = [Math]::Max(
+                    $nativeCrouchExits, [uint64]$Matches[1])
+            }
+            if ($line -match 'stand_retries=(\d+)') {
+                $nativeStandRetries = [Math]::Max(
+                    $nativeStandRetries, [uint64]$Matches[1])
+            }
+            if ($line -match 'mismatch_frames=(\d+)') {
+                $crouchMismatchFrames = [Math]::Max(
+                    $crouchMismatchFrames, [uint64]$Matches[1])
+            }
+            $finalNativeShapeKnown = $line -match 'native_known=1'
+            $finalNativeCrouched = $line -match 'native_crouched=1'
+            $finalVrCrouchOwned = $line -match 'vr_owned=1'
+            if ($line -match 'physical=1 .*effective=1 .*native_known=1 native_crouched=1') {
+                $alignedPhysicalCrouchObserved = $true
+            }
+            if ($physicalCrouchExits -gt 0 -and
+                $line -match 'physical=0 .*effective=0 .*native_known=1 native_crouched=0 .*vr_owned=0') {
+                $alignedPhysicalStandObserved = $true
+            }
+        }
         if ($line -like '*physical_displacement_validation *' -and
             (Test-NonZeroHorizontalVector -Line $line -Field 'requested')) {
             $queuedVectorObserved = $true
@@ -415,6 +493,12 @@ try {
             if ($line -match 'monitor_mirror=1') {
                 $mirrorEnabled = $true
             }
+            $trackedHeadAnchor = Get-VectorField -Line $line -Field 'room_scale_head_anchor_m'
+            if ($null -ne $trackedHeadAnchor -and
+                $line -match 'room_scale_sample_valid=1 positional_translation_applied=1') {
+                $minimumTrackedHeadY = [Math]::Min($minimumTrackedHeadY, $trackedHeadAnchor.Y)
+                $maximumTrackedHeadY = [Math]::Max($maximumTrackedHeadY, $trackedHeadAnchor.Y)
+            }
         }
         if ($EnableRoomScale -and $line -like '*body_collision *') {
             $characterSize = Get-VectorField -Line $line -Field 'character_size'
@@ -446,17 +530,19 @@ try {
     }
 
     $missingEvidence = @()
-    if ($queuedPlans -eq 0 -or -not $queuedVectorObserved) {
-        $missingEvidence += 'non-zero physical plan queued'
-    }
-    if ($consumedRequests -eq 0 -or $injectedRequests -eq 0 -or -not $boundaryVectorObserved) {
-        $missingEvidence += 'physical request consumed and injected at the pre-collision boundary'
-    }
-    if ($matchedObservations -eq 0) {
-        $missingEvidence += 'matched physical observation/reconciliation'
-    }
-    if (-not $bodyInjectionObserved) {
-        $missingEvidence += 'body telemetry with physical_consumed=1, physical_injected=1 and non-zero request/injection'
+    if (-not $PhysicalCrouchFocus) {
+        if ($queuedPlans -eq 0 -or -not $queuedVectorObserved) {
+            $missingEvidence += 'non-zero physical plan queued'
+        }
+        if ($consumedRequests -eq 0 -or $injectedRequests -eq 0 -or -not $boundaryVectorObserved) {
+            $missingEvidence += 'physical request consumed and injected at the pre-collision boundary'
+        }
+        if ($matchedObservations -eq 0) {
+            $missingEvidence += 'matched physical observation/reconciliation'
+        }
+        if (-not $bodyInjectionObserved) {
+            $missingEvidence += 'body telemetry with physical_consumed=1, physical_injected=1 and non-zero request/injection'
+        }
     }
     if ($EnableRoomScale -and -not $directLocomotionObserved) {
         $missingEvidence += 'Rework-style metric stick locomotion injected and accepted through the existing collision tick'
@@ -464,28 +550,28 @@ try {
     if (-not $nativeTickObserved) {
         $missingEvidence += 'existing native body tick at dt~=1/60'
     }
-    if (-not $scenarioEvidence.Stationary) {
+    if (-not $PhysicalCrouchFocus -and -not $scenarioEvidence.Stationary) {
         $missingEvidence += 'stationary body baseline with no native or physical X/Z displacement'
     }
-    if (-not $scenarioEvidence.Free) {
+    if (-not $PhysicalCrouchFocus -and -not $scenarioEvidence.Free) {
         $missingEvidence += 'free physical displacement with the injected X/Z request substantially accepted'
     }
-    if (-not $scenarioEvidence.Blocked) {
+    if (-not $PhysicalCrouchFocus -and -not $scenarioEvidence.Blocked) {
         $missingEvidence += 'blocked physical displacement with the injected X/Z request substantially rejected'
     }
-    if (-not $scenarioEvidence.Slide) {
+    if (-not $PhysicalCrouchFocus -and -not $scenarioEvidence.Slide) {
         $missingEvidence += 'slide/partial physical displacement with both accepted and rejected X/Z components'
     }
     if ($EnableRoomScale -and -not $roomScaleApplied) {
         $missingEvidence += 'fresh reconciled room-scale sample applied to the rendered camera'
     }
-    if ($EnableRoomScale -and -not $nonZeroCameraOffset) {
+    if ($EnableRoomScale -and -not $PhysicalCrouchFocus -and -not $nonZeroCameraOffset) {
         $missingEvidence += 'non-zero horizontal room-scale camera offset'
     }
-    if ($EnableRoomScale -and -not $nonZeroReconciledOffset) {
+    if ($EnableRoomScale -and -not $PhysicalCrouchFocus -and -not $nonZeroReconciledOffset) {
         $missingEvidence += 'non-zero reconciled head/body offset'
     }
-    if ($EnableRoomScale -and -not $renderPredictionObserved) {
+    if ($EnableRoomScale -and -not $PhysicalCrouchFocus -and -not $renderPredictionObserved) {
         $missingEvidence += 'render-rate HMD continuation between native body ticks'
     }
     if ($EnableRoomScale -and -not $mirrorEnabled) {
@@ -496,10 +582,32 @@ try {
          -not $standingBodyRestored)) {
         $missingEvidence += 'native standing -> crouched -> standing shape sequence (1.65 m -> 0.95 m -> 1.65 m)'
     }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and -not $physicalCrouchCalibrated) {
+        $missingEvidence += 'physical crouch standing-height calibration from a plausible raw HMD height'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and $physicalCrouchEntries -lt 2) {
+        $missingEvidence += 'two tracked-height physical crouch entries'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and $physicalCrouchExits -lt 2) {
+        $missingEvidence += 'two tracked-height physical crouch exits'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and
+        ($nativeCrouchEntries -lt 2 -or $nativeCrouchExits -lt 2 -or
+         -not $alignedPhysicalCrouchObserved -or -not $alignedPhysicalStandObserved)) {
+        $missingEvidence += 'two physical policy transitions synchronized with the native 0.95 m/1.65 m body states'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and
+        (-not $finalNativeShapeKnown -or $finalNativeCrouched -or $finalVrCrouchOwned)) {
+        $missingEvidence += 'final native standing shape with VR crouch ownership released'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and
+        ($maximumTrackedHeadY - $minimumTrackedHeadY) -lt 0.15) {
+        $missingEvidence += 'at least 15 cm of continuous Rework-style tracked vertical head movement'
+    }
     if ($EnableRoomScale -and -not $roomScaleRecoveredAfterCrouch) {
         $missingEvidence += 'fresh room-scale camera application after returning to the standing shape'
     }
-    if ($EnableRoomScale -and
+    if ($EnableRoomScale -and -not $PhysicalCrouchFocus -and
         ($null -eq $postCrouchScenarioEvidence -or
          (-not $postCrouchScenarioEvidence.Free -and
           -not $postCrouchScenarioEvidence.Blocked -and
@@ -511,11 +619,19 @@ try {
         throw "Physical displacement live validation is incomplete for PID $($gameProcess.Id). Missing fresh evidence: $($missingEvidence -join '; '). Probe log: '$probeLog'."
     }
 
-    Write-Host "Physical displacement evidence passed: queued=$queuedPlans consumed=$consumedRequests injected=$injectedRequests matched=$matchedObservations."
-    Write-Host "Scenario evidence: stationary=$($scenarioEvidence.StationarySamples) free=$($scenarioEvidence.FreeSamples) blocked=$($scenarioEvidence.BlockedSamples) slide_or_partial=$($scenarioEvidence.SlideSamples)."
+    if (-not $PhysicalCrouchFocus) {
+        Write-Host "Physical displacement evidence passed: queued=$queuedPlans consumed=$consumedRequests injected=$injectedRequests matched=$matchedObservations."
+        Write-Host "Scenario evidence: stationary=$($scenarioEvidence.StationarySamples) free=$($scenarioEvidence.FreeSamples) blocked=$($scenarioEvidence.BlockedSamples) slide_or_partial=$($scenarioEvidence.SlideSamples)."
+    }
     if ($EnableRoomScale) {
-        Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset reconciled_offset=$nonZeroReconciledOffset render_prediction=$renderPredictionObserved direct_locomotion=$directLocomotionObserved mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
-        Write-Host "Post-crouch recovery samples: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
+        if ($PhysicalCrouchFocus) {
+            Write-Host "Room-scale regression evidence passed: camera_applied=$roomScaleApplied direct_locomotion=$directLocomotionObserved mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
+            $trackedHeadRange = $maximumTrackedHeadY - $minimumTrackedHeadY
+            Write-Host "Physical crouch evidence passed: calibrated=$physicalCrouchCalibrated policy_entries=$physicalCrouchEntries policy_exits=$physicalCrouchExits native_entries=$nativeCrouchEntries native_exits=$nativeCrouchExits final_standing=$(-not $finalNativeCrouched) vertical_range_m=$([Math]::Round($trackedHeadRange, 3)) stand_retries=$nativeStandRetries mismatch_frames=$crouchMismatchFrames."
+        } else {
+            Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset reconciled_offset=$nonZeroReconciledOffset render_prediction=$renderPredictionObserved direct_locomotion=$directLocomotionObserved mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
+            Write-Host "Post-crouch recovery samples: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
+        }
     }
     $exitCode = 0
 }

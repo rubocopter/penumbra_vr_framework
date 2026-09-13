@@ -38,7 +38,11 @@ la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
   stick sigue el HMD sin recenter, pero expuso que el remap conservaba las
   velocidades distintas de los ejes/signos del cuerpo nativo. La ruta transitoria
   usa ahora la política directa `1.5/2.25 m/s` de Rework dentro del único request
-  `0xD7281`; está host-tested, no live/headset-validated. El siguiente gate es
+  `0xD7281`; PID 8092 aportó evidencia de visor para esa ruta técnica. PID 20520
+  detectó después que el primer crouch físico no sincronizaba la salida nativa y
+  que el movimiento X/Z corto todavía podía sentirse como un pullback. El latch
+  de Rework, el servicio exacto de postura nativa y el tracking Y continuo están
+  corregidos y host-tested. El siguiente gate focalizado es
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
@@ -158,7 +162,7 @@ crouch físico, jump, bob, estados o efectos de pasos dentro de la política com
 | Deceleración y velocidad final | `D6E00` consume flags, aplica deacc y convierte los campos de velocidad en request horizontal antes de `D7312` | Dentro, antes de colisión | Mapeado |
 | Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan al move-state actual; inicialización de state aplica los límites por setters nativos | Antes | Live-characterized; ~3.0/4.5 m/s efectivos |
 | Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` gestiona hold `+1FC/+200/+204` | La fuerza/estado vertical se publica antes de `D6E00`; horizontal mantiene Y=0 y la vertical se aplica después | Live-characterized: ~5.53 m/s inicial, apex ~0.95 m, landing nativo y 3→0 |
-| Crouch | `5347 -> 9CFA0` es press; `538A -> 9CFD0` release/not-held; ambos delegan al move-state | Antes | Live-characterized: shape `1.65 -> 0.95 m`, feet Y preservado; stand-clearance exacto pendiente |
+| Crouch | Runtime posee latch/altura/Hybrid; el owner existente llama `9CFA0/9CFD0` según postura deseada, observa shape `+0xC8` y reintenta stand bloqueado | Antes | Mecánica nativa live-characterized; sincronización física/Y corregida y host-tested tras el fallo PID 20520 |
 | Colisión/step/gravedad | `D6E00`, primer solver `D7312`, fases posteriores de step/gravedad | Dentro | Live-tested para el límite |
 | `D790C/D7913` | Sync sólo de la rama con gravedad desactivada | Después | No son composición general de cámara; el player activo los evita |
 | Head/footstep bob | No hay evidencia suficiente para atribuir todavía el efecto visual concreto | Pista de comfort separada | Pendiente, no bloquea el adapter/reconciliation inicial |
@@ -195,8 +199,22 @@ por stick y una mejora clara de la sensación general. El helper registró
 `direct_locomotion=True`, `queued/consumed/injected/matched=201/201/201/201`,
 49 muestras stationary, 234 free, 2 blocked y 1 slide/partial, además de mirror
 activo y la secuencia nativa `1.65 -> 0.95 -> 1.65 m` con recuperación. Esa
-secuencia sigue correspondiendo al crouch nativo por botón; el crouch físico por
-altura HMD continúa pendiente como política separada.
+secuencia correspondía al crouch nativo por botón y no validaba altura física.
+
+PID 20520 ejercitó la primera política por altura. La entrada física funcionó,
+pero una salida de política no garantizaba el retorno inmediato a `1.65 m`; otro
+gesto podía invertir la forma más tarde. El helper aprobó erróneamente al sumar
+seis entradas/salidas y detectar una secuencia global sin correlación temporal.
+La causa frente a Rework fue alimentar held/released en el toggle configurable
+de BP en vez de conservar un único estado deseado. La política compartida posee
+ahora el latch de botón y el OR con altura física. `NativeInputBridge`, desde su
+hilo de juego ya existente, aplica `StartCrouch/StopCrouch`, adopta flancos
+legacy, elimina dobles flancos OpenVR/legacy y reintenta stand si la forma sigue
+a `0.95 m`. `render_world_probe` usa `VrTrackingSpace` para Y continuo desde el
+ancla de pies; solo el crouch no físico añade `-PhysicalCrouchDepth`. El helper
+exige dos pares política/shape correlacionados, final de pie y rango Y de al
+menos `0.15 m`. Estado de esta corrección: **host-tested**, pendiente de visor.
+El pullback X/Z descrito en PID 20520 sigue abierto como gate subjetivo.
 
 PID 29672 cerró el burst de salto: `+204=0.3` es umbral para la lógica de hold,
 no máximo de `+200`; el contador alcanzó 2.233332 y al soltar volvió a 0.3.

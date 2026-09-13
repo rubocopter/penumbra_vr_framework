@@ -118,6 +118,7 @@ target_link_libraries(pvr_black_plague_settings PUBLIC pvr_vr_settings)
 pvr_enable_warnings(pvr_black_plague_settings)
 
 add_library(pvr_vr_input_state STATIC
+    src/runtime/vr_crouch_policy.cpp
     src/runtime/vr_input_state.cpp
 )
 target_include_directories(pvr_vr_input_state PUBLIC src/runtime)

@@ -107,6 +107,7 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept;
 void RequestTrackedRecenter() noexcept;
 [[nodiscard]] bool TrackedMovementYaw(float& yaw) noexcept;
 [[nodiscard]] bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept;
+[[nodiscard]] bool TrackedHeadTrackingHeight(float& height) noexcept;
 [[nodiscard]] bool ControllerWorldPose(const runtime::VrHmdPose& controller,
     runtime::VrMatrix44& pose, std::array<float,3>& velocity, std::array<float,3>& angular) noexcept;
 void SetTrackedStereoMonitorMirror(bool enabled) noexcept;

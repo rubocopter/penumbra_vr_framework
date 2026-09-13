@@ -11,6 +11,7 @@
 #include "stereo_render_policy.hpp"
 #include "vr_math.hpp"
 #include "vr_panel_policy.hpp"
+#include "vr_tracking_space.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -41,6 +42,10 @@ constexpr std::array<std::uint8_t, 5> kExpectedUpdateRenderListCall{
 };
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
 constexpr float kRotationOnlyTranslationScale = 0.0F;
+std::atomic<float> g_tracking_height_offset{
+    runtime::vr_setting_limits::kHeightOffset.default_value};
+std::atomic<float> g_tracking_crouch_depth{
+    runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value};
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
 using UpdateRenderList = void(__thiscall*)(
@@ -144,6 +149,29 @@ struct StereoProcessingResult {
     render_head_anchor[0] += render_prediction[0];
     render_head_anchor[2] += render_prediction[2];
 
+    // Rework's player-world pose is the reconciled feet anchor. Its shared
+    // tracking transform supplies the physical HMD height continuously and
+    // zeroes raw horizontal translation because X/Z is already integrated in
+    // render_head_anchor. This also prevents Black Plague's full native
+    // crouch-camera drop from being added to a real physical crouch.
+    runtime::VrTrackingSpace tracking_space;
+    tracking_space.SetHeadTrackingPose(current_tracking_pose);
+    tracking_space.SetPlayerWorldPosition(render_head_anchor);
+    tracking_space.SetHeightCalibration(
+        g_tracking_height_offset.load(std::memory_order_acquire));
+    const auto crouch = ReadNativePhysicalCrouchStatus();
+    if (crouch.native_crouched && !crouch.policy.physical_crouch) {
+        tracking_space.SetPostureOffset(
+            -g_tracking_crouch_depth.load(std::memory_order_acquire));
+    }
+    runtime::VrMatrix44 tracked_head_world;
+    if (!tracking_space.HeadWorldPose(tracked_head_world, error)) {
+        error = "Could not compose Rework tracking height for Black Plague: " +
+            error;
+        return false;
+    }
+    render_head_anchor[1] = tracked_head_world.values[7];
+
     runtime::VrMatrix44 game_head_pose;
     if (!runtime::InvertRigidTransform(
             CollapseMatrix(game_head_view), game_head_pose, error)) {
@@ -152,10 +180,11 @@ struct StereoProcessingResult {
     }
     world_translation = {
         render_head_anchor[0] - game_head_pose.values[3],
-        0.0F,
+        render_head_anchor[1] - game_head_pose.values[7],
         render_head_anchor[2] - game_head_pose.values[11],
     };
     if (!std::isfinite(world_translation[0]) ||
+        !std::isfinite(world_translation[1]) ||
         !std::isfinite(world_translation[2])) {
         error = "The predicted Black Plague room-scale placement is non-finite";
         return false;
@@ -1531,6 +1560,10 @@ void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
     runtime::NormalizeVrSettings(settings);
     g_menu_distance.store(settings.ui_distance, std::memory_order_release);
     g_menu_scale.store(settings.ui_scale, std::memory_order_release);
+    g_tracking_height_offset.store(
+        settings.height_offset, std::memory_order_release);
+    g_tracking_crouch_depth.store(
+        settings.physical_crouch_depth, std::memory_order_release);
 }
 
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
@@ -1645,6 +1678,13 @@ bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept {
     const auto time = g_world_tracking_time;
     ReleaseSRWLockShared(&g_world_tracking_lock);
     return valid && time != 0 && GetTickCount64() - time <= 250;
+}
+bool TrackedHeadTrackingHeight(float& height) noexcept {
+    AcquireSRWLockShared(&g_world_tracking_lock);
+    height = g_world_anchor.values[7];
+    const auto time = g_world_tracking_time;
+    ReleaseSRWLockShared(&g_world_tracking_lock);
+    return time != 0 && GetTickCount64() - time <= 250 && std::isfinite(height);
 }
 bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
     std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {

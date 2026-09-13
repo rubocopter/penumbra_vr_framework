@@ -92,9 +92,18 @@ then exposed incorrect indexed-state field mapping in that predicate; the exact
 verifier. PID 8092 headset-validated the corrected path: direct locomotion was
 observed, all four physical outcomes passed and queue/consume/inject/match was
 `201/201/201/201`. The user reports correct stick locomotion and substantially
-improved overall feel.
-Physical crouch by height and tracking-world-yaw turn ownership remain separate
-milestones.
+improved overall feel. This is headset evidence for the technical
+stick/collision route, while positional comfort remains open: PID 20520 later
+reported a pullback sensation during short physical X/Z movement.
+PID 20520 also exposed that the first physical-crouch integration could enter
+but did not reliably synchronize native standing on exit; its aggregate helper
+result was a false pass. The corrected build owns the Rework button latch and
+desired posture in shared policy, applies Black Plague's exact native crouch
+start/stop methods from the existing game-thread owner, retries blocked stand,
+and presents continuous tracked Y from the reconciled feet anchor. This is
+implemented and host-tested only. The focused headset gate now requires two
+correlated physical/native cycles, final standing state, vertical continuity and
+short-range X/Z comfort. Tracking-world-yaw turn ownership remains separate.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.
@@ -151,7 +160,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset (PID 8092 technical gate)
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
-- [ ] Implement/validate physical crouch without assuming Overture stand-clearance semantics
+- [x] Implement Rework-derived physical crouch policy and explicit desired/native stance synchronization through Black Plague's existing input owner
+- [ ] Headset-validate physical crouch entry/exit, final native shape recovery, continuous tracked Y and short-range X/Z comfort
 - [ ] Validate long-body interaction and mechanism-specific states
 - [ ] Inventory, notes, menus, HUD and subtitles
 - [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy

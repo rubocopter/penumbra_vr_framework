@@ -13,8 +13,12 @@ confirmed that in-place head tilt no longer moved the character, but continuous
 world shake still failed comfort. Rework comparison identified the retained 60
 Hz body offset over Black Plague's native camera as a presentation difference.
 Horizontal render placement now uses the reconciled anchor plus the latest HMD
-delta since that sample; this second correction compiles and awaits repeat
-live/headset validation. Statements below
+delta since that sample. PID 8092 later supplied headset evidence for the
+corrected direct-locomotion/collision route. PID 20520 then reported remaining
+short-range X/Z pullback and exposed a false pass in the first physical-crouch
+integration. The Rework latch, exact desired/native crouch synchronization and
+continuous tracked-Y composition are now host-tested and await a focused headset
+run. Statements below
 that positional translation is compile-time zero describe this earlier
 shadow-only checkpoint.
 

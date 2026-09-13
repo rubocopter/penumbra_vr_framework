@@ -146,6 +146,19 @@ yet been live/headset-tested in Black Plague.
 
 ### Added
 
+- Added Rework-derived crouch ownership as shared runtime policy. It preserves
+  `23c890f`'s single button latch, Hybrid OR composition, plausible
+  `(0.90, 2.20) m` raw-HMD range, upward-settling standing baseline, configured
+  crouch depth (`0.25 m` default) and `0.08 m` exit hysteresis. Black Plague
+  exposes `CrouchMode`, `PhysicalCrouchDepth` and `HeightOffset`; its existing
+  game-thread input owner applies the desired stance through the exact native
+  `StartCrouch/StopCrouch` entries, retries a blocked stand and logs policy/body
+  correlation without adding another hook. Rendering now uses shared
+  `VrTrackingSpace` for continuous tracked Y from the reconciled feet anchor.
+  PID 20520 exercised the previous edge-only integration and exposed a false
+  helper pass: policy exits and the native `1.65/0.95 m` shape were not aligned.
+  The corrected latch, desired/native synchronization, vertical placement and
+  stricter validator are implemented and host-tested only.
 - Added Black Plague probe telemetry for the fresh movement yaw consumed by the
   native-input stick remap. PID 13672 headset-exercised the render-rate anchor
   correction and the user reported the prior continuous world shake gone, but
@@ -258,7 +271,7 @@ yet been live/headset-tested in Black Plague.
   direct Rework `1.5/2.25 m/s` locomotion plus the room-scale technical gate
   through the same single `0xD7281` collision owner. This is still a research
   validation state rather than a supported-release claim.
-- Black Plague native jump/vertical ownership remains separate from shared horizontal intent. Physical crouch and final camera/bob/footstep behavior are also separate milestones.
+- Black Plague native jump ownership remains separate from shared horizontal intent. Physical crouch ownership and tracked-Y presentation are implemented and host-tested after PID 20520; final headset comfort plus camera/body/footstep bob remain separate milestones.
 - The desktop monitor mirror remains experimental and is not a current supported gameplay feature. PID 19192 confirmed mirror-off gameplay black plus visible native menus. Mirror-on and Alt+Tab/focus recovery remain in the next headset batch because the tracked-menu capture path depends on the desktop framebuffer/focus.
 - Rework revision `23c890f` remains the immutable Overture behavioral baseline. Its working tree is not a Framework build or packaging dependency.
 

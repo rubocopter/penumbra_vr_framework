@@ -1,4 +1,5 @@
 #include "vr_input_state.hpp"
+#include "vr_crouch_policy.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -6,6 +7,8 @@
 namespace {
 
 using penumbra_vr::runtime::VrButtonState;
+using penumbra_vr::runtime::VrCrouchMode;
+using penumbra_vr::runtime::VrPhysicalCrouchPolicy;
 using penumbra_vr::runtime::VrHand;
 using penumbra_vr::runtime::VrInputContext;
 using penumbra_vr::runtime::VrInputRouter;
@@ -169,6 +172,95 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
         !router.using_actions() && !result.state.sprint.pressed;
 }
 
+[[nodiscard]] bool TestPhysicalCrouchPolicy() {
+    VrPhysicalCrouchPolicy policy;
+    VrButtonState button;
+
+    auto state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.70F);
+    auto status = policy.status();
+    if (state.pressed || state.just_pressed || !status.standing_height_known ||
+        !NearlyEqual(status.standing_height, 1.70F) ||
+        !NearlyEqual(status.enter_height, 1.45F) ||
+        !NearlyEqual(status.exit_height, 1.53F)) {
+        return false;
+    }
+
+    // Rework lets an initially low calibration settle upward, never downward.
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.75F);
+    status = policy.status();
+    if (!NearlyEqual(status.standing_height, 1.75F)) return false;
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.65F);
+    if (!NearlyEqual(policy.status().standing_height, 1.75F)) return false;
+
+    // Enter at standing-depth, retain through the 8 cm hysteresis band, leave
+    // only when the exit height is reached.
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.50F);
+    if (!state.pressed || !state.just_pressed || state.just_released) return false;
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.56F);
+    if (!state.pressed || state.just_pressed || state.just_released) return false;
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.58F);
+    if (state.pressed || state.just_pressed || !state.just_released) return false;
+
+    // Invalid tracking cannot invent a calibration or transition.
+    policy.Reset();
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 0.70F);
+    if (policy.status().standing_height_known || state.pressed) return false;
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, false, 1.70F);
+    if (policy.status().standing_height_known || state.pressed) return false;
+
+    // Hybrid composition must not release while either latched source still
+    // requests crouch, and must not generate a second edge for the other source.
+    policy.Reset();
+    static_cast<void>(policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.70F));
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.45F);
+    if (!state.just_pressed) return false;
+    button = penumbra_vr::runtime::MakeVrButtonState(true, true, true);
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.45F);
+    if (!state.pressed || state.just_pressed || state.just_released) return false;
+    button = penumbra_vr::runtime::MakeVrButtonState(true, true, false);
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.60F);
+    if (!state.pressed || state.just_released) return false;
+    button = penumbra_vr::runtime::MakeVrButtonState(true, false, true);
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.60F);
+    if (!state.pressed || state.just_released) return false;
+    button = penumbra_vr::runtime::MakeVrButtonState(true, true, true);
+    state = policy.Update(
+        button, VrCrouchMode::hybrid, 0.25F, true, true, 1.60F);
+    if (state.pressed || !state.just_released) return false;
+
+    // Rework button-only crouch toggles on press and ignores release/held state.
+    policy.Reset();
+    button = penumbra_vr::runtime::MakeVrButtonState(true, true, true);
+    state = policy.Update(
+        button, VrCrouchMode::button, 0.25F, true, true, 1.20F);
+    if (!state.pressed || !state.just_pressed ||
+        !policy.status().button_latched || policy.status().physical_crouch) {
+        return false;
+    }
+    button = penumbra_vr::runtime::MakeVrButtonState(true, false, true);
+    state = policy.Update(
+        button, VrCrouchMode::button, 0.25F, true, true, 1.70F);
+    if (!state.pressed || state.just_released) return false;
+    button = penumbra_vr::runtime::MakeVrButtonState(true, true, true);
+    state = policy.Update(
+        button, VrCrouchMode::button, 0.25F, true, true, 1.70F);
+    return !state.pressed && state.just_released &&
+        !policy.status().button_latched;
+}
+
 } // namespace
 
 int main() {
@@ -192,10 +284,14 @@ int main() {
         std::cerr << "VR action idle grace or fallback timing failed\n";
         return 5;
     }
+    if (!TestPhysicalCrouchPolicy()) {
+        std::cerr << "VR physical crouch policy failed\n";
+        return 6;
+    }
     if (penumbra_vr::runtime::OppositeHand(VrHand::left) != VrHand::right ||
         penumbra_vr::runtime::OppositeHand(VrHand::right) != VrHand::left) {
         std::cerr << "VR opposite-hand mapping failed\n";
-        return 6;
+        return 7;
     }
 
     std::cout << "VR logical input routing passed\n";

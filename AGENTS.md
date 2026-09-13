@@ -106,22 +106,37 @@ implementation dropped the `0x200` part of both indexed-state field pairs and
 swapped vector/index ownership. The bridge now reads exactly
 `vector +0x2C4 / index +0x2BC` and `vector +0x2D8 / index +0x2D0`.
 
-PID 8092 headset-validated that correction and the direct metric locomotion
-path. The helper reported `direct_locomotion=True`, queue/consume/inject/match
-`201/201/201/201`, all four physical outcome classes, mirror-on presentation and
-native crouch-shape recovery; the user reported that stick locomotion now moves
-correctly in every direction and that the overall feel is substantially better.
-Y and jump remain native. The active room-scale core has therefore reached
-**headset-validated** for this research build, but this is not a supported-release
-claim and physical crouch by tracked height remains a separate gate.
+PID 8092 supplied headset evidence for that correction and direct metric
+locomotion. The helper reported `direct_locomotion=True`,
+queue/consume/inject/match `201/201/201/201`, all four physical outcome classes,
+mirror-on presentation and native crouch-shape recovery; the user reported that
+stick locomotion moved correctly and felt substantially better. This closes the
+technical stick/collision route for that build. It does not close positional
+tracking comfort: PID 20520 later reported that short physical X/Z motion could
+still feel as if the world pulled back toward its prior position.
 
-The next Black Plague gameplay gate is physical crouch by tracked height. Port
-the proven Rework `23c890f` standing-height baseline, `PhysicalCrouchDepth`
-threshold and hysteresis into shared/game-neutral policy, then feed its result
-through Black Plague's already-owned native crouch input path so the game keeps
-ownership of its crouch move state and body-shape swap. Do not add another
-player-state hook for this. Keep tracking-world-yaw turn ownership and vertical
-camera/footstep-bob as separate validation gates.
+PID 20520 also exercised the first physical-crouch integration. Tracked-height
+entry worked, but standing physically left the native body crouched until a
+second crouching gesture. The helper's aggregate counters falsely passed that
+session. Rework `23c890f` owns one persistent desired crouch state and applies
+the native move state explicitly; the failed Framework build instead fed
+held/released policy into Black Plague's configurable legacy toggle path.
+
+The correction is now implemented and **host-tested** only. Shared
+`VrPhysicalCrouchPolicy` owns Rework's button latch, tracked-height baseline,
+`PhysicalCrouchDepth`, plausible `(0.90, 2.20) m` range and `0.08 m` hysteresis.
+The existing Black Plague game-thread owner applies that desired state through
+the exact native `StartCrouch/StopCrouch` entries `0x9CFA0/0x9CFD0`, adopts a
+legacy crouch edge, retries a blocked stand, and reports desired/native
+correlation. It adds no hook. Rendering now uses shared `VrTrackingSpace` for
+continuous HMD Y and `HeightOffset`, with the reconciled body position as the
+feet anchor; a physical crouch does not also inherit the native full camera
+drop. The next headset gate is the focused run in
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must prove two correlated
+physical entry/exit cycles, button-toggle and Hybrid composition, continuous Y,
+final native standing state, short X/Z comfort and no regression of the PID 8092
+stick path. Keep tracking-world-yaw turn ownership and final footstep/body-bob
+behavior as separate validation gates.
 
 ## Black Plague constraints
 

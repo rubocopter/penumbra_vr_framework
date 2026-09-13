@@ -171,6 +171,35 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     const bool jump_burst_complete =
         penumbra_vr::backends::black_plague::IsBodyJumpBurstComplete();
     if (frame_number % 300 == 0) {
+        const auto physical_crouch = penumbra_vr::backends::black_plague::
+            ReadNativePhysicalCrouchStatus();
+        penumbra_vr::probe::WriteLog(
+            "physical_crouch enabled=%u tracking_valid=%u head_height=%.3f "
+            "standing_known=%u standing_height=%.3f enter_height=%.3f "
+            "exit_height=%.3f physical=%u button_latched=%u effective=%u "
+            "entries=%llu exits=%llu native_known=%u native_crouched=%u "
+            "vr_owned=%u native_entries=%llu native_exits=%llu "
+            "stand_retries=%llu mismatch_frames=%llu",
+            physical_crouch.policy.physical_enabled ? 1U : 0U,
+            physical_crouch.policy.tracking_valid ? 1U : 0U,
+            physical_crouch.policy.head_height,
+            physical_crouch.policy.standing_height_known ? 1U : 0U,
+            physical_crouch.policy.standing_height,
+            physical_crouch.policy.enter_height,
+            physical_crouch.policy.exit_height,
+            physical_crouch.policy.physical_crouch ? 1U : 0U,
+            physical_crouch.policy.button_latched ? 1U : 0U,
+            physical_crouch.policy.effective_crouch ? 1U : 0U,
+            static_cast<unsigned long long>(physical_crouch.policy.physical_entries),
+            static_cast<unsigned long long>(physical_crouch.policy.physical_exits),
+            physical_crouch.native_shape_known ? 1U : 0U,
+            physical_crouch.native_crouched ? 1U : 0U,
+            physical_crouch.vr_stance_owned ? 1U : 0U,
+            static_cast<unsigned long long>(physical_crouch.native_crouch_entries),
+            static_cast<unsigned long long>(physical_crouch.native_crouch_exits),
+            static_cast<unsigned long long>(physical_crouch.stand_retries),
+            static_cast<unsigned long long>(
+                physical_crouch.desired_shape_mismatch_frames));
         const auto shadow = penumbra_vr::backends::black_plague::
             ConsumeBlackPlagueShadowTelemetry();
         const auto physical_request = penumbra_vr::backends::black_plague::

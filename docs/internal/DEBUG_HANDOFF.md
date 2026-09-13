@@ -185,8 +185,9 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 - Scaling analog input only changes native input/acceleration magnitude; it is not equivalent to Rework's locomotion policy.
 - The earlier ratio≈2 timing diagnostic measured `cButtonHandler::Update` callbacks, not physics. The body probe consistently observes the real body tick at ~60 Hz.
 - The transient active room-scale path now ports Rework's direct `1.5 / 2.25
-  m/s` policy through the existing `0xD7281` owner. It is host-tested only. The
-  default path still preserves native tuning.
+  m/s` policy through the existing `0xD7281` owner. PID 8092 supplied headset
+  evidence for this technical route. The default path still preserves native
+  tuning.
 - PID 17612 proved the first direct-locomotion permission gate was impossible:
   full left-stick analog reached the controller frame, but all `locomotion_*`
   fields stayed zero. `MoveForward/MoveSideways` test `amount == 0` before their
@@ -214,15 +215,12 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 
 ### Next evidence
 
-The direct metric path and corrected active room-scale core now have PID 8092
-headset evidence. The next comfort feature is physical crouch by HMD height.
-Reuse Rework's standing-height baseline, `0.25 m` default crouch depth, `0.08 m`
-exit hysteresis and plausible `(0.90, 2.20) m` height range. Feed the resulting
-effective crouch state through Black Plague's existing native crouch-input owner
-so the native move state, capsule swap and stand-clearance behavior remain
-game-owned. Explicitly record whether native footsteps, bob and body animation
-still trigger during direct locomotion, because that remains a separate
-presentation/effects observation.
+The direct metric path has PID 8092 headset evidence. PID 20520 nevertheless
+reported a remaining pullback sensation during short physical X/Z translation,
+so positional comfort is not closed. The focused crouch/Y run must retest small
+`5–10 cm` movements without requiring room-scale walking. Explicitly record
+whether native footsteps, bob and body animation still trigger during direct
+locomotion, because that remains a separate presentation/effects observation.
 
 ## 3. Black Plague jump
 
@@ -256,20 +254,42 @@ None is required for the shadow-only tracking/body validation milestone. Keep na
 - Crouched size: `0.70 x 0.95 x 0.70`.
 - Feet Y remains fixed while body centre changes.
 - The active physics-body pointer changes and restores.
-- The exact Black Plague stand-clearance mechanism remains insufficiently demonstrated.
-- Current headset testing confirms that lowering/raising the user's physical
-  head height does not yet drive Black Plague's native crouch/stand transition.
-  The already live-tested native crouch button and `1.65 -> 0.95 -> 1.65 m`
-  shape swap are separate evidence.
+- Exact native entries `0x9CFA0/0x9CFD0` request crouch/stand through the game's
+  existing move-state/body-shape owner. A failed stand leaves the `0.95 m` shape,
+  which permits a safe retry without importing Overture's `CanStand` layout.
+- PID 20520 proved tracked-height entry worked in the first integration but
+  native exit did not remain synchronized: standing physically could leave the
+  native shape crouched until another crouching gesture. The old helper passed
+  falsely because it compared aggregate counters and an uncorrelated shape
+  sequence.
+- Rework `23c890f` uses one persistent button latch and computes desired crouch
+  as physical OR button. The failed Black Plague build instead sent
+  held/released edges into a configurable native toggle path.
+- Shared policy now owns the Rework latch, `(0.90, 2.20) m` plausible range,
+  upward-settling baseline, `0.25 m` default depth and `0.08 m` hysteresis. The
+  existing Black Plague game-thread owner applies desired stance with the exact
+  native entries, adopts legacy edges, collapses duplicate OpenVR/legacy input,
+  retries blocked stand and logs desired/native correlation.
+- Rendering now composes continuous physical HMD Y through `VrTrackingSpace`
+  from the reconciled feet anchor. A physical crouch does not add the native
+  full camera drop; button-only crouch applies the configured posture offset.
+  This corrected combination is host-tested only.
 
 ### Do not try again
 
 - Do not import Overture `CanStand` semantics into Black Plague without evidence.
 - Do not implement physical crouch as a camera-only height change.
+- Do not feed the shared desired posture back through Black Plague's configurable
+  held/released toggle queries.
 
 ### Next evidence
 
-Physical crouch should be a separate milestone after tracking/body reconciliation. Map or expose the native stand-clearance mechanism before shared physical crouch is allowed to force a stand transition.
+Run `tools/Start-BlackPlagueRoomScaleValidation.ps1` and require two correlated
+physical/native entry/exit cycles, final native standing with VR ownership
+released, button-toggle and Hybrid composition, at least `0.15 m` tracked-Y
+range, post-crouch stick recovery and subjective short-range X/Z comfort. A
+blocked stand should increment retry telemetry and remain crouched until clear;
+it must not be described as validated until exercised in the headset.
 
 ## 5. Black Plague held-object collision
 

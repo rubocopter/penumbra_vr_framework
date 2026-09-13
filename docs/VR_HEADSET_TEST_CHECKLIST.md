@@ -86,9 +86,10 @@ PID 8092 validó esa corrección con visor. El usuario confirmó que el stick vu
 a mover correctamente al personaje y que la sensación general es mucho mejor.
 El helper cerró además `direct_locomotion=True`, los cuatro outcomes físicos,
 queue/consume/inject/match `201/201/201/201`, mirror activo y recuperación tras
-el cambio nativo de forma crouch/stand. Esta tanda de room-scale queda cerrada
-como evidencia de investigación; el siguiente gate es el crouch físico por
-altura HMD.
+el cambio nativo de forma crouch/stand. Esto cierra la ruta técnica de stick y
+colisión como evidencia de investigación. No cierra el confort posicional, que
+PID 20520 volvió a dejar abierto; el siguiente gate combina esa comprobación
+corta con el crouch físico por altura HMD.
 
 El visor de 90 Hz y el cuerpo nativo de 60 Hz son frecuencias esperadas y sí
 importan para el confort: tracking, cámara y presentación deben continuar a 90
@@ -96,10 +97,34 @@ Hz, mientras cuerpo y colisiones se reconcilian a 60 Hz. PID 11804 mostró esa
 división sin recuperar el terremoto anterior. No explica la asimetría de
 velocidad; esa procedía de los ejes nativos descritos arriba.
 
-Agacharse/levantarse solo con la altura física del visor todavía no activa el
-crouch nativo. Ese crouch físico por altura sigue siendo un gate independiente.
+PID 20520 ejercitó la primera integración de crouch físico. El detector de altura
+funcionó, pero el resultado no queda validado: al ponerse de pie, el body nativo
+seguía a `0.95 m` hasta que otro gesto de agacharse generaba el siguiente flanco.
+El helper dio un falso positivo porque comparaba contadores y una secuencia de
+formas agregada sin exigir que cada salida física coincidiera con el retorno a
+`1.65 m`. El mismo log registra seis entradas/salidas de política y varias formas
+nativas invertidas, pese a que la prueba buscaba dos ciclos controlados.
 
-## Siguiente tanda — room-scale activo, colisiones y mirror encendido
+La causa era una diferencia concreta con Rework `23c890f`: el Framework enviaba
+un estado held/released a las consultas configurables de crouch de Black Plague,
+mientras Rework mantiene un latch único y aplica el move-state deseado. La nueva
+implementación conserva la política común de baseline, rango plausible
+`(0.90, 2.20) m`, profundidad `0.25 m` e histéresis `0.08 m`, añade el latch de
+botón probado de Rework y sincroniza el body desde el owner existente del hilo de
+juego mediante las entradas exactas `0x9CFA0/0x9CFD0`. Si el techo impide ponerse
+de pie, reintenta la salida en ticks posteriores. No añade otro hook.
+
+También se ha conectado el eje Y demostrado por Rework usando
+`runtime::VrTrackingSpace`: la altura de la vista sigue de forma continua la
+altura física del HMD, el ancla reconciliada sigue representando los pies y el
+descenso nativo completo de cámara no se suma al crouch físico. El crouch de
+botón usa solo la profundidad configurada. `HeightOffset` queda cableado para
+Black Plague. Todo esto compila y pasa pruebas de host, pero todavía requiere una
+prueba con visor. El usuario también describió un resto de corrección/molestia al
+moverse físicamente en X/Z; la evidencia agregada de PID 20520 no permite
+atribuirlo a una colisión concreta, así que sigue siendo un gate de confort.
+
+## Siguiente tanda — crouch físico por altura HMD
 
 Desde la raíz del repositorio ejecuta:
 
@@ -107,13 +132,20 @@ Desde la raíz del repositorio ejecuta:
 tools\Start-BlackPlagueRoomScaleValidation.ps1
 ```
 
-El helper:
+PID 8092 ya cerró el gate técnico anterior de room-scale y stick. Esta tanda
+comprueba la corrección de PID 20520 y el nuevo eje Y. El helper mantiene las
+rutas activas, pero no obliga a caminar por la habitación, esprintar ni repetir
+`blocked`/`slide`. Además:
 
 - valida la imagen exact-build antes de iniciar;
 - exige un proceso nuevo de `penumbra.exe`;
 - activa los mutex transitorios de physical displacement y room-scale;
 - guarda `MonitorMirror=true` antes del arranque;
-- rechaza la sesión si el probe no confirma los dos modos;
+- rechaza la sesión si el probe no confirma los modos de validación;
+- registra `physical_crouch` con altura HMD, latch, estado deseado, forma nativa,
+  ownership, reintentos y contadores sincronizados;
+- rechaza la antigua falsa aprobación: exige dos ciclos físicos correlacionados,
+  terminar realmente de pie y al menos `15 cm` de recorrido visual vertical;
 - al cerrar el juego analiza únicamente el log fresco de ese PID.
 
 Mantén abierta la consola durante toda la sesión. El log queda en:
@@ -122,118 +154,59 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 
 ### Pruebas obligatorias
 
-1. **Baseline quieto, gate principal.** Ya dentro de una partida y en una zona
-   despejada, no uses sticks durante 10–15 segundos. Mantén una postura normal;
-   el movimiento mínimo del visor es esperado. El mundo debe quedar estable, sin
-   vibración rítmica, saltos de centímetros ni el “pequeño terremoto” de PID
-   21548. Si sigue ocurriendo, anota si es horizontal, vertical o ambos.
-2. **Rotación e inclinación en el sitio.** Sin desplazar pies ni torso, mira a
-   izquierda/derecha, arriba/abajo e inclina lateralmente la cabeza. El mundo y
-   la cámara deben rotar, pero el personaje no debe empezar a andar, avanzar,
-   retroceder ni desplazarse lateralmente de forma apreciable. Anota por separado
-   cualquier bob, paso, deriva o movimiento corporal. Esta es la regresión
-   principal de la tanda.
-3. **Free X/Z lento, gate de 60/90 Hz.** Desplaza cabeza y torso lentamente y de
-   forma continua unos centímetros hacia delante, atrás y ambos lados, sin
-   stick. El punto de vista debe seguir el gesto de forma continua, sin escalones
-   a ~60 Hz, tirones ni oscilación al detenerte. El cuerpo nativo debe recuperar
-   la separación sin mover la vista dos veces.
-4. **Blocked y confort.** Acércate lentamente a una pared y desplázate
-   físicamente hacia ella. La
-   cámara no debe atravesarla ni permitir que la cabeza gane distancia ilimitada
-   respecto al cuerpo. Mantén el caso varios segundos hasta que la consola
-   anuncie `blocked`. Describe la intensidad del retroceso: debe impedir el paso
-   sin alejar el mundo de forma brusca o repetitiva.
-5. **Slide/partial.** Muévete físicamente en diagonal contra la pared. Debe
-   conservarse la componente tangencial y rechazarse la componente que entra en
-   la geometría. Espera a que la consola anuncie `slide/partial`.
-6. **Rumbo, movimiento y sprint del stick sin caminar físicamente.** Quédate de
-   pie o sentado en el mismo sitio durante toda esta prueba; no hace falta andar
-   por la habitación para validar sprint. No hagas recenter antes de empezar.
-   Mira de frente a una referencia clara y pulsa el stick completamente hacia
-   delante durante varios segundos. El personaje debe moverse solo por el stick.
-   Después gira físicamente
-   cabeza/torso 45–90 grados sin recentrar y vuelve a pulsar hacia delante: el
-   desplazamiento debe seguir el rumbo horizontal actual del HMD, como en
-   Rework, y debe conservar aproximadamente la misma velocidad que antes del
-   giro. Repite delante, atrás, izquierda y derecha desde esa nueva orientación.
-   Ningún eje o signo debe ser perceptiblemente más lento por coincidir con el
-   antiguo frente corporal. Sin mover pies ni torso, mantén ahora el mismo stick
-   hacia delante y activa sprint con el control normal: debe aumentar claramente
-   la velocidad del personaje. Repite una comparación corta de sprint en otra
-   orientación; no necesitas recorrer distancia física real. El cambio debe ser
-   uniforme. La política solicitada es
-   `1.5 m/s` normal y `2.25 m/s` con sprint, multiplicada por `MoveSpeed`.
-   Mantén cada caso varios segundos para que el log capture
-   `locomotion_requested`, `locomotion_accepted` y la petición combinada.
-   Usa después varios giros VR normales y vuelve a probar stick hacia delante
-   sin recentrar. Finalmente recentra mirando en otra dirección y repite. El
-   recenter puede redefinir el cero, pero no debe ser necesario para que
-   "delante" vuelva a ser correcto.
-   Después mantén el stick hacia delante y desplaza deliberadamente cabeza y
-   torso unos centímetros hacia delante; repite trasladándolos hacia atrás. Solo
-   aquí existen dos desplazamientos reales que pueden combinarse. No debe
-   aparecer un tercer aporte, salto de cámara ni movimiento residual al detener
-   ambos. La telemetría debe mostrar `native_accepted` combinado y
-   `locomotion_carry` sin la parte `physical_accepted` ya reconciliada.
-7. **Recenter.** Además de la comparación de rumbo del punto 6, ejecuta un
-   recenter, espera unos segundos y repite `free` y `blocked`. No debe aparecer
-   un salto persistente, offset antiguo ni pérdida de manos.
-8. **Cambio nativo de forma.** Usa el botón/control normal de crouch del juego,
-   mantén el estado unos segundos y vuelve a levantarte con ese mismo control.
-   No intentes validar aquí el crouch físico bajando el visor. El `character_body` se
-   conserva mientras su cuerpo físico cambia de `1.65 m` a `0.95 m` y vuelve a
-   `1.65 m`. Después da un paso físico claro en cualquier dirección; el helper
-   exige la secuencia completa, una muestra room-scale fresca y movimiento
-   físico significativo tras volver de pie. Las cuatro clases de colisión solo
-   se exigen una vez en el conjunto de la sesión.
-9. **Manos y coherencia espacial.** Mira ambas manos mientras inclinas la cabeza
-   y durante un movimiento lateral. Las palmas no deben quedarse en el anclaje
-   anterior ni separarse del punto de vista.
-10. **Mirror y menús.** Confirma que el monitor muestra gameplay con mirror
-   encendido. Abre pausa, inventario/libreta y vuelve al juego. Haz un Alt+Tab,
-   abre esos menús antes de devolver el foco y anota qué superficie queda negra,
-   si ocurre. Devuelve el foco y comprueba si se recupera.
-11. **Estabilidad breve.** Solo si los puntos 1–4 son cómodos, juega 2–3 minutos
-    y vigila tirones, world wobble,
-    clipping, pérdida de tracking, desajuste de manos o colisiones distintas de
-    las observadas antes.
+1. **Calibración de pie.** Entra en una partida ya cargada y empieza totalmente
+   de pie. No pulses crouch. Mantén una postura natural al menos 10 segundos. El
+   log debe fijar `standing_known=1`; no empieces agachado porque Rework usa la
+   primera altura plausible como baseline y solo permite corregirla hacia arriba.
+2. **X/Z en poco espacio.** Sin agacharte ni usar sticks, desplaza cabeza y torso
+   solo `5–10 cm` hacia delante, atrás y ambos lados, regresando al mismo punto.
+   La vista debe acompañarte de forma continua. Anota cualquier tirón, oscilación
+   o sensación de que el mundo te arrastra de vuelta; no hace falta dar pasos.
+3. **Entrada física y altura continua.** Sin pulsar crouch, baja lentamente
+   cabeza y torso al menos `25 cm` y mantén 5–6 segundos. La altura visual debe
+   seguir todo el gesto; al cruzar el umbral, el body pasa a `0.95 m` sin añadir
+   una caída profunda o instantánea de cámara.
+4. **Histéresis y salida.** Sube solo un poco y mantente cerca del umbral.
+   No debe alternar rápidamente entre crouch/stand; Rework exige `8 cm` extra de
+   recuperación. Después ponte totalmente de pie durante 5–6 segundos. Vista y
+   body deben volver inmediatamente a de pie; no debes tener que agacharte otra
+   vez para provocar la salida.
+5. **Segundo ciclo.** Repite entrada y salida física completas. La consola exige
+   dos entradas y dos salidas tanto en política como en el body nativo.
+6. **Botón como toggle Rework.** Pulsa una vez el click de crouch del stick
+   derecho: debe quedarse agachado al soltar. Pulsa otra vez: debe ponerse de pie.
+7. **Composición Hybrid.** Agáchate físicamente, pulsa una vez crouch y levántate
+   físicamente. El latch del botón debe mantener el crouch. Pulsa otra vez y debe
+   liberar la postura. Esto prueba el OR de fuentes usado por Rework.
+8. **Stick y combinación breve.** Usa un desplazamiento corto de stick de pie y
+   agachado. Combínalo una vez con un movimiento físico de `5–10 cm`, suelta el
+   stick y vuelve al punto inicial. No debe quedar deriva, pullback ni temblor.
+9. **Presentación.** Comprueba manos y mirror durante subida, bajada y traslación.
+   No necesitas sprint, pared, Alt+Tab ni caminar por la habitación.
 
-Esta tanda sí juzga dirección y velocidad relativa de la nueva locomoción
-`1.5/2.25 m/s`. Anota también si al mover el cuerpo deja de sonar el paso, se
-pierde la animación corporal o cambia el bob, porque Rework genera sus pasos por
-distancia y Black Plague todavía conserva ese comportamiento detrás de un límite
-específico del juego. No uses esta tanda para validar crouch físico por altura
-real, salto VR, bob vertical/altura final, agarres, mecanismos o Enhanced
-Visuals. Siguen siendo gates independientes. Tampoco promociones todavía el
-giro VR de Black Plague a equivalencia Rework: esta tanda conserva su owner
-nativo y comprueba que la locomoción métrica sigue siendo correcta antes y
-después de usarlo. Debes usar el crouch nativo una vez para probar la sustitución
-del body bajo room-scale.
+No uses esta tanda para ajustar salto, mecanismos o Enhanced Visuals. El objetivo
+es decidir si crouch, altura física y movimiento corto ya se comportan como una
+unidad coherente y cómoda.
 
 ### Resultado automático exigido
 
 Al cerrar el juego, el helper solo termina con éxito si el log fresco demuestra:
 
-- plan físico X/Z no nulo encolado;
-- petición consumida e inyectada en `0xD7281`;
 - petición de locomoción directa no nula consumida, inyectada y aceptada;
-- petición física y locomoción combinadas sin superar `0.05 m` por tick;
-- reconciliación emparejada con el mismo body y generación;
 - tick nativo aproximado `dt=1/60`;
-- muestras `stationary`, `free`, `blocked` y `slide/partial`;
 - sample room-scale fresco aplicado a la cámara;
-- offset horizontal de cámara no nulo observado;
-- offset reconciliado no nulo y continuación HMD entre ticks registrada en
-  `room_scale_reconciled_offset_m` y `room_scale_render_prediction_m`;
 - mirror activo en un frame de gameplay;
-- secuencia nativa de altura `1.65 m -> 0.95 m -> 1.65 m` y nueva aplicación
-  room-scale tras volver de pie;
-- al menos una muestra física significativa después de volver de pie.
+- baseline HMD plausible;
+- dos entradas y dos salidas físicas;
+- dos transiciones nativas a `0.95 m` y dos retornos a `1.65 m`, alineadas con la
+  política;
+- estado final realmente de pie y ownership VR liberado;
+- recorrido vertical renderizado mínimo de `15 cm`;
+- sample room-scale fresco después del último retorno a de pie.
 
-La aprobación automática demuestra que el camino técnico estuvo activo y dejó
-evidencia. Para promoverlo a **headset-validated** también necesito tu resultado
-visual de los puntos 1–11.
+La aprobación automática demuestra correlación técnica, no comodidad. Para
+promoverlo a **headset-validated** también necesito el resultado visual de los
+puntos anteriores.
 
 ## Qué devolver después de la prueba
 
@@ -241,24 +214,12 @@ Conserva y comunica:
 
 - PID de la sesión;
 - salida final completa del helper;
-- si `free`, `blocked` y `slide` se sintieron correctos;
-- si hubo doble movimiento, salto del mundo o deriva;
-- si desapareció el temblor continuo de PID 21548 y si cualquier resto fue
-  horizontal, vertical o ligado únicamente a locomoción;
-- si rotar/inclinar la cabeza en el sitio produjo cualquier desplazamiento del
-  personaje, separado del lean/step deliberado;
-- qué ocurrió al combinar stick y traslación física deliberada en el mismo
-  sentido y en sentidos opuestos, y si el movimiento cesó al soltar el stick y
-  volver a la postura inicial;
-- si las manos siguieron a la cabeza;
-- resultado del mirror en gameplay y menús;
-- resultado de Alt+Tab y recuperación de foco;
-- si el stick hacia delante siguió el rumbo del HMD antes y después de girar la
-  cabeza y de recentrar;
-- si delante/atrás/izquierda/derecha conservaron la misma velocidad a stick
-  completo, tanto normal como con sprint;
-- si hubo pasos, animación corporal y bob al usar la locomoción directa;
-- cualquier diferencia antes y después del crouch nativo y del recenter.
+- si el mundo siguió los movimientos X/Z cortos o intentó arrastrarte al origen;
+- si bajar/subir fue continuo y si el umbral produjo algún salto vertical;
+- si cada salida física puso al personaje de pie sin un segundo gesto;
+- resultado del toggle de botón y de la composición Hybrid;
+- si stick, manos y mirror siguieron correctos antes, durante y después;
+- cualquier mareo, temblor, doble movimiento o deriva, indicando si fue X/Z o Y.
 
 Si el helper falla, no repitas a ciegas. El mensaje enumera la evidencia ausente;
 conserva ese texto y el log del PID para separar un escenario no capturado de un
@@ -266,9 +227,10 @@ fallo real de cámara, reconciliación, ownership o presentación.
 
 Los movimientos grandes causados al quitarse parcialmente el visor no sirven
 para juzgar sensibilidad ni comfort, pero tampoco invalidan las muestras
-collision-aware: el límite sigue acotando cada petición a `0.05 m`. Para la
-prueba del punto 6 usa movimientos pequeños y continuos; los pasos completos ya
-aparecen impresos en la propia terminal para evitar consultar otra pantalla.
+collision-aware: el límite sigue acotando cada petición a `0.05 m`. Para las
+pruebas de los puntos 2 y 8 usa movimientos pequeños y continuos; los pasos
+completos ya aparecen impresos en la propia terminal para evitar consultar otra
+pantalla.
 
 ## Gate anterior — repetir solo ante regresión
 
@@ -283,6 +245,6 @@ regresión en `0xD7281`. No es la siguiente tanda normal porque PID 26144 ya la
 promocionó a **live-tested**.
 
 Mantén separados los estados `implemented`, `host-tested`, `live-tested`,
-`headset-validated` y `supported`. La locomoción directa nueva está
-`host-tested`; solo puede promocionarse después de completar la sesión con visor
-descrita arriba.
+`headset-validated` y `supported`. PID 8092 aporta evidencia de visor para la
+locomoción directa; la corrección conjunta de crouch/Y y el confort X/Z de la
+build actual siguen en `host-tested` hasta completar la sesión descrita arriba.

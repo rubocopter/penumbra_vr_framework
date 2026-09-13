@@ -71,6 +71,11 @@ using Update = void(__thiscall*)(void*, float);
 using Move = void(__thiscall*)(void*, float, float);
 using MoveStateGate = bool(__thiscall*)(void*, float, float);
 using Yaw = void(__thiscall*)(void*, float);
+using CrouchAction = void(__thiscall*)(void*);
+constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
+constexpr std::uintptr_t kCharacterSizeYOffset = 0xC8;
+constexpr std::uintptr_t kStartCrouchRva = 0x9CFA0;
+constexpr std::uintptr_t kStopCrouchRva = 0x9CFD0;
 std::uint8_t* g_image = nullptr;
 hooks::IatHook g_update_hook;
 std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
@@ -94,6 +99,15 @@ runtime::VrInputState g_disconnect_release;
 std::atomic<std::uint64_t> g_release_pending{0};
 std::uint64_t g_release_generation = 0;
 runtime::VrSnapTurn g_turn;
+SRWLOCK g_crouch_lock = SRWLOCK_INIT;
+runtime::VrPhysicalCrouchPolicy g_crouch_policy;
+BlackPlagueNativeCrouchStatus g_crouch_status;
+std::atomic<bool> g_native_crouch_press_pending{false};
+bool g_vr_crouch_owned = false;
+std::uint64_t g_native_crouch_entries = 0;
+std::uint64_t g_native_crouch_exits = 0;
+std::uint64_t g_native_crouch_stand_retries = 0;
+std::uint64_t g_native_crouch_mismatch_frames = 0;
 thread_local runtime::VrNativeIntents* g_intents = nullptr;
 thread_local void* g_input_player = nullptr;
 thread_local bool g_direct_locomotion = false;
@@ -107,6 +121,7 @@ thread_local bool g_direct_sprinting = false;
 thread_local bool g_pointer_valid = false;
 thread_local std::array<float, 2> g_pointer_uv{};
 thread_local std::uint64_t g_mouse_override_until = 0;
+thread_local bool g_openvr_crouch_press_this_update = false;
 
 bool ReadBytes(const void* source, void* dest, std::size_t size) noexcept {
     if (!source) return false;
@@ -117,6 +132,68 @@ template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
     T result{};
     if (object) static_cast<void>(ReadBytes(static_cast<const std::uint8_t*>(object) + offset, &result, sizeof(result)));
     return result;
+}
+
+[[nodiscard]] bool ReadNativeCrouchShape(
+    void* player, bool& crouched) noexcept {
+    crouched = false;
+    auto* const body = Read<void*>(player, kPlayerCharacterBodyOffset);
+    const float height = Read<float>(body, kCharacterSizeYOffset);
+    if (!std::isfinite(height)) return false;
+    if (std::abs(height - 0.95F) <= 0.05F) {
+        crouched = true;
+        return true;
+    }
+    return std::abs(height - 1.65F) <= 0.05F;
+}
+
+void ServiceNativeVrCrouch(void* player, bool desired,
+    BlackPlagueNativeCrouchStatus& status) noexcept {
+    bool crouched = false;
+    bool known = ReadNativeCrouchShape(player, crouched);
+
+    if (desired) {
+        if (known && crouched) {
+            // The legacy keyboard path may have applied the state one frame
+            // before its press edge reaches shared policy. Adopt that stance
+            // so the same policy remains its sole release owner.
+            g_vr_crouch_owned = true;
+        } else if (known && player != nullptr && g_image != nullptr) {
+            reinterpret_cast<CrouchAction>(g_image + kStartCrouchRva)(player);
+            bool after = false;
+            if (ReadNativeCrouchShape(player, after) && after) {
+                g_vr_crouch_owned = true;
+                ++g_native_crouch_entries;
+            }
+            known = ReadNativeCrouchShape(player, crouched);
+        }
+    } else if (g_vr_crouch_owned) {
+        if (known && crouched && player != nullptr && g_image != nullptr) {
+            reinterpret_cast<CrouchAction>(g_image + kStopCrouchRva)(player);
+            bool after = true;
+            if (ReadNativeCrouchShape(player, after)) {
+                if (!after) {
+                    g_vr_crouch_owned = false;
+                    ++g_native_crouch_exits;
+                } else {
+                    ++g_native_crouch_stand_retries;
+                }
+            }
+            known = ReadNativeCrouchShape(player, crouched);
+        } else if (known && !crouched) {
+            g_vr_crouch_owned = false;
+            ++g_native_crouch_exits;
+        }
+    }
+
+    if (known && desired != crouched) ++g_native_crouch_mismatch_frames;
+    status.native_shape_known = known;
+    status.native_crouched = known && crouched;
+    status.vr_stance_owned = g_vr_crouch_owned;
+    status.native_crouch_entries = g_native_crouch_entries;
+    status.native_crouch_exits = g_native_crouch_exits;
+    status.stand_retries = g_native_crouch_stand_retries;
+    status.desired_shape_mismatch_frames = g_native_crouch_mismatch_frames;
 }
 
 [[nodiscard]] void* CurrentMoveState(
@@ -215,6 +292,26 @@ bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
         // Always execute native query first, including its string destructor and
         // native edge bookkeeping, even when VR has a matching pressed button.
         const bool native = reinterpret_cast<Query>(g_image + Target(entry.query))(input, name);
+        const bool duplicate_crouch_press = native &&
+            entry.action == A::crouch && entry.query == Q::pressed &&
+            g_openvr_crouch_press_this_update;
+        if (native && entry.action == A::crouch && entry.query == Q::pressed &&
+            !duplicate_crouch_press) {
+            // Rework folds the legacy crouch trigger into the same toggle latch
+            // as the VR action. The exact query has consumed its own edge and
+            // string lifetime; publish it to shared policy for the following
+            // game tick instead of letting a second native toggle own posture.
+            g_native_crouch_press_pending.store(true, std::memory_order_release);
+        }
+        if (entry.action == A::crouch) {
+            // The three exact Black Plague query sites can dispatch both native
+            // StartCrouch and StopCrouch according to its legacy hold/toggle
+            // option. Shared policy now owns one persistent desired stance, so
+            // those action branches must not race ServiceNativeVrCrouch. Native
+            // query bookkeeping still ran above, and its press is applied by
+            // shared policy on the next game tick.
+            return false;
+        }
         const bool vr = g_intents && g_intents->Query(entry.action, entry.query);
         if (vr && !native && entry.action == A::light && g_input_player) {
             auto* glow = Read<void*>(g_input_player,0x29C);
@@ -313,6 +410,9 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     runtime::VrControllerFrame frame;
     runtime::VrAnalogState raw_move;
     float move_scale = 1.0F;
+    runtime::VrCrouchMode crouch_mode = runtime::VrCrouchMode::hybrid;
+    float physical_crouch_depth =
+        runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value;
     std::uint64_t consumed_release = 0;
     AcquireSRWLockExclusive(&g_session_lock);
     if (g_release_pending.load(std::memory_order_acquire)) {
@@ -349,6 +449,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     }
     raw_move = frame.input.state.move;
     move_scale = g_settings.move_speed;
+    crouch_mode = g_settings.crouch_mode;
+    physical_crouch_depth = g_settings.physical_crouch_depth;
     if (frame.input.state.move.active) {
         frame.input.state.move.x *= g_settings.move_speed;
         frame.input.state.move.y *= g_settings.move_speed;
@@ -361,6 +463,37 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     const auto timing=g_update_timing.Update(dt,GetTickCount64(),!ui && frame.focused);
     if (timing.ready) g_timing_sample=timing;
     ReleaseSRWLockExclusive(&g_session_lock);
+    runtime::VrPhysicalCrouchStatus crouch_policy_status;
+    if (consumed_release == 0) {
+        const bool openvr_crouch_press = frame.input.state.crouch.just_pressed;
+        float head_height = 0.0F;
+        const bool gameplay_active = !ui && frame.focused;
+        const bool tracking_valid = gameplay_active &&
+            TrackedHeadTrackingHeight(head_height);
+        if (g_native_crouch_press_pending.exchange(
+                false, std::memory_order_acq_rel)) {
+            frame.input.state.crouch.active = true;
+            frame.input.state.crouch.just_pressed = true;
+        }
+        AcquireSRWLockExclusive(&g_crouch_lock);
+        frame.input.state.crouch = g_crouch_policy.Update(
+            frame.input.state.crouch,
+            crouch_mode,
+            physical_crouch_depth,
+            gameplay_active,
+            tracking_valid,
+            head_height);
+        crouch_policy_status = g_crouch_policy.status();
+        ReleaseSRWLockExclusive(&g_crouch_lock);
+        g_openvr_crouch_press_this_update = openvr_crouch_press;
+    } else {
+        AcquireSRWLockExclusive(&g_crouch_lock);
+        g_crouch_policy.Reset();
+        crouch_policy_status = g_crouch_policy.status();
+        ReleaseSRWLockExclusive(&g_crouch_lock);
+        g_openvr_crouch_press_this_update = false;
+    }
+    const bool desired_vr_crouch = crouch_policy_status.effective_crouch;
     const auto pointer = runtime::SelectUiPointerPose(frame, frame.interact_source);
     g_pointer_valid = ui && frame.focused &&
         pointer.valid && TrackedMenuPointer(pointer.pose, g_pointer_uv);
@@ -377,6 +510,16 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     auto* previous_player = g_input_player;
     g_input_player = Read<void*>(handler, 0x38);
     g_player.store(g_input_player, std::memory_order_release);
+    BlackPlagueNativeCrouchStatus crouch_status;
+    crouch_status.policy = crouch_policy_status;
+    ServiceNativeVrCrouch(g_input_player, desired_vr_crouch, crouch_status);
+    AcquireSRWLockExclusive(&g_crouch_lock);
+    g_crouch_status = crouch_status;
+    ReleaseSRWLockExclusive(&g_crouch_lock);
+    // Shared policy owns VR/legacy crouch state. Do not feed its held/released
+    // representation back through Black Plague's configurable toggle handler;
+    // the exact native start/stop methods above apply the desired body state.
+    frame.input.state.crouch = {};
     g_direct_locomotion = false;
     g_direct_native_axis_observed = false;
     g_direct_forward_allowed = false;
@@ -424,6 +567,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     g_direct_head_world_pose = {};
     g_direct_move_scale = 1.0F;
     g_direct_sprinting = false;
+    g_openvr_crouch_press_this_update = false;
     if (consumed_release != 0) static_cast<void>(g_release_pending.compare_exchange_strong(
         consumed_release, 0, std::memory_order_acq_rel));
     // A button can open an inventory/menu during this update. Publish the new
@@ -554,6 +698,16 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
     if (!ReadBytes(g_image + 0x9CD00, actual_yaw.data(), actual_yaw.size()) || actual_yaw != yaw) {
         error = "Native yaw entry mismatch"; return false;
     }
+    constexpr std::array<std::uint8_t, 8> crouch_action{
+        0x8A, 0x81, 0x6C, 0x02, 0x00, 0x00, 0x84, 0xC0};
+    std::array<std::uint8_t, crouch_action.size()> actual_crouch{};
+    if (!ReadBytes(g_image + kStartCrouchRva, actual_crouch.data(),
+            actual_crouch.size()) || actual_crouch != crouch_action ||
+        !ReadBytes(g_image + kStopCrouchRva, actual_crouch.data(),
+            actual_crouch.size()) || actual_crouch != crouch_action) {
+        error = "Native crouch action entry mismatch";
+        return false;
+    }
     bool ok = true;
     for (std::size_t i = 0; ok && i < std::size(kQueries); ++i) {
         const auto& entry = kQueries[i];
@@ -573,6 +727,17 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
     if (!ok) {
         std::string rollback;
         if (!RemoveNativeInputBridge(rollback)) error += "; rollback failed: " + rollback;
+    } else {
+        AcquireSRWLockExclusive(&g_crouch_lock);
+        g_crouch_policy.Reset();
+        g_crouch_status = {};
+        g_vr_crouch_owned = false;
+        g_native_crouch_entries = 0;
+        g_native_crouch_exits = 0;
+        g_native_crouch_stand_retries = 0;
+        g_native_crouch_mismatch_frames = 0;
+        ReleaseSRWLockExclusive(&g_crouch_lock);
+        g_native_crouch_press_pending.store(false, std::memory_order_release);
     }
     g_installed.store(ok, std::memory_order_release);
     return ok;
@@ -640,6 +805,13 @@ void ConnectNativeInput(runtime::OpenVrSession* session) noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
     if (!session && g_session) {
         g_disconnect_release = runtime::MakeReleasedVrInputState(g_frame.input.state);
+        AcquireSRWLockShared(&g_crouch_lock);
+        const bool effective_crouch = g_crouch_status.policy.effective_crouch;
+        ReleaseSRWLockShared(&g_crouch_lock);
+        if (effective_crouch) {
+            g_disconnect_release.crouch.active = true;
+            g_disconnect_release.crouch.just_released = true;
+        }
         g_release_pending.store(++g_release_generation, std::memory_order_release);
     }
     g_session = session; g_frame = {}; g_turn = {};
@@ -653,6 +825,12 @@ runtime::VrControllerFrame ReadNativeControllerFrame() noexcept {
     const auto frame = g_frame;
     ReleaseSRWLockShared(&g_session_lock);
     return frame;
+}
+BlackPlagueNativeCrouchStatus ReadNativePhysicalCrouchStatus() noexcept {
+    AcquireSRWLockShared(&g_crouch_lock);
+    const auto status = g_crouch_status;
+    ReleaseSRWLockShared(&g_crouch_lock);
+    return status;
 }
 void* NativePlayerPointer() noexcept {
     return g_player.load(std::memory_order_acquire);

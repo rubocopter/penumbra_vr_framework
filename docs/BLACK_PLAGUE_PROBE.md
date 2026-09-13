@@ -522,6 +522,31 @@ native standing -> crouched -> standing recovery. Physical crouch driven by HMD
 height is still a separate behavior and is not implied by that native
 button-crouch sequence.
 
+PID 20520 then exercised the first HMD-height implementation. Physical entry
+worked, but a physical exit could leave the native `0.95 m` shape active until
+another crouching gesture. The old helper falsely passed because six aggregate
+policy entries/exits and one global `1.65 -> 0.95 -> 1.65 m` sequence did not
+prove temporal alignment. This is a real ownership regression, not a failed
+user procedure.
+
+The corrected path ports Rework `23c890f`'s persistent button latch and Hybrid
+OR into `runtime::VrPhysicalCrouchPolicy`. The existing ButtonHandler owner calls
+the exact native entries `0x9CFA0/0x9CFD0` to make the body match desired state,
+observes `cPlayer+0x274 -> body+0xC8`, adopts a legacy edge, collapses duplicate
+OpenVR/legacy presses and retries standing while the native shape remains
+crouched. Periodic `physical_crouch` telemetry reports both policy and native
+state, ownership, entries/exits, stand retries and mismatch frames. The focused
+helper requires two correlated physical/native cycles and final standing.
+
+The same correction composes vertical presentation with shared
+`VrTrackingSpace`: the reconciled body position is the feet anchor, raw HMD Y is
+continuous, `HeightOffset` is consumed, physical crouch avoids the native full
+camera drop, and a non-physical crouch uses `-PhysicalCrouchDepth`. The helper
+requires at least `0.15 m` of rendered head-anchor Y range. Code and host tests
+pass, but no live/headset validation exists for this corrected build. PID 20520
+also reported short physical X/Z pullback/discomfort, which remains a subjective
+gate rather than a claimed fix.
+
 This composition differs narrowly from Rework because the source backend can
 perform physical and stick body updates sequentially, whereas the exact Black
 Plague binary exposes one live-tested native `D6E00` update owner. Adding a
@@ -534,7 +559,7 @@ speed, sprint, footsteps/bob/animation and repeated turns are required in the
 next headset run. Rework's tracking-world-yaw turn owner remains a separate
 milestone; Black Plague still applies VR turn through native player yaw.
 
-Physical crouch-by-height is also confirmed not to drive the native crouch state
-yet. Keep that separate from the already live-tested native crouch button and
-body swap; implementing safe physical stand-up still requires the exact Black
-Plague stand-clearance boundary.
+Physical crouch-by-height now drives the exact native crouch state through the
+existing game-thread owner, but the corrected exit/retry and continuous-Y path
+remain host-tested only. Keep final comfort and blocked-stand validation
+separate from the already live-tested native body swap.

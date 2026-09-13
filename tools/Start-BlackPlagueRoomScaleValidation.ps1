@@ -8,5 +8,5 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $validation = Join-Path $PSScriptRoot 'Start-BlackPlaguePhysicalDisplacementValidation.ps1'
-& $validation -GamePath $GamePath -ImagePath $ImagePath -EnableRoomScale
+& $validation -GamePath $GamePath -ImagePath $ImagePath -EnableRoomScale -PhysicalCrouchFocus
 exit $LASTEXITCODE

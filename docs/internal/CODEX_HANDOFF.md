@@ -47,9 +47,24 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   PID 8092 headset-validated the corrected route: the user reports correct stick
   locomotion and substantially better overall feel, while the helper recorded
   `direct_locomotion=True`, all four physical outcomes and
-  queue/consume/inject/match `201/201/201/201`. The active room-scale core is
-  therefore headset-validated for the research build. Physical crouch by
-  tracked height remains the next separate gate.
+  queue/consume/inject/match `201/201/201/201`. This is headset evidence for the
+  technical stick/collision route. Positional comfort is still open because PID
+  20520 later reported a pullback sensation during short physical X/Z motion.
+- PID 20520 exercised the first tracked-height crouch integration. Physical
+  entry worked, but standing physically left the native body at `0.95 m` until
+  another crouching gesture. Six aggregate policy entry/exit counts and a
+  non-correlated body-shape sequence caused the old helper to pass falsely.
+  Rework `23c890f` owns a single persistent desired state; the failed build fed
+  held/released policy back through Black Plague's configurable legacy toggle.
+  Shared `VrPhysicalCrouchPolicy` now owns the Rework button latch, physical
+  baseline/depth/hysteresis and Hybrid OR. The existing game-thread input owner
+  applies desired stance through exact entries `0x9CFA0/0x9CFD0`, adopts legacy
+  edges, retries blocked stand and publishes desired/native correlation. The
+  same physical control reported by OpenVR and legacy input is collapsed into
+  one toggle. Rendering now uses `VrTrackingSpace` to compose continuous HMD Y
+  and `HeightOffset` from the reconciled feet anchor; physical crouch no longer
+  adds the full native camera drop. Code, host tests and the stricter static
+  helper are complete, but this corrected combination is **host-tested only**.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -263,7 +278,7 @@ feeds the matched physical observation into shared reconciliation. A separate
 default-off active consumer can now expose the resulting horizontal anchor/body
 offset to rendering during the next validation gate.
 
-## Current milestone — active room-scale correction awaiting repeat validation
+## Current milestone — physical crouch/Y correction awaiting headset validation
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -427,15 +442,16 @@ technical gate now have headset evidence. The presence of footsteps/bob/body
 animation under every direct-locomotion case still needs explicit observation.
 Rework still applies VR turning to tracking `world yaw`,
 whereas Black Plague currently applies the shared turn amount to native player
-yaw; that separate owner remains unchanged. The next gate is
-`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must first prove that
-stationary/slow movement has no world shake, rotation/tilt in place causes no
-appreciable locomotion, then retest deliberate
-translated HMD motion, free/block/slide, explicit head-relative stick direction
-and equal speed before/after physical turn and recenter, native crouch recovery,
-hands, mirror/focus and absence of residual drift before promotion. Physical
-crouch-by-height remains a separate milestone because Black Plague's safe
-stand-clearance boundary is still unknown.
+yaw; that separate owner remains unchanged. PID 20520 then exposed the failed
+edge-only physical-crouch ownership and remaining short-range X/Z discomfort
+described in the repository checkpoint. The next gate remains
+`tools/Start-BlackPlagueRoomScaleValidation.ps1`, now in focused crouch mode. It
+must prove two tracked-height entry/exit cycles correlated with native
+`0.95/1.65 m` shapes, final standing/ownership release, button-toggle and Hybrid
+composition, at least `0.15 m` of continuous tracked Y, short-range X/Z comfort,
+direct stick movement, hands and mirror. It does not require walking, sprint or
+wall cases in the user's limited play area. Do not promote the corrected build
+from host-tested until both telemetry and subjective comfort pass.
 
 Two presentation regressions from the earlier headset session remain separate.
 PID 19192 refined the mirror-off evidence: gameplay frames reported
@@ -517,7 +533,8 @@ The remaining Rework VR code was re-audited host-only on 2026-09-12 after the
 attachment-socket extraction. There is no further justified shared-runtime
 extraction at the current evidence level: the VR dimmer is only consumed by
 Overture UI flows; staged loading is tied to Overture's map/compositor lifecycle;
-physical crouch still needs Black Plague stand-clearance evidence; inventory,
+physical crouch now has a narrow Black Plague desired/native boundary but still
+needs headset and blocked-stand evidence; inventory,
 notes, HUD and subtitles need native menu/draw-state boundaries; and jointed
 mechanisms need one mapped native mechanism consumer. Do not manufacture a
 generic abstraction to make the roadmap checkbox move. Resume this audit when a
