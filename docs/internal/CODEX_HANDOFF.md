@@ -65,6 +65,20 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   and `HeightOffset` from the reconciled feet anchor; physical crouch no longer
   adds the full native camera drop. Code, host tests and the stricter static
   helper are complete, but this corrected combination is **host-tested only**.
+- PID 23260 proved that the shared policy and button route are working but the
+  native exit owner was still wrong. The log reached `physical entries/exits =
+  10/10` and `button_latched` changed both directions, while the native body
+  remained at `0.95 m`: `native_exits=0`, `vr_owned=1` and
+  `stand_retries=17832`. The cause is now narrowed to Black Plague's native
+  crouch mode: `0x9CFA0/0x9CFD0` are the existing pressed/released dispatches,
+  not unconditional crouch/stand setters. In toggle mode the release dispatch
+  intentionally leaves crouch latched. The backend still owns one persistent
+  desired stance; on a stand request it now sends the native release first and,
+  only if the body is still crouched, sends the native pressed dispatch that
+  toggles the game's own move state back toward standing. Native clearance and
+  body replacement remain authoritative, so a blocked stand remains retryable.
+  Release build plus all 30 host tests pass. This correction is **host-tested
+  only** and must replace the failed PID 23260 build in the next headset gate.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -444,7 +458,10 @@ Rework still applies VR turning to tracking `world yaw`,
 whereas Black Plague currently applies the shared turn amount to native player
 yaw; that separate owner remains unchanged. PID 20520 then exposed the failed
 edge-only physical-crouch ownership and remaining short-range X/Z discomfort
-described in the repository checkpoint. The next gate remains
+described in the repository checkpoint. PID 23260 then confirmed that physical
+policy exit and button latching were correct but the native toggle release did
+not restore standing; the host-tested release-then-toggle fallback above is the
+current build. The next gate remains
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`, now in focused crouch mode. It
 must prove two tracked-height entry/exit cycles correlated with native
 `0.95/1.65 m` shapes, final standing/ownership release, button-toggle and Hybrid

@@ -254,8 +254,10 @@ None is required for the shadow-only tracking/body validation milestone. Keep na
 - Crouched size: `0.70 x 0.95 x 0.70`.
 - Feet Y remains fixed while body centre changes.
 - The active physics-body pointer changes and restores.
-- Exact native entries `0x9CFA0/0x9CFD0` request crouch/stand through the game's
-  existing move-state/body-shape owner. A failed stand leaves the `0.95 m` shape,
+- Exact native entries `0x9CFA0/0x9CFD0` are the crouch pressed/released
+  dispatches owned by the game's existing move-state/body-shape path. They are
+  affected by the native hold/toggle crouch setting and must not be treated as
+  unconditional crouch/stand setters. A failed stand leaves the `0.95 m` shape,
   which permits a safe retry without importing Overture's `CanStand` layout.
 - PID 20520 proved tracked-height entry worked in the first integration but
   native exit did not remain synchronized: standing physically could leave the
@@ -270,6 +272,17 @@ None is required for the shadow-only tracking/body validation milestone. Keep na
   existing Black Plague game-thread owner applies desired stance with the exact
   native entries, adopts legacy edges, collapses duplicate OpenVR/legacy input,
   retries blocked stand and logs desired/native correlation.
+- PID 23260 separated policy/input from the native stance defect. Physical
+  policy reached `10/10` entries/exits and `button_latched` toggled on and off,
+  but native stance reached crouch and never returned: `native_exits=0`, final
+  `native_crouched=1`, `vr_owned=1`, `stand_retries=17832`. Therefore the right
+  stick/OpenVR button route is not the missing boundary. In native toggle mode
+  the release dispatch leaves crouch latched. The backend now preserves the
+  Rework persistent desired state and, for a requested stand, sends release
+  first then sends the game's own pressed dispatch only when the native shape is
+  still crouched. Hold mode exits on release; toggle mode exits on the second
+  press; a blocked native stand remains crouched and is retried. This change is
+  Release-built and passes 30/30 host tests, but is not live/headset validated.
 - Rendering now composes continuous physical HMD Y through `VrTrackingSpace`
   from the reconciled feet anchor. A physical crouch does not add the native
   full camera drop; button-only crouch applies the configured posture offset.

@@ -99,11 +99,18 @@ PID 20520 also exposed that the first physical-crouch integration could enter
 but did not reliably synchronize native standing on exit; its aggregate helper
 result was a false pass. The corrected build owns the Rework button latch and
 desired posture in shared policy, applies Black Plague's exact native crouch
-start/stop methods from the existing game-thread owner, retries blocked stand,
+pressed/released dispatches from the existing game-thread owner, retries blocked stand,
 and presents continuous tracked Y from the reconciled feet anchor. This is
 implemented and host-tested only. The focused headset gate now requires two
 correlated physical/native cycles, final standing state, vertical continuity and
 short-range X/Z comfort. Tracking-world-yaw turn ownership remains separate.
+PID 23260 then proved that physical/button policy itself was working but exposed
+one more backend-specific distinction: the exact native crouch entries are
+pressed/released dispatches and preserve the game's hold/toggle setting. In
+toggle mode release alone cannot restore standing. The current host-tested build
+therefore sends release first and only falls back to the native pressed dispatch
+when the body remains crouched, preserving native clearance/body-swap ownership.
+Release compilation and all 30 host tests pass; headset validation remains open.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.

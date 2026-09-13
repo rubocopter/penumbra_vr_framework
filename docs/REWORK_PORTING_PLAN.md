@@ -133,6 +133,15 @@ The first shared contract exists to separate **policy** from **native mechanism*
 
 The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is adapted to Black Plague's one native tick. PID 28996 exposed the final indexed-state mapping defect in its permission predicate, and PID 8092 supplied headset evidence for the corrected stick/collision route. PID 20520 then exposed two remaining boundaries: the first physical-crouch edge mapping failed to synchronize standing, and short physical X/Z motion could still feel like a pullback. The corrected Rework latch, explicit Black Plague desired/native stance service and shared tracked-Y composition are host-tested only; they are the next focused headset gate.
 
+PID 23260 narrowed the crouch failure further. Physical height transitions and the
+button latch both reached shared policy, but the native body stayed at `0.95 m`
+with no native exit because Black Plague's exact crouch entries preserve legacy
+pressed/released hold/toggle semantics. The current host-tested backend keeps the
+Rework desired state, sends native release first and uses the game's second press
+only when toggle mode leaves the body crouched. Native body replacement and
+clearance remain authoritative. Release compilation and all 30 host tests pass;
+the next headset gate must validate the corrected exit path.
+
 Current order:
 
 1. Preserve the completed Overture source host and validated artifact behavior.
@@ -218,7 +227,7 @@ backend consumer or target-specific validation:
   compositor presentation lifecycle; a second backend presentation boundary is
   required before extracting it.
 - physical crouch policy is now shared, while Black Plague keeps its exact native
-  start/stop and stand-retry mechanism in the backend. A second backend is not
+  pressed/released toggle adaptation and stand-retry mechanism in the backend. A second backend is not
   needed to generalize those exact methods; headset and blocked-stand evidence
   are still required before promotion.
 - inventory/notes/HUD/subtitle integration still depends on each game's menu,

@@ -40,9 +40,12 @@ la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
   usa ahora la política directa `1.5/2.25 m/s` de Rework dentro del único request
   `0xD7281`; PID 8092 aportó evidencia de visor para esa ruta técnica. PID 20520
   detectó después que el primer crouch físico no sincronizaba la salida nativa y
-  que el movimiento X/Z corto todavía podía sentirse como un pullback. El latch
-  de Rework, el servicio exacto de postura nativa y el tracking Y continuo están
-  corregidos y host-tested. El siguiente gate focalizado es
+  que el movimiento X/Z corto todavía podía sentirse como un pullback. PID 23260
+  confirmó que latch/altura y botón sí llegaban al runtime, pero la salida nativa
+  seguía bloqueada por la semántica toggle del dispatch release. El backend actual
+  conserva el desired state de Rework y usa release seguido de un segundo press
+  solo si la forma sigue a `0.95 m`. El tracking Y continuo y esta adaptación
+  están corregidos y host-tested. El siguiente gate focalizado es
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
@@ -162,7 +165,7 @@ crouch físico, jump, bob, estados o efectos de pasos dentro de la política com
 | Deceleración y velocidad final | `D6E00` consume flags, aplica deacc y convierte los campos de velocidad en request horizontal antes de `D7312` | Dentro, antes de colisión | Mapeado |
 | Sprint | queries `52EB/5313` llegan a wrappers `9CF40/9CF70`, que delegan al move-state actual; inicialización de state aplica los límites por setters nativos | Antes | Live-characterized; ~3.0/4.5 m/s efectivos |
 | Jump | `5299 -> 9CEA0` selecciona estado 3 (`cPlayerMoveState_Jump`); `52CF -> 9A890` gestiona hold `+1FC/+200/+204` | La fuerza/estado vertical se publica antes de `D6E00`; horizontal mantiene Y=0 y la vertical se aplica después | Live-characterized: ~5.53 m/s inicial, apex ~0.95 m, landing nativo y 3→0 |
-| Crouch | Runtime posee latch/altura/Hybrid; el owner existente llama `9CFA0/9CFD0` según postura deseada, observa shape `+0xC8` y reintenta stand bloqueado | Antes | Mecánica nativa live-characterized; sincronización física/Y corregida y host-tested tras el fallo PID 20520 |
+| Crouch | Runtime posee latch/altura/Hybrid; el owner existente usa los dispatches pressed/released `9CFA0/9CFD0`, observa shape `+0xC8` y, si toggle mantiene crouch tras release, usa el segundo press nativo para solicitar stand | Antes | Mecánica nativa live-characterized; sincronización física/Y corregida y host-tested tras los fallos PID 20520/PID 23260 |
 | Colisión/step/gravedad | `D6E00`, primer solver `D7312`, fases posteriores de step/gravedad | Dentro | Live-tested para el límite |
 | `D790C/D7913` | Sync sólo de la rama con gravedad desactivada | Después | No son composición general de cámara; el player activo los evita |
 | Head/footstep bob | No hay evidencia suficiente para atribuir todavía el efecto visual concreto | Pista de comfort separada | Pendiente, no bloquea el adapter/reconciliation inicial |
@@ -207,10 +210,12 @@ gesto podía invertir la forma más tarde. El helper aprobó erróneamente al su
 seis entradas/salidas y detectar una secuencia global sin correlación temporal.
 La causa frente a Rework fue alimentar held/released en el toggle configurable
 de BP en vez de conservar un único estado deseado. La política compartida posee
-ahora el latch de botón y el OR con altura física. `NativeInputBridge`, desde su
-hilo de juego ya existente, aplica `StartCrouch/StopCrouch`, adopta flancos
-legacy, elimina dobles flancos OpenVR/legacy y reintenta stand si la forma sigue
-a `0.95 m`. `render_world_probe` usa `VrTrackingSpace` para Y continuo desde el
+ahora el latch de botón y el OR con altura física. PID 23260 demostró una segunda
+diferencia: `9CFA0/9CFD0` son dispatches pressed/released y release no hace stand
+en modo toggle. `NativeInputBridge`, desde su hilo de juego ya existente, adopta
+flancos legacy, elimina dobles flancos OpenVR/legacy y, al pedir stand, envía
+release seguido del segundo press solo si la forma sigue a `0.95 m`.
+`render_world_probe` usa `VrTrackingSpace` para Y continuo desde el
 ancla de pies; solo el crouch no físico añade `-PhysicalCrouchDepth`. El helper
 exige dos pares política/shape correlacionados, final de pie y rango Y de al
 menos `0.15 m`. Estado de esta corrección: **host-tested**, pendiente de visor.

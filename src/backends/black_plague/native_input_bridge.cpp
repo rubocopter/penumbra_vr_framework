@@ -171,7 +171,15 @@ void ServiceNativeVrCrouch(void* player, bool desired,
         if (known && crouched && player != nullptr && g_image != nullptr) {
             reinterpret_cast<CrouchAction>(g_image + kStopCrouchRva)(player);
             bool after = true;
-            if (ReadNativeCrouchShape(player, after)) {
+            bool after_known = ReadNativeCrouchShape(player, after);
+            if (after_known && after) {
+                // In Black Plague's native toggle-crouch mode the release path
+                // intentionally leaves the stance latched. A second press is
+                // the game's own request to return from crouch to standing.
+                reinterpret_cast<CrouchAction>(g_image + kStartCrouchRva)(player);
+                after_known = ReadNativeCrouchShape(player, after);
+            }
+            if (after_known) {
                 if (!after) {
                     g_vr_crouch_owned = false;
                     ++g_native_crouch_exits;

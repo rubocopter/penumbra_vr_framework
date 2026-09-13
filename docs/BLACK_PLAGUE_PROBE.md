@@ -530,20 +530,33 @@ prove temporal alignment. This is a real ownership regression, not a failed
 user procedure.
 
 The corrected path ports Rework `23c890f`'s persistent button latch and Hybrid
-OR into `runtime::VrPhysicalCrouchPolicy`. The existing ButtonHandler owner calls
-the exact native entries `0x9CFA0/0x9CFD0` to make the body match desired state,
-observes `cPlayer+0x274 -> body+0xC8`, adopts a legacy edge, collapses duplicate
+OR into `runtime::VrPhysicalCrouchPolicy`. The existing ButtonHandler owner uses
+the exact native crouch pressed/released entries `0x9CFA0/0x9CFD0`, observes
+`cPlayer+0x274 -> body+0xC8`, adopts a legacy edge, collapses duplicate
 OpenVR/legacy presses and retries standing while the native shape remains
-crouched. Periodic `physical_crouch` telemetry reports both policy and native
-state, ownership, entries/exits, stand retries and mismatch frames. The focused
-helper requires two correlated physical/native cycles and final standing.
+crouched. These entries retain Black Plague's native hold/toggle semantics; they
+are not unconditional stance setters. Periodic `physical_crouch` telemetry
+reports both policy and native state, ownership, entries/exits, stand retries and
+mismatch frames. The focused helper requires two correlated physical/native
+cycles and final standing.
+
+PID 23260 proved the distinction. Shared policy detected repeated physical
+entries/exits and the OpenVR button latch changed state, but the body stayed at
+`0.95 m` with `native_exits=0` and `stand_retries=17832`. The failed build called
+the native release entry as if it were an unconditional stand operation. The
+current backend sends release first and, if the body is still crouched, sends
+the native pressed dispatch once so toggle mode can request its own return to
+standing. Hold mode still exits on release. Native geometry/body-swap ownership
+is unchanged. Release compilation and 30/30 host tests pass; this correction is
+not yet live/headset validated.
 
 The same correction composes vertical presentation with shared
 `VrTrackingSpace`: the reconciled body position is the feet anchor, raw HMD Y is
 continuous, `HeightOffset` is consumed, physical crouch avoids the native full
 camera drop, and a non-physical crouch uses `-PhysicalCrouchDepth`. The helper
 requires at least `0.15 m` of rendered head-anchor Y range. Code and host tests
-pass, but no live/headset validation exists for this corrected build. PID 20520
+pass, but no live/headset validation exists for the PID-23260 native-exit fix.
+PID 20520
 also reported short physical X/Z pullback/discomfort, which remains a subjective
 gate rather than a claimed fix.
 

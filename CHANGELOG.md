@@ -42,6 +42,17 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- Corrected Black Plague VR crouch exit after PID 23260 showed that shared
+  physical/button policy was working while the native body remained stuck at
+  `0.95 m`. The exact `0x9CFA0/0x9CFD0` entries are native crouch
+  pressed/released dispatches, so toggle-crouch mode intentionally ignores
+  release as a request to stand. The existing game-thread owner now issues the
+  native release first and, only when the body is still crouched, sends the
+  native pressed dispatch that toggles the game's own move state toward standing.
+  Native clearance/body replacement remain authoritative and blocked stand can
+  still retry. Release build and 30/30 host tests pass; headset validation is
+  still pending.
+
 - Fixed the Black Plague direct metric locomotion gate exposed by PID 17612.
   Full left-stick deflection reached OpenVR frame telemetry while every
   `locomotion_*` field remained zero. Exact-build decoding showed that native
@@ -152,7 +163,7 @@ yet been live/headset-tested in Black Plague.
   crouch depth (`0.25 m` default) and `0.08 m` exit hysteresis. Black Plague
   exposes `CrouchMode`, `PhysicalCrouchDepth` and `HeightOffset`; its existing
   game-thread input owner applies the desired stance through the exact native
-  `StartCrouch/StopCrouch` entries, retries a blocked stand and logs policy/body
+  crouch pressed/released dispatches, retries a blocked stand and logs policy/body
   correlation without adding another hook. Rendering now uses shared
   `VrTrackingSpace` for continuous tracked Y from the reconciled feet anchor.
   PID 20520 exercised the previous edge-only integration and exposed a false

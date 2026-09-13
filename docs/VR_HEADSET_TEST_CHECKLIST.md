@@ -124,6 +124,17 @@ prueba con visor. El usuario también describió un resto de corrección/molesti
 moverse físicamente en X/Z; la evidencia agregada de PID 20520 no permite
 atribuirlo a una colisión concreta, así que sigue siendo un gate de confort.
 
+PID 23260 separó definitivamente la política compartida del fallo nativo. El
+log alcanzó `physical entries/exits=10/10`, y `button_latched` cambió en ambos
+sentidos, así que tanto el crouch físico como el click derecho llegaron al
+runtime. Sin embargo el body terminó todavía a `0.95 m`, con `native_exits=0`,
+`vr_owned=1` y `stand_retries=17832`. La build de esa prueba trataba la entrada
+nativa de release como un stand incondicional; Black Plague conserva su modo
+hold/toggle y, en toggle, release deja la postura latched. La corrección actual
+envía release y, solo si el body sigue agachado, el segundo press nativo que el
+propio juego usa para solicitar volver a de pie. Compila en Release y pasa 30/30
+tests de host; sigue pendiente la validación con visor.
+
 ## Siguiente tanda — crouch físico por altura HMD
 
 Desde la raíz del repositorio ejecuta:
@@ -133,7 +144,7 @@ tools\Start-BlackPlagueRoomScaleValidation.ps1
 ```
 
 PID 8092 ya cerró el gate técnico anterior de room-scale y stick. Esta tanda
-comprueba la corrección de PID 20520 y el nuevo eje Y. El helper mantiene las
+comprueba la corrección posterior a PID 23260 y el nuevo eje Y. El helper mantiene las
 rutas activas, pero no obliga a caminar por la habitación, esprintar ni repetir
 `blocked`/`slide`. Además:
 
@@ -173,11 +184,15 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
    vez para provocar la salida.
 5. **Segundo ciclo.** Repite entrada y salida física completas. La consola exige
    dos entradas y dos salidas tanto en política como en el body nativo.
-6. **Botón como toggle Rework.** Pulsa una vez el click de crouch del stick
-   derecho: debe quedarse agachado al soltar. Pulsa otra vez: debe ponerse de pie.
+6. **Botón como toggle Rework.** Empieza totalmente de pie. Pulsa una vez el
+   click de crouch del stick derecho: debe quedarse agachado al soltar. Espera
+   2–3 segundos y pulsa otra vez: debe volver a `1.65 m` inmediatamente. Repite
+   una vez más para confirmar que no depende de haber usado antes crouch físico.
 7. **Composición Hybrid.** Agáchate físicamente, pulsa una vez crouch y levántate
    físicamente. El latch del botón debe mantener el crouch. Pulsa otra vez y debe
-   liberar la postura. Esto prueba el OR de fuentes usado por Rework.
+   liberar la postura y volver a `1.65 m` sin otro gesto físico. Repite el orden
+   inverso: botón para agacharte, baja físicamente, quita el latch con otro click
+   y después levántate. El body no debe quedar atrapado a `0.95 m`.
 8. **Stick y combinación breve.** Usa un desplazamiento corto de stick de pie y
    agachado. Combínalo una vez con un movimiento físico de `5–10 cm`, suelta el
    stick y vuelve al punto inicial. No debe quedar deriva, pullback ni temblor.
