@@ -67,27 +67,28 @@ zero. Re-analysis with the corrected real-HMD stationary classifier also found
 12 sub-2 mm stationary/jitter samples. The boundary retained the `0.05 m`
 horizontal clamp, body/generation matching and the existing single native tick.
 
-PID 24956 live-exercised the default-off Black Plague active room-scale
-consumer. It captured 90 stationary/jitter, 963 free, 10 blocked and 95
-slide/partial telemetry samples, the native `1.65 -> 0.95 -> 1.65 m` crouch
-shape sequence, camera application after recovery and mirror-on gameplay
-frames. The session did not pass headset validation: the user reported that
-rotating/tilting the head in place made the character walk, with stick adding or
-opposing that unintended motion. Static comparison also found that the single
-Black Plague body tick fed its already reconciled physical displacement back
-into Rework's locomotion-only anchor carry phase. The implementation now
-subtracts that matched physical component before locomotion carry while
-retaining the real whole-tick body position for camera space. This correction
-may remove amplification but has not yet been tested in the headset; do not
-treat tilt-induced walking as expected room-scale behavior.
+PID 21548 repeated the default-off active room-scale gate after the combined-tick
+carry correction. Queue/injection/reconciliation matched 201/201, all four
+physical outcomes and the native crouch/stand recovery passed, and in-place head
+tilt no longer made the character walk. The path is still **not
+headset-validated**: the world continuously shook and wall rejection remained
+aggressive. Log analysis found a median 9.65 mm reconciled X/Z offset and median
+15.77 mm change between sampled stick-zero frames, including direction
+reversals in 430/539 windows. Rework `23c890f` drives its VR world anchor at 90
+Hz and does not retain the native smoothed/bobbed camera position. Black Plague
+was presenting only a retained ~60 Hz body offset on top of that native camera.
+The renderer now places X/Z directly at the fresh reconciled anchor and advances
+it with only the HMD delta observed since that body sample. The correction is
+compiled but has not been live/headset-tested. Y and jump remain native.
 
 The next Black Plague gameplay gate is
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must validate active
-physical movement, blocking/sliding, recenter, the native crouch shape swap and
-recovery, rotation/tilt in place without locomotion, deliberate translated HMD
-movement with/without stick, head/hand coherence and mirror-on presentation
-before promotion. Keep physical
-crouch-by-height, speed tuning and camera/bob as separate validation gates.
+stationary visual stability, smooth render-rate physical movement,
+blocking/sliding, recenter, the native crouch shape swap and recovery,
+rotation/tilt in place without locomotion, deliberate translated HMD movement
+with/without stick, head/hand coherence and mirror-on presentation before
+promotion. Keep physical crouch-by-height, speed tuning and vertical
+camera/footstep-bob as separate validation gates.
 
 ## Black Plague constraints
 

@@ -54,6 +54,9 @@ struct RenderWorldFrameTelemetry {
     bool positional_translation_applied = false;
     std::uint64_t room_scale_body_generation = 0;
     std::array<float, 3> room_scale_camera_offset_m{};
+    std::array<float, 3> room_scale_reconciled_offset_m{};
+    std::array<float, 3> room_scale_render_prediction_m{};
+    std::array<float, 3> room_scale_head_anchor_m{};
     bool persistent_stereo_active = false;
     bool monitor_mirror_enabled = false;
     std::uint32_t monitor_world_passes = 0;

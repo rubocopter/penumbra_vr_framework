@@ -1,18 +1,20 @@
 # Tracking/body reconciliation — host and live shadow validation
 
-Updated: 2026-09-12.
+Updated: 2026-09-13.
 Feature checkpoint: `18c63ef39adb9d3af6df0a6e9f97d0889df5194c`.
 CI hardening checkpoint: `ea12955f494976ed7e3fb2913a3da6221d7dcff8`.
 
 This file follows up `TRACKING_BODY_RECONCILIATION.md`. That report is an implementation-time snapshot from the Linux editing environment and intentionally records the Windows gates that could not be run there. The post-push GitHub state below supersedes only those pending-host statements; it does not rewrite the historical evidence or promote any live/headset claim.
 
 Later checkpoints: PID 26144 subsequently live-tested the physical request at
-`0xD7281`. PID 24956 then live-exercised the default-off active room-scale
-consumer and native crouch recovery. The user reported unintended character
-walking during in-place head tilt; static comparison also exposed reuse of the
-combined tick's already reconciled physical component in locomotion carry. The
-corrected partition compiles, but it is not yet proven to resolve that symptom
-and awaits repeat live/headset validation. Statements below
+`0xD7281`. PID 21548 then passed the full default-off active room-scale helper
+and native crouch recovery after the combined-tick carry correction. The user
+confirmed that in-place head tilt no longer moved the character, but continuous
+world shake still failed comfort. Rework comparison identified the retained 60
+Hz body offset over Black Plague's native camera as a presentation difference.
+Horizontal render placement now uses the reconciled anchor plus the latest HMD
+delta since that sample; this second correction compiles and awaits repeat
+live/headset validation. Statements below
 that positional translation is compile-time zero describe this earlier
 shadow-only checkpoint.
 

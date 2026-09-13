@@ -24,14 +24,17 @@ comprobaciones históricas. Esto no promueve ningún estado live/headset de BP.
 Este texto conserva el estado histórico del 11 de septiembre. Después se
 live-testó el shadow en PID 28172 y la solicitud física X/Z separada en
 `0xD7281` quedó live-tested en PID 26144. La traslación posicional estuvo a
-cero en esa sesión. PID 24956 ejercitó después el consumidor room-scale X/Z
-activo mediante doble opt-in: obtuvo `predicted_anchor - body_after`, aplicó la
-misma base a cámara, visibilidad y controladores, capturó las cuatro clases de
-colisión y recuperó cámara tras `1.65 -> 0.95 -> 1.65 m`. La prueba reveló que el
-tick único de Black Plague mezclaba locomoción y petición física, y el shadow
-volvía a arrastrar el ancla con la parte física ya reconciliada. Ahora esa parte
-se resta antes del carry de locomoción, conservando el `body_after` real. La
-corrección compila, pero aún no está live/headset-validated. El siguiente gate es
+cero en esa sesión. PID 21548 ejercitó después el consumidor room-scale X/Z
+activo mediante doble opt-in y pasó queue/injection/reconciliation, las cuatro
+clases de colisión y la recuperación tras `1.65 -> 0.95 -> 1.65 m`. La corrección
+del carry evitó ya la locomoción al inclinar la cabeza. La experiencia siguió
+fallando por temblor continuo y rechazo agresivo junto a paredes. El log mostró
+cambios X/Z centimétricos e inversiones frecuentes aun sin stick. Rework coloca
+la vista desde su ancla VR a 90 Hz y no conserva el suavizado/bob horizontal de
+la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
+esa cámara. Ahora el render coloca X/Z en el ancla reconciliada y la continúa
+con el delta HMD posterior a la muestra. La corrección compila, pero aún no está
+live/headset-validated. El siguiente gate es
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
@@ -352,11 +355,11 @@ PowerShell local contrasta la captura inicializada sin modificar procesos.
 
 El boundary corporal/adapter, la reconciliación shadow y la petición física X/Z
 collision-aware en `0xD7281` ya están live-tested, pero los hitos amplios de
-jugabilidad todavía no están certificados. PID 24956 live-ejercitó room-scale
-activo, reportó locomoción al inclinar la cabeza sin trasladar el cuerpo y
-permitió encontrar la doble contabilización del carry. La siguiente evidencia
-debe probar primero inclinación/rotación sin locomoción apreciable y después la
-partición corregida con traslación HMD deliberada y stick.
+jugabilidad todavía no están certificados. PID 21548 confirmó que la corrección
+del carry elimina la locomoción al inclinar la cabeza, pero reveló temblor
+continuo de mundo. La siguiente evidencia debe probar primero estabilidad en
+reposo y traslación lenta con la continuación de render, conservar
+inclinación/rotación sin locomoción y después repetir colisión, crouch y stick.
 Herramientas definitivas,
 palm collision y mecanismos articulados siguen pendientes, además de sus pruebas
 con visor.

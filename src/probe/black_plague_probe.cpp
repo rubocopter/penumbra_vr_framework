@@ -299,6 +299,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "room_scale_enabled=%u room_scale_sample_valid=%u "
             "positional_translation_applied=%u room_scale_generation=%llu "
             "room_scale_camera_offset_m=[%.5f,%.5f,%.5f] "
+            "room_scale_reconciled_offset_m=[%.5f,%.5f,%.5f] "
+            "room_scale_render_prediction_m=[%.5f,%.5f,%.5f] "
+            "room_scale_head_anchor_m=[%.5f,%.5f,%.5f] "
             "persistent_stereo_active=%u monitor_mirror=%u monitor_world_passes=%lu "
             "suppressed_monitor_world_passes=%lu eye_owned_frame_time_frames=%lu "
             "stereo_failed=%u stereo_error=%s "
@@ -356,6 +359,15 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.room_scale_camera_offset_m[0],
             render_world.room_scale_camera_offset_m[1],
             render_world.room_scale_camera_offset_m[2],
+            render_world.room_scale_reconciled_offset_m[0],
+            render_world.room_scale_reconciled_offset_m[1],
+            render_world.room_scale_reconciled_offset_m[2],
+            render_world.room_scale_render_prediction_m[0],
+            render_world.room_scale_render_prediction_m[1],
+            render_world.room_scale_render_prediction_m[2],
+            render_world.room_scale_head_anchor_m[0],
+            render_world.room_scale_head_anchor_m[1],
+            render_world.room_scale_head_anchor_m[2],
             render_world.persistent_stereo_active ? 1U : 0U,
             render_world.monitor_mirror_enabled ? 1U : 0U,
             static_cast<unsigned long>(render_world.monitor_world_passes),

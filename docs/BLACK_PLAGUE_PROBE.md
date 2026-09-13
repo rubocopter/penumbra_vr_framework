@@ -410,3 +410,35 @@ component for carry, preserves actual whole-tick `body_after` for camera space
 and logs the result as `locomotion_carry`. The correction is compiled but has not
 yet been tested in a headset, so it is not claimed to resolve tilt-induced
 walking.
+
+PID 21548 reran the corrected path and passed the full automatic gate:
+`queued=201 consumed=201 injected=201 matched=201`, with 92 stationary, 477
+free, 1 blocked and 45 slide/partial samples. The native crouch sequence and
+post-stand recovery also passed. The user confirmed that tilting the head in
+place no longer moved the character, so the combined-tick carry correction is
+live/headset evidenced for that symptom. The integration is still not
+headset-validated because the world continuously appeared to shake and wall
+rejection remained aggressive.
+
+The fresh log contains 625 sampled room-scale frames. With stick input below
+0.01, the reconciled X/Z camera offset had a 9.65 mm median magnitude and changed
+15.77 mm between logged samples; 430 of 539 sampled windows reversed at least
+one horizontal direction. Stable-HMD logged intervals still contained offset
+jumps up to 60.08 mm. Only 4 of 64 periodic reconciliation summaries reported a
+non-zero rejection, so wall collision alone does not explain the continuous
+shake.
+
+Comparison with Rework `23c890f` identified the presentation difference. Rework
+sets its loop to 90 updates/s, advances `vr_headPos` from each tracking pose and
+renders `cVRTrackingSpace::GetHeadWorldPose`; its character-camera path does not
+retain native smoothing or `mvCameraPosAdd`. Black Plague instead presented a
+body-owned offset refreshed at ~60 Hz on top of the native camera. The corrected
+backend stores the tracking pose associated with each reconciled body sample,
+places rendered X/Z directly at the absolute reconciled head anchor and advances
+that anchor by the latest post-sample HMD delta. Camera, visibility and
+controller space share the result. Deltas larger than the existing 0.8 m
+discontinuity limit fail closed; Y/jump and the single native body tick are
+unchanged. Frame telemetry now separates `room_scale_reconciled_offset_m`,
+`room_scale_render_prediction_m`, the applied `room_scale_camera_offset_m` and
+`room_scale_head_anchor_m`. Both Release configurations compile; no executable
+or headset validation has been run for this correction.

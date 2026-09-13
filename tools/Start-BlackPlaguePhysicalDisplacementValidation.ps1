@@ -300,7 +300,8 @@ try {
     Write-Host "Probe log: $probeLog"
     Write-Host 'Validate stationary/free/block/slide while keeping this window open. Hold each case for several seconds so periodic body telemetry captures it.'
     if ($EnableRoomScale) {
-        Write-Host 'First rotate, look up/down and tilt the head in place without shifting the torso. This must not produce visible character locomotion.'
+        Write-Host 'First remain still for 10 seconds, then rotate, look up/down and tilt the head in place without shifting the torso. The world must remain stable and this must not produce visible character locomotion.'
+        Write-Host 'Next make slow, continuous horizontal head/torso translations in free space. The view must follow smoothly rather than stepping at the native 60 Hz body cadence.'
         Write-Host 'Then test stick alone and together with a deliberate small horizontal head/torso translation in the same and opposite directions; neither case should amplify or retain motion after you stop.'
         Write-Host 'Recenter once, crouch and stand once, then take one clear physical step after the native shape has returned to standing.'
         Write-Host 'Observe that the desktop mirror shows gameplay and that head motion, hands and world remain coherent.'
@@ -345,6 +346,8 @@ try {
     $nativeTickObserved = $false
     $roomScaleApplied = $false
     $nonZeroCameraOffset = $false
+    $nonZeroReconciledOffset = $false
+    $renderPredictionObserved = $false
     $mirrorEnabled = $false
     $standingBodyObserved = $false
     $crouchedBodyObserved = $false
@@ -380,6 +383,12 @@ try {
             }
             if (Test-NonZeroHorizontalVector -Line $line -Field 'room_scale_camera_offset_m') {
                 $nonZeroCameraOffset = $true
+            }
+            if (Test-NonZeroHorizontalVector -Line $line -Field 'room_scale_reconciled_offset_m') {
+                $nonZeroReconciledOffset = $true
+            }
+            if (Test-NonZeroHorizontalVector -Line $line -Field 'room_scale_render_prediction_m') {
+                $renderPredictionObserved = $true
             }
             if ($line -match 'monitor_mirror=1') {
                 $mirrorEnabled = $true
@@ -448,6 +457,12 @@ try {
     if ($EnableRoomScale -and -not $nonZeroCameraOffset) {
         $missingEvidence += 'non-zero horizontal room-scale camera offset'
     }
+    if ($EnableRoomScale -and -not $nonZeroReconciledOffset) {
+        $missingEvidence += 'non-zero reconciled head/body offset'
+    }
+    if ($EnableRoomScale -and -not $renderPredictionObserved) {
+        $missingEvidence += 'render-rate HMD continuation between native body ticks'
+    }
     if ($EnableRoomScale -and -not $mirrorEnabled) {
         $missingEvidence += 'monitor mirror enabled in a gameplay render frame'
     }
@@ -474,7 +489,7 @@ try {
     Write-Host "Physical displacement evidence passed: queued=$queuedPlans consumed=$consumedRequests injected=$injectedRequests matched=$matchedObservations."
     Write-Host "Scenario evidence: stationary=$($scenarioEvidence.StationarySamples) free=$($scenarioEvidence.FreeSamples) blocked=$($scenarioEvidence.BlockedSamples) slide_or_partial=$($scenarioEvidence.SlideSamples)."
     if ($EnableRoomScale) {
-        Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
+        Write-Host "Room-scale evidence passed: camera_applied=$roomScaleApplied non_zero_offset=$nonZeroCameraOffset reconciled_offset=$nonZeroReconciledOffset render_prediction=$renderPredictionObserved mirror=$mirrorEnabled crouch_shape_sequence=$standingBodyObserved/$crouchedBodyObserved/$standingBodyRestored recovered_after_crouch=$roomScaleRecoveredAfterCrouch."
         Write-Host "Post-crouch recovery samples: free=$($postCrouchScenarioEvidence.FreeSamples) blocked=$($postCrouchScenarioEvidence.BlockedSamples) slide_or_partial=$($postCrouchScenarioEvidence.SlideSamples)."
     }
     $exitCode = 0

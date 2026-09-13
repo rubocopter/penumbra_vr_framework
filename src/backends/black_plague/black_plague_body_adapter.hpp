@@ -115,6 +115,7 @@ struct BlackPlagueRoomScaleCameraSample {
     std::array<float, 3> horizontal_world_offset{};
     std::array<float, 3> predicted_head_anchor{};
     std::array<float, 3> body_position{};
+    runtime::VrMatrix34 observed_tracking_pose{};
 };
 
 // Default-off active validation boundary. It is enabled only when the

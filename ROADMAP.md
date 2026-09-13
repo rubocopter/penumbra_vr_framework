@@ -69,14 +69,16 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 the default-off reconciliation shadow path and the bounded collision-aware
 physical X/Z displacement request in metres are now live-tested. PID 26144
 demonstrated queue, injection, native collision and matched reconciliation at
-`0xD7281` while positional HMD translation remained zero. PID 24956 exercised
-the active room-scale consumer, all physical outcomes and native crouch recovery
-in a headset, but reported unintended character walking during in-place head
-tilt. Static comparison also found that the combined native tick carried its
-already reconciled physical component as locomotion. That Rework-sequence
-difference is corrected and compiled, but it is not yet proven to explain the
-reported tilt behavior; the revised active path remains `implemented` pending a
-repeat live/headset validation.
+`0xD7281` while positional HMD translation remained zero. PID 21548 then passed
+the complete active room-scale helper after the combined-tick carry correction;
+in-place head tilt no longer caused locomotion. The visual gate still failed:
+the world shook continuously and wall rejection felt aggressive. Log evidence
+showed centimetre-scale, frequently reversing X/Z presentation changes while
+the stick was idle. Rework places its camera at the VR anchor and updates at 90
+Hz; the Black Plague consumer instead retained a 60 Hz body sample over the
+native smoothed camera. Horizontal render placement now uses the reconciled
+anchor plus the newest HMD delta between body ticks. This remains `implemented`
+and compiled pending another live/headset validation.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.
@@ -130,7 +132,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Implement and host-test a bounded collision-aware physical displacement request separately from native analog movement
 - [x] Live-validate that physical request through stationary/free/block/slide cases before enabling room-scale
 - [x] Implement a transient, fail-closed room-scale consumer through that reconciled request
-- [ ] Revalidate corrected positional physical movement, blocking/sliding and head/body reconciliation in the headset
+- [ ] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
 - [ ] Implement/validate physical crouch without assuming Overture stand-clearance semantics

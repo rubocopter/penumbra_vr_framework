@@ -74,6 +74,96 @@ struct StereoProcessingResult {
     bool suppress_original_world = false;
 };
 
+[[nodiscard]] runtime::VrMatrix34 CollapseMatrix(
+    const runtime::VrMatrix44& matrix) noexcept {
+    runtime::VrMatrix34 result;
+    for (std::size_t row = 0; row < 3; ++row) {
+        for (std::size_t column = 0; column < 4; ++column) {
+            result.values[row * 4U + column] =
+                matrix.values[row * 4U + column];
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] float TrackingWorldYaw(
+    const runtime::VrMatrix44& game_head_view,
+    const runtime::VrMatrix34& tracking_anchor) noexcept {
+    // For a rigid view, these entries are the world-pose forward X/Z after
+    // transposition by the inverse.  This is the same yaw alignment used by
+    // ComposeYawRecenteredTrackedHeadView.
+    const float game_forward_x = -game_head_view.values[8];
+    const float game_forward_z = -game_head_view.values[10];
+    const float anchor_forward_x = -tracking_anchor.values[2];
+    const float anchor_forward_z = -tracking_anchor.values[10];
+    return std::atan2(
+        anchor_forward_z * game_forward_x -
+            anchor_forward_x * game_forward_z,
+        anchor_forward_x * game_forward_x +
+            anchor_forward_z * game_forward_z);
+}
+
+[[nodiscard]] bool ResolveBlackPlagueRoomScalePlacement(
+    const runtime::VrMatrix44& game_head_view,
+    const runtime::VrMatrix34& tracking_anchor,
+    const runtime::VrMatrix34& current_tracking_pose,
+    const BlackPlagueRoomScaleCameraSample& room_scale,
+    bool& placement_available,
+    std::array<float, 3>& world_translation,
+    std::array<float, 3>& render_prediction,
+    std::array<float, 3>& render_head_anchor,
+    std::string& error) noexcept {
+    world_translation = {};
+    render_prediction = {};
+    render_head_anchor = {};
+    placement_available = false;
+    if (!room_scale.enabled || !room_scale.valid) return true;
+
+    const float tracking_delta_x = current_tracking_pose.values[3] -
+        room_scale.observed_tracking_pose.values[3];
+    const float tracking_delta_z = current_tracking_pose.values[11] -
+        room_scale.observed_tracking_pose.values[11];
+    const float tracking_delta_length =
+        std::hypot(tracking_delta_x, tracking_delta_z);
+    if (!std::isfinite(tracking_delta_length) || tracking_delta_length >
+            runtime::vr_locomotion_policy::kMaximumHeadBodySeparation) {
+        // A recenter/tracking discontinuity must not be extrapolated into the
+        // world before the body owner has rebased the reconciliation sample.
+        return true;
+    }
+
+    const float world_yaw = TrackingWorldYaw(game_head_view, tracking_anchor);
+    const float cosine = std::cos(world_yaw);
+    const float sine = std::sin(world_yaw);
+    render_prediction = {
+        cosine * tracking_delta_x + sine * tracking_delta_z,
+        0.0F,
+        -sine * tracking_delta_x + cosine * tracking_delta_z,
+    };
+    render_head_anchor = room_scale.predicted_head_anchor;
+    render_head_anchor[0] += render_prediction[0];
+    render_head_anchor[2] += render_prediction[2];
+
+    runtime::VrMatrix44 game_head_pose;
+    if (!runtime::InvertRigidTransform(
+            CollapseMatrix(game_head_view), game_head_pose, error)) {
+        error = "The native Black Plague camera view is not rigid: " + error;
+        return false;
+    }
+    world_translation = {
+        render_head_anchor[0] - game_head_pose.values[3],
+        0.0F,
+        render_head_anchor[2] - game_head_pose.values[11],
+    };
+    if (!std::isfinite(world_translation[0]) ||
+        !std::isfinite(world_translation[2])) {
+        error = "The predicted Black Plague room-scale placement is non-finite";
+        return false;
+    }
+    placement_available = true;
+    return true;
+}
+
 [[nodiscard]] bool ComposeBlackPlagueTrackedHeadView(
     const runtime::VrMatrix44& game_head_view,
     const runtime::VrMatrix34& anchor,
@@ -81,17 +171,30 @@ struct StereoProcessingResult {
     const BlackPlagueRoomScaleCameraSample& room_scale,
     runtime::VrMatrix44& tracked_head_view,
     bool& positional_translation_applied,
+    std::array<float, 3>& world_translation,
+    std::array<float, 3>& render_prediction,
+    std::array<float, 3>& render_head_anchor,
     std::string& error) noexcept {
     positional_translation_applied = false;
+    world_translation = {};
+    render_prediction = {};
+    render_head_anchor = {};
     if (!runtime::ComposeYawRecenteredTrackedHeadView(
             game_head_view, anchor, current, kRotationOnlyTranslationScale,
             tracked_head_view, error)) {
         return false;
     }
     if (!room_scale.enabled || !room_scale.valid) return true;
+    bool placement_available = false;
+    if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, anchor, current,
+            room_scale, placement_available, world_translation, render_prediction,
+            render_head_anchor, error)) {
+        return false;
+    }
+    if (!placement_available) return true;
     runtime::VrMatrix44 translated;
     if (!runtime::ApplyWorldTranslationToView(
-            tracked_head_view, room_scale.horizontal_world_offset,
+            tracked_head_view, world_translation,
             translated, error)) {
         return false;
     }
@@ -384,6 +487,9 @@ void __fastcall HookedUpdateRenderList(
 
     runtime::VrMatrix44 tracked_head_view;
     bool positional_translation_applied = false;
+    std::array<float, 3> world_translation{};
+    std::array<float, 3> render_prediction{};
+    std::array<float, 3> render_head_anchor{};
     const auto room_scale = g_stereo_room_scale_sample;
     if (!ComposeBlackPlagueTrackedHeadView(
             camera_snapshot.view,
@@ -392,6 +498,9 @@ void __fastcall HookedUpdateRenderList(
             room_scale,
             tracked_head_view,
             positional_translation_applied,
+            world_translation,
+            render_prediction,
+            render_head_anchor,
             error)) {
         RecordHmdVisibilityFailure(
             "Could not compose the HMD visibility view: " + error, true);
@@ -613,6 +722,9 @@ void __fastcall HookedUpdateRenderList(
     runtime::VrMatrix44 head_view = camera_snapshot.view;
     BlackPlagueRoomScaleCameraSample room_scale;
     bool positional_translation_applied = false;
+    std::array<float, 3> room_scale_world_translation{};
+    std::array<float, 3> room_scale_render_prediction{};
+    std::array<float, 3> room_scale_render_head_anchor{};
     if (g_stereo_track_head_rotation) {
         if (g_recenter_requested.exchange(false, std::memory_order_acq_rel))
             g_stereo_tracking_anchor_valid = false;
@@ -637,6 +749,9 @@ void __fastcall HookedUpdateRenderList(
                 room_scale,
                 head_view,
                 positional_translation_applied,
+                room_scale_world_translation,
+                room_scale_render_prediction,
+                room_scale_render_head_anchor,
                 error)) {
             FailStereoMatrixValidation(
                 "Could not compose the yaw-recentered HMD rotation: " + error);
@@ -647,7 +762,7 @@ void __fastcall HookedUpdateRenderList(
         runtime::VrMatrix44 controller_game_view = camera_snapshot.view;
         if (positional_translation_applied &&
             !runtime::ApplyWorldTranslationToView(
-                camera_snapshot.view, room_scale.horizontal_world_offset,
+                camera_snapshot.view, room_scale_world_translation,
                 controller_game_view, error)) {
             FailStereoMatrixValidation(
                 "Could not compose the room-scale controller basis: " + error);
@@ -783,7 +898,13 @@ void __fastcall HookedUpdateRenderList(
         g_telemetry.room_scale_body_generation =
             room_scale.body_generation;
         g_telemetry.room_scale_camera_offset_m =
+            room_scale_world_translation;
+        g_telemetry.room_scale_reconciled_offset_m =
             room_scale.horizontal_world_offset;
+        g_telemetry.room_scale_render_prediction_m =
+            room_scale_render_prediction;
+        g_telemetry.room_scale_head_anchor_m =
+            room_scale_render_head_anchor;
     }
     g_telemetry.stereo_camera_restored = true;
     g_telemetry.persistent_stereo_active = persistent_stereo;

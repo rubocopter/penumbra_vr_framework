@@ -523,3 +523,34 @@ The 37-byte unpacked-memory signature accepted for Black Plague `cLowLevelGraphi
   Both Release configurations compile. No test executable or new live/headset
   session was run, so the correction remains `implemented` and is not yet
   claimed to resolve tilt-induced walking.
+
+### 2026-09-13 — Active room-scale technical pass and presentation correction
+
+- PID 21548 passed the complete helper after the carry correction:
+  `queued=201 consumed=201 injected=201 matched=201`, scenario counts 92
+  stationary, 477 free, 1 blocked and 45 slide/partial, mirror on, native
+  `1.65 -> 0.95 -> 1.65 m` crouch/stand and post-crouch recovery.
+- Headset evidence: in-place head tilt no longer produced character locomotion.
+  The technical pass did not pass the visual gate because the world continuously
+  shook; wall rejection also remained aggressive.
+- Log analysis: 625 room-scale frame summaries were sampled. For 539 stick-zero
+  samples, reconciled offset magnitude had a 9.65 mm median and its logged
+  sample-to-sample change had a 15.77 mm median; 430 windows reversed at least
+  one horizontal direction. Stable-HMD sampled intervals still reached a 60.08
+  mm offset jump. Only 4/64 periodic reconciliation summaries contained a
+  non-zero physical rejection, so continuous shake is not explained by wall
+  rejection alone.
+- Rework comparison: revision `23c890f` runs tracking/player placement at 90
+  updates/s, renders from its VR player-world anchor and does not retain native
+  character-camera smoothing or camera-position additions. The Black Plague
+  adapter updated its reconciled offset on the native ~60 Hz body tick and added
+  it to the stock camera.
+- Correction: each reconciled body sample now retains its observed tracking
+  pose. Render computes the new HMD delta since that sample, transforms it with
+  the same yaw policy, and places camera X/Z directly at the resulting absolute
+  head anchor. Visibility and controller space use the same translation.
+  Existing 0.8 m discontinuity handling fails closed, while Y/jump, collision
+  reconciliation, hooks and single native tick remain unchanged. Telemetry now
+  exposes source offset, render prediction, applied correction and final anchor.
+- State: both Release configurations compile. No project test executable, game,
+  SteamVR or headset was run for the correction; it remains `implemented`.

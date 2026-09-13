@@ -201,6 +201,7 @@ void PublishRoomScaleCameraSampleLocked(
         shadow_sample.predicted_anchor;
     g_room_scale_camera_sample.body_position =
         shadow_sample.native_motion.body_after;
+    g_room_scale_camera_sample.observed_tracking_pose = g_shadow_pose;
     g_room_scale_camera_sample_time = now;
 }
 

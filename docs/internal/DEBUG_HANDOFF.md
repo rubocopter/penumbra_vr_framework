@@ -44,12 +44,26 @@ locomotion-only anchor carry. Movements caused while partially removing the
 headset reached the existing `0.05 m` per-tick clamp and are unsuitable for
 comfort tuning, but did not cause the diagnosed sequence difference.
 
+PID 21548 confirmed that the carry correction removed that locomotion symptom,
+and the helper passed `201/201` queue/consume/inject/match plus all physical and
+crouch gates. The user still saw continuous world shake. Across the fresh log,
+stick-zero frames had a 9.65 mm median reconciled offset, a 15.77 mm median
+sample-to-sample change and 430 direction-reversal windows out of 539. This is a
+real comfort failure, not headset jitter being mislabeled by the helper. The
+renderer was holding body-owned translation at ~60 Hz while rotation and stereo
+presentation ran near 90 Hz, and it applied the offset relative to Black
+Plague's native smoothed/bobbed camera. Rework places its view from the VR world
+anchor and updates tracking at 90 Hz. The current implementation now predicts
+from the fresh reconciled anchor to the latest render pose and replaces native
+camera X/Z rather than inheriting it. This correction is compile-only.
+
 ### Established facts
 
-- Framework positional HMD translation remains default-off. PID 24956
-  live-exercised its transient active mode and all physical outcomes, but the
-  session failed headset validation because of the double carry described above.
-  The corrected partition is compiled and awaits a repeat session.
+- Framework positional HMD translation remains default-off. PID 21548
+  live-exercised its transient active mode and all physical outcomes. The carry
+  correction is now live/headset evidenced for removing tilt-induced
+  locomotion, while the subsequent render-placement correction remains
+  compile-only and awaits a repeat session.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.
@@ -73,9 +87,11 @@ comfort tuning, but did not cause the diagnosed sequence difference.
 ### Do not try again
 
 - Do not add a fake head collider.
-- Do not translate the camera from raw HMD delta. The active validation path
-  must use the fresh reconciled `predicted_anchor - body_after` X/Z sample and
-  apply the same basis to camera visibility and controllers.
+- Do not translate the camera from an unconstrained raw HMD origin. The active
+  path must start from the fresh reconciled head anchor. It may advance that
+  anchor by only the HMD delta since the body sample to bridge the demonstrated
+  60/90 Hz boundary, and must apply the same result to camera visibility and
+  controllers.
 - Do not tune arbitrary positional multipliers to hide clipping or push-back.
 - Do not add another owner for `MoveForward/MoveSideways` or `D460A`.
 - Do not call `D6E00` from `BlackPlagueBodyAdapter`.
@@ -108,8 +124,8 @@ separate comfort work.
 The next path is now implemented behind the separate
 `Local\PenumbraVR.BlackPlague.RoomScaleValidation` request. It fails closed
 unless physical validation is also active, expires camera samples after 250 ms
-and applies only the reconciled X/Z offset to camera, culling and controller
-space. Run `tools/Start-BlackPlagueRoomScaleValidation.ps1`; do not promote it
+and applies the reconciled/predicted X/Z anchor consistently to camera, culling
+and controller space. Run `tools/Start-BlackPlagueRoomScaleValidation.ps1`; do not promote it
 past `implemented` until host evidence and the required headset pass
 exist.
 
@@ -148,8 +164,9 @@ VR movement has felt substantially faster than Overture/Rework and native walkin
 ### Next evidence
 
 Headset-validate the corrected active room-scale/positional HMD translation
-through the live-tested physical displacement boundary first. Require
-free/block/slide, recenter, native crouch shape swap/recovery, in-place
+through the live-tested physical displacement boundary first. Require a stable
+world at rest and during slow translation, then free/block/slide, recenter,
+native crouch shape swap/recovery, in-place
 rotation/tilt with no appreciable locomotion, deliberate translated HMD movement
 with/without stick, hands and mirror-on evidence. `locomotion_carry` must exclude
 the already reconciled `physical_accepted` component and no extra camera jump or

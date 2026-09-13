@@ -248,15 +248,15 @@ evidence for Overture's added `vr_velocity`, `vr_stepstaticonly`,
 `CollidePlayer` or `IsPlayer` fields/arguments, so none may be copied by layout.
 The probe measures before/requested/solver/final positions. Those mappings,
 jump ownership and the narrow body adapter are live-characterized. The separate
-default-off X/Z injection boundary at `0xD7281` is live-tested in PID 26144;
-PID 24956 live-exercised the default-off active room-scale consumer through that
-boundary and reported character locomotion during in-place head tilt. Static
-comparison also exposed a Black Plague-only sequencing defect: its combined
-native tick reused already reconciled physical displacement in locomotion carry.
-The adapter/shadow partition is corrected and compiles in the affected Release
-targets, but it is not yet proven to resolve the reported symptom and still
-requires live/headset validation. Overture's proven two-update sequence was not
-changed.
+default-off X/Z injection boundary at `0xD7281` is live-tested in PID 26144. PID
+21548 later passed the complete default-off active room-scale helper and
+confirmed that the corrected Black Plague combined-tick partition removes
+locomotion from in-place head tilt. That session still failed comfort because
+horizontal presentation shook continuously. The Black Plague renderer now
+follows Rework's camera ownership more closely by placing X/Z at the reconciled
+VR anchor and continuing it with the latest HMD delta between 60 Hz body ticks.
+This second correction compiles but still requires live/headset validation.
+Overture's proven two-update and camera paths were not changed.
 
 Finger articulation points in the other direction. BP's existing shared
 `VrHandArticulation` output (independent curls, three joint curves, spread and

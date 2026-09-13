@@ -42,6 +42,17 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 
 ### Fixed
 
+- Corrected the Black Plague active room-scale presentation after PID 21548
+  passed the technical gate but exposed continuous world shake. In stick-zero
+  telemetry the reconciled X/Z offset changed by a median 15.77 mm between
+  logged samples and repeatedly reversed direction. Unlike Rework `23c890f`,
+  the backend was retaining a ~60 Hz body offset over Black Plague's native
+  smoothed/bobbed camera. Rendering now derives horizontal camera placement
+  directly from the fresh reconciled head anchor and advances it with the HMD
+  delta since that body sample. Camera, visibility and controller space consume
+  the same placement; discontinuities fail closed, Y/jump remain native and no
+  body tick or hook is added. Separate telemetry records the reconciled offset,
+  render prediction and final head anchor.
 - Corrected Black Plague room-scale anchor carry after PID 24956 exposed a
   sequence difference from Rework `23c890f`. Black Plague's one owned native
   tick contains both native locomotion and the previously queued physical
@@ -75,10 +86,10 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
 - Reject signed `SettingsVersion` values and retain the OpenVR loader handle
   when `FreeLibrary` fails so shutdown can be retried accurately.
 
-These maintenance changes and the room-scale carry correction compile in both
+These maintenance changes and both room-scale corrections compile in both
 Release configurations. No test executable, game, SteamVR or headset process
-was run while preparing the correction, so the revised behavior has not
-advanced beyond `implemented`.
+was run while preparing the latest presentation correction, so that revised
+behavior has not advanced beyond `implemented`.
 
 ### Added
 
@@ -132,8 +143,8 @@ advanced beyond `implemented`.
 - Default-off Black Plague tracking/body shadow diagnostics (`PVR_BP_RECONCILIATION_SHADOW=1` or transient validation mutex), using existing tracking and native body callbacks; no physical request injection or positional camera translation. Portable/Windows host tests pass and PID 28172 live-tested the mutex path with positional translation still zero.
 - Default-off Black Plague physical-displacement validation path at exact-build RVA `0xD7281`. It injects a one-shot bounded X/Z request (maximum `0.05 m`, Y zero) immediately before native horizontal collision comparison, preserves the original instructions and single `D6E00` owner, and records queue/injection/acceptance telemetry from a pre-injection baseline. PID 26144 live-tested the boundary with positional HMD translation still zero.
 - `tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1` verifies the supported initialized executable, launches through Steam, holds the transient physical-validation mutex and fails closed unless the fresh probe log proves a non-zero queued plan, consumed/injected pre-collision request, matched reconciliation, injected body telemetry, the native `dt~=1/60` body tick and sampled stationary/free/block/slide-or-partial cases. The stationary classifier now tolerates sub-2 mm real-HMD jitter instead of requiring zero injection; Rework `23c890f` reacts to any non-zero HMD delta. PID 18392 confirmed that activation alone is rejected, while PID 26144 supplies the completed live evidence.
-- Default-off Black Plague active room-scale validation. A dedicated transient request is accepted only together with the live-tested physical-displacement owner; a fresh body-generation-matched shadow sample supplies the reconciled horizontal camera offset, which is applied consistently to head view, visibility and controller space. Samples expire after 250 ms, Y/jump remain native and no additional body tick is introduced. PID 24956 live-exercised this path and captured all physical outcome classes plus crouch recovery, but unintended character walking during in-place head tilt prevented headset validation; the corrected carry partition needs a repeat session.
-- `tools/Start-BlackPlagueRoomScaleValidation.ps1` enables mirror-on persistence, holds both transient validation mutexes and requires fresh evidence for camera application, non-zero X/Z offset, mirror gameplay frames, the native `1.65 -> 0.95 -> 1.65 m` crouch shape sequence, and meaningful physical movement after standing again.
+- Default-off Black Plague active room-scale validation. A dedicated transient request is accepted only together with the live-tested physical-displacement owner; a fresh body-generation-matched shadow sample supplies the reconciled horizontal anchor. PID 21548 captured all physical classes and crouch recovery and confirmed that the carry correction removed locomotion from in-place head tilt, but continuous world shake prevented headset validation. The latest implementation places X/Z from that anchor and continues it with the current render pose; samples expire after 250 ms, Y/jump remain native and no additional body tick is introduced.
+- `tools/Start-BlackPlagueRoomScaleValidation.ps1` enables mirror-on persistence, holds both transient validation mutexes and requires fresh evidence for camera application, non-zero reconciled X/Z offset, render-rate HMD continuation, mirror gameplay frames, the native `1.65 -> 0.95 -> 1.65 m` crouch shape sequence, and meaningful physical movement after standing again.
 - `PenumbraVR.ProbeLauncher.exe --set-vr-mirror on|off` changes the persisted mirror choice without requiring a running game or an in-game VR settings page.
 - Dedicated Windows CI regression job for the autonomous Framework-owned Overture Release pipeline. It forces a clean full product rebuild and runs the retained project/shader/visual/texture/LAA/`VRTrackingTest` gates after shared-runtime changes.
 - Initial `pvr_overture_backend` gameplay core with a narrow HPL body/jump adapter boundary, ported from Rework revision `23c890f`.
@@ -179,7 +190,7 @@ advanced beyond `implemented`.
 
 - Overture now builds entirely from this repository. `pvr_overture_backend` preserves the proven Rework tracking-space, room-scale rejection/reconciliation and `1.5/2.25 m/s` locomotion policy behind an Overture-specific HPL body/jump adapter. The exact autonomous Release artifact has been deployed and functionally exercised in a headset; exhaustive equivalence remains a separate evidence gate. The autonomous Release pipeline is also now a dedicated CI regression job.
 - The migration audit records the explicit `REWORK → FRAMEWORK → DIFFERENCE → CAUSE → SOLUTION` comparison and remains the authoritative reference for what was ported versus what still requires game-specific mechanism.
-- Black Plague active positional HMD translation remains default-off and unvalidated. Its transient validation implementation now consumes the live-tested `0xD7281` route and applies only the reconciled horizontal offset; Release compilation passes, while host, live and headset validation remain pending.
+- Black Plague active positional HMD translation remains default-off and is not headset-validated. Its transient validation implementation consumes the live-tested `0xD7281` route. PID 21548 live-tested the carry partition and technical gate; the new render-rate horizontal placement compiles, while live/headset validation of that correction remains pending.
 - Black Plague native jump/vertical ownership remains separate from shared horizontal intent. Physical crouch, VR speed tuning and camera/bob comfort are also separate milestones rather than part of the first reconciliation live gate.
 - The desktop monitor mirror remains experimental and is not a current supported gameplay feature. PID 19192 confirmed mirror-off gameplay black plus visible native menus. Mirror-on and Alt+Tab/focus recovery remain in the next headset batch because the tracked-menu capture path depends on the desktop framebuffer/focus.
 - Rework revision `23c890f` remains the immutable Overture behavioral baseline. Its working tree is not a Framework build or packaging dependency.
