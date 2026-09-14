@@ -60,7 +60,7 @@ checks.
 
 Remaining posture edge cases, short physical-motion comfort, yaw, palms and lifecycle
 retain their documented validation states until fresh live evidence covers them.
-image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, its nine stack
+Static exact-image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, its nine stack
 arguments, callback slot, legacy contact layout, body matrix/shape accessors,
 CreateBoxShape, shape user count and destruction route. A default-off no-write
 diagnostic and synthetic harness are host-tested. The diagnostic has not yet
