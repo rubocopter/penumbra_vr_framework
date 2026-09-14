@@ -10,6 +10,24 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Release-candidate checkpoint (2026-09-14): keep the next Black Plague Release
+  as a validation candidate, not a supported/public release. The authoritative
+  headset gate is `docs/VR_HEADSET_TEST_CHECKLIST.md`; it now explicitly groups
+  the remaining crouch/Y, short-X/Z comfort, constrained Push/Move locomotion,
+  recenter/tracking-loss, hold-generation, mirror/focus and yaw/bob checks. The
+  palm no-write real-process query remains a separate live gate that does not
+  require a headset. Do not promote any of those states from host-tested solely
+  because a Release package builds.
+- The candidate is now rebuilt and offline-validated for the next headset
+  session. Release, Debug and SDK-less Release each pass 34/34 root CTest;
+  metadata and the exact-build Black Plague verifier pass; Overture `-Full`
+  passes the Release build, Large Address Aware check and 289/289
+  `VRTrackingTest` after its existing 16-shader, 8,752-visual-check and
+  231-texture gates. The headset entry point is
+  `tools/Start-BlackPlagueRoomScaleValidation.ps1`, which uses the Release
+  launcher from `build/bin/Release` and validates the supported game image
+  before launch. This evidence remains host/offline evidence only.
+
 - Latest offline checkpoint (2026-09-14): the intervention is implemented in
   the working tree and host-tested. The body path now plans before the sole
   native tick, consumes the combined request once, matches tick/body/generation

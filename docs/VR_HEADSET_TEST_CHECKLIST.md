@@ -1,6 +1,83 @@
 # Black Plague — checklist de validación con visor
 
-Actualizado: 2026-09-13.
+Actualizado: 2026-09-14.
+
+## Gate del candidato Release
+
+La siguiente build Release debe tratarse como **candidato de validación**, no
+como release soportada. El trabajo nuevo de crouch/Y, transacción cuerpo/tracking,
+lifecycle, interacción/contacto y locomoción restringida sigue como máximo en
+`host-tested` hasta obtener la evidencia indicada aquí. Black Plague permanece
+default-off fuera de los gates transitorios de validación.
+
+Para cerrar el candidato con visor, la tanda debe cubrir, en este orden:
+
+1. baseline de pie y dos ciclos completos de crouch físico `4/0` con shapes
+   `0.95/1.65 m`;
+2. crouch por botón mantenido y composición Hybrid, incluyendo stand bloqueado
+   bajo techo y recuperación al quedar espacio;
+3. movimiento físico X/Z corto de `5–10 cm`, quietud e inclinación de cabeza,
+   sin pullback, deriva ni oscilación perceptible;
+4. stick normal y sprint con varios yaw, conservando `1.5/2.25 m/s`, más una
+   combinación breve de stick y desplazamiento físico opuestos;
+5. un caso Push y un caso Move para validar en visor la rama restringida
+   `0.5 m/s`; sprint no debe elevar esa velocidad;
+6. seated/standing, recenter y pérdida/recuperación de tracking sin doble
+   integración ni salto de época de yaw;
+7. pared, slide y esquina para comprobar rechazo/reconciliación sin repetir la
+   validación ya cerrada de `0xD7281` salvo regresión;
+8. manos, herramientas, free-body grab/release y cambio de mapa mientras se
+   sostiene un objeto, verificando que un hold de una generación anterior no se
+   reutiliza;
+9. mirror/focus y Alt+Tab como gate separado; si reaparece el crash histórico de
+   SDL, conservar dump y lista de módulos sin atribuir causa por proximidad;
+10. yaw/footstep-body-bob como gate de confort separado antes de cualquier
+    promoción a `supported`.
+
+La palma collision-aware completa sigue fuera de este candidato hasta que el
+query nativo no-write ya host-tested se ejecute con éxito contra un proceso real
+de Black Plague. Ese gate live no requiere visor y no debe confundirse con la
+validación visual/contacto de la futura palma completa.
+
+### Build preparada para la siguiente sesión
+
+El candidato de prueba con visor se genera directamente en
+`build\bin\Release`. No hace falta crear una release pública ni copiar DLLs al
+directorio del juego: el helper usa
+`build\bin\Release\PenumbraVR.ProbeLauncher.exe`, valida primero el ejecutable
+exact-build soportado y lanza Black Plague por la ruta de inyección existente.
+
+La preparación offline de 2026-09-14 queda cerrada con:
+
+- Release: 34/34 CTest;
+- Debug: 34/34 CTest;
+- Release sin SDK OpenVR: 34/34 CTest;
+- metadata: 6 entradas de catálogo, 2 manifests exact-build, 42 actions,
+  6 action sets y 8 bindings;
+- verifier Black Plague exact-build: pasa incluyendo locomoción, ownership,
+  cuerpo/colisión y ABI/contacto de palma;
+- Overture `-Full`: build Release, Large Address Aware, 16 shaders, 8.752
+  comprobaciones visuales CPU, selección/decodificación de 231 texturas y
+  289/289 `VRTrackingTest`.
+
+Esto deja la build **lista para validación con visor**, no `headset-validated`
+ni `supported`.
+
+Para iniciar la tanda principal desde la raíz del repositorio:
+
+```powershell
+tools\Start-BlackPlagueRoomScaleValidation.ps1
+```
+
+Si Black Plague no está en la ruta Steam por defecto:
+
+```powershell
+tools\Start-BlackPlagueRoomScaleValidation.ps1 -GamePath "X:\ruta\Penumbra Black Plague\redist\penumbra.exe"
+```
+
+El helper debe permanecer abierto hasta cerrar el juego. Imprime los pasos de
+la tanda, mantiene los gates transitorios activos y al final analiza únicamente
+el log fresco de ese PID. No lances `penumbra.exe` manualmente para esta tanda.
 
 ## Estado antes de la siguiente tanda
 

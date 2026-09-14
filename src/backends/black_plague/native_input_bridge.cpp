@@ -73,8 +73,11 @@ using MoveStateGate = bool(__thiscall*)(void*, float, float);
 using ChangeMoveState = void(__thiscall*)(void*, std::int32_t, bool);
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kCharacterSizeYOffset = 0xC8;
+constexpr std::uintptr_t kPlayerActionStateIndexOffset = 0x2BC;
 constexpr std::uintptr_t kPlayerMoveStateIndexOffset = 0x2D0;
 constexpr std::uintptr_t kChangeMoveStateRva = 0x9C750;
+constexpr std::int32_t kPushActionState = 1;
+constexpr std::int32_t kMoveActionState = 2;
 constexpr std::int32_t kWalkMoveState = 0;
 constexpr std::int32_t kJumpMoveState = 3;
 constexpr std::int32_t kCrouchMoveState = 4;
@@ -142,6 +145,13 @@ template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
     T result{};
     if (object) static_cast<void>(ReadBytes(static_cast<const std::uint8_t*>(object) + offset, &result, sizeof(result)));
     return result;
+}
+
+[[nodiscard]] bool ConstrainedDirectLocomotion(void* player) noexcept {
+    if (player == nullptr) return false;
+    const auto action_state =
+        Read<std::int32_t>(player, kPlayerActionStateIndexOffset);
+    return action_state == kPushActionState || action_state == kMoveActionState;
 }
 
 [[nodiscard]] bool ReadNativeCrouchShape(
@@ -454,6 +464,7 @@ void __fastcall HookedSideways(void* player, void*, float amount, float dt) {
         intent.move = {permitted.x, permitted.y};
         intent.head_world_pose = g_direct_head_world_pose.values;
         intent.move_scale = g_direct_move_scale;
+        intent.constrained = ConstrainedDirectLocomotion(player);
         intent.sprinting = g_direct_sprinting;
         intent.player_generation = g_direct_player_generation;
         if (std::hypot(permitted.x, permitted.y) > 0.0F &&
@@ -1061,6 +1072,28 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         cleanup();
         return false;
     };
+
+    std::array<std::uint8_t, 0x400> locomotion_player{};
+    ContractWrite(locomotion_player.data(), kPlayerActionStateIndexOffset,
+        std::int32_t{0});
+    if (ConstrainedDirectLocomotion(locomotion_player.data())) {
+        return fail("normal Black Plague state was treated as constrained locomotion");
+    }
+    ContractWrite(locomotion_player.data(), kPlayerActionStateIndexOffset,
+        kPushActionState);
+    if (!ConstrainedDirectLocomotion(locomotion_player.data())) {
+        return fail("Black Plague Push state lost constrained locomotion");
+    }
+    ContractWrite(locomotion_player.data(), kPlayerActionStateIndexOffset,
+        kMoveActionState);
+    if (!ConstrainedDirectLocomotion(locomotion_player.data())) {
+        return fail("Black Plague Move state lost constrained locomotion");
+    }
+    ContractWrite(locomotion_player.data(), kPlayerActionStateIndexOffset,
+        std::int32_t{6});
+    if (ConstrainedDirectLocomotion(locomotion_player.data())) {
+        return fail("Black Plague Grab state was treated as constrained locomotion");
+    }
 
     for (const auto query : {Q::pressed, Q::released, Q::held}) {
         if (!ContractJump(image + Target(query),

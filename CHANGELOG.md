@@ -11,6 +11,13 @@
   supported-image BP verifier and diff checks pass. The Overture -Full gate
   was rerun after fixing one stale extracted helper call and passed the Release
   product build, Large Address Aware check and 289-check `VRTrackingTest`.
+- Prepared the next Black Plague headset-validation candidate after the
+  constrained Push/Move locomotion mapping. Release, Debug and SDK-less Release
+  pass 34/34 CTest, metadata and the supported-image verifier pass, and the
+  Overture `-Full` regression passes again. The candidate is launched through
+  `tools/Start-BlackPlagueRoomScaleValidation.ps1`; this does not promote the
+  new crouch/Y, short-X/Z comfort, constrained locomotion or lifecycle work
+  beyond host-tested evidence.
 - Mapped and pinned the supported Black Plague image boundary needed for a
   future palm adapter: `CheckShapeWorldCollision` at RVA `0xD4830` with its
   nine-argument x86 ABI, legacy callback/contact layout, physics-body shape and
@@ -271,6 +278,7 @@ yet been live/headset-tested in Black Plague.
   distinguishable from a silent no-tick session. The synthetic default-off,
   environment and mutex paths are covered by the body-probe test.
 - Shared stateless tracking/body planning, physical rejection correction and locomotion anchor carry, consumed by Overture without changing the tested sequence.
+- Black Plague direct locomotion now maps exact-build action states `1` (Push) and `2` (Move) to the shared Rework-derived constrained `0.5 m/s` policy. The mapping is pinned by exact-image evidence (`MaxPushSpeed`, the Push `ChangeMoveState(2)` transition and the Move native body callback) and covered by the native-input contract harness; it remains host-tested only.
 - Default-off Black Plague tracking/body shadow diagnostics (`PVR_BP_RECONCILIATION_SHADOW=1` or transient validation mutex), using existing tracking and native body callbacks; no physical request injection or positional camera translation. Portable/Windows host tests pass and PID 28172 live-tested the mutex path with positional translation still zero.
 - Default-off Black Plague physical-displacement validation path at exact-build RVA `0xD7281`. It injects a one-shot bounded X/Z request (maximum `0.05 m`, Y zero) immediately before native horizontal collision comparison, preserves the original instructions and single `D6E00` owner, and records queue/injection/acceptance telemetry from a pre-injection baseline. PID 26144 live-tested the boundary with positional HMD translation still zero.
 - `tools/Start-BlackPlaguePhysicalDisplacementValidation.ps1` verifies the supported initialized executable, launches through Steam, holds the transient physical-validation mutex and fails closed unless the fresh probe log proves a non-zero queued plan, consumed/injected pre-collision request, matched reconciliation, injected body telemetry, the native `dt~=1/60` body tick and sampled stationary/free/block/slide-or-partial cases. The stationary classifier now tolerates sub-2 mm real-HMD jitter instead of requiring zero injection; Rework `23c890f` reacts to any non-zero HMD delta. PID 18392 confirmed that activation alone is rejected, while PID 26144 supplies the completed live evidence.

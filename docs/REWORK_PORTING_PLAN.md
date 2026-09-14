@@ -170,13 +170,16 @@ Current order:
 5. Preserve the live-tested `0xD7281` bounded X/Z injection boundary, its `0.05 m` horizontal clamp, body/generation matching, one-shot semantics and single native tick ownership.
 6. Preserve the corrected combined-tick partition: reconcile matched physical X/Z once, then carry the anchor only with the remaining native locomotion while retaining actual `body_after` for camera space.
 7. Preserve the new direct locomotion adaptation: game-neutral HMD direction and
-   `1.5/2.25 m/s` policy stay in runtime; the exact pre-Move state predicate,
+   `1.5/2.25 m/s` policy stay in runtime; exact-build Black Plague action-state
+   indices `1` (Push) and `2` (Move) select the same shared constrained
+   `0.5 m/s` policy. The exact pre-Move state predicate,
    single-tick `0xD7281` injection, `+0x264` post-publication state mirror and
    accepted-component partition stay in the Black Plague backend. PID 17612
    proved that `+0x264` cannot be used as the pre-publication permission oracle
    after the VR native axis is zeroed. This differs from Rework's two sequential
    body updates because the target exposes only one live-tested native update
-   owner.
+   owner. The new constrained-state mapping is host-tested only and must not
+   inherit PID 8092's headset status.
 8. Preserve PID 8092 as headset evidence for corrected direct locomotion and the collision route, while keeping PID 20520's short-range X/Z pullback report open as a comfort regression.
 9. Preserve the host-tested Rework crouch latch/height policy and Black Plague exact native stance service. The next headset run must correlate policy with native shape and final standing rather than aggregate counters.
 10. Validate shared tracked-Y placement from the reconciled feet anchor together with crouch. Keep final camera/body/footstep bob as the separate comfort track.

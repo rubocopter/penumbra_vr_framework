@@ -401,20 +401,24 @@ repeated poses, ramp/stop, block/slide/jitter and same-tick physical/stick
 partitioning. Debug/Release and SDK-less Release currently pass 30/30 host tests.
 
 This does not yet prove the headset pullback is gone. The direct-stick producer
-still converts analog input to metres with the input callback `dt`; the intended
-next boundary is to publish logical direction/magnitude/sprint plus identified
-pose/yaw epoch and integrate it with the physics `delta_seconds` inside the body
-transaction. Do not map Black Plague's constrained `0.5 m/s` state until exact
-evidence identifies it.
+now publishes logical direction/magnitude/sprint plus the identified head pose;
+the body transaction integrates that intent with its physics `delta_seconds`.
+Do not reopen the input-callback `dt` path. Exact-build analysis now identifies
+Black Plague action-state indices `1` and `2` as Push and Move respectively, so
+those two states feed the shared constrained `0.5 m/s` policy. That mapping is
+**host-tested only**; PID 8092 predates it and is not headset evidence for the
+constrained branch.
 
 The current crouch ownership/lifecycle hardening is also host-only. Native
 crouch results are preserved outside the VR ownership window, VR-owned stance is
 generation-bound and `ChangeMoveState(4/0)` remains the application boundary;
 blocked stand is represented separately in shared policy. Probe teardown now
-retains partial state and can be retried. A real NativeInputBridge harness for
-session/focus/disconnect/player replacement/double-edge/low-ceiling cases and
-systematic lifecycle failure injection are still required before treating those
-contracts as closed.
+retains partial state and can be retried. The real NativeInputBridge contract
+harness now covers session/focus/disconnect/player replacement/double-edge and
+low-ceiling cases, and the probe lifecycle harness injects every install,
+rollback and teardown failure point. Both are part of the current 34/34 host
+suite. These contracts remain **host-tested only** until fresh live evidence
+exercises the corresponding Black Plague paths.
 
 For any repeated defect, write down:
 

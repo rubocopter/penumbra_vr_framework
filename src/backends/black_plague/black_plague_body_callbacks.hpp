@@ -19,6 +19,7 @@ struct BlackPlagueDirectLocomotionIntent {
     std::array<float, 2> move{};
     std::array<float, 16> head_world_pose{};
     float move_scale = 1.0F;
+    bool constrained = false;
     bool sprinting = false;
     std::uint64_t player_generation = 0;
 };

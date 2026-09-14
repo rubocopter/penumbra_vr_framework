@@ -478,7 +478,7 @@ void PrepareBlackPlagueNativeBodyTick(void* player, void* character_body,
             const auto displacement = runtime::LocomotionDisplacement(
                 direction, delta_seconds,
                 g_direct_locomotion_intent.intent.move_scale,
-                false,
+                g_direct_locomotion_intent.intent.constrained,
                 g_direct_locomotion_intent.intent.sprinting);
             if (HasHorizontalRequest(displacement)) {
                 static_cast<void>(
