@@ -8,10 +8,12 @@ The current working tree has host-tested implementations for the shared play
 mode policy, identified tracking samples and yaw epochs, the single-tick body
 transaction, generation-safe crouch and holds, and partial probe lifecycle
 rollback. The extracted hand-contact mathematics is used by Overture and has a
-host test, while Black Plague's native shape/callback adapter remains pending
-exact supported-image lifetime evidence. Debug, Release and SDK-less Release
-pass 33/33 CTest tests. This checkpoint does not promote any new Black Plague
-behavior to live-tested, headset-validated or supported.
+host test. Black Plague now also has pinned exact-image shape-query/callback/
+lifetime evidence and a default-off no-write boundary diagnostic with a
+synthetic host harness. It still creates no palm shape and is not connected to
+gameplay. Debug, Release and SDK-less Release pass 34/34 tests. This checkpoint
+does not promote any new Black Plague behavior to live-tested,
+headset-validated or supported.
 
 Penumbra VR is GPLv3-or-later and records adapted components/provenance in `THIRD_PARTY.md` and the relevant product/source notes.
 
@@ -178,7 +180,9 @@ Current order:
 8. Preserve PID 8092 as headset evidence for corrected direct locomotion and the collision route, while keeping PID 20520's short-range X/Z pullback report open as a comfort regression.
 9. Preserve the host-tested Rework crouch latch/height policy and Black Plague exact native stance service. The next headset run must correlate policy with native shape and final standing rather than aggregate counters.
 10. Validate shared tracked-Y placement from the reconciled feet anchor together with crouch. Keep final camera/body/footstep bob as the separate comfort track.
-11. Continue palm collision, mechanism state and definitive tool/light profile work after the player-body path is stable.
+11. Run the no-write BP shape query live without VR, then add palm-shape
+    creation/destruction and the Rework resolver behind separate evidence gates.
+    Continue mechanism state and definitive tool/light profile work afterward.
 12. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
 
 This order proves each boundary in isolation and prevents a game-adapter defect from being mistaken for a shared-runtime defect.
@@ -214,6 +218,12 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
   predicates. Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so
   future Black Plague/Requiem palm adapters can reuse the same policy while
   keeping native collision queries and body exclusions game-specific.
+- `src/backends/black_plague/hand_contact_probe.*` owns a default-off diagnostic
+  for the now-pinned BP `CheckShapeWorldCollision` ABI. It fans out after the
+  existing native body update, reuses the current body shape, records callback
+  contacts and verifies selected native bytes remain unchanged. Its synthetic
+  harness is host-tested; a real-process query, palm-shape lifecycle and
+  gameplay connection remain pending.
 - `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
 - `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and `CarryHeadAnchorWithLocomotion` now provide the shared stateless reconciliation phases used by Overture and the Black Plague shadow consumer.
 - `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.

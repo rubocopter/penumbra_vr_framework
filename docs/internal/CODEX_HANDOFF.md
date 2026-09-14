@@ -25,7 +25,8 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   every probe install/rollback and teardown point, 60 Hz body ticks with
   72/90/120 Hz render sampling, ramps, repeated poses, wall/slide, recenter,
   body replacement and sub-2 mm jitter. Debug, Release and no-OpenVR Release
-  all pass 33/33 CTest tests; metadata, exact-image BP verification and
+  all pass 34/34 CTest tests after adding the no-write contact harness.
+  Metadata, exact-image BP verification and
   `git diff --check` pass. Overture `-Full` reached the product build and
   exposed a stale extracted `VRHandNominalRecoveryAnchor` call; that call was
   fixed and the subsequent product gate passed the Release build, Large Address
@@ -36,8 +37,8 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   not validate the new crouch or positional comfort. No headset or supported
   claim is made here.
 
-- Current intervention checkpoint (2026-09-14): HEAD remained
-  `73c70f0aad6fd2f33dc27983a44971ec44215f4a` before edits. Black Plague
+- Audit baseline (2026-09-14): implementation began from
+  `73c70f0aad6fd2f33dc27983a44971ec44215f4a`. Black Plague
   room-scale reconciliation now uses one same-tick transaction around the
   existing `D460A -> D6E00` owner: plan from B0/latest tracking before the
   native update, consume the bounded `0xD7281` request once, observe B1, match
@@ -60,22 +61,22 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   `Rel32CallHook` prepares handles/storage before suspending peer threads. These
   changes are **host-tested only**. The real NativeInputBridge harness and
   systematic lifecycle install/remove fault injection are now covered by the
-  33/33 suite and must not be promoted beyond host-tested evidence.
+  34/34 suite and must not be promoted beyond host-tested evidence.
 - Still open in this working tree: headset comfort for short physical motion,
   presentation pose identity/time and pose/yaw epoch live correlation, and the
-  Black Plague palm collision ABI/query remain unfinished. Do not claim those
-  contracts complete. In particular, do not invent a BP `CheckShapeWorldCollision`
-  ABI/RVA: prove bytes/callback/lifetime and a no-write query first.
+  Black Plague palm gameplay adapter. Do not claim those contracts complete.
 - Palm-collision reference research is now pinned more narrowly. Rework
   `23c890f` creates player-owned hand collision shapes once per world, reuses
   them for overlap/sweep-style sampling, and destroys them on world teardown;
   its resolver uses `iPhysicsWorld::CheckShapeWorldCollision` with a collision
   callback, a held-body skip pointer, contact-depth tolerance, recovery anchors,
-  stepped translation and rotation refinement. The public HPL1 declaration is
-  useful only as a source-level prototype: it does not prove the Black Plague
-  exact-build ABI, vtable/layout, callback shape, or RVA. BP palm integration
-  therefore remains gated on supported-image xrefs/bytes plus a read-only
-  no-write query before any shape is created or connected to gameplay.
+  stepped translation and rotation refinement. Supported-image analysis now
+  proves BP `CheckShapeWorldCollision` RVA `0xD4830`, its nine stack arguments,
+  callback/contact layout, body matrix/shape accessors, CreateBoxShape slot,
+  shape user count and destruction route. `hand_contact_probe.*` implements a
+  default-off no-write query on the existing post-`D6E00` owner and its
+  synthetic clear/contact/mutation harness passes. No live process has run that
+  command yet; it creates no palm shape and does not connect collision to hands.
 - PID 21548 reran the corrected active room-scale path and passed its complete
   automatic gate: queued/consumed/injected/matched were `201/201`, all four
   collision outcomes were observed, crouch/stand recovery passed and in-place
@@ -579,16 +580,18 @@ shared input conditioning -> shared articulation output
 per-game rig/profile adapter
 ```
 
-Release validation is host-only: the full autonomous Overture Release regression passes, including 289 `VRTrackingTest` checks, and all 30 root CTest tests pass. Do not mark this extraction live/headset validated until controller hardware is exercised. Do not degrade Black Plague articulation to match Overture merely because Overture is the historical reference.
+Release validation is host-only: the full autonomous Overture Release regression passes, including 289 `VRTrackingTest` checks. The current root suite has 34 tests. Do not mark this extraction live/headset validated until controller hardware is exercised. Do not degrade Black Plague articulation to match Overture merely because Overture is the historical reference.
 
 ## Interaction priorities after body reconciliation
 
 The game-neutral Rework palm collision policy (dimensions, contact skin,
 sweep/refinement and recovery thresholds/predicates) is now Framework-owned in
 `vr_interaction_policy.hpp`; Overture consumes that exact policy through its
-legacy `VRHandCollisionPolicy` namespace. Black Plague still needs a native
-collision/contact adapter and character/body exclusion validation before this
-becomes an implemented gameplay feature there.
+legacy `VRHandCollisionPolicy` namespace. Black Plague now has the exact native
+query/callback boundary and a host-tested no-write diagnostic. It still needs a
+successful live diagnostic, owned palm-shape creation/destruction, and
+character/held-body exclusion validation before this becomes an implemented
+gameplay feature there.
 
 Rework's semantic haptic profiles are also Framework-owned in
 `vr_haptics.hpp`, including strength clamping/scaling and per-event cooldowns.
@@ -618,7 +621,8 @@ mine-gallery EFX parameter set, including echo, modulation and room-rolloff
 fields. This strengthens the offline reference; Black Plague/Requiem audio hook
 integration still requires game-specific evidence.
 
-1. palm collision adapter and character/body exclusion validation;
+1. live no-write shape query, then palm-shape lifecycle and character/body
+   exclusion validation;
 2. jointed mechanisms / doors / levers through native mechanism state;
 3. definitive per-game tool/glowstick geometry/profile and headset validation;
 4. inventory, notes, menus, HUD and subtitles;

@@ -209,6 +209,7 @@ pvr_enable_warnings(pvr_black_plague_body_adapter)
 
 add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/body_collision_probe.cpp
+    src/backends/black_plague/hand_contact_probe.cpp
     src/backends/black_plague/movement_ownership_probe.cpp
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
@@ -315,13 +316,22 @@ if(BUILD_TESTING)
 
     add_executable(pvr_body_collision_probe_test
         tests/black_plague_body/body_collision_probe_test.cpp
-        tests/black_plague_body/native_movement_boundary_stub.cpp)
+        tests/black_plague_body/native_movement_boundary_stub.cpp
+        src/backends/black_plague/hand_contact_probe.cpp)
     target_include_directories(pvr_body_collision_probe_test PRIVATE
         src/hooks src/backends/black_plague src/runtime)
     target_link_libraries(pvr_body_collision_probe_test PRIVATE
         pvr_rel32_call_hook pvr_vr_math pvr_black_plague_body_adapter)
     pvr_enable_warnings(pvr_body_collision_probe_test)
     add_test(NAME body_collision_probe COMMAND pvr_body_collision_probe_test)
+
+    add_executable(pvr_hand_contact_probe_test
+        tests/black_plague_body/hand_contact_probe_test.cpp
+        src/backends/black_plague/hand_contact_probe.cpp)
+    target_include_directories(pvr_hand_contact_probe_test PRIVATE
+        src/backends/black_plague)
+    pvr_enable_warnings(pvr_hand_contact_probe_test)
+    add_test(NAME hand_contact_probe COMMAND pvr_hand_contact_probe_test)
 
     add_executable(pvr_black_plague_body_adapter_test
         tests/black_plague_body/black_plague_body_adapter_test.cpp

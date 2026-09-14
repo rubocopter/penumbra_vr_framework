@@ -7,15 +7,21 @@
   mode policies, same-tick body transaction coverage for 72/90/120 Hz render
   against a 60 Hz body tick, repeated samples, recenter, slide and jitter, and
   moved rel32 hook diagnostics outside the suspended-thread region. Debug,
-  Release and SDK-less Release each pass 33/33 CTest tests; metadata, the
+  Release and SDK-less Release each pass 34/34 CTest tests; metadata, the
   supported-image BP verifier and diff checks pass. The Overture -Full gate
   was rerun after fixing one stale extracted helper call and passed the Release
   product build, Large Address Aware check and 289-check `VRTrackingTest`.
-- The Black Plague palm path remains default-off and unconnected. The exact
-  `CheckShapeWorldCollision` owner and the HPL-compatible CreateBoxShape
-  vtable slot are identified, but BP shape destruction/user-count and callback
-  lifetime are not yet proven from the supported image. No palm ABI or RVA is
-  promoted from this research.
+- Mapped and pinned the supported Black Plague image boundary needed for a
+  future palm adapter: `CheckShapeWorldCollision` at RVA `0xD4830` with its
+  nine-argument x86 ABI, legacy callback/contact layout, physics-body shape and
+  matrix accessors, `CreateBoxShape` vtable slot, shape user count and
+  destruction route. Added a default-off `--validate-palm-query` diagnostic
+  that reuses the current player-body shape on the existing post-`D6E00` game
+  thread owner, writes only to DLL/stack output and rejects changes to selected
+  native world/body/shape bytes. Its synthetic clear/contact/mutation harness
+  is host-tested, bringing root CTest to 34 tests. The query has not run in a
+  real BP process; no palm shape is created and gameplay palm collision remains
+  unconnected.
 
 - Extracted the demonstrated Overture/Rework palm collision policy into
   `src/runtime/vr_interaction_policy.hpp`: palm dimensions, contact tolerances,

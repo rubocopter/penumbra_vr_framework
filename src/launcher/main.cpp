@@ -522,6 +522,40 @@ bool ValidateRemoteEyeTargets(
     return true;
 }
 
+bool ValidateRemotePalmQuery(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::wstring& error) {
+    const std::uintptr_t remote_probe = FindRemoteModuleBase(
+        process_id, L"PenumbraVR.BlackPlague.Probe.dll");
+    if (remote_probe == 0) {
+        error = L"Attach the Black Plague probe before validating the palm query";
+        return false;
+    }
+
+    LPTHREAD_START_ROUTINE remote_validate = nullptr;
+    if (!ResolveRemoteExport(
+            process_id,
+            probe_path,
+            remote_probe,
+            "PenumbraVR_ValidatePalmQuery",
+            remote_validate,
+            error)) {
+        return false;
+    }
+
+    DWORD validation_result = 0;
+    if (!CallRemote(process, remote_validate, nullptr, validation_result, error)) {
+        return false;
+    }
+    if (validation_result != 1) {
+        error = L"The no-write native palm-query validation failed; inspect the probe log";
+        return false;
+    }
+    return true;
+}
+
 bool CreateRemotePersistentEyeTargets(
     HANDLE process,
     DWORD process_id,
@@ -1151,6 +1185,8 @@ int wmain(int argc, wchar_t** argv) {
     const bool inspect = argc == 3 && _wcsicmp(argv[1], L"--inspect") == 0;
     const bool validate_eye_targets =
         argc == 3 && _wcsicmp(argv[1], L"--validate-eye-targets") == 0;
+    const bool validate_palm_query =
+        argc == 3 && _wcsicmp(argv[1], L"--validate-palm-query") == 0;
     const bool hold_eye_targets =
         argc == 3 && _wcsicmp(argv[1], L"--hold-eye-targets") == 0;
     const bool hold_openvr_eye_targets =
@@ -1172,13 +1208,13 @@ int wmain(int argc, wchar_t** argv) {
         argc == 3 && _wcsicmp(argv[1], L"--vr-mirror-off") == 0;
     const bool capture_image = argc == 4 && _wcsicmp(argv[1], L"--capture-image") == 0;
     const bool inspect_camera = argc == 4 && _wcsicmp(argv[1], L"--inspect-camera") == 0;
-    if ((!configure_vr && !set_vr_mirror && !attach && !detach && !inspect && !validate_eye_targets && !hold_eye_targets &&
+    if ((!configure_vr && !set_vr_mirror && !attach && !detach && !inspect && !validate_eye_targets && !validate_palm_query && !hold_eye_targets &&
          !hold_openvr_eye_targets && !validate_world_duplication &&
          !validate_stereo_matrices && !validate_stereo_submission &&
          !validate_tracked_stereo_submission && !start_vr && !stop_vr &&
          !vr_mirror_on && !vr_mirror_off && !capture_image && !inspect_camera && !launch_vr && !check_vr &&
          argc != 2) ||
-        ((attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
+        ((attach || detach || inspect || validate_eye_targets || validate_palm_query || hold_eye_targets ||
           hold_openvr_eye_targets || validate_world_duplication ||
           validate_stereo_matrices || validate_stereo_submission ||
           validate_tracked_stereo_submission || start_vr || stop_vr ||
@@ -1194,6 +1230,7 @@ int wmain(int argc, wchar_t** argv) {
                    << L"  PenumbraVR.ProbeLauncher.exe --attach <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --detach <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-eye-targets <process-id>\n"
+                   << L"  PenumbraVR.ProbeLauncher.exe --validate-palm-query <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --hold-openvr-eye-targets <process-id>\n"
                    << L"  PenumbraVR.ProbeLauncher.exe --validate-world-duplication <process-id>\n"
@@ -1223,7 +1260,7 @@ int wmain(int argc, wchar_t** argv) {
         _wcsicmp(argv[2], L"on") == 0);
     if (launch_vr || check_vr) return LaunchVr(argv[2], probe_path, check_vr);
 
-    if (attach || detach || inspect || validate_eye_targets || hold_eye_targets ||
+    if (attach || detach || inspect || validate_eye_targets || validate_palm_query || hold_eye_targets ||
         hold_openvr_eye_targets || validate_world_duplication ||
         validate_stereo_matrices || validate_stereo_submission ||
         validate_tracked_stereo_submission || start_vr || stop_vr ||
@@ -1364,6 +1401,17 @@ int wmain(int argc, wchar_t** argv) {
             }
             std::wcout << L"Validated transient OpenGL eye targets in "
                        << penumbra_vr::GameDisplayName(build->game) << L" (PID "
+                       << parsed_pid << L").\n";
+            return 0;
+        }
+        if (validate_palm_query) {
+            if (!ValidateRemotePalmQuery(
+                    process.get(), parsed_pid, probe_path, error)) {
+                std::wcerr << L"Palm-query validation failed: " << error << L'\n';
+                return 8;
+            }
+            std::wcout << L"Validated one no-write native shape query on the "
+                       << L"existing Black Plague body-update owner (PID "
                        << parsed_pid << L").\n";
             return 0;
         }

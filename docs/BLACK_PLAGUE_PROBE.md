@@ -252,6 +252,9 @@ The correction hooks that earlier call while continuous stereo is active. After 
 # With the probe attached, exercise transient eye targets on the render thread
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-eye-targets <pid>
 
+# Without starting VR, run one no-write native shape query on the game thread
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-palm-query <pid>
+
 # Keep a diagnostic pair alive until --detach performs render-thread teardown
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <pid>
 
@@ -283,6 +286,14 @@ The correction hooks that earlier call while continuous stereo is active. After 
 # Read known cCamera3D fields without injecting or writing memory
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --inspect-camera <pid> <camera-address>
 ```
+
+`--validate-palm-query` is a narrow ABI/lifecycle gate for the future palm
+adapter. It requires a loaded map and current player body. The command reuses
+that body's existing native shape after its normal update, records any legacy
+collision callback contacts, and verifies selected world/body/shape bytes are
+unchanged. It creates no palm shape, applies no corrected pose and does not
+start OpenVR. A timeout with no current body tick is a failed/unserviced request;
+a timeout after game-thread processing began is reported as indeterminate.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes

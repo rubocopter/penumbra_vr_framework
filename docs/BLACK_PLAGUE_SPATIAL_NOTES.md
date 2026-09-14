@@ -300,6 +300,35 @@ demostrada. `positional_translation_enabled=0` durante toda la sesión: no se
 han validado room-scale, traslación posicional HMD, reconciliación activa,
 velocidades VR, crouch físico, jump VR ni comfort/bob.
 
+### Frontera exacta de contacto de mano (host-tested; sin conexión gameplay)
+
+La captura inicializada soportada fija ahora la ABI que antes estaba abierta.
+El slot `cPhysicsWorldNewton` `0x291BB0` apunta a `CreateBoxShape` en
+`0x18AC10`; es `thiscall`, recibe `size` y matriz opcional y retorna con
+`ret 8`. El constructor Newton en `0x19E5A0` deja el contador de usuarios en
+`shape+0x54`, el mundo en `+0x58` y la vtable `0x692D40`. La retirada exacta
+`iPhysicsWorld::DestroyShape` está en `0xD4210`: decrementa `+0x54` y, al llegar
+a cero, quita el shape de la lista del mundo mediante `0xF9920`, que invoca su
+destructor escalar. El destructor de shapes compuestos en `0x19E850` usa esa
+misma retirada para sus hijos.
+
+`CheckShapeWorldCollision` queda fijado en `0xD4830`, con nueve argumentos de
+pila (`ret 0x24`). En `0xD49E3` comprueba el callback y llama a su slot virtual
+cero con `(physics_body, cCollideData*)`. El `cCollideData` de esta build usa el
+layout VC7: primer punto `+0x04`, último `+0x08`, contador `+0x10`; cada punto
+mide `0x1C`, con normal en `+0x0C` y profundidad en `+0x18`. Los accessors
+nativos de matriz local y shape del body están en `0xC9D90` (`body+0x34`) y
+`0xCCC30` (`body+0x340`). El verificador fija todos esos bytes y retornos.
+
+`hand_contact_probe.*` añade solamente un diagnóstico default-off. Una petición
+remota `--validate-palm-query` se atiende después del único `D460A -> D6E00`,
+en el owner ya existente. Reutiliza el shape actual del cuerpo del jugador,
+escribe el resultado en pila/memoria de la DLL y compara antes/después la lista
+de shapes, posición del character body, matriz/puntero del physics body y
+cabecera del shape. El harness sintético prueba espacio libre, callback con dos
+contactos y rechazo de una mutación nativa. Aún no se ha ejecutado en un proceso
+BP real, no crea un shape de palma y no mueve ni corrige las manos.
+
 ### Articulación de dedos: BP no debe degradarse
 
 La comparación confirma dos capas distintas. BP ya usa la política neutral
@@ -419,9 +448,9 @@ calcular el agarre con sus nodos/escala y probar la transformación de la luz.
 
 ## Verificación y límites
 
-La configuración raíz contiene ahora 28 tests. El CI Windows x86 pasa los gates
-Debug y Release establecidos, excluyendo deliberadamente `opengl_eye_targets`
-en el runner SDK-less porque esa prueba necesita el driver WGL real. El test
+La configuración raíz contiene ahora 34 tests. Debug, Release y SDK-less pasan.
+El runner SDK-less excluye deliberadamente `opengl_eye_targets` porque esa
+prueba necesita el driver WGL real. El test
 corporal ejecuta la sonda exact-build sobre una imagen sintética y el test
 espacial ejecuta el código del adaptador en una imagen sintética con trampolines
 a dobles nativos; no prueba Newton ni el juego real. La prueba matemática de
@@ -431,11 +460,14 @@ PowerShell local contrasta la captura inicializada sin modificar procesos.
 
 El boundary corporal/adapter, la reconciliación shadow y la petición física X/Z
 collision-aware en `0xD7281` ya están live-tested, pero los hitos amplios de
-jugabilidad todavía no están certificados. PID 21548 confirmó que la corrección
-del carry elimina la locomoción al inclinar la cabeza, pero reveló temblor
-continuo de mundo. La siguiente evidencia debe probar primero estabilidad en
-reposo y traslación lenta con la continuación de render, conservar
-inclinación/rotación sin locomoción y después repetir colisión, crouch y stick.
-Herramientas definitivas,
-palm collision y mecanismos articulados siguen pendientes, además de sus pruebas
-con visor.
+jugabilidad todavía no están certificados. PID 13672 confirmó que la corrección
+de presentación eliminó el temblor continuo; PID 8092 validó técnicamente la
+ruta stick/collision. PID 20520 dejó abiertos el pullback de movimientos físicos
+cortos y la salida de crouch. La transacción por tick y la política/correlación
+de crouch que corrigen esas fronteras son host-tested y necesitan visor.
+
+La ABI/contactos/lifetime base de shapes BP ya está demostrada de forma estática
+y el diagnóstico sin escrituras está host-tested. Falta ejecutarlo live sin VR;
+después siguen pendientes el shape de palma, la adaptación del resolver de
+Rework, herramientas definitivas y mecanismos articulados. Ninguna de esas
+partes se considera live-tested ni soportada.

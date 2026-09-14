@@ -2,6 +2,7 @@
 
 #include "black_plague_body_callbacks.hpp"
 
+#include "hand_contact_probe.hpp"
 #include "native_input_bridge.hpp"
 #include "rel32_call_hook.hpp"
 #include "vr_locomotion.hpp"
@@ -424,6 +425,7 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
     g_original_update(character_body, delta_seconds);
 
     if (observe) {
+        ServiceNoWriteHandContactQuery(g_image, character_body);
         const Vec3 position_after = Read<Vec3>(
             character_body, kCharacterPositionOffset);
         if (Finite(position_after)) {

@@ -4,6 +4,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $inputRoot = Split-Path -Parent $PSScriptRoot
 $inputSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/native_input_bridge.cpp') -Raw
+$contactSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/hand_contact_probe.cpp') -Raw
 $inputImage = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $ImagePath).Path)
 if ($inputImage.Length -lt 0x272A88) { throw 'Capture is too short for the mapped virtual image.' }
 function Assert-Call([int]$Site, [int]$Target) {
@@ -88,10 +89,10 @@ Assert-Call 0xAEF22 0x9C750
 Assert-Bytes 0xD5F00 @(0x83,0xEC,0x28,0x56,0x8B,0xF1,0x8B,0x86)
 Assert-Bytes 0xD6120 @(0x81,0xEC,0x9C,0,0,0,0x53,0x8B)
 Write-Output 'Verified 8 movement-ownership calls, including the held-jump push/call boundary and target signatures. No process was modified.'
-if ($inputImage.Length -lt 0x292CC8) { throw 'Capture is too short for spatial vtables.' }
+if ($inputImage.Length -lt 0x292D44) { throw 'Capture is too short for spatial vtables.' }
 $spatialSlots = @{
     0x27CB70 = 0xA3DE0
-    0x291BE8 = 0x189E30; 0x27D0D4 = 0xABA90; 0x27D12C = 0xAC900; 0x27D130 = 0xAA4C0
+    0x291BB0 = 0x18AC10; 0x291BE8 = 0x189E30; 0x27D0D4 = 0xABA90; 0x27D12C = 0xAC900; 0x27D130 = 0xAA4C0
     0x27D0E4 = 0xA9FD0; 0x27D13C = 0xAD6C0
     0x292C3C = 0x19C2A0; 0x292C44 = 0x19C2C0
     0x292C5C = 0x19C360; 0x292C64 = 0x19C380; 0x292CC4 = 0x19C590
@@ -116,7 +117,56 @@ Assert-Bytes 0xD4952 @(0x8A,0x86,0xC8,0x03,0,0) # character-aware world query
 Assert-Bytes 0xD4E0E @(0x8A,0x90,0xC8,0x03,0,0) # character body ray filter
 Assert-Bytes 0x19D2D0 @(0x8A,0x90,0xC8,0x03,0,0) # Newton contact: body 2 vs character 1
 Assert-Bytes 0x19D2E4 @(0x8A,0x91,0xC8,0x03,0,0) # Newton contact: body 1 vs character 2
-Write-Output 'Verified 12 spatial/HUD method slots, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
+Write-Output 'Verified 13 spatial/HUD/physics method slots, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
+
+# Pin the exact legacy shape-query ABI before any Black Plague palm shape is
+# created. The diagnostic reuses the current character-body shape and checks
+# that this query changes no selected native world/body/shape bytes.
+$contactConstants = @{
+    kCharacterPositionOffset = 0x48
+    kCharacterPhysicsBodyOffset = 0x23C
+    kCharacterPhysicsWorldOffset = 0x240
+    kPhysicsBodyMatrixOffset = 0x34
+    kPhysicsBodyShapeOffset = 0x340
+    kPhysicsWorldShapeListOffset = 0x04
+    kShapeTypeOffset = 0x10
+    kShapeUserCountOffset = 0x54
+    kShapeWorldOffset = 0x58
+    kPhysicsWorldVtable = 0x291B80
+    kPhysicsBodyVtable = 0x292C08
+    kCollideShapeNewtonVtable = 0x292D40
+    kCheckShapeWorldCollision = 0xD4830
+}
+foreach ($contactConstant in $contactConstants.GetEnumerator()) {
+    $pattern = '\b{0}\s*=\s*0x([0-9A-Fa-f]+)\s*;' -f
+        [regex]::Escape($contactConstant.Key)
+    $sourceConstant = [regex]::Match($contactSource, $pattern)
+    if (-not $sourceConstant.Success -or
+        [Convert]::ToInt32($sourceConstant.Groups[1].Value, 16) -ne
+            $contactConstant.Value) {
+        throw ('Hand-contact source constant mismatch: {0}' -f $contactConstant.Key)
+    }
+}
+Assert-Bytes 0x18AC10 @(0x6A,0xFF,0x68,0x6B,0x88,0x64,0,0x64,0xA1,0,0,0,0)
+Assert-Bytes 0x18AC56 @(0x6A,0x01)
+Assert-Bytes 0x18ACAB @(0xC2,0x08,0)
+Assert-Bytes 0x19E5CA @(0xC7,0x03,0x30,0x2D,0x69,0)
+Assert-Bytes 0x19E5E3 @(0x89,0x7B,0x54,0x89,0x43,0x58)
+Assert-Bytes 0x19E5EE @(0xC7,0x03,0x40,0x2D,0x69,0)
+Assert-Bytes 0xD4210 @(0x8B,0x44,0x24,0x04,0x8B,0x50,0x54,0x4A,0x85,0xD2,0x89,0x50,0x54,0x7F,0x0D,0x50,0x83,0xC1,0x04,0x51)
+Assert-Call 0xD4224 0xF9920
+Assert-Bytes 0xD422C @(0xC2,0x04,0)
+Assert-Call 0x19E8CD 0xD4210
+Assert-Bytes 0xF9964 @(0x85,0xFF,0x74,0x08,0x8B,0x07,0x6A,0x01,0x8B,0xCF,0xFF,0x10)
+Assert-Bytes 0xD49E3 @(0x8B,0x8C,0x24,0x08,0x03,0,0,0x3B,0xCB,0x74,0x0A,0x8B,0x11,0x8D,0x44,0x24,0x30,0x50,0x56,0xFF,0x12)
+Assert-Bytes 0xD49F8 @(0x8B,0x54,0x24,0x40)
+Assert-Bytes 0xD4A04 @(0x8B,0x4C,0x24,0x34,0x83,0xC1,0x18)
+Assert-Bytes 0xD4A82 @(0x83,0xC1,0x1C)
+Assert-Bytes 0xD4BB5 @(0xC2,0x24,0)
+Assert-Bytes 0xC9D90 @(0x8D,0x41,0x34,0xC3)
+Assert-Bytes 0xCCC30 @(0x8B,0x81,0x40,0x03,0,0,0xC3)
+Write-Output 'Verified the exact CheckShapeWorldCollision ABI, callback/contact layout, body shape/matrix accessors and Newton shape ownership/destruction boundary. No process was modified.'
+
 Assert-Call 0xD460A 0xD6E00
 Assert-Call 0xD7312 0xD4830
 Assert-Bytes 0xD7281 @(0xD9,0x07,0xD9,0x46,0x54)

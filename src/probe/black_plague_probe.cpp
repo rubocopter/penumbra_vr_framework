@@ -8,6 +8,7 @@
 #include "render_world_probe.hpp"
 #include "native_input_bridge.hpp"
 #include "body_collision_probe.hpp"
+#include "hand_contact_probe.hpp"
 #include "black_plague_body_adapter.hpp"
 #include "movement_ownership_probe.hpp"
 #include "spatial_interaction.hpp"
@@ -1462,6 +1463,36 @@ extern "C" DWORD WINAPI PenumbraVR_ValidateEyeTargets(void*) {
         return 0;
     }
     penumbra_vr::probe::WriteLog("In-game eye-target validation passed");
+    return 1;
+}
+
+extern "C" DWORD WINAPI PenumbraVR_ValidatePalmQuery(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) return 0;
+
+    penumbra_vr::backends::black_plague::HandContactQueryTelemetry telemetry;
+    std::string error;
+    if (!penumbra_vr::backends::black_plague::RequestNoWriteHandContactQuery(
+            telemetry, error)) {
+        penumbra_vr::probe::WriteLog(
+            "No-write native palm-query validation failed: %s", error.c_str());
+        return 0;
+    }
+    penumbra_vr::probe::WriteLog(
+        "No-write native palm-query validation passed: result=%s "
+        "callbacks=%lu contacts=%lu max_depth=%.6f shape_type=%ld "
+        "shape_users=%ld shape=(%.6f,%.6f,%.6f) "
+        "requested=(%.6f,%.6f,%.6f) corrected=(%.6f,%.6f,%.6f) "
+        "native_memory_changed=false",
+        telemetry.native_collided ? "collided" : "clear",
+        static_cast<unsigned long>(telemetry.callback_count),
+        static_cast<unsigned long>(telemetry.contact_count),
+        telemetry.maximum_contact_depth,
+        static_cast<long>(telemetry.shape_type),
+        static_cast<long>(telemetry.shape_user_count),
+        telemetry.shape_size[0], telemetry.shape_size[1], telemetry.shape_size[2],
+        telemetry.requested_position[0], telemetry.requested_position[1],
+        telemetry.requested_position[2], telemetry.corrected_position[0],
+        telemetry.corrected_position[1], telemetry.corrected_position[2]);
     return 1;
 }
 

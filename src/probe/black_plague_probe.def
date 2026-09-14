@@ -10,6 +10,7 @@ EXPORTS
     PenumbraVR_QueryMonitorMirror=_PenumbraVR_QueryMonitorMirror@4
     PenumbraVR_DisableMonitorMirror=_PenumbraVR_DisableMonitorMirror@4
     PenumbraVR_ValidateEyeTargets=_PenumbraVR_ValidateEyeTargets@4
+    PenumbraVR_ValidatePalmQuery=_PenumbraVR_ValidatePalmQuery@4
     PenumbraVR_CreatePersistentEyeTargets=_PenumbraVR_CreatePersistentEyeTargets@4
     PenumbraVR_ValidateWorldDuplication=_PenumbraVR_ValidateWorldDuplication@4
     PenumbraVR_ValidateStereoMatrices=_PenumbraVR_ValidateStereoMatrices@4

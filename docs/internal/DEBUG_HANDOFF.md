@@ -5,19 +5,20 @@ This file prevents repeated symptom-level fixes from replacing evidence-backed i
 ## Current offline checkpoint (2026-09-14)
 
 The working tree contains the five-phase offline intervention. Debug, Release
-and SDK-less Release pass 33/33 CTest tests, metadata validation passes, and the
-supported-image BP verifier passes without modifying a process. The body
+and SDK-less Release pass 34/34 CTest tests. Metadata validation and the
+supported-image BP verifier pass without modifying a process. The body
 transaction, crouch ownership, presentation epochs, interaction generation
 checks and partial lifecycle ledger are host-tested only. The Overture `-Full`
-gate reached compilation and found one stale extracted helper reference;
-`Player.cpp` now uses the shared recovery candidate for that call, and the full
-product gate still needs a clean rerun.
+gate passed after correcting its stale extracted recovery-helper reference.
 
 Do not promote the new BP crouch, short physical-motion comfort, yaw gate,
-palms or lifecycle live behavior without a fresh live run. The palm boundary is
-still limited to the verified `CheckShapeWorldCollision` owner and a verified
-CreateBoxShape vtable slot; shape destruction/user counts and callback ABI/
-lifetime remain unproven for the supported BP image.
+palms or lifecycle live behavior without a fresh live run. Static supported-
+image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, its nine stack
+arguments, callback slot, legacy contact layout, body matrix/shape accessors,
+CreateBoxShape, shape user count and destruction route. A default-off no-write
+diagnostic and synthetic harness are host-tested. The diagnostic has not yet
+run against a live BP process, creates no palm shape and is not gameplay palm
+collision.
 
 ## 0. Hook and loader lifecycle
 
@@ -338,10 +339,23 @@ it must not be described as validated until exercised in the headset.
 - The current grab path snapshots the original value, disables it only while an eligible free body is owned, then restores the exact original value on release.
 - Parent/joint bodies are excluded from the free-body path.
 - The binary has no separate Rework-era player-only collision filter demonstrated yet; the current implementation is intentionally conservative.
+- Static exact-image evidence pins `CheckShapeWorldCollision` at `0xD4830`
+  (`ret 0x24`), callback slot zero, the VC7 `cCollideData` pointer/count layout,
+  `0x1C` contact stride, body matrix/shape accessors, CreateBoxShape and
+  reference-counted destruction through `DestroyShape` at `0xD4210`.
+- `hand_contact_probe.*` is a default-off, host-tested no-write diagnostic. It
+  runs from the existing post-`D6E00` fan-out, reuses the current character
+  body shape and rejects any selected native-byte mutation. It is not the palm
+  resolver and has not run live.
 
 ### Next evidence
 
-Headset-test only small free bodies first. Confirm zero collision-restore failures, no player displacement, correct restoration and no regressions to normal world collisions.
+First run `--validate-palm-query <pid>` in a loaded map without starting VR and
+confirm a clear or collided result plus `native_memory_changed=false`. Then add
+owned palm shapes with explicit world teardown and port the Rework resolver.
+Headset-test only small free bodies after those gates. Confirm zero collision-
+restore failures, no player displacement, correct restoration and no
+regressions to normal world collisions.
 
 ## 6. Long bars, doors and mechanisms
 

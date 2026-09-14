@@ -159,6 +159,11 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's `0.18 m` physical reach
 - [ ] Complete palm collision, jointed mechanisms and definitive tool/light geometry/profile validation
+  - [x] Pin the supported BP `CheckShapeWorldCollision` ABI, callback/contact
+    layout, shape accessors and reference-counted destruction; host-test a
+    default-off no-write query on the existing body-update owner
+  - [ ] Run that query in a live BP map without VR, then implement and validate
+    owned palm shapes plus the Rework sweep/refinement/recovery resolver
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
