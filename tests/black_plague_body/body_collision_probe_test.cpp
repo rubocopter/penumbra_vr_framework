@@ -88,6 +88,10 @@ void* NativePlayerPointer() noexcept {
     return g_test_player;
 }
 
+std::uint64_t NativePlayerGeneration() noexcept {
+    return 1;
+}
+
 int RunBodyCollisionProbeTest() {
     auto* image = static_cast<std::uint8_t*>(VirtualAlloc(
         nullptr, 0x300000, MEM_COMMIT | MEM_RESERVE,
@@ -415,9 +419,10 @@ int RunBodyCollisionProbeTest() {
     }
     CloseHandle(shadow_mutex);
 
-    // Physical validation is a separate, default-off mode. It implies shadow
-    // planning, queues tick N's plan for tick N+1, and only reconciles a
-    // request that the exact physical gateway proves was injected.
+    // Physical validation is a separate, default-off mode. The body-update
+    // owner prepares the request from B0 before the one native update, the
+    // exact physical gateway consumes it in that same tick, and reconciliation
+    // runs once from the resulting B1 observation.
     HANDLE physical_mutex = CreateMutexW(nullptr, FALSE,
         L"Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation");
     if (physical_mutex == nullptr) return 51;
@@ -451,18 +456,28 @@ int RunBodyCollisionProbeTest() {
     head.values[3] = 0.03F;
     PublishBlackPlagueShadowTracking(head, 0.0F, false);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    auto same_tick_sample = ConsumeBodyCollisionTelemetry();
+    auto same_tick_shadow = ConsumeBlackPlagueShadowTelemetry();
     auto validation = ConsumeBlackPlaguePhysicalValidationTelemetry();
     auto queued_physical = ConsumePhysicalBodyDisplacementTelemetry();
-    if (!validation.pending || validation.queued_plans != 1 ||
-        validation.latest_result != BlackPlaguePhysicalValidationResult::queued ||
+    if (!same_tick_sample.physical_request_injected ||
+        !Near(same_tick_sample.physical_requested_displacement[0], 0.03F) ||
+        !Near(same_tick_sample.physical_accepted_displacement[0], 0.03F) ||
+        !same_tick_shadow.latest.physical_observation_available ||
+        !same_tick_shadow.latest.physical_reconciliation.valid ||
+        validation.pending || validation.queued_plans != 1 ||
+        validation.matched_observations != 1 ||
+        validation.latest_result != BlackPlaguePhysicalValidationResult::reconciled ||
         !Near(validation.requested_displacement[0], 0.03F) ||
-        !queued_physical.pending || queued_physical.queued_requests != 1)
+        queued_physical.pending || queued_physical.queued_requests != 1 ||
+        queued_physical.injected_requests != 1)
         return 54;
 
-    // Add unrelated native movement before the injection. The physical
+    // Add unrelated native movement before a fresh same-tick injection. The physical
     // acceptance baseline must start after that native movement, so the
     // reconciler sees 0.03 m rather than the whole 0.23 m tick delta.
     g_stationary_native_update = false;
+    head.values[3] = 0.06F;
     PublishBlackPlagueShadowTracking(head, 0.0F, false);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
     const auto matched_sample = ConsumeBodyCollisionTelemetry();
@@ -472,7 +487,7 @@ int RunBodyCollisionProbeTest() {
     if (!matched_sample.physical_request_injected ||
         !Near(matched_sample.accepted_displacement[0], 0.23F) ||
         !Near(matched_sample.physical_position_before_injection[0],
-            start.x + 0.20F) ||
+            start.x + 0.23F) ||
         !Near(matched_sample.physical_accepted_displacement[0], 0.03F) ||
         !matched_shadow.latest.physical_observation_available ||
         !Near(matched_shadow.latest.physical_motion.accepted_displacement[0],
@@ -485,21 +500,31 @@ int RunBodyCollisionProbeTest() {
             BlackPlaguePhysicalValidationResult::reconciled ||
         queued_physical.injected_requests != 1) return 55;
 
-    // Recenter invalidates a plan queued for the next tick before it can be
-    // mistaken for evidence from a different tracking generation.
+    // Recenter happens before planning for the next body tick. No request from
+    // the pre-recenter tracking epoch may survive into that tick.
     g_stationary_native_update = true;
-    head.values[3] = 0.06F;
+    head.values[3] = 0.09F;
+    PublishBlackPlagueShadowTracking(head, 0.0F, false);
+    PublishBlackPlagueShadowTracking(head, 0.0F, true);
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    const auto recentered_body = ConsumeBodyCollisionTelemetry();
+    const auto recentered_shadow = ConsumeBlackPlagueShadowTelemetry();
+    validation = ConsumeBlackPlaguePhysicalValidationTelemetry();
+    queued_physical = ConsumePhysicalBodyDisplacementTelemetry();
+    if (recentered_body.physical_request_injected ||
+        !recentered_shadow.latest.reset || validation.pending ||
+        validation.queued_plans != 0 || validation.matched_observations != 0 ||
+        queued_physical.pending || queued_physical.injected_requests != 0)
+        return 56;
+
+    head.values[3] = 0.12F;
     PublishBlackPlagueShadowTracking(head, 0.0F, false);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
     validation = ConsumeBlackPlaguePhysicalValidationTelemetry();
-    if (!validation.pending || validation.queued_plans != 1) return 56;
-    PublishBlackPlagueShadowTracking(head, 0.0F, true);
-    validation = ConsumeBlackPlaguePhysicalValidationTelemetry();
-    queued_physical = ConsumePhysicalBodyDisplacementTelemetry();
-    if (validation.pending || validation.invalidated_plans != 1 ||
-        validation.latest_result !=
-            BlackPlaguePhysicalValidationResult::invalidated ||
-        queued_physical.pending) return 57;
+    if (validation.pending || validation.queued_plans != 1 ||
+        validation.matched_observations != 1 ||
+        validation.latest_result != BlackPlaguePhysicalValidationResult::reconciled)
+        return 57;
 
     if (!RemoveBlackPlagueBodyAdapter(error)) {
         CloseHandle(physical_mutex);
@@ -541,14 +566,38 @@ int RunBodyCollisionProbeTest() {
         !Near(room_scale_camera.horizontal_world_offset[1], 0.0F) ||
         !Near(room_scale_camera.horizontal_world_offset[2], 0.0F)) return 67;
 
+    // Input publishes a logical latest-state intent. The body owner converts
+    // it with the native physics dt, so 20 ms at Rework's 1.5 m/s produces a
+    // 0.03 m step regardless of the input callback cadence.
+    BlackPlagueDirectLocomotionIntent direct_intent;
+    direct_intent.move = {0.0F, 1.0F};
+    direct_intent.head_world_pose = runtime::IdentityMatrix().values;
+    direct_intent.player_generation = NativePlayerGeneration();
+    if (!PublishBlackPlagueDirectLocomotionIntent(
+            g_test_player, direct_intent)) return 83;
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.020F);
+    const auto direct_body = ConsumeBodyCollisionTelemetry();
+    if (!direct_body.locomotion_request_injected ||
+        !Near(direct_body.locomotion_requested_displacement[2], -0.03F) ||
+        !Near(direct_body.locomotion_accepted_displacement[2], -0.03F))
+        return 84;
+
+    direct_intent.player_generation = NativePlayerGeneration() + 1;
+    if (!PublishBlackPlagueDirectLocomotionIntent(
+            g_test_player, direct_intent)) return 85;
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.020F);
+    if (ConsumeBodyCollisionTelemetry().locomotion_request_injected) return 86;
+    InvalidateBlackPlagueDirectLocomotionIntent();
+
     head.values[3] += 0.03F;
     PublishBlackPlagueShadowTracking(head, 0.0F, false);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
     room_scale_camera = ReadBlackPlagueRoomScaleCameraSample();
     if (!room_scale_camera.valid ||
-        !Near(room_scale_camera.horizontal_world_offset[0], 0.03F) ||
+        !Near(room_scale_camera.horizontal_world_offset[0], 0.0F) ||
         !Near(room_scale_camera.horizontal_world_offset[1], 0.0F)) return 68;
     if (!QueueLocomotionBodyDisplacement({0.0F, 0.0F, 0.02F})) return 76;
+    head.values[3] += 0.03F;
     PublishBlackPlagueShadowTracking(head, 0.0F, false);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
     const auto combined_body = ConsumeBodyCollisionTelemetry();

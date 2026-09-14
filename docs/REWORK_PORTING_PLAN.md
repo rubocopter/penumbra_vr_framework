@@ -2,6 +2,17 @@
 
 This plan treats `rubocopter/penumbra_vr_rework` revision `23c890f` as the proven Overture reference. When Rework already solves a VR behavior, its implementation and observed behavior are the primary source of truth for the Overture path. The Framework should extract game-neutral policy and adapt only the game-specific mechanism.
 
+## 2026-09-14 implementation checkpoint
+
+The current working tree has host-tested implementations for the shared play
+mode policy, identified tracking samples and yaw epochs, the single-tick body
+transaction, generation-safe crouch and holds, and partial probe lifecycle
+rollback. The extracted hand-contact mathematics is used by Overture and has a
+host test, while Black Plague's native shape/callback adapter remains pending
+exact supported-image lifetime evidence. Debug, Release and SDK-less Release
+pass 33/33 CTest tests. This checkpoint does not promote any new Black Plague
+behavior to live-tested, headset-validated or supported.
+
 Penumbra VR is GPLv3-or-later and records adapted components/provenance in `THIRD_PARTY.md` and the relevant product/source notes.
 
 ## Porting rule

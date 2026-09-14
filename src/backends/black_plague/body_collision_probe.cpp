@@ -410,10 +410,16 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
         size.y > 0.0F && size.z > 0.0F && std::isfinite(delta_seconds);
 
     const TickContext previous = g_tick;
+    std::uint64_t tick_sequence = 0;
     if (observe) {
         g_tick = {};
         g_tick.character_body = character_body;
         g_tick.position_before = position_before;
+        tick_sequence = g_body_update_sequence.fetch_add(
+            1, std::memory_order_relaxed) + 1;
+        PrepareBlackPlagueNativeBodyTick(
+            player, character_body, ToArray(position_before), delta_seconds,
+            tick_sequence, NativePlayerGeneration());
     }
     g_original_update(character_body, delta_seconds);
 
@@ -500,15 +506,13 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
             ObserveBlackPlagueNativeBodyTick(
                 player, character_body, sample.body_position_before,
                 sample.body_position_after, sample.feet_position_after,
-                delta_seconds, physical_tick);
+                tick_sequence, physical_tick);
 
             AcquireSRWLockExclusive(&g_telemetry_lock);
             sample.character_updates += g_telemetry.character_updates;
             sample.horizontal_collision_requests +=
                 g_telemetry.horizontal_collision_requests;
             g_telemetry = sample;
-            const auto sequence = g_body_update_sequence.fetch_add(
-                1, std::memory_order_relaxed) + 1;
             auto remaining = g_jump_burst_remaining.load(
                 std::memory_order_relaxed);
             if (remaining != 0 &&
@@ -516,7 +520,7 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
                     remaining, remaining - 1, std::memory_order_relaxed) &&
                 g_jump_burst.count < BodyJumpBurstTelemetry::kCapacity) {
                 auto& burst = g_jump_burst.samples[g_jump_burst.count++];
-                burst.body_update_sequence = sequence;
+                burst.body_update_sequence = tick_sequence;
                 burst.body = sample;
                 burst.player_268 = Read<std::int32_t>(
                     player, kPlayerGroundField268Offset);

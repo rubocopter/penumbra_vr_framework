@@ -11,6 +11,7 @@
 #include "stereo_render_policy.hpp"
 #include "vr_math.hpp"
 #include "vr_panel_policy.hpp"
+#include "vr_play_mode_policy.hpp"
 #include "vr_tracking_space.hpp"
 
 #define NOMINMAX
@@ -42,10 +43,17 @@ constexpr std::array<std::uint8_t, 5> kExpectedUpdateRenderListCall{
 };
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
 constexpr float kRotationOnlyTranslationScale = 0.0F;
+constexpr float kNativeYawRebaseEpsilonRadians = 0.0001F;
 std::atomic<float> g_tracking_height_offset{
     runtime::vr_setting_limits::kHeightOffset.default_value};
 std::atomic<float> g_tracking_crouch_depth{
     runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value};
+std::atomic<runtime::VrPlayMode> g_tracking_play_mode{
+    runtime::VrPlayMode::standing};
+std::atomic<float> g_tracking_player_height{
+    runtime::vr_setting_limits::kPlayerHeight.default_value};
+SRWLOCK g_play_mode_lock = SRWLOCK_INIT;
+runtime::VrPlayModePolicy g_play_mode_policy;
 
 using RenderWorld = void(__thiscall*)(void* renderer, void* world, void* camera, float frame_time);
 using UpdateRenderList = void(__thiscall*)(
@@ -112,6 +120,7 @@ struct StereoProcessingResult {
     const runtime::VrMatrix44& game_head_view,
     const runtime::VrMatrix34& tracking_anchor,
     const runtime::VrMatrix34& current_tracking_pose,
+    const runtime::VrTrackingSampleIdentity& current_identity,
     const BlackPlagueRoomScaleCameraSample& room_scale,
     bool& placement_available,
     std::array<float, 3>& world_translation,
@@ -123,6 +132,11 @@ struct StereoProcessingResult {
     render_head_anchor = {};
     placement_available = false;
     if (!room_scale.enabled || !room_scale.valid) return true;
+    if (room_scale.tracking_identity.sequence != 0 &&
+        !runtime::SameTrackingEpoch(
+            room_scale.tracking_identity, current_identity)) {
+        return true;
+    }
 
     const float tracking_delta_x = current_tracking_pose.values[3] -
         room_scale.observed_tracking_pose.values[3];
@@ -159,6 +173,13 @@ struct StereoProcessingResult {
     tracking_space.SetPlayerWorldPosition(render_head_anchor);
     tracking_space.SetHeightCalibration(
         g_tracking_height_offset.load(std::memory_order_acquire));
+    AcquireSRWLockExclusive(&g_play_mode_lock);
+    const auto play_mode = g_play_mode_policy.Update(
+        g_tracking_play_mode.load(std::memory_order_acquire),
+        current_tracking_pose.values[7],
+        g_tracking_player_height.load(std::memory_order_acquire));
+    ReleaseSRWLockExclusive(&g_play_mode_lock);
+    tracking_space.SetSeatedOffset(play_mode.seated_offset);
     const auto crouch = ReadNativePhysicalCrouchStatus();
     if (crouch.native_crouched && !crouch.policy.physical_crouch) {
         tracking_space.SetPostureOffset(
@@ -197,6 +218,7 @@ struct StereoProcessingResult {
     const runtime::VrMatrix44& game_head_view,
     const runtime::VrMatrix34& anchor,
     const runtime::VrMatrix34& current,
+    const runtime::VrTrackingSampleIdentity& current_identity,
     const BlackPlagueRoomScaleCameraSample& room_scale,
     runtime::VrMatrix44& tracked_head_view,
     bool& positional_translation_applied,
@@ -216,6 +238,7 @@ struct StereoProcessingResult {
     if (!room_scale.enabled || !room_scale.valid) return true;
     bool placement_available = false;
     if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, anchor, current,
+            current_identity,
             room_scale, placement_available, world_translation, render_prediction,
             render_head_anchor, error)) {
         return false;
@@ -259,6 +282,21 @@ runtime::VrMatrix34 g_stereo_tracking_anchor{};
 bool g_stereo_latest_pose_valid = false;
 runtime::VrMatrix34 g_stereo_latest_pose{};
 BlackPlagueRoomScaleCameraSample g_stereo_room_scale_sample{};
+struct PresentationSnapshot {
+    bool valid = false;
+    runtime::VrHmdPose pose{};
+    BlackPlagueRoomScaleCameraSample room_scale{};
+    runtime::VrMatrix34 effective_tracking_anchor{};
+};
+SRWLOCK g_presentation_lock = SRWLOCK_INIT;
+PresentationSnapshot g_presentation_snapshot;
+std::atomic<std::uint64_t> g_presentation_sequence{0};
+std::atomic<std::uint64_t> g_presentation_pose_epoch{1};
+std::atomic<std::uint64_t> g_presentation_yaw_epoch{1};
+SRWLOCK g_tracking_yaw_lock = SRWLOCK_INIT;
+runtime::VrTrackingSpace g_tracking_yaw_space;
+float g_native_tracking_yaw = 0.0F;
+bool g_native_tracking_yaw_known = false;
 bool g_menu_anchor_valid = false;
 runtime::VrMatrix34 g_menu_anchor{};
 SRWLOCK g_menu_pointer_lock = SRWLOCK_INIT;
@@ -277,8 +315,78 @@ float g_world_movement_yaw = 0;
 bool g_world_movement_yaw_valid = false;
 bool g_world_head_pose_valid = false;
 std::uint64_t g_world_tracking_time = 0;
+
+void ResetTrackedWorldYawForRecenter() noexcept {
+    AcquireSRWLockExclusive(&g_tracking_yaw_lock);
+    g_tracking_yaw_space.SetWorldYaw(0.0F);
+    g_native_tracking_yaw = 0.0F;
+    g_native_tracking_yaw_known = false;
+    ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
+}
+
+[[nodiscard]] bool ResolvePresentationTrackingYaw(
+    const runtime::VrMatrix44& game_head_view,
+    PresentationSnapshot& snapshot,
+    std::string& error) noexcept {
+    if (!g_stereo_tracking_anchor_valid) {
+        error = "The tracking yaw anchor is unavailable";
+        return false;
+    }
+    const float native_yaw = TrackingWorldYaw(
+        game_head_view, g_stereo_tracking_anchor);
+    if (!std::isfinite(native_yaw)) {
+        error = "The native camera yaw is non-finite";
+        return false;
+    }
+
+    float tracking_world_yaw = 0.0F;
+    bool native_rebased = false;
+    AcquireSRWLockExclusive(&g_tracking_yaw_lock);
+    if (!g_native_tracking_yaw_known) {
+        g_native_tracking_yaw = native_yaw;
+        g_native_tracking_yaw_known = true;
+    } else {
+        const float delta = std::remainder(
+            native_yaw - g_native_tracking_yaw,
+            6.28318530717958647692F);
+        if (std::abs(delta) > kNativeYawRebaseEpsilonRadians) {
+            g_native_tracking_yaw = native_yaw;
+            native_rebased = true;
+        }
+    }
+    tracking_world_yaw = g_tracking_yaw_space.world_yaw();
+    if (native_rebased) {
+        g_presentation_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
+    }
+    snapshot.pose.identity.yaw_epoch =
+        g_presentation_yaw_epoch.load(std::memory_order_acquire);
+    ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
+
+    if (!runtime::RotateTrackingPoseYaw(
+            g_stereo_tracking_anchor,
+            -tracking_world_yaw,
+            snapshot.effective_tracking_anchor,
+            error)) {
+        error = "Could not apply tracking-world yaw to the presentation anchor: " +
+            error;
+        return false;
+    }
+    snapshot.valid = true;
+    AcquireSRWLockExclusive(&g_presentation_lock);
+    g_presentation_snapshot = snapshot;
+    ReleaseSRWLockExclusive(&g_presentation_lock);
+    return true;
+}
+
 void InvalidateWorldTracking() {
     InvalidateBlackPlagueShadowTracking();
+    AcquireSRWLockExclusive(&g_presentation_lock);
+    g_presentation_snapshot = {};
+    ReleaseSRWLockExclusive(&g_presentation_lock);
+    g_presentation_pose_epoch.fetch_add(1, std::memory_order_acq_rel);
+    AcquireSRWLockExclusive(&g_tracking_yaw_lock);
+    g_native_tracking_yaw_known = false;
+    ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
     AcquireSRWLockExclusive(&g_world_tracking_lock);
     g_world_tracking_time = 0;
     g_world_movement_yaw_valid = false;
@@ -473,6 +581,48 @@ void RecordHmdVisibilityFailure(
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 }
 
+[[nodiscard]] bool AcquirePresentationSnapshot(
+    PresentationSnapshot& snapshot,
+    bool& recentered,
+    std::string& error) noexcept {
+    snapshot = {};
+    recentered = false;
+    auto* const session = g_stereo_session.load(std::memory_order_acquire);
+    if (session == nullptr || !session->WaitForHmdPose(snapshot.pose, error) ||
+        !snapshot.pose.device_connected || !snapshot.pose.pose_valid) {
+        AcquireSRWLockExclusive(&g_presentation_lock);
+        g_presentation_snapshot = {};
+        ReleaseSRWLockExclusive(&g_presentation_lock);
+        return false;
+    }
+
+    recentered = g_recenter_requested.exchange(false, std::memory_order_acq_rel) ||
+        !g_stereo_tracking_anchor_valid;
+    if (recentered) {
+        g_stereo_tracking_anchor = snapshot.pose.device_to_absolute;
+        g_stereo_tracking_anchor_valid = true;
+        ResetTrackedWorldYawForRecenter();
+        g_presentation_pose_epoch.fetch_add(1, std::memory_order_acq_rel);
+        g_presentation_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
+    }
+    snapshot.pose.identity.sequence =
+        g_presentation_sequence.fetch_add(1, std::memory_order_acq_rel) + 1;
+    snapshot.pose.identity.timestamp_ms = GetTickCount64();
+    snapshot.pose.identity.pose_epoch =
+        g_presentation_pose_epoch.load(std::memory_order_acquire);
+    snapshot.pose.identity.yaw_epoch =
+        g_presentation_yaw_epoch.load(std::memory_order_acquire);
+    snapshot.room_scale = ReadBlackPlagueRoomScaleCameraSample();
+    if (recentered) {
+        snapshot.room_scale.valid = false;
+        snapshot.room_scale.horizontal_world_offset = {};
+    }
+    g_stereo_latest_pose = snapshot.pose.device_to_absolute;
+    g_stereo_latest_pose_valid = true;
+    g_stereo_room_scale_sample = snapshot.room_scale;
+    return true;
+}
+
 void __fastcall HookedUpdateRenderList(
     void* renderer,
     void*,
@@ -489,11 +639,11 @@ void __fastcall HookedUpdateRenderList(
     const auto visibility_active = []() noexcept {
         return g_stereo_persistent.load(std::memory_order_acquire) &&
             g_stereo_track_head_rotation &&
-            !g_recenter_requested.load(std::memory_order_acquire) &&
-            g_stereo_tracking_anchor_valid &&
-            g_stereo_latest_pose_valid &&
-            g_stereo_state.load(std::memory_order_acquire) ==
-                StereoMatrixState::processing;
+            !NativeInputUiActive() &&
+            (g_stereo_state.load(std::memory_order_acquire) ==
+                StereoMatrixState::pending ||
+             g_stereo_state.load(std::memory_order_acquire) ==
+                StereoMatrixState::processing);
     };
     if (!visibility_active()) {
         original(renderer, world, camera, frame_time);
@@ -506,8 +656,21 @@ void __fastcall HookedUpdateRenderList(
         return;
     }
 
-    CameraMatrixSnapshot camera_snapshot;
+    StereoMatrixState pending = StereoMatrixState::pending;
+    static_cast<void>(g_stereo_state.compare_exchange_strong(
+        pending, StereoMatrixState::processing, std::memory_order_acq_rel));
+    PresentationSnapshot presentation;
+    bool recentered = false;
     std::string error;
+    if (!AcquirePresentationSnapshot(presentation, recentered, error)) {
+        RecordHmdVisibilityFailure(
+            error.empty() ? "The presentation HMD pose is unavailable" : error,
+            true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    CameraMatrixSnapshot camera_snapshot;
     if (!adapters::hpl1::CaptureCameraMatrices(
             camera, kCameraLayout, camera_snapshot, error) ||
         !LooksLikeMappedGameplayCamera(camera_snapshot)) {
@@ -518,18 +681,24 @@ void __fastcall HookedUpdateRenderList(
         original(renderer, world, camera, frame_time);
         return;
     }
+    if (!ResolvePresentationTrackingYaw(
+            camera_snapshot.view, presentation, error)) {
+        RecordHmdVisibilityFailure(error, true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
 
     runtime::VrMatrix44 tracked_head_view;
     bool positional_translation_applied = false;
     std::array<float, 3> world_translation{};
     std::array<float, 3> render_prediction{};
     std::array<float, 3> render_head_anchor{};
-    const auto room_scale = g_stereo_room_scale_sample;
     if (!ComposeBlackPlagueTrackedHeadView(
             camera_snapshot.view,
-            g_stereo_tracking_anchor,
-            g_stereo_latest_pose,
-            room_scale,
+            presentation.effective_tracking_anchor,
+            presentation.pose.device_to_absolute,
+            presentation.pose.identity,
+            presentation.room_scale,
             tracked_head_view,
             positional_translation_applied,
             world_translation,
@@ -723,8 +892,25 @@ void __fastcall HookedUpdateRenderList(
     runtime::OpenVrSession* session =
         g_stereo_session.load(std::memory_order_acquire);
     runtime::VrHmdPose pose;
+    PresentationSnapshot presentation;
+    bool presentation_from_visibility = false;
     std::string error;
-    if (session != nullptr) {
+    bool presentation_recentered = false;
+    if (session != nullptr && g_stereo_persistent.load(std::memory_order_acquire) &&
+        g_stereo_track_head_rotation) {
+        AcquireSRWLockShared(&g_presentation_lock);
+        presentation = g_presentation_snapshot;
+        ReleaseSRWLockShared(&g_presentation_lock);
+        const auto now = GetTickCount64();
+        if (!presentation.valid || presentation.pose.identity.timestamp_ms == 0 ||
+            now < presentation.pose.identity.timestamp_ms ||
+            now - presentation.pose.identity.timestamp_ms > 250) {
+            InvalidateWorldTracking();
+            return result;
+        }
+        pose = presentation.pose;
+        presentation_from_visibility = true;
+    } else if (session != nullptr) {
         if (!session->WaitForHmdPose(pose, error)) {
             FailStereoMatrixValidation(
                 "Could not acquire the compositor frame pose: " + error);
@@ -760,15 +946,19 @@ void __fastcall HookedUpdateRenderList(
     std::array<float, 3> room_scale_render_prediction{};
     std::array<float, 3> room_scale_render_head_anchor{};
     if (g_stereo_track_head_rotation) {
-        if (g_recenter_requested.exchange(false, std::memory_order_acq_rel))
-            g_stereo_tracking_anchor_valid = false;
-        const bool shadow_recentered = !g_stereo_tracking_anchor_valid;
         if (!g_stereo_tracking_anchor_valid) {
             g_stereo_tracking_anchor = pose.device_to_absolute;
             g_stereo_tracking_anchor_valid = true;
+            presentation_recentered = true;
         }
-        room_scale = ReadBlackPlagueRoomScaleCameraSample();
-        if (shadow_recentered) {
+        runtime::VrMatrix34 frame_tracking_anchor = g_stereo_tracking_anchor;
+        if (presentation_from_visibility) {
+            room_scale = presentation.room_scale;
+            frame_tracking_anchor = presentation.effective_tracking_anchor;
+        } else {
+            room_scale = ReadBlackPlagueRoomScaleCameraSample();
+        }
+        if (presentation_recentered) {
             room_scale.valid = false;
             room_scale.horizontal_world_offset = {};
         }
@@ -778,8 +968,9 @@ void __fastcall HookedUpdateRenderList(
         g_stereo_room_scale_sample = room_scale;
         if (!ComposeBlackPlagueTrackedHeadView(
                 camera_snapshot.view,
-                g_stereo_tracking_anchor,
+                frame_tracking_anchor,
                 pose.device_to_absolute,
+                pose.identity,
                 room_scale,
                 head_view,
                 positional_translation_applied,
@@ -809,14 +1000,14 @@ void __fastcall HookedUpdateRenderList(
             movement_pose_error);
         AcquireSRWLockExclusive(&g_world_tracking_lock);
         g_world_game_view = controller_game_view;
-        g_world_anchor = g_stereo_tracking_anchor;
+        g_world_anchor = frame_tracking_anchor;
         g_world_head_pose = movement_head_pose;
         g_world_head_pose_valid = movement_head_pose_valid;
         // Rework steers from the current HMD world heading. Keep the same
         // tracking-only basis here instead of feeding the rendered game camera
         // back into the native-input remap.
         g_world_movement_yaw_valid = runtime::HorizontalTrackingYawDelta(
-            g_stereo_tracking_anchor, pose.device_to_absolute,
+            frame_tracking_anchor, pose.device_to_absolute,
             g_world_movement_yaw);
         const float gx = -camera_snapshot.view.values[8];
         const float gz = -camera_snapshot.view.values[10];
@@ -829,12 +1020,12 @@ void __fastcall HookedUpdateRenderList(
         // Same yaw basis as ComposeYawRecenteredTrackedHeadView. Use the
         // original rotational anchor, not g_world_anchor whose translation
         // is deliberately overwritten for rotation-only hand rendering.
-        const float ax = -g_stereo_tracking_anchor.values[2];
-        const float az = -g_stereo_tracking_anchor.values[10];
+        const float ax = -frame_tracking_anchor.values[2];
+        const float az = -frame_tracking_anchor.values[10];
         const float shadow_yaw = std::atan2(az * gx - ax * gz,
             ax * gx + az * gz);
         PublishBlackPlagueShadowTracking(pose.device_to_absolute,
-            shadow_yaw, shadow_recentered);
+            shadow_yaw, presentation_recentered, pose.identity);
     }
 
     // Read the snapshot sampled once by ButtonHandler::Update. Never consume
@@ -1564,6 +1755,12 @@ void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
         settings.height_offset, std::memory_order_release);
     g_tracking_crouch_depth.store(
         settings.physical_crouch_depth, std::memory_order_release);
+    g_tracking_play_mode.store(settings.play_mode, std::memory_order_release);
+    g_tracking_player_height.store(
+        settings.player_height, std::memory_order_release);
+    AcquireSRWLockExclusive(&g_play_mode_lock);
+    g_play_mode_policy.Reset();
+    ReleaseSRWLockExclusive(&g_play_mode_lock);
 }
 
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
@@ -1662,6 +1859,23 @@ bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose, std::array<float
         anchor, pointer_pose.device_to_absolute, aspect, distance, width, uv);
 }
 void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::memory_order_release); }
+
+void AddTrackedWorldYaw(float radians) noexcept {
+    if (!std::isfinite(radians) || std::abs(radians) <=
+            kNativeYawRebaseEpsilonRadians) {
+        return;
+    }
+    AcquireSRWLockExclusive(&g_tracking_yaw_lock);
+    const float before = g_tracking_yaw_space.world_yaw();
+    g_tracking_yaw_space.AddWorldYaw(radians);
+    const float after = g_tracking_yaw_space.world_yaw();
+    const float applied = std::remainder(
+        after - before, 6.28318530717958647692F);
+    if (std::abs(applied) > kNativeYawRebaseEpsilonRadians) {
+        g_presentation_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
+    }
+    ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
+}
 
 bool TrackedMovementYaw(float& yaw) noexcept {
     AcquireSRWLockShared(&g_world_tracking_lock);

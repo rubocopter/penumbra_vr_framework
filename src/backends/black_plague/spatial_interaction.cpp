@@ -45,6 +45,10 @@ struct CallbackScope {
     ~CallbackScope() { g_callbacks.fetch_sub(1, std::memory_order_acq_rel); }
 };
 std::atomic<bool> g_held{false};
+std::atomic<void*> g_player_identity{nullptr};
+std::atomic<std::uint64_t> g_player_generation{0};
+thread_local bool g_vr_selection_ready = false;
+thread_local void* g_vr_selection_player = nullptr;
 // HPL's per-body CollideCharacter flag is consumed by world collision queries,
 // character rays and Newton's character/body contact filtering. Never move a
 // tracked body until the exact-build field and its consumers have been proved.
@@ -52,7 +56,9 @@ std::atomic<bool> g_player_collision_filter_ready{false};
 void* g_pending_state = nullptr; // Input thread only; never dereferenced without current-state identity.
 struct Hold {
     void* state = nullptr;
+    void* player = nullptr;
     void* body = nullptr;
+    std::uint64_t player_generation = 0;
     runtime::VrHand hand = runtime::VrHand::right;
     runtime::VrGrabPose pose;
     runtime::VrReleaseVelocity release_velocity;
@@ -61,6 +67,24 @@ struct Hold {
     bool collide_character = true;
     bool discard_momentum = false;
 } g_hold;
+
+[[nodiscard]] std::uint64_t ObservePlayerGeneration(void* player) noexcept {
+    void* const previous = g_player_identity.exchange(player, std::memory_order_acq_rel);
+    if (previous != player) {
+        return g_player_generation.fetch_add(1, std::memory_order_acq_rel) + 1;
+    }
+    return g_player_generation.load(std::memory_order_acquire);
+}
+
+[[nodiscard]] Vec TransformPoint(const Matrix& matrix, const Vec& point) noexcept {
+    return {
+        matrix.values[0] * point[0] + matrix.values[1] * point[1] +
+            matrix.values[2] * point[2] + matrix.values[3],
+        matrix.values[4] * point[0] + matrix.values[5] * point[1] +
+            matrix.values[6] * point[2] + matrix.values[7],
+        matrix.values[8] * point[0] + matrix.values[9] * point[1] +
+            matrix.values[10] * point[2] + matrix.values[11]};
+}
 
 bool Copy(const void* source, void* dest, std::size_t size) noexcept {
     if (!source) return false;
@@ -143,7 +167,7 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
         const auto frame = ReadNativeControllerFrame();
         Matrix pose; Vec velocity{},angular{},from{},to{};
         if (Copy(origin,from.data(),sizeof(from)) && Copy(end,to.data(),sizeof(to)) &&
-            HandPose(frame.interact_source,true,pose,velocity,angular)) {
+            HandPose(frame.interact_source,false,pose,velocity,angular)) {
             const float native_length = std::hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
             if (std::isfinite(native_length) && native_length > 0 && native_length <= 20) {
                 // Rework uses palm overlap for props and reserves long-range
@@ -157,6 +181,7 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
                 for (std::size_t row=0;row<3;++row) {
                     from[row]=pose.values[row*4+3]; to[row]=from[row]-pose.values[row*4+2]*length;
                 }
+                g_vr_selection_ready = true;
                 ++g_contact_rays;
                 reinterpret_cast<Ray>(g_image+0x189E30)(world,callback,&from,&to,distance,normal,point,prefilter);
                 return;
@@ -168,13 +193,17 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
 void __fastcall HookedEnter(void* state, void*, void* previous) {
     CallbackScope scope;
     const auto frame = ReadNativeControllerFrame();
+    auto* const player = Read<void*>(state,0x10);
     g_pending_state = g_enabled.load(std::memory_order_acquire) && frame.focused &&
-        frame.input.state.interact.just_pressed ? state : nullptr;
+        frame.input.state.interact.just_pressed && g_vr_selection_ready &&
+        g_vr_selection_player == player ? state : nullptr;
+    g_vr_selection_ready = false;
+    g_vr_selection_player = nullptr;
     reinterpret_cast<Transition>(g_image+0xAC900)(state,previous);
     // ChangeState publishes player+2BC AFTER Enter returns (9CABB).
     // Acquire only when ServiceSpatialInteraction observes the committed state.
 }
-void AcquirePendingGrab(void* state) {
+void AcquirePendingGrab(void* state, std::uint64_t player_generation) {
     if (!g_player_collision_filter_ready.load(std::memory_order_acquire)) { ++g_blocked_grabs; return; }
     const auto frame = ReadNativeControllerFrame();
     auto* player=Read<void*>(state,0x10);
@@ -189,10 +218,22 @@ void AcquirePendingGrab(void* state) {
     const float mass=Read<float>(body,0x434);
     if (!std::isfinite(max_linear) || !std::isfinite(max_angular) || max_linear<0 || max_angular<0 ||
         !std::isfinite(mass) || mass<=0) return;
-    Hold hold; hold.state=state; hold.body=body; hold.hand=frame.interact_source;
+    Hold hold; hold.state=state; hold.player=player; hold.body=body;
+    hold.player_generation=player_generation; hold.hand=frame.interact_source;
     hold.max_linear=max_linear; hold.max_angular=max_angular;
     hold.collide_character=Read<bool>(body,0x3C8);
     const auto local_contact=Read<Vec>(state,0x14);
+    const auto world_contact=TransformPoint(body_pose,local_contact);
+    const float contact_distance=std::hypot(
+        world_contact[0]-palm.values[3],
+        world_contact[1]-palm.values[7],
+        world_contact[2]-palm.values[11]);
+    if (!std::isfinite(contact_distance) || contact_distance>
+        runtime::vr_interaction_policy::kMaximumCollisionInteractionReach+
+            runtime::vr_interaction_policy::kInteractionContactTolerance) {
+        ++g_blocked_grabs;
+        return;
+    }
     std::string error;
     if (!hold.pose.Begin(palm,body_pose,local_contact,Read<bool>(state,0xE1),error)) return;
     hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
@@ -204,6 +245,22 @@ void AcquirePendingGrab(void* state) {
     ++g_grabs_acquired;
     NativeControllerHaptic(hold.hand,true);
 }
+
+void RestoreHeldBody(const Hold& hold, const Vec& velocity,
+    const Vec& angular) noexcept {
+    if (!BodyMatches(hold.body)) return;
+    if (!Store(static_cast<std::uint8_t*>(hold.body)+0x3C8,
+            &hold.collide_character,sizeof(hold.collide_character))) {
+        ++g_collision_restore_failures;
+    }
+    SetFloat(hold.body,0x19C360,hold.max_linear);
+    SetFloat(hold.body,0x19C380,hold.max_angular);
+    SetVelocity(hold.body,0x19C2A0,
+        runtime::LimitTrackedVelocity(velocity,1.25F,9));
+    SetVelocity(hold.body,0x19C2C0,
+        runtime::LimitTrackedVelocity(angular,0.5F,6));
+}
+
 void __fastcall HookedLeave(void* state, void*, void* next) {
     CallbackScope scope;
     if (g_pending_state == state) g_pending_state = nullptr;
@@ -216,15 +273,11 @@ void __fastcall HookedLeave(void* state, void*, void* next) {
         g_hold={}; g_held.store(false,std::memory_order_release);
     }
     reinterpret_cast<Transition>(g_image+0xAA4C0)(state,next);
-    if (owned && BodyMatches(hold.body)) {
-        if (!Store(static_cast<std::uint8_t*>(hold.body)+0x3C8,
-            &hold.collide_character,sizeof(hold.collide_character))) ++g_collision_restore_failures;
-        SetFloat(hold.body,0x19C360,hold.max_linear); SetFloat(hold.body,0x19C380,hold.max_angular);
-        SetVelocity(hold.body,0x19C2A0,runtime::LimitTrackedVelocity(velocity,1.25F,9));
-        SetVelocity(hold.body,0x19C2C0,runtime::LimitTrackedVelocity(angular,0.5F,6));
+    if (owned) {
+        RestoreHeldBody(hold,velocity,angular);
         NativeControllerHaptic(hold.hand,false);
+        ++g_grabs_released;
     }
-    if (owned) ++g_grabs_released;
 }
 void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     CallbackScope scope;
@@ -412,6 +465,8 @@ bool RemoveSpatialInteraction(std::string& error) noexcept {
 }
 void RefreshVrSelectionBeforeInteract(void* player) noexcept {
     CallbackScope scope;
+    g_vr_selection_ready=false;
+    g_vr_selection_player=nullptr;
     if (!g_enabled.load(std::memory_order_acquire) || !player || NativeInputUiActive() ||
         Read<int>(player,0x2BC)!=0) return;
     // Resolve on each input tick: never retain a state/player pointer across maps.
@@ -420,23 +475,54 @@ void RefreshVrSelectionBeforeInteract(void* player) noexcept {
     if (!normal || Read<void*>(normal,0)!=g_image+0x27D138 || Read<void*>(normal,0x10)!=player) return;
     // This mapped update has no time integration. It clears/recasts the native
     // pick callback and computes the crosshair, including script eligibility.
+    g_vr_selection_player=player;
     reinterpret_cast<Update>(g_image+0xAD6C0)(normal,0);
+    if (!g_vr_selection_ready) g_vr_selection_player=nullptr;
 }
 void ServiceSpatialInteraction(void* player, bool ui) noexcept {
     CallbackScope scope;
+    const std::uint64_t player_generation=ObservePlayerGeneration(player);
     if (g_pending_state) {
         auto* pending = g_pending_state;
         g_pending_state = nullptr;
         if (!ui && player && Read<int>(player,0x2BC)==6 &&
             Read<void*>(Read<void*>(player,0x2C4),6*sizeof(void*))==pending &&
-            Read<void*>(pending,0x10)==player) AcquirePendingGrab(pending);
+            Read<void*>(pending,0x10)==player)
+            AcquirePendingGrab(pending,player_generation);
     }
     if (!g_held.load(std::memory_order_acquire)) return;
-    // A different player means a lifecycle mismatch. Never dereference the old
-    // state from an unrelated map; retain hooks and report refusal at detach.
-    if (!player || Read<int>(player,0x2BC)!=6 ||
-        Read<void*>(Read<void*>(player,0x2C4),6*sizeof(void*))!=g_hold.state ||
-        Read<void*>(g_hold.state,0x10)!=player) return;
+    // A different generation makes the old state/body lifetime uncertain.
+    // Drop ownership without dereferencing or restoring stale native memory.
+    if (!player || g_hold.player!=player ||
+        g_hold.player_generation!=player_generation) {
+        const auto hand=g_hold.hand;
+        g_hold={};
+        g_held.store(false,std::memory_order_release);
+        ++g_guarded_releases;
+        NativeControllerHaptic(hand,false);
+        return;
+    }
+    auto* const states=Read<void*>(player,0x2C4);
+    auto* const registered_grab_state=
+        Read<void*>(states,6*sizeof(void*));
+    const bool state_registered=registered_grab_state==g_hold.state;
+    const bool state_owned=state_registered &&
+        Read<void*>(g_hold.state,0x10)==player;
+    if (Read<int>(player,0x2BC)!=6 || !state_owned) {
+        // HookedLeave normally restores a grab before ChangeState publishes the
+        // next index. Reaching this branch means that lifecycle notification
+        // was missed. Clear ownership first. Restore only while the same live
+        // player still registers the exact grab-state object; otherwise the
+        // old state/body lifetime is unproven and must not be dereferenced.
+        const Hold hold=g_hold;
+        g_hold={};
+        g_held.store(false,std::memory_order_release);
+        ++g_guarded_releases;
+        if (state_owned) RestoreHeldBody(hold,{},{});
+        NativeControllerHaptic(hold.hand,false);
+        ++g_grabs_released;
+        return;
+    }
     const auto frame=ReadNativeControllerFrame();
     Matrix palm; Vec velocity{},angular{};
     const bool valid_pose=HandPose(g_hold.hand,false,palm,velocity,angular);

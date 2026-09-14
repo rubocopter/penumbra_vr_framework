@@ -23,6 +23,9 @@ struct VrPhysicalCrouchStatus {
     float exit_height = 0.0F;
     bool physical_crouch = false;
     bool button_latched = false;
+    bool desired_crouch = false;
+    bool stand_blocked = false;
+    bool stand_release_pending = false;
     bool effective_crouch = false;
     std::uint64_t physical_entries = 0;
     std::uint64_t physical_exits = 0;
@@ -39,7 +42,8 @@ public:
         float physical_crouch_depth,
         bool gameplay_active,
         bool tracking_valid,
-        float head_height) noexcept;
+        float head_height,
+        bool stand_blocked = false) noexcept;
 
     void Reset() noexcept;
     [[nodiscard]] const VrPhysicalCrouchStatus& status() const noexcept;
@@ -49,6 +53,7 @@ private:
     float standing_height_ = 0.0F;
     bool physical_crouch_ = false;
     bool button_latched_ = false;
+    bool stand_release_pending_ = false;
     bool effective_crouch_ = false;
     std::uint64_t physical_entries_ = 0;
     std::uint64_t physical_exits_ = 0;

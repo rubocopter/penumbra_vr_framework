@@ -81,9 +81,11 @@ pvr_enable_warnings(pvr_spatial_audio)
 add_library(pvr_vr_math STATIC
     src/runtime/vr_math.cpp
     src/runtime/vr_grab_pose.cpp
+    src/runtime/vr_hand_contact.cpp
     src/runtime/vr_hand_pose.cpp
     src/runtime/vr_interaction_policy.cpp
     src/runtime/vr_locomotion.cpp
+    src/runtime/vr_play_mode_policy.cpp
     src/runtime/vr_tracking_space.cpp
 )
 target_include_directories(pvr_vr_math PUBLIC src/runtime)
@@ -302,6 +304,15 @@ add_custom_target(pvr_overture_package
     VERBATIM)
 
 if(BUILD_TESTING)
+    target_compile_definitions(pvr_black_plague_backend_probe PRIVATE
+        PVR_NATIVE_INPUT_BRIDGE_TEST_ACCESS=1)
+
+    add_executable(pvr_probe_lifecycle_test
+        tests/probe_lifecycle/probe_lifecycle_test.cpp)
+    target_include_directories(pvr_probe_lifecycle_test PRIVATE include)
+    pvr_enable_warnings(pvr_probe_lifecycle_test)
+    add_test(NAME probe_lifecycle COMMAND pvr_probe_lifecycle_test)
+
     add_executable(pvr_body_collision_probe_test
         tests/black_plague_body/body_collision_probe_test.cpp
         tests/black_plague_body/native_movement_boundary_stub.cpp)
@@ -425,6 +436,12 @@ if(BUILD_TESTING)
 
     add_test(NAME vr_math COMMAND pvr_vr_math_test)
 
+    add_executable(pvr_vr_hand_contact_test
+        tests/vr_math/vr_hand_contact_test.cpp)
+    target_link_libraries(pvr_vr_hand_contact_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_vr_hand_contact_test)
+    add_test(NAME vr_hand_contact COMMAND pvr_vr_hand_contact_test)
+
     add_executable(pvr_vr_tracking_space_test
         tests/vr_tracking_space/vr_tracking_space_test.cpp
     )
@@ -463,6 +480,18 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_vr_input_state_test)
 
     add_test(NAME vr_input_state COMMAND pvr_vr_input_state_test)
+
+    add_executable(pvr_native_input_bridge_contract_test
+        tests/vr_input_state/native_input_bridge_contract_test.cpp)
+    set_target_properties(pvr_native_input_bridge_contract_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/native_input_bridge_contract")
+    target_include_directories(pvr_native_input_bridge_contract_test PRIVATE
+        src/backends/black_plague src/runtime src/hooks)
+    target_link_libraries(pvr_native_input_bridge_contract_test PRIVATE
+        pvr_black_plague_backend_probe)
+    pvr_enable_warnings(pvr_native_input_bridge_contract_test)
+    add_test(NAME native_input_bridge_contract
+        COMMAND pvr_native_input_bridge_contract_test)
 
     add_executable(pvr_vr_action_input_test tests/vr_input_state/vr_action_input_test.cpp)
     target_link_libraries(pvr_vr_action_input_test PRIVATE pvr_vr_action_input)

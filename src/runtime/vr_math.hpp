@@ -56,6 +56,15 @@ struct VrCullFrustum {
     VrMatrix44& tracked_head_view,
     std::string& error) noexcept;
 
+// Rotates only a tracking pose's orientation around tracking-space Y while
+// preserving its translation. A negative yaw applied to a recenter anchor is
+// equivalent to Rework's positive tracking-world yaw applied to current poses.
+[[nodiscard]] bool RotateTrackingPoseYaw(
+    const VrMatrix34& pose,
+    float yaw_radians,
+    VrMatrix34& rotated_pose,
+    std::string& error) noexcept;
+
 // Preserves the raw OpenVR pitch and roll while aligning only the anchor yaw
 // with the game's current camera heading. This follows the tracking-space
 // boundary proven by Penumbra Overture VR Rework, adapted to runtime-neutral

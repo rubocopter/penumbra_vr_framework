@@ -228,6 +228,34 @@ bool ComposeRelativeTrackedHeadView(
     return true;
 }
 
+bool RotateTrackingPoseYaw(
+    const VrMatrix34& pose,
+    float yaw_radians,
+    VrMatrix34& rotated_pose,
+    std::string& error) noexcept {
+    error.clear();
+    rotated_pose = {};
+    if (!std::isfinite(yaw_radians)) {
+        error = "The tracking yaw must be finite";
+        return false;
+    }
+    VrMatrix44 ignored_inverse;
+    if (!InvertRigidTransform(pose, ignored_inverse, error)) {
+        error = "The tracking pose is not rigid: " + error;
+        return false;
+    }
+    rotated_pose = pose;
+    const float cosine = std::cos(yaw_radians);
+    const float sine = std::sin(yaw_radians);
+    for (std::size_t column = 0; column < 3; ++column) {
+        const float x = pose.values[column];
+        const float z = pose.values[8U + column];
+        rotated_pose.values[column] = cosine * x + sine * z;
+        rotated_pose.values[8U + column] = -sine * x + cosine * z;
+    }
+    return true;
+}
+
 bool ComposeYawRecenteredTrackedHeadView(
     const VrMatrix44& game_head_view,
     const VrMatrix34& anchor_device_to_absolute,

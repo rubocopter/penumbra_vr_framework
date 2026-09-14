@@ -241,6 +241,30 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
         button, VrCrouchMode::hybrid, 0.25F, true, true, 1.60F);
     if (state.pressed || !state.just_released) return false;
 
+    // A rejected native stand keeps logical ownership and freezes the standing
+    // baseline until the backend reports that standing is possible again.
+    policy.Reset();
+    button = {};
+    static_cast<void>(policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.70F));
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.40F);
+    if (!state.pressed || !state.just_pressed) return false;
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.90F, true);
+    status = policy.status();
+    if (!state.pressed || state.just_released || status.desired_crouch ||
+        !status.stand_blocked || !status.stand_release_pending ||
+        !NearlyEqual(status.standing_height, 1.70F)) {
+        return false;
+    }
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.90F, false);
+    if (state.pressed || !state.just_released ||
+        policy.status().stand_release_pending) {
+        return false;
+    }
+
     // Rework button-only crouch toggles on press and ignores release/held state.
     policy.Reset();
     button = penumbra_vr::runtime::MakeVrButtonState(true, true, true);

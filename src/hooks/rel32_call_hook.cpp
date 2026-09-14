@@ -20,10 +20,8 @@ public:
     SuspendedThreads& operator=(const SuspendedThreads&) = delete;
 
     ~SuspendedThreads() {
-        for (auto iterator = handles_.rbegin(); iterator != handles_.rend(); ++iterator) {
-            ResumeThread(*iterator);
-            CloseHandle(*iterator);
-        }
+        ResumeAll();
+        for (HANDLE handle : handles_) CloseHandle(handle);
     }
 
     [[nodiscard]] bool SuspendOthers(
@@ -48,42 +46,53 @@ public:
             return false;
         }
 
-        bool success = true;
+        std::vector<DWORD> thread_ids;
         do {
             if (entry.th32OwnerProcessID != process_id ||
                 entry.th32ThreadID == current_thread_id) {
                 continue;
             }
+            thread_ids.push_back(entry.th32ThreadID);
+        } while (Thread32Next(snapshot, &entry));
+        CloseHandle(snapshot);
 
+        // All storage and handles are prepared before the first thread is
+        // suspended. The suspended region below performs no allocations and
+        // formats no error strings while another game thread is stopped.
+        handles_.reserve(thread_ids.size());
+        for (DWORD thread_id : thread_ids) {
             HANDLE thread = OpenThread(
                 THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_INFORMATION,
                 FALSE,
-                entry.th32ThreadID);
+                thread_id);
             if (thread == nullptr) {
                 if (GetLastError() == ERROR_INVALID_PARAMETER) {
                     continue;
                 }
                 error = "OpenThread failed with Win32 error " +
                     std::to_string(GetLastError());
-                success = false;
-                break;
+                CloseHandles();
+                return false;
             }
+            handles_.push_back(thread);
+        }
+
+        enum class Failure { none, suspend, context, protected_instruction };
+        Failure failure = Failure::none;
+        DWORD failure_error = ERROR_SUCCESS;
+        for (HANDLE thread : handles_) {
             if (SuspendThread(thread) == static_cast<DWORD>(-1)) {
-                error = "SuspendThread failed with Win32 error " +
-                    std::to_string(GetLastError());
-                CloseHandle(thread);
-                success = false;
+                failure = Failure::suspend;
+                failure_error = GetLastError();
                 break;
             }
+            ++suspended_count_;
 
             CONTEXT context{};
             context.ContextFlags = CONTEXT_CONTROL;
             if (!GetThreadContext(thread, &context)) {
-                error = "GetThreadContext failed with Win32 error " +
-                    std::to_string(GetLastError());
-                ResumeThread(thread);
-                CloseHandle(thread);
-                success = false;
+                failure = Failure::context;
+                failure_error = GetLastError();
                 break;
             }
 
@@ -92,21 +101,41 @@ public:
                 reinterpret_cast<std::uintptr_t>(protected_begin);
             if (instruction_pointer >= protected_address &&
                 instruction_pointer < protected_address + protected_size) {
-                error = "A thread was executing the call instruction; retry the operation";
-                ResumeThread(thread);
-                CloseHandle(thread);
-                success = false;
+                failure = Failure::protected_instruction;
                 break;
             }
-            handles_.push_back(thread);
-        } while (Thread32Next(snapshot, &entry));
+        }
 
-        CloseHandle(snapshot);
-        return success;
+        if (failure == Failure::none) return true;
+
+        ResumeAll();
+        if (failure == Failure::suspend) {
+            error = "SuspendThread failed with Win32 error " +
+                std::to_string(failure_error);
+        } else if (failure == Failure::context) {
+            error = "GetThreadContext failed with Win32 error " +
+                std::to_string(failure_error);
+        } else {
+            error = "A thread was executing the call instruction; retry the operation";
+        }
+        return false;
     }
 
 private:
+    void ResumeAll() noexcept {
+        while (suspended_count_ != 0) {
+            --suspended_count_;
+            ResumeThread(handles_[suspended_count_]);
+        }
+    }
+
+    void CloseHandles() noexcept {
+        for (HANDLE handle : handles_) CloseHandle(handle);
+        handles_.clear();
+    }
+
     std::vector<HANDLE> handles_;
+    std::size_t suspended_count_ = 0;
 };
 
 [[nodiscard]] bool BuildRel32Instruction(
@@ -145,39 +174,79 @@ private:
     const std::array<std::uint8_t, 5>& expected,
     const std::array<std::uint8_t, 5>& replacement,
     std::string& error) {
-    SuspendedThreads suspended;
-    if (!suspended.SuspendOthers(instruction, expected.size(), error)) {
-        return false;
-    }
-    if (!std::equal(expected.begin(), expected.end(), instruction)) {
-        error = "The call instruction changed before it could be patched";
-        return false;
+    enum class Failure {
+        none,
+        instruction_changed,
+        make_writable,
+        restore_protection,
+    };
+    Failure failure = Failure::none;
+    DWORD failure_error = ERROR_SUCCESS;
+
+    {
+        SuspendedThreads suspended;
+        if (!suspended.SuspendOthers(instruction, expected.size(), error)) {
+            return false;
+        }
+
+        // From the first suspended peer until this scope ends, do not allocate
+        // or format diagnostics. Record only fixed-size failure state and let
+        // SuspendedThreads resume every peer before touching std::string.
+        if (!std::equal(expected.begin(), expected.end(), instruction)) {
+            failure = Failure::instruction_changed;
+        } else {
+            DWORD old_protection = 0;
+            if (!VirtualProtect(
+                    instruction,
+                    replacement.size(),
+                    PAGE_EXECUTE_READWRITE,
+                    &old_protection)) {
+                failure = Failure::make_writable;
+                failure_error = GetLastError();
+            } else {
+                std::memcpy(
+                    instruction, replacement.data(), replacement.size());
+                FlushInstructionCache(
+                    GetCurrentProcess(), instruction, replacement.size());
+
+                DWORD ignored = 0;
+                if (!VirtualProtect(
+                        instruction,
+                        replacement.size(),
+                        old_protection,
+                        &ignored)) {
+                    failure = Failure::restore_protection;
+                    failure_error = GetLastError();
+                    std::memcpy(
+                        instruction, expected.data(), expected.size());
+                    FlushInstructionCache(
+                        GetCurrentProcess(), instruction, expected.size());
+                    static_cast<void>(VirtualProtect(
+                        instruction,
+                        expected.size(),
+                        old_protection,
+                        &ignored));
+                }
+            }
+        }
     }
 
-    DWORD old_protection = 0;
-    if (!VirtualProtect(
-            instruction,
-            replacement.size(),
-            PAGE_EXECUTE_READWRITE,
-            &old_protection)) {
-        error = "VirtualProtect failed with Win32 error " + std::to_string(GetLastError());
-        return false;
+    switch (failure) {
+        case Failure::none:
+            return true;
+        case Failure::instruction_changed:
+            error = "The call instruction changed before it could be patched";
+            return false;
+        case Failure::make_writable:
+            error = "VirtualProtect failed with Win32 error " +
+                std::to_string(failure_error);
+            return false;
+        case Failure::restore_protection:
+            error = "Could not restore page protection after patching; Win32 error " +
+                std::to_string(failure_error);
+            return false;
     }
-
-    std::memcpy(instruction, replacement.data(), replacement.size());
-    FlushInstructionCache(GetCurrentProcess(), instruction, replacement.size());
-
-    DWORD ignored = 0;
-    if (!VirtualProtect(instruction, replacement.size(), old_protection, &ignored)) {
-        const DWORD restore_error = GetLastError();
-        std::memcpy(instruction, expected.data(), expected.size());
-        FlushInstructionCache(GetCurrentProcess(), instruction, expected.size());
-        VirtualProtect(instruction, expected.size(), old_protection, &ignored);
-        error = "Could not restore page protection after patching; Win32 error " +
-            std::to_string(restore_error);
-        return false;
-    }
-    return true;
+    return false;
 }
 
 } // namespace

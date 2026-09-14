@@ -45,6 +45,7 @@
 #include "VRHelper.hpp"
 #include "VRHandCollisionPolicy.h"
 #include "overture_source_integration.hpp"
+#include "vr_hand_contact.hpp"
 
 namespace
 {
@@ -131,18 +132,7 @@ namespace
 	public:
 		cVRHandWorldCollisionCallback(const cVector3f& avMotion,
 			float afTolerance)
-			: mfTolerance(afTolerance), mfMaxDepth(0.0f),
-			  mfBestDepth(0.0f), mfBestScore(-9999.0f),
-			  mvBestNormal(0, 0, 0), mbHasContact(false),
-			  mbHasBlockingNormal(false)
-		{
-			cVector3f vMotion = avMotion;
-			const float fMotionLength = vMotion.Length();
-			if(fMotionLength > 0.00001f)
-				mvMotionDirection = vMotion / fMotionLength;
-			else
-				mvMotionDirection = cVector3f(0, 0, 0);
-		}
+			: mContacts({avMotion.x, avMotion.y, avMotion.z}, afTolerance) {}
 
 		void OnCollision(iPhysicsBody *apBody, cCollideData *apCollideData)
 		{
@@ -151,41 +141,17 @@ namespace
 			for(int i = 0; i < apCollideData->mlNumOfPoints; ++i)
 			{
 				cCollidePoint& point = apCollideData->mvContactPoints[i];
-				if(point.mfDepth < 0.0f || point.mfDepth != point.mfDepth)
-					continue;
-
-				mbHasContact = true;
-				if(point.mfDepth > mfMaxDepth) mfMaxDepth = point.mfDepth;
-				if(point.mfDepth <= mfTolerance) continue;
-
-				const float fNormalLength = point.mvNormal.Length();
-				if(fNormalLength <= 0.00001f || fNormalLength != fNormalLength)
-					continue;
-				const cVector3f vNormal = point.mvNormal / fNormalLength;
-				const bool bHasMotion = mvMotionDirection.SqrLength() > 0.0f;
-				const float fScore = bHasMotion
-					? -cMath::Vector3Dot(mvMotionDirection, vNormal)
-					: point.mfDepth;
-				if(!mbHasBlockingNormal || fScore > mfBestScore + 0.0001f ||
-					(fabsf(fScore - mfBestScore) <= 0.0001f &&
-					 point.mfDepth > mfBestDepth))
-				{
-					mfBestScore = fScore;
-					mfBestDepth = point.mfDepth;
-					mvBestNormal = vNormal;
-					mbHasBlockingNormal = true;
-				}
+				mContacts.Add(point.mfDepth,
+					{point.mvNormal.x, point.mvNormal.y, point.mvNormal.z});
 			}
 		}
 
-		float mfTolerance;
-		float mfMaxDepth;
-		float mfBestDepth;
-		float mfBestScore;
-		cVector3f mvMotionDirection;
-		cVector3f mvBestNormal;
-		bool mbHasContact;
-		bool mbHasBlockingNormal;
+		const penumbra_vr::runtime::VrHandContactSummary& GetSummary() const
+		{
+			return mContacts.summary();
+		}
+
+		penumbra_vr::runtime::VrHandContactAccumulator mContacts;
 	};
 
 	bool CheckVRHandWorldCollision(iPhysicsWorld *apPhysicsWorld,
@@ -200,47 +166,17 @@ namespace
 		const bool bCollide = apPhysicsWorld->CheckShapeWorldCollision(
 			&vCorrectedPos, apShape, aPose, apSkipBody, false, false,
 			&callback, false, false, false, false);
-		if(!bCollide) return false;
-
-		if(callback.mbHasContact)
-		{
-			if(callback.mfMaxDepth <= afTolerance) return false;
-			if(callback.mbHasBlockingNormal)
-			{
-				avNormal = callback.mvBestNormal;
-				afDepth = callback.mfBestDepth;
-				return true;
-			}
-		}
-
-		// Defensive fallback for a backend that reports an overlap without
-		// contact data. It remains blocking unless its correction fits in skin.
-		cVector3f vCorrection =
-			vCorrectedPos - aPose.GetTranslation();
-		const float fCorrectionLength = vCorrection.Length();
-		if(fCorrectionLength == fCorrectionLength &&
-			fCorrectionLength <= afTolerance)
-			return false;
-		if(fCorrectionLength > 0.00001f &&
-			fCorrectionLength == fCorrectionLength)
-		{
-			avNormal = vCorrection / fCorrectionLength;
-			afDepth = fCorrectionLength;
-		}
+		const cVector3f vRequested = aPose.GetTranslation();
+		const auto decision = penumbra_vr::runtime::ResolveVrHandCollision(
+			bCollide,
+			{vRequested.x, vRequested.y, vRequested.z},
+			{vCorrectedPos.x, vCorrectedPos.y, vCorrectedPos.z},
+			callback.GetSummary());
+		if(!decision.blocking) return false;
+		avNormal = cVector3f(
+			decision.normal[0], decision.normal[1], decision.normal[2]);
+		afDepth = decision.depth;
 		return true;
-	}
-
-	cVector3f VRHandNominalRecoveryAnchor(cCamera3D *apCamera,
-		eVRHandIndex aHand)
-	{
-		if(apCamera == NULL) return cVector3f(0, 0, 0);
-		const float fSide = aHand == eVRHandIndex_Left
-			? -VRHandCollisionPolicy::kRecoveryAnchorSide
-			: VRHandCollisionPolicy::kRecoveryAnchorSide;
-		return apCamera->GetPosition() + apCamera->GetRight() * fSide -
-			apCamera->GetUp() * VRHandCollisionPolicy::kRecoveryAnchorDown +
-			apCamera->GetForward() *
-				VRHandCollisionPolicy::kRecoveryAnchorForward;
 	}
 
 	bool FindVRHandRecoveryPose(iPhysicsWorld *apPhysicsWorld,
@@ -251,18 +187,21 @@ namespace
 		if(apPhysicsWorld == NULL || apShape == NULL || apCamera == NULL)
 			return false;
 
-		const float fSide = aHand == eVRHandIndex_Left ? -1.0f : 1.0f;
 		const cVector3f vHead = apCamera->GetPosition();
 		const cVector3f vRight = apCamera->GetRight();
 		const cVector3f vUp = apCamera->GetUp();
 		const cVector3f vForward = apCamera->GetForward();
+		const auto vSharedCandidates =
+			penumbra_vr::runtime::VrHandRecoveryCandidates(
+				{vHead.x, vHead.y, vHead.z},
+				{vRight.x, vRight.y, vRight.z},
+				{vUp.x, vUp.y, vUp.z},
+				{vForward.x, vForward.y, vForward.z},
+				aHand == eVRHandIndex_Left);
 		cVector3f vCandidates[4];
-		vCandidates[0] = VRHandNominalRecoveryAnchor(apCamera, aHand);
-		vCandidates[1] = vHead + vRight * (0.10f * fSide) -
-			vUp * 0.32f + vForward * 0.02f;
-		vCandidates[2] = vHead + vRight * (0.20f * fSide) -
-			vUp * 0.20f - vForward * 0.02f;
-		vCandidates[3] = vHead - vUp * 0.30f;
+		for(int i = 0; i < 4; ++i)
+			vCandidates[i] = cVector3f(vSharedCandidates[i][0],
+				vSharedCandidates[i][1], vSharedCandidates[i][2]);
 
 		for(int i = 0; i < 4; ++i)
 		{
@@ -1175,8 +1114,20 @@ bool cPlayer::ResolveVRHandPose(eVRHandIndex aHand, const cMatrixf& aRawPose,
 	bool bPullbackRecovery = false;
 	if(!bFirstPose && mpCamera != NULL)
 	{
-		const cVector3f vAnchor =
-			VRHandNominalRecoveryAnchor(mpCamera, aHand);
+		const auto vSharedCandidates =
+			penumbra_vr::runtime::VrHandRecoveryCandidates(
+				{mpCamera->GetPosition().x, mpCamera->GetPosition().y,
+					mpCamera->GetPosition().z},
+				{mpCamera->GetRight().x, mpCamera->GetRight().y,
+					mpCamera->GetRight().z},
+				{mpCamera->GetUp().x, mpCamera->GetUp().y,
+					mpCamera->GetUp().z},
+				{mpCamera->GetForward().x, mpCamera->GetForward().y,
+					mpCamera->GetForward().z},
+				aHand == eVRHandIndex_Left);
+		const cVector3f vAnchor(
+			vSharedCandidates[0][0], vSharedCandidates[0][1],
+			vSharedCandidates[0][2]);
 		const float fCurrentAnchorDistance = (vRawPos - vAnchor).Length();
 		const float fPreviousAnchorDistance =
 			(mVRHandRawPoses[lHand].GetTranslation() - vAnchor).Length();

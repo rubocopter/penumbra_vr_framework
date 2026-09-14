@@ -10,6 +10,72 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Latest offline checkpoint (2026-09-14): the intervention is implemented in
+  the working tree and host-tested. The body path now plans before the sole
+  native tick, consumes the combined request once, matches tick/body/generation
+  and tracking identity, reconciles once and publishes the resulting anchor.
+  Crouch ownership is session/generation-bound and applies native
+  `ChangeMoveState(4/0)` on the game thread. Render visibility owns the common
+  presentation pose sample and carries pose/yaw epochs into eyes, body and
+  prediction. Interaction acquisition revalidates VR selection/contact and
+  drops stale holds without dereferencing an old player. Probe lifecycle keeps
+  an explicit cleanup ledger, partial state and retryable shutdown; rel32 hook
+  error formatting occurs after peer threads resume.
+- New host coverage includes the actual NativeInputBridge contract harness,
+  every probe install/rollback and teardown point, 60 Hz body ticks with
+  72/90/120 Hz render sampling, ramps, repeated poses, wall/slide, recenter,
+  body replacement and sub-2 mm jitter. Debug, Release and no-OpenVR Release
+  all pass 33/33 CTest tests; metadata, exact-image BP verification and
+  `git diff --check` pass. Overture `-Full` reached the product build and
+  exposed a stale extracted `VRHandNominalRecoveryAnchor` call; that call was
+  fixed and the subsequent product gate passed the Release build, Large Address
+  Aware check and 289-check `VRTrackingTest`.
+- Validation state remains **host-tested only** for the new BP crouch,
+  presentation/body transaction and lifecycle work. Existing PID 8092
+  headset evidence covers the earlier direct stick/collision route; it does
+  not validate the new crouch or positional comfort. No headset or supported
+  claim is made here.
+
+- Current intervention checkpoint (2026-09-14): HEAD remained
+  `73c70f0aad6fd2f33dc27983a44971ec44215f4a` before edits. Black Plague
+  room-scale reconciliation now uses one same-tick transaction around the
+  existing `D460A -> D6E00` owner: plan from B0/latest tracking before the
+  native update, consume the bounded `0xD7281` request once, observe B1, match
+  tick/body/generation, reconcile once and carry locomotion once. The previous
+  post-tick plan-for-next-tick epoch mixing is gone. The synthetic body harness
+  was updated to prove same-tick injection/reconciliation, native movement before
+  injection, recenter invalidation and combined physical/stick accounting.
+  Debug and Release both pass 30/30 root CTest after rebuilding these sources;
+  the SDK-less Release build also passes 30/30. This work is **host-tested only**.
+  It does not close the prior short physical-motion pullback report without a
+  fresh headset run.
+- The same intervention hardens crouch ownership and lifecycle without changing
+  exact-build owners. Crouch preserves native queries outside VR ownership,
+  ties VR stance/pending legacy edges to session and player generation, keeps
+  `ChangeMoveState(4/0)` on the game thread, and feeds blocked stand back into
+  the shared Rework-derived policy. Probe lifecycle now distinguishes clean,
+  initializing, ready, shutting-down and partial states; capability bits remain
+  a teardown ledger, failed rollback/shutdown is retryable, callbacks are
+  suppressed unless ready, and launcher timeout is explicitly indeterminate.
+  `Rel32CallHook` prepares handles/storage before suspending peer threads. These
+  changes are **host-tested only**. The real NativeInputBridge harness and
+  systematic lifecycle install/remove fault injection are now covered by the
+  33/33 suite and must not be promoted beyond host-tested evidence.
+- Still open in this working tree: headset comfort for short physical motion,
+  presentation pose identity/time and pose/yaw epoch live correlation, and the
+  Black Plague palm collision ABI/query remain unfinished. Do not claim those
+  contracts complete. In particular, do not invent a BP `CheckShapeWorldCollision`
+  ABI/RVA: prove bytes/callback/lifetime and a no-write query first.
+- Palm-collision reference research is now pinned more narrowly. Rework
+  `23c890f` creates player-owned hand collision shapes once per world, reuses
+  them for overlap/sweep-style sampling, and destroys them on world teardown;
+  its resolver uses `iPhysicsWorld::CheckShapeWorldCollision` with a collision
+  callback, a held-body skip pointer, contact-depth tolerance, recovery anchors,
+  stepped translation and rotation refinement. The public HPL1 declaration is
+  useful only as a source-level prototype: it does not prove the Black Plague
+  exact-build ABI, vtable/layout, callback shape, or RVA. BP palm integration
+  therefore remains gated on supported-image xrefs/bytes plus a read-only
+  no-write query before any shape is created or connected to gameplay.
 - PID 21548 reran the corrected active room-scale path and passed its complete
   automatic gate: queued/consumed/injected/matched were `201/201`, all four
   collision outcomes were observed, crouch/stand recovery passed and in-place

@@ -146,7 +146,9 @@ bool WaitForThread(HANDLE thread, DWORD& exit_code, std::wstring& error, bool* f
     if (finished) *finished = false;
     const DWORD wait = WaitForSingleObject(thread, 15'000);
     if (wait != WAIT_OBJECT_0) {
-        error = wait == WAIT_TIMEOUT ? L"Remote call timed out" : LastErrorText(L"WaitForSingleObject");
+        error = wait == WAIT_TIMEOUT
+            ? L"Remote call timed out; remote state is indeterminate and the thread may still be running"
+            : LastErrorText(L"WaitForSingleObject");
         return false;
     }
     if (finished) *finished = true;
@@ -241,6 +243,22 @@ bool CallRemote(
     return WaitForThread(thread.get(), result, error, finished);
 }
 
+bool QueryRemoteProbeDword(
+    HANDLE process,
+    DWORD process_id,
+    const std::filesystem::path& probe_path,
+    std::uintptr_t remote_probe_base,
+    const char* export_name,
+    DWORD& result,
+    std::wstring& error) {
+    LPTHREAD_START_ROUTINE remote_query = nullptr;
+    if (!ResolveRemoteExport(process_id, probe_path, remote_probe_base,
+            export_name, remote_query, error)) {
+        return false;
+    }
+    return CallRemote(process, remote_query, nullptr, result, error);
+}
+
 bool ShutdownAndDeactivate(
     HANDLE process,
     DWORD process_id,
@@ -307,11 +325,30 @@ bool InjectAndInitialize(
     }
 
     DWORD initialize_result = 0;
-    if (!CallRemote(process, remote_initialize, nullptr, initialize_result, error)) {
+    bool initialize_finished = false;
+    if (!CallRemote(process, remote_initialize, nullptr, initialize_result, error,
+            &initialize_finished)) {
         return false;
     }
     if (initialize_result != 1) {
-        error = L"PenumbraVR_Initialize rejected the host or could not install the hook";
+        DWORD lifecycle = 0;
+        DWORD cleanup_ledger = 0;
+        std::wstring lifecycle_error;
+        if (QueryRemoteProbeDword(process, process_id, probe_path,
+                remote_probe_base, "PenumbraVR_QueryLifecycleState",
+                lifecycle, lifecycle_error)) {
+            error = L"PenumbraVR_Initialize did not reach ready state; lifecycle=" +
+                std::to_wstring(lifecycle);
+            std::wstring ledger_error;
+            if (QueryRemoteProbeDword(process, process_id, probe_path,
+                    remote_probe_base, "PenumbraVR_QueryCleanupLedger",
+                    cleanup_ledger, ledger_error)) {
+                error += L", cleanup_ledger=" +
+                    std::to_wstring(cleanup_ledger);
+            }
+        } else {
+            error = L"PenumbraVR_Initialize rejected the host or could not install the hook";
+        }
         return false;
     }
 
@@ -331,7 +368,13 @@ bool InjectAndInitialize(
         return fail_after_initialize(error);
     }
     DWORD query_result = 0;
-    if (!CallRemote(process, remote_query, nullptr, query_result, error)) {
+    bool query_finished = false;
+    if (!CallRemote(process, remote_query, nullptr, query_result, error,
+            &query_finished)) {
+        if (!query_finished) {
+            error += L"; automatic shutdown was not attempted while that remote call remained indeterminate";
+            return false;
+        }
         return fail_after_initialize(error);
     }
     capabilities = query_result;
@@ -378,11 +421,31 @@ bool ShutdownAndDeactivate(
     }
 
     DWORD shutdown_result = 0;
-    if (!CallRemote(process, remote_shutdown, nullptr, shutdown_result, error)) {
+    bool shutdown_finished = false;
+    if (!CallRemote(process, remote_shutdown, nullptr, shutdown_result, error,
+            &shutdown_finished)) {
+        if (!shutdown_finished) {
+            error += L"; teardown state must be queried or retried after the remote call settles";
+        }
         return false;
     }
     if (shutdown_result != 1) {
-        error = L"PenumbraVR_Shutdown could not remove the frame hook";
+        DWORD lifecycle = 0;
+        DWORD cleanup_ledger = 0;
+        std::wstring query_error;
+        error = L"PenumbraVR_Shutdown left a partial teardown";
+        if (QueryRemoteProbeDword(process, process_id, probe_path,
+                remote_probe, "PenumbraVR_QueryLifecycleState",
+                lifecycle, query_error)) {
+            error += L"; lifecycle=" + std::to_wstring(lifecycle);
+        }
+        query_error.clear();
+        if (QueryRemoteProbeDword(process, process_id, probe_path,
+                remote_probe, "PenumbraVR_QueryCleanupLedger",
+                cleanup_ledger, query_error)) {
+            error += L", cleanup_ledger=" + std::to_wstring(cleanup_ledger);
+        }
+        error += L"; retry shutdown after the remaining callbacks/components settle";
         return false;
     }
 

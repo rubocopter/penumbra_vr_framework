@@ -2,6 +2,7 @@
 
 #include "vr_input_state.hpp"
 #include "vr_native_intents.hpp"
+#include "vr_play_mode_policy.hpp"
 #include "vr_settings.hpp"
 #include "vr_tracking_space.hpp"
 
@@ -93,9 +94,8 @@ private:
     runtime::VrInputState pending_input_;
     std::array<float, 3> previous_head_position_{};
     std::array<float, 3> head_anchor_{};
-    float seated_baseline_ = 0.0F;
+    runtime::VrPlayModePolicy play_mode_policy_;
     bool initialized_ = false;
-    bool seated_baseline_known_ = false;
 };
 
 } // namespace penumbra_vr::backends::overture

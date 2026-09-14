@@ -34,7 +34,8 @@ struct BlackPlagueBodyMotion {
 // native body callback consumes it. Shadow-only mode remains observation-only;
 // room-scale validation can publish through the separate bounded request.
 void PublishBlackPlagueShadowTracking(const runtime::VrMatrix34& pose,
-    float world_yaw, bool recentered) noexcept;
+    float world_yaw, bool recentered,
+    runtime::VrTrackingSampleIdentity identity = {}) noexcept;
 void InvalidateBlackPlagueShadowTracking() noexcept;
 struct BlackPlagueShadowTelemetry {
     std::uint64_t observed_ticks = 0;
@@ -118,6 +119,7 @@ struct BlackPlagueRoomScaleCameraSample {
     std::array<float, 3> predicted_head_anchor{};
     std::array<float, 3> body_position{};
     runtime::VrMatrix34 observed_tracking_pose{};
+    runtime::VrTrackingSampleIdentity tracking_identity{};
 };
 
 // Default-off active validation boundary. It is enabled only when the

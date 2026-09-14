@@ -55,8 +55,7 @@ void OvertureBackend::SetSettings(runtime::VrSettings settings) noexcept {
     settings_ = settings;
     tracking_space_.SetHeightCalibration(settings_.height_offset);
     if (settings_.play_mode == runtime::VrPlayMode::standing) {
-        seated_baseline_known_ = false;
-        seated_baseline_ = 0.0F;
+        play_mode_policy_.Reset();
         tracking_space_.SetSeatedOffset(0.0F);
     }
 }
@@ -270,9 +269,8 @@ void OvertureBackend::Reset() noexcept {
     pending_input_ = {};
     previous_head_position_ = {};
     head_anchor_ = {};
-    seated_baseline_ = 0.0F;
+    play_mode_policy_.Reset();
     initialized_ = false;
-    seated_baseline_known_ = false;
 }
 
 runtime::VrTrackingSpace& OvertureBackend::tracking_space() noexcept {
@@ -284,36 +282,9 @@ const runtime::VrTrackingSpace& OvertureBackend::tracking_space() const noexcept
 }
 
 void OvertureBackend::UpdatePlayMode(float raw_head_height) noexcept {
-    if (settings_.play_mode == runtime::VrPlayMode::standing) {
-        seated_baseline_known_ = false;
-        seated_baseline_ = 0.0F;
-        tracking_space_.SetSeatedOffset(0.0F);
-        return;
-    }
-
-    const bool plausible = raw_head_height > 0.60F && raw_head_height < 1.50F;
-    if (!seated_baseline_known_) {
-        if (!plausible) {
-            tracking_space_.SetSeatedOffset(0.0F);
-            return;
-        }
-        seated_baseline_ = raw_head_height;
-        seated_baseline_known_ = true;
-    } else {
-        if (raw_head_height > seated_baseline_ + 0.45F) {
-            seated_baseline_known_ = false;
-            seated_baseline_ = 0.0F;
-            tracking_space_.SetSeatedOffset(0.0F);
-            return;
-        }
-        if (plausible && raw_head_height < seated_baseline_ - 0.10F) {
-            seated_baseline_ = raw_head_height;
-        }
-    }
-
-    const float mapped_height = (seated_baseline_ - 0.2F) * 1.065F;
-    tracking_space_.SetSeatedOffset(std::clamp(
-        settings_.player_height - mapped_height, 0.0F, 1.5F));
+    const auto play_mode = play_mode_policy_.Update(
+        settings_.play_mode, raw_head_height, settings_.player_height);
+    tracking_space_.SetSeatedOffset(play_mode.seated_offset);
 }
 
 } // namespace penumbra_vr::backends::overture

@@ -30,7 +30,8 @@ VrButtonState VrPhysicalCrouchPolicy::Update(
     float physical_crouch_depth,
     bool gameplay_active,
     bool tracking_valid,
-    float head_height) noexcept {
+    float head_height,
+    bool stand_blocked) noexcept {
     const bool physical_enabled = mode != VrCrouchMode::button;
     const bool button_enabled = mode != VrCrouchMode::physical;
     bool physical_changed = false;
@@ -52,6 +53,7 @@ VrButtonState VrPhysicalCrouchPolicy::Update(
             standing_height_known_ = true;
             standing_height_ = head_height;
         } else if (!physical_crouch_ && !button_latched_ &&
+                   !stand_blocked && !stand_release_pending_ &&
                    head_height > standing_height_) {
             // Match Rework: let an initially low standing sample settle upward,
             // but never let a ducking motion drag the standing baseline down.
@@ -75,7 +77,15 @@ VrButtonState VrPhysicalCrouchPolicy::Update(
         else ++physical_exits_;
     }
 
-    const bool effective_crouch = physical_crouch_ || button_latched_;
+    const bool desired_crouch = physical_crouch_ || button_latched_;
+    if (desired_crouch) {
+        stand_release_pending_ = false;
+    } else if (effective_crouch_ && stand_blocked) {
+        stand_release_pending_ = true;
+    } else if (!stand_blocked) {
+        stand_release_pending_ = false;
+    }
+    const bool effective_crouch = desired_crouch || stand_release_pending_;
 
     VrButtonState result;
     result.active = physical_enabled || (button_enabled && button.active);
@@ -90,7 +100,8 @@ VrButtonState VrPhysicalCrouchPolicy::Update(
         standing_height_known_ ? standing_height_ - depth : 0.0F,
         standing_height_known_ ? standing_height_ - depth +
             vr_crouch_policy::kExitHysteresis : 0.0F,
-        physical_crouch_, button_latched_, effective_crouch_,
+        physical_crouch_, button_latched_, desired_crouch,
+        stand_blocked, stand_release_pending_, effective_crouch_,
         physical_entries_, physical_exits_};
     return result;
 }
@@ -100,6 +111,7 @@ void VrPhysicalCrouchPolicy::Reset() noexcept {
     standing_height_ = 0.0F;
     physical_crouch_ = false;
     button_latched_ = false;
+    stand_release_pending_ = false;
     effective_crouch_ = false;
     physical_entries_ = 0;
     physical_exits_ = 0;

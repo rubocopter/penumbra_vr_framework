@@ -415,6 +415,36 @@ using penumbra_vr::runtime::VrMatrix44;
     return true;
 }
 
+[[nodiscard]] bool TestTrackingYawRotation() {
+    VrMatrix34 rotated;
+    std::string error;
+    constexpr float kHalfPi = 1.57079632679489661923F;
+    const auto pose = Translation(1.0F, 2.0F, 3.0F);
+    if (!penumbra_vr::runtime::RotateTrackingPoseYaw(
+            pose, kHalfPi, rotated, error)) {
+        std::cerr << "Tracking yaw rotation failed: " << error << '\n';
+        return false;
+    }
+    const float tolerance = 0.00001F;
+    if (std::abs(rotated.values[0]) > tolerance ||
+        std::abs(rotated.values[2] - 1.0F) > tolerance ||
+        std::abs(rotated.values[8] + 1.0F) > tolerance ||
+        std::abs(rotated.values[10]) > tolerance ||
+        std::abs(rotated.values[3] - 1.0F) > tolerance ||
+        std::abs(rotated.values[7] - 2.0F) > tolerance ||
+        std::abs(rotated.values[11] - 3.0F) > tolerance) {
+        std::cerr << "Tracking yaw rotation changed the wrong basis or translation\n";
+        return false;
+    }
+    if (penumbra_vr::runtime::RotateTrackingPoseYaw(
+            pose, std::numeric_limits<float>::quiet_NaN(),
+            rotated, error) || error.empty()) {
+        std::cerr << "A non-finite tracking yaw was accepted\n";
+        return false;
+    }
+    return true;
+}
+
 [[nodiscard]] bool TestInvalidInputs() {
     VrMatrix34 scaled = Translation(0.0F, 0.0F, 0.0F);
     scaled.values[0] = 2.0F;
@@ -485,7 +515,8 @@ int main() {
     if (!TestRigidInverse() || !TestProjection() ||
         !TestConservativeStereoCullFrustum() || !TestEyeViews() ||
         !TestRelativeHeadTracking() || !TestYawRecenteredHeadTracking() ||
-        !TestWorldTranslationToView() || !TestInvalidInputs()) {
+        !TestWorldTranslationToView() || !TestTrackingYawRotation() ||
+        !TestInvalidInputs()) {
         return 1;
     }
     std::cout << "VR matrix tests passed\n";

@@ -23,22 +23,41 @@ struct BodyReconciliationShadowSample {
     float separation = 0.0F;
 };
 
+struct BodyReconciliationTickPlan {
+    bool valid = false;
+    bool reset = false;
+    std::uint64_t sequence = 0;
+    std::uint64_t body_generation = 0;
+    runtime::VrTrackingSampleIdentity tracking_identity{};
+    runtime::VrMatrix34 tracking_pose{};
+    std::array<float, 3> body_before{};
+    std::array<float, 3> head_tracking_position{};
+    std::array<float, 3> physical_delta{};
+    runtime::VrBodyReconciliationPlan reconciliation{};
+};
+
 class BodyReconciliationShadow final {
 public:
     void Reset() noexcept;
-    [[nodiscard]] bool ApplyPhysicalReconciliation(
-        const runtime::VrPhysicalReconciliationResult& reconciliation) noexcept;
-    [[nodiscard]] BodyReconciliationShadowSample Observe(
+    [[nodiscard]] BodyReconciliationTickPlan PrepareTick(
         const runtime::VrMatrix34& head_tracking_pose,
         float tracking_world_yaw,
         std::uint64_t body_generation,
+        const std::array<float, 3>& body_before,
+        float delta_seconds,
+        runtime::VrTrackingSampleIdentity tracking_identity = {}) noexcept;
+    [[nodiscard]] BodyReconciliationShadowSample CompleteTick(
+        const BodyReconciliationTickPlan& tick,
         const runtime::VrAcceptedBodyMotion& native_motion,
         const std::array<float, 3>& feet_after,
-        float delta_seconds,
-        const std::array<float, 3>& reconciled_physical_displacement = {}) noexcept;
+        bool physical_observation_available = false,
+        const runtime::VrAcceptedBodyMotion& physical_motion = {}) noexcept;
 private:
     bool initialized_ = false;
+    bool tick_pending_ = false;
     std::uint64_t generation_ = 0;
+    std::uint64_t next_sequence_ = 0;
+    std::uint64_t pending_sequence_ = 0;
     std::array<float, 3> previous_head_{};
     std::array<float, 3> previous_body_{};
     std::array<float, 3> anchor_{};

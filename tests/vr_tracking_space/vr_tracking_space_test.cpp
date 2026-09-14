@@ -1,5 +1,6 @@
 #include "vr_locomotion.hpp"
 #include "vr_interaction_policy.hpp"
+#include "vr_play_mode_policy.hpp"
 #include "vr_tracking_space.hpp"
 
 #include <cmath>
@@ -141,10 +142,35 @@ using penumbra_vr::runtime::VrTrackingSpace;
     return true;
 }
 
+[[nodiscard]] bool TestPlayModeAndEpochPolicy() {
+    using namespace penumbra_vr::runtime;
+    VrPlayModePolicy play_mode;
+    auto status = play_mode.Update(VrPlayMode::seated, 1.0F, 1.70F);
+    if (!status.baseline_known || !Near(status.baseline_height, 1.0F) ||
+        !Near(status.seated_offset, 0.848F, 1.0e-3F)) return false;
+    status = play_mode.Update(VrPlayMode::seated, 0.85F, 1.70F);
+    if (!Near(status.baseline_height, 0.85F) ||
+        !Near(status.seated_offset, 1.00775F, 1.0e-3F)) return false;
+    status = play_mode.Update(VrPlayMode::seated, 1.31F, 1.70F);
+    if (status.baseline_known || status.seated_offset != 0.0F) return false;
+    status = play_mode.Update(VrPlayMode::standing, 1.0F, 1.70F);
+    if (status.baseline_known || status.seated_offset != 0.0F) return false;
+
+    const VrTrackingSampleIdentity a{4, 100, 2, 7};
+    const VrTrackingSampleIdentity same_epoch{5, 110, 2, 7};
+    const VrTrackingSampleIdentity different_pose{6, 120, 3, 7};
+    const VrTrackingSampleIdentity different_yaw{7, 130, 2, 8};
+    return SameTrackingEpoch(a, same_epoch) &&
+        !SameTrackingEpoch(a, different_pose) &&
+        !SameTrackingEpoch(a, different_yaw) &&
+        !SameTrackingEpoch({}, same_epoch);
+}
+
 } // namespace
 
 int main() {
-    if (!TestTrackingSpace() || !TestLocomotionPolicy()) {
+    if (!TestTrackingSpace() || !TestLocomotionPolicy() ||
+        !TestPlayModeAndEpochPolicy()) {
         return 1;
     }
     std::cout << "Rework tracking-space and locomotion policies passed\n";

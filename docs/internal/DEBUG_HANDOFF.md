@@ -2,6 +2,23 @@
 
 This file prevents repeated symptom-level fixes from replacing evidence-backed investigation. Read it before revisiting any of these issues.
 
+## Current offline checkpoint (2026-09-14)
+
+The working tree contains the five-phase offline intervention. Debug, Release
+and SDK-less Release pass 33/33 CTest tests, metadata validation passes, and the
+supported-image BP verifier passes without modifying a process. The body
+transaction, crouch ownership, presentation epochs, interaction generation
+checks and partial lifecycle ledger are host-tested only. The Overture `-Full`
+gate reached compilation and found one stale extracted helper reference;
+`Player.cpp` now uses the shared recovery candidate for that call, and the full
+product gate still needs a clean rerun.
+
+Do not promote the new BP crouch, short physical-motion comfort, yaw gate,
+palms or lifecycle live behavior without a fresh live run. The palm boundary is
+still limited to the verified `CheckShapeWorldCollision` owner and a verified
+CreateBoxShape vtable slot; shape destruction/user counts and callback ABI/
+lifetime remain unproven for the supported BP image.
+
 ## 0. Hook and loader lifecycle
 
 The first 2026-09-13 room-scale helper attempt stopped before launching the game
@@ -355,6 +372,35 @@ Do not tune the final socket against provisional hand geometry and then retune i
 Integrate definitive hand geometry, measure a per-game tool socket against that geometry, then validate light direction and model placement together.
 
 ## Debugging rule
+
+### 2026-09-14 body-transaction checkpoint
+
+The short-motion pullback investigation now has a host-tested structural fix:
+`BodyReconciliationShadow` no longer observes a finished native tick and plans
+that physical delta for the next one. The existing character-update wrapper
+prepares from B0 and the latest tracking sample before its one native update,
+the existing `0xD7281` owner consumes that request in the same tick, and the
+adapter completes from B1 only when tick/body/generation match. Recenter/body
+replacement invalidates the transaction rather than carrying a request across
+epochs. The body harness covers presentation rates above the 60 Hz physics tick,
+repeated poses, ramp/stop, block/slide/jitter and same-tick physical/stick
+partitioning. Debug/Release and SDK-less Release currently pass 30/30 host tests.
+
+This does not yet prove the headset pullback is gone. The direct-stick producer
+still converts analog input to metres with the input callback `dt`; the intended
+next boundary is to publish logical direction/magnitude/sprint plus identified
+pose/yaw epoch and integrate it with the physics `delta_seconds` inside the body
+transaction. Do not map Black Plague's constrained `0.5 m/s` state until exact
+evidence identifies it.
+
+The current crouch ownership/lifecycle hardening is also host-only. Native
+crouch results are preserved outside the VR ownership window, VR-owned stance is
+generation-bound and `ChangeMoveState(4/0)` remains the application boundary;
+blocked stand is represented separately in shared policy. Probe teardown now
+retains partial state and can be retried. A real NativeInputBridge harness for
+session/focus/disconnect/player replacement/double-edge/low-ceiling cases and
+systematic lifecycle failure injection are still required before treating those
+contracts as closed.
 
 For any repeated defect, write down:
 

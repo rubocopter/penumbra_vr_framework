@@ -1,5 +1,22 @@
 # Changelog
 
+- 2026-09-14: completed the offline intervention checkpoint for tracking/body,
+  crouch ownership, posture snapshots, interaction lifecycle and probe
+  teardown. Added the real NativeInputBridge crouch contract harness, a
+  partial-lifecycle install/rollback ledger test, shared hand-contact and play
+  mode policies, same-tick body transaction coverage for 72/90/120 Hz render
+  against a 60 Hz body tick, repeated samples, recenter, slide and jitter, and
+  moved rel32 hook diagnostics outside the suspended-thread region. Debug,
+  Release and SDK-less Release each pass 33/33 CTest tests; metadata, the
+  supported-image BP verifier and diff checks pass. The Overture -Full gate
+  was rerun after fixing one stale extracted helper call and passed the Release
+  product build, Large Address Aware check and 289-check `VRTrackingTest`.
+- The Black Plague palm path remains default-off and unconnected. The exact
+  `CheckShapeWorldCollision` owner and the HPL-compatible CreateBoxShape
+  vtable slot are identified, but BP shape destruction/user-count and callback
+  lifetime are not yet proven from the supported image. No palm ABI or RVA is
+  promoted from this research.
+
 - Extracted the demonstrated Overture/Rework palm collision policy into
   `src/runtime/vr_interaction_policy.hpp`: palm dimensions, contact tolerances,
   sweep/refinement limits and recovery predicates now have one Framework-owned
@@ -41,6 +58,27 @@ This project is pre-alpha. Entries distinguish implemented infrastructure from f
   documentation.
 
 ### Fixed
+
+- Reworked the Black Plague room-scale body reconciliation into one explicit
+  pre/post native-tick transaction. The existing `D460A -> D6E00` owner now
+  plans from the current B0 and latest tracking sample before the native update,
+  `0xD7281` consumes the bounded physical request in that same tick, and the
+  adapter reconciles once from B1 using matching tick/body/generation evidence.
+  The old post-tick plan-for-next-tick path was removed. Host tests cover
+  free-space ramps/stops, repeated presentation samples, 60 Hz physics with
+  72/90/120 Hz presentation cadence, block/slide/jitter, recenter and body
+  replacement. This is host-tested only; the prior short-motion pullback report
+  still requires a fresh headset gate.
+- Hardened Black Plague crouch and probe lifecycle ownership. Native crouch
+  queries are preserved outside an active VR ownership window; VR-owned posture
+  is tied to session/player generation and keeps `ChangeMoveState(4/0)` as the
+  game-thread application boundary, while the shared crouch policy distinguishes
+  desired/effective stance and blocked stand release. Probe startup/shutdown now
+  retains an explicit partial-state component ledger, failed rollback/shutdown
+  remains retryable, launcher remote-call timeout is reported as indeterminate,
+  and rel32 hook setup allocates/opens thread resources before suspending peers.
+  These changes are host-tested only; the bridge/lifecycle fault harnesses pass,
+  while headset posture validation remains pending.
 
 - Corrected Black Plague VR crouch ownership after PID 24948 showed that the
   previous release/press compensation could alternate the native `1.65/0.95 m`

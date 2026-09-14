@@ -74,10 +74,22 @@ int RunSpatialTest() {
     auto begin=[&] {
         g_enabled.store(true); Put(player.data(),0x2BC,0);
         test_frame.input.state.interact.pressed=true; test_frame.input.state.interact.just_pressed=true;
+        g_vr_selection_ready=true;
+        g_vr_selection_player=player.data();
         HookedEnter(state.data(),nullptr,nullptr);
         Put(player.data(),0x2BC,6); // Native ChangeState commits only after Enter.
         ServiceSpatialInteraction(player.data(),false);
     };
+    // A native/fallback transition with no VR grip selection must not be
+    // promoted into a VR grab merely because the VR button edge is present.
+    g_enabled.store(true); Put(player.data(),0x2BC,0);
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=false; g_vr_selection_player=nullptr;
+    HookedEnter(state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,6);
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load() || g_pending_state) return 24;
     begin();
     if (g_held.load() || Read<float>(body.data(),0x42C)!=3) return 15;
     // Exercise acquisition after the exact-build installation gate has proved
@@ -116,6 +128,38 @@ int RunSpatialTest() {
     hand.device_to_absolute.values[3]+=2;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 10;
+
+    // Acquisition revalidates the resolved contact against the same grip pose
+    // used for selection. A selected body outside the physical reach is not a
+    // valid VR grab even if the native state transition itself commits.
+    const float body_x=Read<Matrix>(body.data(),0x34).values[3];
+    hand.device_to_absolute.values[3]=body_x+0.25F;
+    begin();
+    if (g_held.load()) return 25;
+    hand.device_to_absolute.values[3]=body_x;
+
+    // If ChangeState advances without the expected Leave callback, the same
+    // live player's registered grab-state proves that the held body is still
+    // safe to restore once. Ownership must then be dropped so teardown cannot
+    // be stranded behind a stale hold.
+    begin();
+    if (!g_held.load()) return 28;
+    Put(player.data(),0x2BC,0);
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load() || !Read<bool>(body.data(),0x3C8)) return 29;
+
+    // Player replacement invalidates hold ownership before old state/body
+    // pointers are dereferenced. The old collision flag is deliberately not
+    // restored because its lifetime is no longer demonstrated.
+    begin();
+    if (!g_held.load()) return 26;
+    std::array<std::uint8_t,0x500> replacement_player{};
+    std::array<void*,10> replacement_states{};
+    Put(replacement_player.data(),0x2C4,replacement_states.data());
+    ServiceSpatialInteraction(replacement_player.data(),false);
+    if (g_held.load() || Read<bool>(body.data(),0x3C8)) return 27;
+    Put(body.data(),0x3C8,true);
+    ServiceSpatialInteraction(player.data(),false);
     const auto diagnostics=ConsumeSpatialDiagnostics();
     if (diagnostics.grabs_acquired<5 || diagnostics.grabs_released<5 ||
         diagnostics.guarded_releases<3 || diagnostics.collision_restore_failures) return 22;
