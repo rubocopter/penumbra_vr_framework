@@ -569,19 +569,19 @@ state. The current backend therefore applies shared desired crouch directly via
 the native move-state index and the focused helper requires it to agree with the
 `0.95/1.65 m` collider, including button-only and Hybrid intervals. Native
 geometry/body-swap ownership is unchanged. Release compilation, exact-image
-verification and 30/30 host tests pass; this correction is not yet live/headset
-validated.
+verification and 30/30 host tests passed at that checkpoint. PID 22096 later supplied
+headset evidence for ordinary posture behavior on the current implementation.
 
 The same correction composes vertical presentation with shared
 `VrTrackingSpace`: the reconciled body position is the feet anchor, raw HMD Y is
 continuous, `HeightOffset` is consumed, physical crouch avoids the native full
 camera drop, and a non-physical crouch uses `-PhysicalCrouchDepth`. The helper
 requires at least `0.15 m` of rendered head-anchor Y range. Code and host tests
-pass, but no live/headset validation exists for the direct move-state fix after
-PID 24948.
-PID 20520
-also reported short physical X/Z pullback/discomfort, which remains a subjective
-gate rather than a claimed fix.
+pass. PID 22096 later supplied headset evidence for ordinary posture modes;
+low-clearance recovery and explicit vertical correlation remain separate gates.
+PID 20520 introduced the earlier report;
+PID 22096 kept the previously reported comfort concern open.
+The current filter remains host-tested pending another headset run.
 
 This composition differs narrowly from Rework because the source backend can
 perform physical and stick body updates sequentially, whereas the exact Black
@@ -596,6 +596,6 @@ next headset run. Rework's tracking-world-yaw turn owner remains a separate
 milestone; Black Plague still applies VR turn through native player yaw.
 
 Physical crouch-by-height now drives exact native move-state `4/0` through the
-existing game-thread owner, but the direct-state and continuous-Y path remain
-host-tested only. Keep final comfort and blocked-stand validation
+existing game-thread owner. PID 22096 adds headset evidence for the ordinary posture path;
+continuous vertical correlation and blocked recovery remain focused headset gates. Keep final comfort
 separate from the already live-tested native body swap.
