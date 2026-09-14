@@ -2,245 +2,341 @@
 
 ## Product boundary
 
-Penumbra VR is one user-facing product, not necessarily one executable or DLL. The eventual installer presents a single product and deploys the appropriate integration for every detected game/build.
+Penumbra VR Framework is one user-facing project, not necessarily one executable or one injection mechanism. The eventual product should detect a supported Penumbra game/build and deploy the appropriate integration while exposing a coherent VR experience.
 
-The architecture separates three concerns:
+The architecture separates four concerns:
 
-1. **Runtime:** game-independent VR behavior and policy.
-2. **Host adapter/backend:** access to one game's renderer, player, UI, physics and interactions.
-3. **Deployment:** installation, executable validation, backup, launch and rollback.
+1. **Shared runtime** — game-neutral VR units, transforms, policies and reusable algorithms.
+2. **Host adapter/backend** — one game's renderer, player, physics, input, interaction and native state boundaries.
+3. **Profiles/data** — controller bindings, tool/model sockets, bone mappings and demonstrated build capabilities.
+4. **Deployment** — build identification, installation, launch, backup, verification and rollback.
+
+The three games intentionally use asymmetric integrations where the evidence requires it.
 
 ## Integration matrix
 
-| Game | Integration model | Current direction |
-|---|---|---|
-| Overture | Released source code plus HPL1 | Framework-owned rebuilt executable using shared runtime policy |
-| Black Plague | Closed game layer on HPL1 | Bootstrap/probe DLL plus exact-build binary backend/adapters |
-| Requiem | Closed game layer on HPL1 | Future exact-build binary backend |
+| Game | Integration model | Current state |
+| --- | --- | --- |
+| Overture | Released source + HPL1 | Framework-owned source product; initial headset validation completed |
+| Black Plague | Closed game layer on HPL1 | Exact-build x86 launcher/probe/backend; active gameplay and comfort validation |
+| Requiem | Closed game layer on HPL1 | Catalog/deployment preparation only; functional backend not yet demonstrated |
 
-The public experience is unified even though these implementations are intentionally asymmetric.
+The goal is shared behavior plus narrow mechanisms, not three independent VR implementations and not a speculative universal engine API.
 
-## Runtime boundary
+## Behavioral reference and evidence model
 
-The game-independent runtime owns, or is intended to own:
+Overture Rework revision `23c890f7dbd06b939be9951d282e6e948d9a6623` remains the behavioral reference for already-demonstrated Overture VR behavior. It is not a build dependency.
 
-- OpenVR lifecycle and compositor access;
-- tracked poses and coordinate conversion;
-- action manifests, controller input and haptics;
-- shared settings and structured logging;
-- renderer-neutral eye/view data;
-- tracking space, calibration and recenter policy;
-- reusable locomotion/reconciliation policy demonstrated in real integrations;
-- game-neutral accepted-body-motion observation;
-- host-independent tests.
-
-The runtime must not own:
-
-- game RVAs or signatures;
-- exact HPL object layouts;
-- player-class assumptions;
-- binary calling conventions;
-- game-specific entity queries;
-- native update ownership.
-
-Those details belong to a backend/adapter and, for binary games, to exact-build evidence.
-
-`runtime::VrAcceptedBodyMotion` is the first body contract consumed by both Overture and Black Plague. It contains only finite before/after body positions plus accepted displacement. It deliberately knows nothing about HPL layouts, movement speeds, solver internals, hook addresses or who owns the native update.
-
-## Shared HPL1 adapter boundary
-
-The games share HPL1 ancestry, but shared behavior is promoted only after evidence supports it. Reusable engine behavior therefore lives in a narrow adapter layer between shared policy and per-game implementation.
-
-Examples:
-
-- `src/adapters/hpl1/camera_matrix_override.*` owns byte-exact camera transaction behavior while the backend supplies validated layout data;
-- `src/adapters/overture_source` exposes source-level `cPlayer` / `iCharacterBody` operations to the Overture backend;
-- the Black Plague body adapter exposes only the measured exact-build native movement/body boundary required by shared policy.
-
-This layer must not turn a coincidental RVA, field offset or one game's state-machine detail into a supposed engine contract.
-
-## Reuse direction
-
-Overture Rework `23c890f` remains the proven behavioral reference for Overture VR. Existing proven behavior should be adapted rather than reinvented.
-
-Reuse is nevertheless bidirectional. When another backend demonstrates a better game-neutral implementation, the Framework should preserve that stronger behavior and adapt per-game details around it. The current finger-articulation direction is the main example: Black Plague's independent curls/per-joint curves/spread/thumb opposition are the better candidate shared semantics, while Overture's bind poses, bone axes, deadzone/smoothing and handle poses remain rig/profile concerns.
-
-The goal is not three independent VR implementations; it is shared policy plus narrow mechanisms.
-
-## Backend responsibilities
-
-A backend translates runtime concepts into one game's implementation:
-
-- stable frame/update boundaries;
-- view and projection control;
-- per-eye render entry and render-target ownership;
-- player body and camera relationship;
-- collision/body access;
-- interaction, hands and held objects;
-- game input and haptics;
-- HUD, menus, inventory, notes and subtitles;
-- positional audio listener when required.
-
-The backend API should remain narrow and evidence-driven. A large speculative cross-game interface would encode guesses rather than reuse.
-
-## Overture backend
-
-`pvr_overture_backend` sequences the proven Rework tracking, calibration, room-scale and locomotion policy over a narrow `OvertureBodyAdapter`.
-
-The Framework-owned product host under `products/overture` contains the minimum coherent Penumbra/HPL/OAL source, Win32 dependencies, required resources and package tooling. Rework `23c890f` is not part of the build/package graph.
-
-The exact autonomous Release artifact has completed an initial functional SteamVR/headset/controller pass without an evident Rework regression. Exhaustive feature/hardware coverage remains separate from that completed integration milestone.
-
-The autonomous Release build is now also a dedicated Windows CI regression gate. After the shared tracking/body extraction, the clean CI job completed `Build-OvertureProduct.ps1 -Configuration Release -Full` successfully, preserving the product-level project/shader/visual/texture/LAA/`VRTrackingTest` checks as a guard against shared-runtime regressions.
-
-## Black Plague backend
-
-The Black Plague backend is exact-build binary integration. Unknown hashes fail closed.
-
-The render path already validates/intercepts the mapped world-render boundary, applies reversible per-eye camera overrides, renders into runtime-sized eye targets and submits continuous rotationally tracked stereo to OpenVR. HMD-aware render-list correction, keyboard/mouse preservation and rotational tracking have been exercised in headset. Frame-pacing, reliable mirror output and positional tracking remain open.
-
-Native controller intents, tracked UI panels, provisional hands and free-body interaction are implemented. Palm collision, articulated mechanisms and definitive tool/light grip profiles remain pending.
-
-### Player/body ownership
-
-The player/body pipeline is now mapped and live-characterized:
-
-```text
-cPlayer movement intent
-      ↓
-iCharacterBody::Move(D4F50)
-      ↓
-native acceleration / speed state
-      ↓
-D460A -> iCharacterBody::Update(D6E00) exactly once
-      ↓
-horizontal collision + native step/gravity/move-state work
-      ↓
-accepted body displacement
-```
-
-The first `BlackPlagueBodyAdapter` is live-tested and follows a strict single-owner model:
-
-- `NativeInputBridge` owns the `MoveForward/MoveSideways` callsites;
-- `BodyCollisionProbe` owns the `D460A -> D6E00` callsite;
-- `BlackPlagueBodyAdapter` binds through those verified owners and receives fan-out rather than installing competing hooks.
-
-The adapter dynamically re-resolves the current player body, forwards existing horizontal native intent and observes the result after the original native body update. It never invokes `D6E00` directly.
-
-That boundary is live-tested for free movement, total blocking and slide/partial acceptance, including a live body replacement without stale cached identity. This does **not** validate active positional HMD translation, room-scale reconciliation, VR speed tuning, physical crouch, jump tuning or camera/bob comfort.
-
-Native jump/vertical ownership remains separate from shared horizontal intent. Native crouch is also a real body/shape change, but Black Plague's exact stand-clearance mechanism remains insufficiently demonstrated for a shared physical-crouch policy.
-
-## Current framework proof
-
-The previous Black Plague proof was establishing the exact body/collision boundary and a safe adapter without double-updating physics. That proof is complete at `live-tested` level for the supported research build.
-
-The tracking/body policy now has shared stateless planning, physical rejection
-and locomotion-carry phases. Overture executes physical requests through its
-source adapter. Black Plague has two deliberately separate consumers: a
-default-off observation-only shadow and a default-off physical-validation path.
-The shadow and physical-validation paths are live-tested. PID 26144 exercised
-the physical path at exact-build RVA `0xD7281`:
-
-```text
-raw tracking at existing render boundary
-      ↓
-BP shadow input snapshot (pose + aligned yaw)
-      ↓
-existing adapter observes the single native tick
-      ↓
-shared plan/rebase
-      ↓
-      ├─ shadow: telemetry only
-      └─ physical validation: one bounded X/Z request at 0xD7281
-      ↓
-existing native collision/update owner
-      ↓
-measured accepted motion + reconciliation telemetry
-```
-
-Shadow accepted movement is still not a response to its observation-only plan.
-The separate validation mode injects a collision-aware request in metres and
-now has live queue, injection, native collision and matched-reconciliation
-evidence for stationary/jitter, free, blocked and sliding cases. Positional
-translation remained zero in that run; active room-scale is the next headset
-gate through the same boundary.
-
-The shared extraction is host-tested and the shadow wiring is live-tested in PID
-28172. GitHub Actions passed metadata validation plus Debug/Release root CTest
-and a clean autonomous Overture Release regression after the extraction. Hosted
-CI still cannot replace the Black Plague live physical-validation gate. See
-[`docs/internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md`](docs/internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
-
-Camera/head-bob/footstep-bob ownership is a separate comfort track. It must not be “fixed” by speculative offsets while the body reconciliation milestone is in progress.
-
-## Exact-build hook ownership
-
-A binary callsite has one owner. If multiple subsystems need data from the same boundary, the owner exposes verified status/fan-out instead of allowing independent hook stacking.
-
-Probe initialization also exposes a capability bitmap. Matrix telemetry,
-RenderWorld ownership and the SDL frame hook are required for initialization;
-native input, body/collision, body adapter, movement ownership and spatial
-interaction are reported independently. The launcher displays that result so a
-research-capable partial backend is not presented as a complete gameplay stack.
-
-This rule exists because initialized images legitimately differ from pristine executable bytes after the Framework installs earlier hooks. Validation must distinguish:
-
-```text
-pristine exact build
-        ↓
-verified owner installs replacement
-        ↓
-dependent consumer verifies owner state
-```
-
-from an unknown third-party rewrite, which must fail closed.
-
-## Build identity
-
-Filename detection is insufficient because multiple games use `Penumbra.exe`. Each binary backend selects a manifest using a cryptographic executable hash.
-
-Evidence manifests contain, and future production manifests must preserve:
-
-- game and release/channel identity;
-- executable architecture and SHA-256;
-- module-relative RVAs;
-- independently verifiable signatures;
-- calling conventions and structure layouts;
-- provenance and validation notes.
-
-Unknown hashes must never receive hooks intended for a known build. Unsupported builds should produce a diagnostic report suitable for adding support later.
-
-## Bootstrap direction
-
-The preferred production direction is one small, dependable bootstrap installed beside each supported binary game. It identifies the host, validates its build, loads exactly one backend and otherwise exits without modifying the process.
-
-The current research launcher injects a version-gated probe into an already running Steam process. `--launch-vr` / `Start-Black-Plague-VR.cmd` also provide a one-step development path. This is not yet a production installer/bootstrap.
-
-Whether the final bootstrap is loaded by a launcher, SDL proxy or another mechanism remains an open deployment decision. Multiple overlapping SDL/OpenAL/OpenGL proxy layers are not a design goal.
-
-## Installer responsibilities
-
-The eventual installer will:
-
-- discover Steam and manually selected installations;
-- distinguish games and exact executable builds;
-- show supported, unknown and already-modded states;
-- back up every replaced file transactionally;
-- enable Large Address Aware only for allowlisted x86 PE32 executables after backup and restore original bytes during rollback;
-- deploy only the files needed by each integration model;
-- preserve saves and configuration;
-- support verification, repair and rollback;
-- never patch an unknown executable silently.
-
-The transaction/state model is specified in [`docs/INSTALLER_DESIGN.md`](docs/INSTALLER_DESIGN.md). The repository currently contains the tested in-memory LAA transformation but does not yet implement the complete production installer.
-
-## Validation model
-
-Use these evidence states consistently:
+Validation states are architectural metadata and must be kept distinct:
 
 `planned` → `implemented` → `host-tested` → `live-tested` → `headset-validated` → `supported`
 
-A compile or synthetic test never implies headset validation. A successful hook installation does not imply comfort or gameplay correctness. A body adapter can be live-tested while room-scale remains unvalidated.
+A build or synthetic test does not imply in-game behavior. A live binary boundary does not imply headset comfort. A successful headset run for one contract does not promote unrelated contracts.
 
-The demonstrated Rework implementation remains the Overture behavioral reference, while detailed Black Plague binary evidence lives in `docs/BLACK_PLAGUE_PROBE.md` and `docs/BLACK_PLAGUE_SPATIAL_NOTES.md`.
+The historical Astra audit and its current reconciliation are documented in:
+
+- [`docs/audits/ASTRA_HIGH_AUDIT.md`](docs/audits/ASTRA_HIGH_AUDIT.md)
+- [`docs/AUDIT_STATUS.md`](docs/AUDIT_STATUS.md)
+- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)
+- [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md)
+
+## Shared runtime boundary
+
+The runtime owns or is intended to own behavior that has demonstrated game-neutral semantics, including:
+
+- OpenVR session/runtime abstractions;
+- tracked-pose types and coordinate conversion;
+- tracking space, calibration, recenter and identified pose/yaw epochs;
+- action state, controller input and haptic policy;
+- locomotion speeds and neutral displacement policy;
+- tracking/body reconciliation mathematics;
+- accepted-body-motion representation;
+- crouch desired-state policy and shared play-mode policy;
+- reusable grab-pose and hand-contact mathematics;
+- shared settings schemas and validation-friendly telemetry types;
+- renderer-neutral eye/view and render-target policy;
+- host-independent tests.
+
+The runtime does **not** own:
+
+- game RVAs or byte signatures;
+- exact HPL object layouts;
+- binary calling conventions;
+- one game's player/state enum values;
+- native physics/update ownership;
+- game-specific entity classification;
+- per-model tool sockets or bone axes.
+
+Promote behavior to the runtime only when the semantics are demonstrated. Duplicated but validated game/source code is preferable to a false abstraction.
+
+## Adapter/backend boundary
+
+A backend translates shared policy into one game's actual engine phases and objects. Typical backend responsibilities include:
+
+- exact build identification;
+- renderer and visibility boundaries;
+- player/body/camera acquisition;
+- native collision and shape queries;
+- move-state application and native state classification;
+- hook ownership and teardown;
+- interaction entity classification;
+- HUD/menu/inventory integration;
+- per-game audio or presentation details;
+- exact-build ABI, layouts and RVAs.
+
+The shared HPL ancestry of the trilogy is useful evidence, but a source declaration or one game's RVA is never automatically another game's ABI.
+
+## Overture architecture
+
+Overture is a source-integrated product:
+
+```text
+Framework-owned Penumbra/HPL1 source product
+    ↓
+Game.cpp acquisition/update
+    ↓
+ButtonHandler / Player
+    ↓
+OvertureSourceIntegration
+    ↓
+OvertureBackend
+    ↓
+shared runtime policy
+    ↓
+HPL/source adapters
+    ↓
+source renderer, player and physics
+```
+
+The autonomous product lives under `products/overture`. The Framework owns the coherent source host and packaging path; the separate Rework repository is used for behavioral comparison, not compilation.
+
+The Overture product is also a regression consumer for shared extraction. Existing proven `Game.cpp` sequencing and `PlayerState_Interact_VR.cpp` behavior should not be rewritten without a demonstrated contract gap.
+
+## Black Plague architecture
+
+Black Plague is an exact-build binary integration:
+
+```text
+ProbeLauncher
+    ↓
+Steam launch / process discovery
+    ↓
+exact executable validation
+    ↓
+remote DLL load
+    ↓
+PenumbraVR_Initialize
+    ↓
+ordered component owners
+    ↓
+NativeInputBridge + BodyCollisionProbe
+    ↓
+BlackPlagueBodyAdapter / interaction / renderer
+    ↓
+shared runtime policy
+```
+
+Unknown builds fail closed. Exact-build evidence lives in manifests, verifiers and backend constants with provenance; it is not promoted into generic HPL contracts.
+
+### Singular hook ownership
+
+A native callsite has one owner. Multiple consumers receive verified fan-out/status rather than stacking independent hooks.
+
+Important Black Plague owners include:
+
+- `NativeInputBridge` — native input queries and movement callsites;
+- `D460A -> D6E00` — the single native character-body update;
+- `D7281` — bounded X/Z request injection before native horizontal resolution;
+- the mapped visibility/render callsites — presentation/culling ownership;
+- the SDL frame boundary — outer frame/presentation integration.
+
+`BlackPlagueBodyAdapter` consumes those owners and does not install a second native body-update hook.
+
+## Black Plague body/tracking transaction
+
+The Astra audit identified a temporal defect in the former post-tick plan-for-next-tick path. The current host-tested contract is a same-tick transaction around the existing native body owner:
+
+```text
+before D6E00
+    resolve player/body identity and B0
+    consume latest identified tracking sample
+    consume logical locomotion intent
+    integrate using the physics tick
+    bind request to tick/body/generation/epoch
+
+inside existing D7281 owner
+    consume the bounded horizontal request once
+    preserve native Y/solver ownership
+
+D6E00
+    run exactly once
+
+after D6E00
+    observe B1
+    verify tick/body/generation correspondence
+    reconcile once
+    carry accepted locomotion once
+    publish body/anchor result
+```
+
+The previous plan against the `body_before` of an already-finished tick is not the current architecture.
+
+The combined Black Plague boundary resolves physical and direct-stick horizontal requests through one native update. The total accepted body displacement is observed; any attribution between physical/stick components remains an adaptation and must not be described as two independent native solves.
+
+Native jump, gravity and vertical gameplay remain outside this horizontal ownership contract.
+
+### Locomotion policy
+
+Shared runtime policy currently carries:
+
+- normal walk: `1.5 m/s`;
+- sprint: `2.25 m/s`;
+- demonstrated constrained movement: `0.5 m/s`;
+- bounded per-tick horizontal request policy, distinct from the game's native step-height semantics.
+
+The normal direct route has headset evidence from the existing validation history. Black Plague's exact Push/Move state mapping to `0.5 m/s` is a later host-tested mapping and retains its own headset gate.
+
+## Crouch and posture ownership
+
+The current contract follows Rework's persistent desired-state model:
+
+- shared policy owns desired crouch/latch semantics;
+- Black Plague preserves native crouch query results when VR is not the owner;
+- VR stance ownership is tied to session/player generation;
+- Black Plague applies native stance through `cPlayer::ChangeMoveState(4/0)` on the existing game-thread owner;
+- desired stance, effective move state and blocked stand are represented separately;
+- standing remains pending/retryable when native clearance prevents the transition.
+
+Ordinary physical/button/Hybrid crouch has headset evidence in the later Black Plague runs. Low-ceiling blocked-stand recovery and explicit tracked-Y/collider correlation remain separate headset gates.
+
+Shared seated/play-mode policy has been extracted; per-game native application remains adapter-owned.
+
+## Presentation and tracking epochs
+
+The audit identified that visibility, eye rendering, controllers and body placement could consume different pose/yaw epochs. The post-audit architecture therefore carries identified presentation/tracking samples and explicit yaw epochs.
+
+Real headset candidates then exposed two compositor-ownership bugs:
+
+1. nested visibility callbacks during eye rendering could reacquire compositor poses;
+2. a valid presentation snapshot could be reused after its eye pair had already been submitted.
+
+The current presentation contract is **single-consumption**:
+
+- the owning outer presentation phase acquires/publishes the sample;
+- nested eye/visibility consumers reuse that owned sample rather than calling for another compositor frame;
+- sequence `0`, already-submitted sequences and older sequences are rejected before another eye submit;
+- a skipped world submit is preferable to submitting an eye pair twice for one compositor sequence.
+
+PID 22096 subsequently sustained the current presentation path through menu/gameplay with no stereo/compositor failures. That closes the specific error-108 regression but does not by itself validate tracking-world-yaw ownership, mirror/focus or final body/footstep bob.
+
+## Positional comfort handoff
+
+Short physical X/Z pullback remained after the earlier body-boundary work. Later telemetry narrowed one remaining path to render-rate prediction continuing briefly into a horizontal direction rejected by the previous native solve.
+
+The current host-tested render handoff carries the last physical reconciliation and removes only the prediction component that continues into the rejected direction. Tangential slide and movement away from the obstacle remain available.
+
+This filter is not considered headset-validated until a fresh short-motion/wall/slide run closes the comfort gate.
+
+## Interaction architecture
+
+Interaction is split into three distinct layers:
+
+1. **selection/acquisition lifecycle** — input, contact candidate, generation and ownership;
+2. **free-body grab** — palm-relative transform/held-body behavior;
+3. **collision-resolved palm contact** — world collision, recovery and a resolved palm pose.
+
+Free-body grab is not a substitute for collision-resolved palm contact, and neither is a substitute for jointed mechanism support.
+
+### Generation/lifecycle
+
+Post-audit interaction work makes selection/hold state generation-aware and revalidates acquisition so stale player/world state is not silently reused. Release/restoration must occur at most once and must never dereference a demonstrated-destroyed native body.
+
+### Shared hand-contact policy
+
+Rework's demonstrated palm dimensions, contact tolerances, sweep/refinement and recovery mathematics are extracted into shared runtime policy. Native shape creation, collision queries and body exclusions remain adapter/backend responsibilities.
+
+### Black Plague palm boundary
+
+The exact supported-image Black Plague contact boundary has advanced beyond the original audit:
+
+- `CheckShapeWorldCollision` ABI/callback/contact layout is pinned;
+- body shape/matrix accessors are pinned;
+- `CreateBoxShape`, user count and destruction route are pinned;
+- a default-off `--validate-palm-query` diagnostic reuses the current body shape and guards against native-state mutation;
+- its synthetic harness is host-tested.
+
+The diagnostic has not yet established the required successful real-process live gate, no owned palm shape is created by it, and the full Rework sweep/refinement/recovery resolver is not yet connected to Black Plague gameplay.
+
+Therefore the architecture deliberately gates gameplay palm implementation on the no-write live query first.
+
+## Tools, hands and mechanisms
+
+Measured flashlight/glowstick grip points and model orientations are profile data, not global calibration knobs. Black Plague's richer finger articulation is retained and should inform shared semantics without forcing identical rigs.
+
+Doors, levers, sliders and other joints remain native mechanisms until their state/constraint boundaries are mapped. Generic free-body grab must not be presented as mechanism support.
+
+## Probe lifecycle
+
+Initialization and shutdown are transactional at the component level. The probe records installed/active components and can represent a partial state if rollback or teardown fails.
+
+Architectural requirements:
+
+- publish `ready` only for the required installed set;
+- preserve real capability/owner state after partial failure;
+- keep teardown retryable;
+- keep observability/memory valid while owned callbacks may still execute;
+- treat remote-call timeout as indeterminate rather than proof of non-execution;
+- prepare thread handles/storage before suspending peers and avoid allocations/error formatting inside the suspended region.
+
+Do not collapse a partial state back to “clean” or “ready” for convenience.
+
+## Historical SDL crash
+
+The original SDL APPCRASH remains without a proven causal explanation. Later OpenVR compositor error-108 regressions had separately demonstrated presentation-ownership causes and must not be conflated with that historical crash.
+
+If an SDL crash recurs, the required evidence is a dump with stack, registers and module identity. Temporal proximity to a shadow/mutex/feature is not causal proof.
+
+## Build identity and binary evidence
+
+Filename detection is insufficient because multiple games use similar executable names. Binary backends select supported builds by cryptographic identity and exact evidence.
+
+Evidence records should preserve:
+
+- game/channel/build identity;
+- executable architecture and SHA-256;
+- RVAs and independently verifiable byte/signature evidence;
+- calling conventions and object layouts;
+- whether the inspected image was pristine or already contained known Framework hooks;
+- provenance and validation status.
+
+Unknown or contradictory images fail closed.
+
+## Deployment direction
+
+The final product should provide one safe user-facing installer/bootstrap while retaining the asymmetric game integrations.
+
+Deployment responsibilities include:
+
+- Steam/manual installation discovery;
+- build compatibility reporting;
+- transactional backup/install/verify/rollback;
+- allowlisted Large Address Aware transformation where required;
+- action manifest/binding deployment;
+- optional localization payload deployment with provenance;
+- clean-machine and upgrade testing.
+
+The current research launcher/probe path is not yet the final production installer.
+
+## Current implementation boundary
+
+Do not interpret this architecture document as a request to redesign already-host-tested contracts. The active order is maintained in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+
+At the current checkpoint, the principal remaining evidence/implementation boundaries are:
+
+1. successful real-process no-write Black Plague palm query;
+2. focused headset validation of short-X/Z comfort, low-ceiling stand recovery/tracked-Y, constrained locomotion and recenter/tracking-loss;
+3. interaction lifecycle/tool geometry validation;
+4. gameplay collision-resolved palms after the no-write live gate;
+5. mirror/focus, tracking-world-yaw and final body/footstep bob as separate gates;
+6. mechanisms, broader UI/gameplay coverage and production deployment;
+7. Requiem exact-build backend research.
