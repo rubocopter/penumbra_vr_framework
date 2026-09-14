@@ -12,26 +12,33 @@ default-off fuera de los gates transitorios de validación.
 
 Para cerrar el candidato con visor, la tanda debe cubrir, en este orden:
 
-1. baseline de pie y dos ciclos completos de crouch físico `4/0` con shapes
+1. **gate de presentación primero**: desde menú entra en gameplay, confirma
+   imagen estereoscópica estable en visor, controles activos y al menos unos
+   segundos de envío sostenido sin `VRCompositorError_AlreadySubmitted (108)`;
+   si falla aquí, detén la tanda y conserva el log fresco del PID. El log nuevo
+   expone `presentation_pose_acquisitions` y `presentation_pose_reuses` para
+   comprobar que el owner exterior adquiere la muestra y los eye passes la
+   reutilizan;
+2. baseline de pie y dos ciclos completos de crouch físico `4/0` con shapes
    `0.95/1.65 m`;
-2. crouch por botón mantenido y composición Hybrid, incluyendo stand bloqueado
+3. crouch por botón mantenido y composición Hybrid, incluyendo stand bloqueado
    bajo techo y recuperación al quedar espacio;
-3. movimiento físico X/Z corto de `5–10 cm`, quietud e inclinación de cabeza,
+4. movimiento físico X/Z corto de `5–10 cm`, quietud e inclinación de cabeza,
    sin pullback, deriva ni oscilación perceptible;
-4. stick normal y sprint con varios yaw, conservando `1.5/2.25 m/s`, más una
+5. stick normal y sprint con varios yaw, conservando `1.5/2.25 m/s`, más una
    combinación breve de stick y desplazamiento físico opuestos;
-5. un caso Push y un caso Move para validar en visor la rama restringida
+6. un caso Push y un caso Move para validar en visor la rama restringida
    `0.5 m/s`; sprint no debe elevar esa velocidad;
-6. seated/standing, recenter y pérdida/recuperación de tracking sin doble
+7. seated/standing, recenter y pérdida/recuperación de tracking sin doble
    integración ni salto de época de yaw;
-7. pared, slide y esquina para comprobar rechazo/reconciliación sin repetir la
+8. pared, slide y esquina para comprobar rechazo/reconciliación sin repetir la
    validación ya cerrada de `0xD7281` salvo regresión;
-8. manos, herramientas, free-body grab/release y cambio de mapa mientras se
+9. manos, herramientas, free-body grab/release y cambio de mapa mientras se
    sostiene un objeto, verificando que un hold de una generación anterior no se
    reutiliza;
-9. mirror/focus y Alt+Tab como gate separado; si reaparece el crash histórico de
+10. mirror/focus y Alt+Tab como gate separado; si reaparece el crash histórico de
    SDL, conservar dump y lista de módulos sin atribuir causa por proximidad;
-10. yaw/footstep-body-bob como gate de confort separado antes de cualquier
+11. yaw/footstep-body-bob como gate de confort separado antes de cualquier
     promoción a `supported`.
 
 La palma collision-aware completa sigue fuera de este candidato hasta que el
@@ -40,6 +47,14 @@ de Black Plague. Ese gate live no requiere visor y no debe confundirse con la
 validación visual/contacto de la futura palma completa.
 
 ### Build preparada para la siguiente sesión
+
+El candidato anterior `3333be1` queda descartado: PIDs 23656 y 21396 fallaron
+en la primera transición real a gameplay con OpenVR compositor error 108. La
+build actual contiene la corrección de ownership de la muestra de presentación:
+las cámaras de transición/UI no consumen una muestra y los callbacks de
+visibilidad ejecutados dentro de los dos eye passes reutilizan el snapshot del
+owner previo a RenderWorld. Este cambio sigue **host-tested**, pendiente del
+primer gate de presentación indicado arriba.
 
 El candidato de prueba con visor se genera directamente en
 `build\bin\Release`. No hace falta crear una release pública ni copiar DLLs al

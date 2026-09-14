@@ -1,5 +1,16 @@
 # Changelog
 
+- 2026-09-14: invalidated headset candidate `3333be1` after Black Plague PIDs
+  23656 and 21396 both failed their first gameplay stereo transition with
+  OpenVR compositor error 108 (`VRCompositorError_AlreadySubmitted`). The new
+  visibility-owned presentation sampling could reacquire compositor poses from
+  `UpdateRenderList` callbacks reached inside the two eye renders, overwriting
+  the pre-RenderWorld snapshot and breaking one-wait/one-submit ownership. The
+  backend now validates the gameplay camera before sampling and reuses the
+  owning presentation snapshot during nested eye callbacks. Debug, Release and
+  SDK-less Release each pass 34/34 root tests; metadata, the supported-image BP
+  verifier and Overture `-Full` also pass. A fresh headset run is still required
+  before the presentation intervention can be promoted.
 - 2026-09-14: completed the offline intervention checkpoint for tracking/body,
   crouch ownership, posture snapshots, interaction lifecycle and probe
   teardown. Added the real NativeInputBridge crouch contract harness, a

@@ -650,6 +650,26 @@ void __fastcall HookedUpdateRenderList(
         return;
     }
 
+    CameraMatrixSnapshot camera_snapshot;
+    std::string error;
+    if (!adapters::hpl1::CaptureCameraMatrices(
+            camera, kCameraLayout, camera_snapshot, error) ||
+        !LooksLikeMappedGameplayCamera(camera_snapshot)) {
+        if (error.empty()) {
+            error = "The visibility camera does not match the mapped layout";
+        }
+        RecordHmdVisibilityFailure(error, true);
+        original(renderer, world, camera, frame_time);
+        return;
+    }
+
+    // UpdateRenderList is also reached from the two RenderWorld eye passes.
+    // Those nested calls must reuse the presentation sample acquired by the
+    // pre-RenderWorld visibility owner. Calling WaitGetPoses again here moves
+    // compositor ownership forward and can leave the next world Submit on a
+    // frame whose eyes were already submitted (VRCompositorError 108).
+    const bool reuse_presentation =
+        g_stereo_frame_calls.load(std::memory_order_acquire) != 0;
     ActiveStereoFrame active_stereo_frame;
     if (!visibility_active()) {
         original(renderer, world, camera, frame_time);
@@ -661,31 +681,36 @@ void __fastcall HookedUpdateRenderList(
         pending, StereoMatrixState::processing, std::memory_order_acq_rel));
     PresentationSnapshot presentation;
     bool recentered = false;
-    std::string error;
-    if (!AcquirePresentationSnapshot(presentation, recentered, error)) {
-        RecordHmdVisibilityFailure(
-            error.empty() ? "The presentation HMD pose is unavailable" : error,
-            true);
-        original(renderer, world, camera, frame_time);
-        return;
-    }
-
-    CameraMatrixSnapshot camera_snapshot;
-    if (!adapters::hpl1::CaptureCameraMatrices(
-            camera, kCameraLayout, camera_snapshot, error) ||
-        !LooksLikeMappedGameplayCamera(camera_snapshot)) {
-        if (error.empty()) {
-            error = "The visibility camera does not match the mapped layout";
+    if (reuse_presentation) {
+        AcquireSRWLockShared(&g_presentation_lock);
+        presentation = g_presentation_snapshot;
+        ReleaseSRWLockShared(&g_presentation_lock);
+        if (!presentation.valid) {
+            RecordHmdVisibilityFailure(
+                "The active stereo frame has no presentation snapshot", true);
+            original(renderer, world, camera, frame_time);
+            return;
         }
-        RecordHmdVisibilityFailure(error, true);
-        original(renderer, world, camera, frame_time);
-        return;
-    }
-    if (!ResolvePresentationTrackingYaw(
-            camera_snapshot.view, presentation, error)) {
-        RecordHmdVisibilityFailure(error, true);
-        original(renderer, world, camera, frame_time);
-        return;
+        AcquireSRWLockExclusive(&g_telemetry_lock);
+        ++g_telemetry.presentation_pose_reuses;
+        ReleaseSRWLockExclusive(&g_telemetry_lock);
+    } else {
+        if (!AcquirePresentationSnapshot(presentation, recentered, error)) {
+            RecordHmdVisibilityFailure(
+                error.empty() ? "The presentation HMD pose is unavailable" : error,
+                true);
+            original(renderer, world, camera, frame_time);
+            return;
+        }
+        AcquireSRWLockExclusive(&g_telemetry_lock);
+        ++g_telemetry.presentation_pose_acquisitions;
+        ReleaseSRWLockExclusive(&g_telemetry_lock);
+        if (!ResolvePresentationTrackingYaw(
+                camera_snapshot.view, presentation, error)) {
+            RecordHmdVisibilityFailure(error, true);
+            original(renderer, world, camera, frame_time);
+            return;
+        }
     }
 
     runtime::VrMatrix44 tracked_head_view;

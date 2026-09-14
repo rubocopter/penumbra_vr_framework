@@ -4,6 +4,20 @@ This file prevents repeated symptom-level fixes from replacing evidence-backed i
 
 ## Current offline checkpoint (2026-09-14)
 
+The first two headset attempts from candidate `3333be1` (PIDs 23656 and 21396)
+failed at the presentation boundary, not at locomotion/crouch ownership. Both
+initialized the probe/controller path, then the first gameplay stereo submit
+returned OpenVR error 108 (`VRCompositorError_AlreadySubmitted`). The regression
+was introduced by visibility-owned presentation sampling: nested
+`UpdateRenderList` calls from the stereo eye passes could call `WaitGetPoses`
+again and replace the sample owned by the outer presentation frame. The current
+fix rejects non-gameplay visibility cameras before sampling and makes nested
+eye callbacks reuse the existing presentation snapshot. Debug, Release and
+SDK-less Release each pass 34/34 after the fix; metadata, the exact-build BP
+verifier and the Overture `-Full` regression also pass. Treat `3333be1` as a
+failed headset candidate; the fix remains host-tested until a new headset run
+proves normal menu/gameplay transition and sustained stereo submission.
+
 The working tree contains the five-phase offline intervention. Debug, Release
 and SDK-less Release pass 34/34 CTest tests. Metadata validation and the
 supported-image BP verifier pass without modifying a process. The body

@@ -506,6 +506,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "suppressed_monitor_world_passes=%lu eye_owned_frame_time_frames=%lu "
             "stereo_failed=%u stereo_error=%s "
             "hmd_visibility_updates=%lu hmd_visibility_failures=%lu "
+            "presentation_pose_acquisitions=%lu presentation_pose_reuses=%lu "
             "hmd_visibility_camera_restored=%u hmd_visibility_error=%s "
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
@@ -579,6 +580,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.stereo_error.data(),
             static_cast<unsigned long>(render_world.hmd_visibility_updates),
             static_cast<unsigned long>(render_world.hmd_visibility_failures),
+            static_cast<unsigned long>(render_world.presentation_pose_acquisitions),
+            static_cast<unsigned long>(render_world.presentation_pose_reuses),
             render_world.hmd_visibility_camera_restored ? 1U : 0U,
             render_world.hmd_visibility_error.data(),
             static_cast<unsigned long>(render_world.eye_scissor_remapped),

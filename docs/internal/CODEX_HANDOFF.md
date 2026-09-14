@@ -10,6 +10,21 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Headset-candidate regression found on 2026-09-14: PIDs 23656 and 21396
+  initialized the Black Plague probe and controller path, but the first gameplay
+  stereo transition failed with OpenVR compositor error `108`
+  (`VRCompositorError_AlreadySubmitted`). This invalidates commit `3333be1` as
+  a headset candidate. The presentation/visibility intervention had allowed
+  `UpdateRenderList` callbacks reached from the stereo eye passes to acquire a
+  fresh compositor pose and overwrite the pre-RenderWorld presentation sample.
+  The current fix validates the mapped gameplay camera before acquiring a pose
+  and makes nested eye-pass visibility reuse the owning presentation snapshot,
+  so the world pair remains associated with one compositor frame. Debug,
+  Release and SDK-less Release each pass 34/34 root tests after the fix;
+  metadata and the exact-build BP verifier pass, and Overture `-Full` passes
+  its Release/LAA, 16-shader, 8,752 visual-check, 231-texture and 289/289 test
+  gates. Fresh headset evidence is still required before restoring any
+  live/headset claim for the new presentation contract.
 - Release-candidate checkpoint (2026-09-14): keep the next Black Plague Release
   as a validation candidate, not a supported/public release. The authoritative
   headset gate is `docs/VR_HEADSET_TEST_CHECKLIST.md`; it now explicitly groups
