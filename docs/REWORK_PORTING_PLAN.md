@@ -136,11 +136,17 @@ The body/collision/adapter mapping milestone is complete enough that more probin
 PID 23260 narrowed the crouch failure further. Physical height transitions and the
 button latch both reached shared policy, but the native body stayed at `0.95 m`
 with no native exit because Black Plague's exact crouch entries preserve legacy
-pressed/released hold/toggle semantics. The current host-tested backend keeps the
-Rework desired state, sends native release first and uses the game's second press
-only when toggle mode leaves the body crouched. Native body replacement and
-clearance remain authoritative. Release compilation and all 30 host tests pass;
-the next headset gate must validate the corrected exit path.
+pressed/released hold/toggle semantics. PID 24948 then proved that compensating
+inside those callbacks was still insufficient: the native body alternated
+between standing/crouched shapes (`native_entries=14`, `native_exits=14`) while
+the game did not hold the expected crouch/stealth state. Exact-build decoding
+identifies `cPlayer::ChangeMoveState` at `0x9C750`; Black Plague's own normal
+crouch handlers prove state `4` is crouch and `0` is walk. The current
+host-tested backend therefore ports Rework's actual ownership model: shared
+runtime owns one desired state and the existing game-thread backend applies it
+directly with `ChangeMoveState(4/0)`. Native body replacement and clearance
+remain authoritative. Release compilation, exact-image verification and all 30
+host tests pass; the next headset gate must validate stable state-4 crouch/stealth.
 
 Current order:
 
@@ -226,10 +232,11 @@ backend consumer or target-specific validation:
 - staged loading/fade is coupled to Overture's synchronous map load and
   compositor presentation lifecycle; a second backend presentation boundary is
   required before extracting it.
-- physical crouch policy is now shared, while Black Plague keeps its exact native
-  pressed/released toggle adaptation and stand-retry mechanism in the backend. A second backend is not
-  needed to generalize those exact methods; headset and blocked-stand evidence
-  are still required before promotion.
+- physical crouch policy is now shared, while Black Plague keeps its exact
+  `cPlayer::ChangeMoveState(4/0)` adapter, move-state/body-shape observation and
+  stand-retry mechanism in the backend. A second backend is not needed to
+  generalize that exact native boundary; headset and blocked-stand evidence are
+  still required before promotion.
 - inventory/notes/HUD/subtitle integration still depends on each game's menu,
   draw-order and native state boundaries. The reusable panel/pointer/settings
   policy already extracted should be consumed once those boundaries are mapped.

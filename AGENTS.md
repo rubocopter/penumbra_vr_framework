@@ -122,21 +122,29 @@ session. Rework `23c890f` owns one persistent desired crouch state and applies
 the native move state explicitly; the failed Framework build instead fed
 held/released policy into Black Plague's configurable legacy toggle path.
 
-The correction is now implemented and **host-tested** only. Shared
+PID 23260 then showed that the configurable native release dispatch could leave
+the body crouched, and PID 24948 showed that compensating with release/second
+press could alternate the `1.65/0.95 m` shape without holding Black Plague's
+real crouch/stealth state. Exact-build decoding identifies
+`cPlayer::ChangeMoveState` at `0x9C750`; the original handlers prove state `4`
+is crouch, state `0` is walk and state `3` is jump.
+
+The current correction is implemented and **host-tested** only. Shared
 `VrPhysicalCrouchPolicy` owns Rework's button latch, tracked-height baseline,
 `PhysicalCrouchDepth`, plausible `(0.90, 2.20) m` range and `0.08 m` hysteresis.
-The existing Black Plague game-thread owner applies that desired state through
-the exact native `StartCrouch/StopCrouch` entries `0x9CFA0/0x9CFD0`, adopts a
-legacy crouch edge, retries a blocked stand, and reports desired/native
-correlation. It adds no hook. Rendering now uses shared `VrTrackingSpace` for
+The existing Black Plague game-thread owner applies that desired state directly
+through `ChangeMoveState(4/0)`, adopts a legacy crouch edge, retries a blocked
+stand, and reports desired move-state/body correlation. It adds no hook.
+Rendering now uses shared `VrTrackingSpace` for
 continuous HMD Y and `HeightOffset`, with the reconciled body position as the
 feet anchor; a physical crouch does not also inherit the native full camera
 drop. The next headset gate is the focused run in
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must prove two correlated
-physical entry/exit cycles, button-toggle and Hybrid composition, continuous Y,
-final native standing state, short X/Z comfort and no regression of the PID 8092
-stick path. Keep tracking-world-yaw turn ownership and final footstep/body-bob
-behavior as separate validation gates.
+physical entry/exit cycles with move-state `4/0` and `0.95/1.65 m` shapes, a
+stable button-only crouch/stealth interval, Hybrid composition, continuous Y,
+final native standing state, short X/Z comfort and no regression of the PID
+8092 stick path. Keep tracking-world-yaw turn ownership and final
+footstep/body-bob behavior as separate validation gates.
 
 ## Black Plague constraints
 

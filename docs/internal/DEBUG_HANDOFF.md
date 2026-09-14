@@ -277,12 +277,19 @@ None is required for the shadow-only tracking/body validation milestone. Keep na
   but native stance reached crouch and never returned: `native_exits=0`, final
   `native_crouched=1`, `vr_owned=1`, `stand_retries=17832`. Therefore the right
   stick/OpenVR button route is not the missing boundary. In native toggle mode
-  the release dispatch leaves crouch latched. The backend now preserves the
-  Rework persistent desired state and, for a requested stand, sends release
-  first then sends the game's own pressed dispatch only when the native shape is
-  still crouched. Hold mode exits on release; toggle mode exits on the second
-  press; a blocked native stand remains crouched and is retried. This change is
-  Release-built and passes 30/30 host tests, but is not live/headset validated.
+  the release dispatch leaves crouch latched. A release/second-press adaptation
+  fixed that stuck shape but was not the final owner.
+- PID 24948 exposed the remaining conceptual error. The user saw a short
+  down/up motion instead of persistent crouch/stealth, while telemetry reached
+  `native_entries=14` and `native_exits=14`. The body shape was being toggled,
+  but the backend was still feeding a persistent desired state through native
+  configurable press/release callbacks. Exact-build decoding identifies
+  `cPlayer::ChangeMoveState` at `0x9C750`; the original normal-state crouch
+  handlers prove move-state `4` is crouch and `0` is walk. The game-thread owner
+  now applies those states directly, matching Rework's ownership model. Probe
+  telemetry includes `cPlayer+0x2D0`, and validation requires move-state and
+  collider shape to agree. Release build, exact-image verification and 30/30
+  host tests pass; this direct-state correction is not live/headset validated.
 - Rendering now composes continuous physical HMD Y through `VrTrackingSpace`
   from the reconciled feet anchor. A physical crouch does not add the native
   full camera drop; button-only crouch applies the configured posture offset.
@@ -298,9 +305,10 @@ None is required for the shadow-only tracking/body validation milestone. Keep na
 ### Next evidence
 
 Run `tools/Start-BlackPlagueRoomScaleValidation.ps1` and require two correlated
-physical/native entry/exit cycles, final native standing with VR ownership
-released, button-toggle and Hybrid composition, at least `0.15 m` tracked-Y
-range, post-crouch stick recovery and subjective short-range X/Z comfort. A
+physical/native entry/exit cycles with move-state `4/0`, final native standing
+with VR ownership released, a stable button-only state-4 crouch/stealth interval
+followed by state 0, Hybrid composition, at least `0.15 m` tracked-Y range,
+post-crouch stick recovery and subjective short-range X/Z comfort. A
 blocked stand should increment retry telemetry and remain crouched until clear;
 it must not be described as validated until exercised in the headset.
 

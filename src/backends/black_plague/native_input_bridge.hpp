@@ -12,6 +12,8 @@ struct BlackPlagueNativeCrouchStatus {
     runtime::VrPhysicalCrouchStatus policy{};
     bool native_shape_known = false;
     bool native_crouched = false;
+    bool native_move_state_known = false;
+    std::int32_t native_move_state = -1;
     bool vr_stance_owned = false;
     std::uint64_t native_crouch_entries = 0;
     std::uint64_t native_crouch_exits = 0;

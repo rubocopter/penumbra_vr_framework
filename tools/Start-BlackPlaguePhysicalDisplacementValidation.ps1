@@ -315,14 +315,14 @@ try {
     Write-Host "Probe log: $probeLog"
     if ($EnableRoomScale -and $PhysicalCrouchFocus) {
         Write-Host 'Validate physical crouch/native-shape synchronization and short-range comfort while keeping this window open. Hold each stance for several seconds so periodic telemetry captures it.'
-        Write-Host 'PID 20520 exposed a false automatic pass: policy exits were not synchronized with the native standing body. This run validates the corrected Rework-style owner and vertical tracking.'
+        Write-Host 'PID 24948 proved that shape-only crouch synchronization was insufficient: the native body could alternate 1.65/0.95 m while the game never held its real crouch/stealth move state. This run validates the Rework-style desired state through Black Plague move-state 4 (crouch) and 0 (walk), plus vertical tracking.'
         Write-Host '1. Start fully STANDING and do not press crouch. Stay naturally upright for 10 seconds so the raw HMD standing-height baseline calibrates.'
         Write-Host '2. Without crouching or using sticks, move head/torso only 5-10 cm forward, back and sideways, returning to the same spot each time. The world must follow continuously and must not pull you back, oscillate or lurch.'
         Write-Host '3. Without pressing crouch, lower your real head/body by at least 25 cm and hold for 5-6 seconds. Height must follow continuously; crossing the threshold must change the native body to 0.95 m without an extra deep camera drop.'
         Write-Host '4. Rise slightly near the threshold and hold briefly; the 8 cm hysteresis must prevent rapid toggling. Then stand fully upright for 5-6 seconds. The view and native 1.65 m body must stand immediately, without another crouching gesture.'
         Write-Host '5. Repeat one complete physical crouch/stand cycle. The helper requires two policy entries/exits synchronized with two native body entries/exits.'
-        Write-Host '6. Test the RIGHT-stick crouch click as a Rework toggle: one click crouches and a second click stands. A button release by itself must not invert the stance.'
-        Write-Host '7. In Hybrid mode, crouch physically, click crouch once, then stand physically: the button latch should keep you crouched. Click once more and the body/view must stand.'
+        Write-Host '6. BUTTON-ONLY: while physically standing, click crouch once and remain still for at least 5 seconds. The game must enter and KEEP its real crouch/stealth state: native move-state 4 and the 0.95 m body must remain active instead of dipping and immediately returning. Click again, remain still for 5 seconds, and confirm native move-state 0 plus the 1.65 m body. Repeat once so periodic telemetry captures both sides.'
+        Write-Host '7. HYBRID: crouch physically and, while still physically crouched, click crouch once. Then stand physically without clicking again: the button latch must keep the game in native move-state 4/stealth with the 0.95 m body. Click once more only after you are physically standing; it must return to move-state 0 and 1.65 m.'
         Write-Host '8. Use a short LEFT-stick move while standing and while physically crouched. Then combine a small 5-10 cm physical translation with stick and stop both; direction must remain HMD-relative with no retained pull or shake.'
         Write-Host '9. Check both hands and the desktop mirror throughout. No sprint, wall block or room-scale walking is required in a small play area. Close the game normally when finished.'
     } elseif ($EnableRoomScale) {
@@ -406,7 +406,16 @@ try {
     $alignedPhysicalStandObserved = $false
     $finalNativeShapeKnown = $false
     $finalNativeCrouched = $true
+    $finalNativeMoveStateKnown = $false
+    [int]$finalNativeMoveState = -1
     $finalVrCrouchOwned = $true
+    $nativeCrouchMoveStateObserved = $false
+    $nativeWalkMoveStateObserved = $false
+    $buttonOnlyCrouchObserved = $false
+    [int]$buttonOnlyCrouchLineIndex = -1
+    $buttonOnlyStandObserved = $false
+    $hybridCombinedObserved = $false
+    $hybridLatchHoldObserved = $false
     [double]$minimumTrackedHeadY = [double]::PositiveInfinity
     [double]$maximumTrackedHeadY = [double]::NegativeInfinity
     for ($lineIndex = 0; $lineIndex -lt $freshLines.Count; $lineIndex++) {
@@ -441,12 +450,39 @@ try {
             }
             $finalNativeShapeKnown = $line -match 'native_known=1'
             $finalNativeCrouched = $line -match 'native_crouched=1'
+            $finalNativeMoveStateKnown = $line -match 'native_state_known=1'
+            if ($line -match 'native_state=(-?\d+)') {
+                $finalNativeMoveState = [int]$Matches[1]
+            }
             $finalVrCrouchOwned = $line -match 'vr_owned=1'
-            if ($line -match 'physical=1 .*effective=1 .*native_known=1 native_crouched=1') {
+            if ($line -match 'effective=1 .*native_known=1 native_crouched=1 .*native_state_known=1 native_state=4') {
+                $nativeCrouchMoveStateObserved = $true
+            }
+            if ($line -match 'effective=0 .*native_known=1 native_crouched=0 .*native_state_known=1 native_state=0') {
+                $nativeWalkMoveStateObserved = $true
+            }
+            if ($line -match 'physical=0 button_latched=1 effective=1 .*native_known=1 native_crouched=1 .*native_state_known=1 native_state=4') {
+                $buttonOnlyCrouchObserved = $true
+                if ($buttonOnlyCrouchLineIndex -lt 0) {
+                    $buttonOnlyCrouchLineIndex = $lineIndex
+                }
+            }
+            if ($buttonOnlyCrouchLineIndex -ge 0 -and $lineIndex -gt $buttonOnlyCrouchLineIndex -and
+                $line -match 'physical=0 button_latched=0 effective=0 .*native_known=1 native_crouched=0 .*native_state_known=1 native_state=0 .*vr_owned=0') {
+                $buttonOnlyStandObserved = $true
+            }
+            if ($line -match 'physical=1 button_latched=1 effective=1 .*native_known=1 native_crouched=1 .*native_state_known=1 native_state=4 .*vr_owned=1') {
+                $hybridCombinedObserved = $true
+            }
+            if ($hybridCombinedObserved -and
+                $line -match 'physical=0 button_latched=1 effective=1 .*native_known=1 native_crouched=1 .*native_state_known=1 native_state=4 .*vr_owned=1') {
+                $hybridLatchHoldObserved = $true
+            }
+            if ($line -match 'physical=1 .*effective=1 .*native_known=1 native_crouched=1 .*native_state_known=1 native_state=4') {
                 $alignedPhysicalCrouchObserved = $true
             }
             if ($physicalCrouchExits -gt 0 -and
-                $line -match 'physical=0 .*effective=0 .*native_known=1 native_crouched=0 .*vr_owned=0') {
+                $line -match 'physical=0 .*effective=0 .*native_known=1 native_crouched=0 .*native_state_known=1 native_state=0 .*vr_owned=0') {
                 $alignedPhysicalStandObserved = $true
             }
         }
@@ -594,11 +630,25 @@ try {
     if ($EnableRoomScale -and $PhysicalCrouchFocus -and
         ($nativeCrouchEntries -lt 2 -or $nativeCrouchExits -lt 2 -or
          -not $alignedPhysicalCrouchObserved -or -not $alignedPhysicalStandObserved)) {
-        $missingEvidence += 'two physical policy transitions synchronized with the native 0.95 m/1.65 m body states'
+        $missingEvidence += 'two physical policy transitions synchronized with native crouch/walk move states 4/0 and 0.95 m/1.65 m body states'
     }
     if ($EnableRoomScale -and $PhysicalCrouchFocus -and
-        (-not $finalNativeShapeKnown -or $finalNativeCrouched -or $finalVrCrouchOwned)) {
-        $missingEvidence += 'final native standing shape with VR crouch ownership released'
+        (-not $nativeCrouchMoveStateObserved -or -not $nativeWalkMoveStateObserved)) {
+        $missingEvidence += 'native move-state 4 while crouched and move-state 0 after standing'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and
+        (-not $buttonOnlyCrouchObserved -or -not $buttonOnlyStandObserved)) {
+        $missingEvidence += 'button-only crouch latched in native move-state 4 followed by button release to move-state 0'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and
+        (-not $hybridCombinedObserved -or -not $hybridLatchHoldObserved)) {
+        $missingEvidence += 'Hybrid composition with the physical source released while the button latch keeps native move-state 4'
+    }
+    if ($EnableRoomScale -and $PhysicalCrouchFocus -and
+        (-not $finalNativeShapeKnown -or $finalNativeCrouched -or
+         -not $finalNativeMoveStateKnown -or $finalNativeMoveState -ne 0 -or
+         $finalVrCrouchOwned)) {
+        $missingEvidence += 'final native standing shape in move-state 0 with VR crouch ownership released'
     }
     if ($EnableRoomScale -and $PhysicalCrouchFocus -and
         ($maximumTrackedHeadY - $minimumTrackedHeadY) -lt 0.15) {

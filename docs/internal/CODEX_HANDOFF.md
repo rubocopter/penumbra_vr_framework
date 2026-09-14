@@ -57,14 +57,14 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   Rework `23c890f` owns a single persistent desired state; the failed build fed
   held/released policy back through Black Plague's configurable legacy toggle.
   Shared `VrPhysicalCrouchPolicy` now owns the Rework button latch, physical
-  baseline/depth/hysteresis and Hybrid OR. The existing game-thread input owner
-  applies desired stance through exact entries `0x9CFA0/0x9CFD0`, adopts legacy
-  edges, retries blocked stand and publishes desired/native correlation. The
-  same physical control reported by OpenVR and legacy input is collapsed into
-  one toggle. Rendering now uses `VrTrackingSpace` to compose continuous HMD Y
+  baseline/depth/hysteresis and Hybrid OR. The first backend integration applied
+  that desired stance through exact entries `0x9CFA0/0x9CFD0`, adopted legacy
+  edges, retried blocked stand and published desired/native shape correlation.
+  The same physical control reported by OpenVR and legacy input was collapsed
+  into one toggle. Rendering uses `VrTrackingSpace` to compose continuous HMD Y
   and `HeightOffset` from the reconciled feet anchor; physical crouch no longer
-  adds the full native camera drop. Code, host tests and the stricter static
-  helper are complete, but this corrected combination is **host-tested only**.
+  adds the full native camera drop. PID 23260 and PID 24948 below show why the
+  press/release backend owner itself had to be replaced.
 - PID 23260 proved that the shared policy and button route are working but the
   native exit owner was still wrong. The log reached `physical entries/exits =
   10/10` and `button_latched` changed both directions, while the native body
@@ -72,13 +72,24 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   `stand_retries=17832`. The cause is now narrowed to Black Plague's native
   crouch mode: `0x9CFA0/0x9CFD0` are the existing pressed/released dispatches,
   not unconditional crouch/stand setters. In toggle mode the release dispatch
-  intentionally leaves crouch latched. The backend still owns one persistent
-  desired stance; on a stand request it now sends the native release first and,
-  only if the body is still crouched, sends the native pressed dispatch that
-  toggles the game's own move state back toward standing. Native clearance and
-  body replacement remain authoritative, so a blocked stand remains retryable.
-  Release build plus all 30 host tests pass. This correction is **host-tested
-  only** and must replace the failed PID 23260 build in the next headset gate.
+  intentionally leaves crouch latched. The first correction compensated with a
+  release followed by another press when needed; PID 24948 disproved that as a
+  stable ownership boundary.
+- PID 24948 no longer stuck at `0.95 m`, but the user saw only a short crouch dip
+  and no persistent native crouch/stealth behavior. The log confirms repeated
+  body transitions instead of a stable state: `native_entries=14` and
+  `native_exits=14`. Re-analysis of the exact initialized image found the direct
+  native boundary Rework conceptually requires: `cPlayer::ChangeMoveState` at
+  `0x9C750`. The original Black Plague normal-state crouch handlers prove state
+  `4` is crouch and state `0` is walk; jump remains state `3`. The existing
+  game-thread owner now applies the shared persistent desired state directly via
+  `ChangeMoveState(4/0)`, without another hook or another body tick. Telemetry
+  reports `+0x2D0`, and the focused validator requires state `4` plus the
+  `0.95 m` collider for crouch, state `0` plus `1.65 m` for standing, a stable
+  button-only latch, Hybrid composition and final released ownership. Native
+  clearance/body replacement remain authoritative. Release build, exact-image
+  verification and all 30 host tests pass. This correction is **host-tested
+  only** and must replace the failed PID 24948 build in the next headset gate.
 - PID 24956 live-exercised active Black Plague room-scale and exposed a real
   Rework-sequence regression. Its log captured 1159 body summaries, all four
   physical outcome classes, the native crouch/stand shape sequence and camera
@@ -458,13 +469,16 @@ Rework still applies VR turning to tracking `world yaw`,
 whereas Black Plague currently applies the shared turn amount to native player
 yaw; that separate owner remains unchanged. PID 20520 then exposed the failed
 edge-only physical-crouch ownership and remaining short-range X/Z discomfort
-described in the repository checkpoint. PID 23260 then confirmed that physical
+described in the repository checkpoint. PID 23260 confirmed that physical
 policy exit and button latching were correct but the native toggle release did
-not restore standing; the host-tested release-then-toggle fallback above is the
-current build. The next gate remains
+not restore standing. PID 24948 then showed that release/press compensation
+could restore the collider while repeatedly toggling the native state and never
+holding the real crouch/stealth behavior. The current host-tested build applies
+the desired state through exact `ChangeMoveState(4/0)` instead. The next gate remains
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`, now in focused crouch mode. It
 must prove two tracked-height entry/exit cycles correlated with native
-`0.95/1.65 m` shapes, final standing/ownership release, button-toggle and Hybrid
+move states `4/0` and `0.95/1.65 m` shapes, final standing/ownership release,
+stable button-only crouch/stealth and Hybrid
 composition, at least `0.15 m` of continuous tracked Y, short-range X/Z comfort,
 direct stick movement, hands and mirror. It does not require walking, sprint or
 wall cases in the user's limited play area. Do not promote the corrected build

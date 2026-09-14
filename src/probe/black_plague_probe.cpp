@@ -178,7 +178,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "standing_known=%u standing_height=%.3f enter_height=%.3f "
             "exit_height=%.3f physical=%u button_latched=%u effective=%u "
             "entries=%llu exits=%llu native_known=%u native_crouched=%u "
-            "vr_owned=%u native_entries=%llu native_exits=%llu "
+            "native_state_known=%u native_state=%ld vr_owned=%u "
+            "native_entries=%llu native_exits=%llu "
             "stand_retries=%llu mismatch_frames=%llu",
             physical_crouch.policy.physical_enabled ? 1U : 0U,
             physical_crouch.policy.tracking_valid ? 1U : 0U,
@@ -194,6 +195,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long long>(physical_crouch.policy.physical_exits),
             physical_crouch.native_shape_known ? 1U : 0U,
             physical_crouch.native_crouched ? 1U : 0U,
+            physical_crouch.native_move_state_known ? 1U : 0U,
+            static_cast<long>(physical_crouch.native_move_state),
             physical_crouch.vr_stance_owned ? 1U : 0U,
             static_cast<unsigned long long>(physical_crouch.native_crouch_entries),
             static_cast<unsigned long long>(physical_crouch.native_crouch_exits),

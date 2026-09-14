@@ -110,9 +110,13 @@ un estado held/released a las consultas configurables de crouch de Black Plague,
 mientras Rework mantiene un latch único y aplica el move-state deseado. La nueva
 implementación conserva la política común de baseline, rango plausible
 `(0.90, 2.20) m`, profundidad `0.25 m` e histéresis `0.08 m`, añade el latch de
-botón probado de Rework y sincroniza el body desde el owner existente del hilo de
-juego mediante las entradas exactas `0x9CFA0/0x9CFD0`. Si el techo impide ponerse
-de pie, reintenta la salida en ticks posteriores. No añade otro hook.
+botón probado de Rework. La primera adaptación de backend intentó sincronizar el
+body mediante las entradas `0x9CFA0/0x9CFD0`; PID 23260 y PID 24948 demostraron
+que esos callbacks configurables no sirven como owner persistente del estado.
+La implementación vigente sincroniza desde el owner existente del hilo de juego
+mediante `cPlayer::ChangeMoveState` (`0x9C750`), con crouch=`4` y walk=`0`. Si el
+techo impide ponerse de pie, reintenta la salida en ticks posteriores. No añade
+otro hook.
 
 También se ha conectado el eje Y demostrado por Rework usando
 `runtime::VrTrackingSpace`: la altura de la vista sigue de forma continua la
@@ -130,10 +134,21 @@ sentidos, así que tanto el crouch físico como el click derecho llegaron al
 runtime. Sin embargo el body terminó todavía a `0.95 m`, con `native_exits=0`,
 `vr_owned=1` y `stand_retries=17832`. La build de esa prueba trataba la entrada
 nativa de release como un stand incondicional; Black Plague conserva su modo
-hold/toggle y, en toggle, release deja la postura latched. La corrección actual
-envía release y, solo si el body sigue agachado, el segundo press nativo que el
-propio juego usa para solicitar volver a de pie. Compila en Release y pasa 30/30
-tests de host; sigue pendiente la validación con visor.
+hold/toggle y, en toggle, release deja la postura latched.
+
+PID 24948 probó la corrección release/segundo-press y reveló el siguiente límite.
+Ya no quedó atrapado permanentemente a `0.95 m`, pero el usuario observó que el
+botón solo producía una bajada/subida breve y nunca mantenía el crouch/sigilo real
+del juego. El log coincide: terminó con `native_entries=14` y
+`native_exits=14`, señal de que la forma nativa alternaba repetidamente. La
+revisión exact-build localizó `cPlayer::ChangeMoveState` en `0x9C750`; los
+handlers originales prueban que el estado `4` es crouch, el `0` es walk y el
+`3` sigue siendo jump. La build actual aplica directamente `4/0` desde el owner
+del hilo de juego, como hace conceptualmente Rework con su desired state. La
+caída visual de botón sigue siendo deliberadamente la profundidad VR configurada
+(`0.25 m` por defecto); lo nuevo que debe quedar estable es el move-state `4`,
+la forma `0.95 m` y el comportamiento de crouch/sigilo. Compila en Release,
+pasa el verificador exact-build y 30/30 tests de host; sigue pendiente de visor.
 
 ## Siguiente tanda — crouch físico por altura HMD
 
@@ -144,7 +159,7 @@ tools\Start-BlackPlagueRoomScaleValidation.ps1
 ```
 
 PID 8092 ya cerró el gate técnico anterior de room-scale y stick. Esta tanda
-comprueba la corrección posterior a PID 23260 y el nuevo eje Y. El helper mantiene las
+comprueba la corrección posterior a PID 24948 y el nuevo eje Y. El helper mantiene las
 rutas activas, pero no obliga a caminar por la habitación, esprintar ni repetir
 `blocked`/`slide`. Además:
 
@@ -154,7 +169,7 @@ rutas activas, pero no obliga a caminar por la habitación, esprintar ni repetir
 - guarda `MonitorMirror=true` antes del arranque;
 - rechaza la sesión si el probe no confirma los modos de validación;
 - registra `physical_crouch` con altura HMD, latch, estado deseado, forma nativa,
-  ownership, reintentos y contadores sincronizados;
+  **move-state nativo**, ownership, reintentos y contadores sincronizados;
 - rechaza la antigua falsa aprobación: exige dos ciclos físicos correlacionados,
   terminar realmente de pie y al menos `15 cm` de recorrido visual vertical;
 - al cerrar el juego analiza únicamente el log fresco de ese PID.
@@ -185,14 +200,16 @@ Mantén abierta la consola durante toda la sesión. El log queda en:
 5. **Segundo ciclo.** Repite entrada y salida física completas. La consola exige
    dos entradas y dos salidas tanto en política como en el body nativo.
 6. **Botón como toggle Rework.** Empieza totalmente de pie. Pulsa una vez el
-   click de crouch del stick derecho: debe quedarse agachado al soltar. Espera
-   2–3 segundos y pulsa otra vez: debe volver a `1.65 m` inmediatamente. Repite
-   una vez más para confirmar que no depende de haber usado antes crouch físico.
+   click de crouch del stick derecho y permanece quieto al menos 5 segundos. El
+   juego debe entrar y **mantener** su crouch/sigilo real: `native_state=4` y
+   body `0.95 m`; no vale una bajada/subida momentánea. La vista puede bajar solo
+   ~`0.25 m`, porque esa es la postura VR de confort heredada de Rework. Pulsa
+   otra vez, espera otros 5 segundos y debe quedar `native_state=0`, body
+   `1.65 m`. Repite una vez para que la telemetría periódica capture ambos lados.
 7. **Composición Hybrid.** Agáchate físicamente, pulsa una vez crouch y levántate
-   físicamente. El latch del botón debe mantener el crouch. Pulsa otra vez y debe
-   liberar la postura y volver a `1.65 m` sin otro gesto físico. Repite el orden
-   inverso: botón para agacharte, baja físicamente, quita el latch con otro click
-   y después levántate. El body no debe quedar atrapado a `0.95 m`.
+   físicamente sin volver a pulsar. El latch debe mantener **move-state 4**, el
+   crouch/sigilo y body `0.95 m` aunque la fuente física ya haya salido. Pulsa
+   otra vez solo estando de pie: debe pasar a state `0` y `1.65 m`.
 8. **Stick y combinación breve.** Usa un desplazamiento corto de stick de pie y
    agachado. Combínalo una vez con un movimiento físico de `5–10 cm`, suelta el
    stick y vuelve al punto inicial. No debe quedar deriva, pullback ni temblor.
@@ -213,9 +230,13 @@ Al cerrar el juego, el helper solo termina con éxito si el log fresco demuestra
 - mirror activo en un frame de gameplay;
 - baseline HMD plausible;
 - dos entradas y dos salidas físicas;
-- dos transiciones nativas a `0.95 m` y dos retornos a `1.65 m`, alineadas con la
-  política;
-- estado final realmente de pie y ownership VR liberado;
+- dos transiciones físicas alineadas con **move-state 4 + `0.95 m`** y retorno a
+  **move-state 0 + `1.65 m`**;
+- un intervalo button-only estable con `physical=0`, latch activo,
+  `native_state=4` y body `0.95 m`, seguido de segundo click a state `0`;
+- composición Hybrid donde al liberar solo el crouch físico el latch conserva
+  state `4` hasta el segundo click;
+- estado final realmente de pie, move-state `0` y ownership VR liberado;
 - recorrido vertical renderizado mínimo de `15 cm`;
 - sample room-scale fresco después del último retorno a de pie.
 

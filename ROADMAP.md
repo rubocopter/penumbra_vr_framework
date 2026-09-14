@@ -97,20 +97,24 @@ stick/collision route, while positional comfort remains open: PID 20520 later
 reported a pullback sensation during short physical X/Z movement.
 PID 20520 also exposed that the first physical-crouch integration could enter
 but did not reliably synchronize native standing on exit; its aggregate helper
-result was a false pass. The corrected build owns the Rework button latch and
-desired posture in shared policy, applies Black Plague's exact native crouch
-pressed/released dispatches from the existing game-thread owner, retries blocked stand,
-and presents continuous tracked Y from the reconciled feet anchor. This is
-implemented and host-tested only. The focused headset gate now requires two
-correlated physical/native cycles, final standing state, vertical continuity and
-short-range X/Z comfort. Tracking-world-yaw turn ownership remains separate.
+result was a false pass. The first correction moved Rework's button latch and
+desired posture into shared policy, drove Black Plague's existing crouch
+pressed/released dispatches from the game-thread owner and added continuous
+tracked Y from the reconciled feet anchor. That iteration was host-tested before
+the later headset runs below exposed the remaining native ownership problem.
 PID 23260 then proved that physical/button policy itself was working but exposed
 one more backend-specific distinction: the exact native crouch entries are
-pressed/released dispatches and preserve the game's hold/toggle setting. In
-toggle mode release alone cannot restore standing. The current host-tested build
-therefore sends release first and only falls back to the native pressed dispatch
-when the body remains crouched, preserving native clearance/body-swap ownership.
-Release compilation and all 30 host tests pass; headset validation remains open.
+pressed/released dispatches and preserve the game's hold/toggle setting. PID
+24948 showed that compensating inside those callbacks was still the wrong
+ownership boundary: the body repeatedly changed between `1.65/0.95 m`, but the
+game did not hold its real crouch/stealth state. Exact-build decoding now pins
+`cPlayer::ChangeMoveState` at `0x9C750`; the original crouch handlers prove
+state `4` is crouch and state `0` is walk. The current host-tested build applies
+the shared Rework desired state directly through that native transition and the
+focused helper now requires collider shape and move-state to agree, including a
+stable button-only crouch and Hybrid latch. Release compilation and all 30 host
+tests pass; headset validation remains open. Tracking-world-yaw turn ownership
+remains separate.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.

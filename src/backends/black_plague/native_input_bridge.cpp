@@ -71,11 +71,14 @@ using Update = void(__thiscall*)(void*, float);
 using Move = void(__thiscall*)(void*, float, float);
 using MoveStateGate = bool(__thiscall*)(void*, float, float);
 using Yaw = void(__thiscall*)(void*, float);
-using CrouchAction = void(__thiscall*)(void*);
+using ChangeMoveState = void(__thiscall*)(void*, std::int32_t, bool);
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kCharacterSizeYOffset = 0xC8;
-constexpr std::uintptr_t kStartCrouchRva = 0x9CFA0;
-constexpr std::uintptr_t kStopCrouchRva = 0x9CFD0;
+constexpr std::uintptr_t kPlayerMoveStateIndexOffset = 0x2D0;
+constexpr std::uintptr_t kChangeMoveStateRva = 0x9C750;
+constexpr std::int32_t kWalkMoveState = 0;
+constexpr std::int32_t kJumpMoveState = 3;
+constexpr std::int32_t kCrouchMoveState = 4;
 std::uint8_t* g_image = nullptr;
 hooks::IatHook g_update_hook;
 std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
@@ -151,52 +154,54 @@ void ServiceNativeVrCrouch(void* player, bool desired,
     BlackPlagueNativeCrouchStatus& status) noexcept {
     bool crouched = false;
     bool known = ReadNativeCrouchShape(player, crouched);
+    const bool move_state_known = player != nullptr;
+    std::int32_t move_state = move_state_known
+        ? Read<std::int32_t>(player, kPlayerMoveStateIndexOffset) : -1;
 
     if (desired) {
-        if (known && crouched) {
-            // The legacy keyboard path may have applied the state one frame
-            // before its press edge reaches shared policy. Adopt that stance
-            // so the same policy remains its sole release owner.
+        if (move_state == kCrouchMoveState) {
             g_vr_crouch_owned = true;
-        } else if (known && player != nullptr && g_image != nullptr) {
-            reinterpret_cast<CrouchAction>(g_image + kStartCrouchRva)(player);
-            bool after = false;
-            if (ReadNativeCrouchShape(player, after) && after) {
+        } else if (move_state_known && move_state != kJumpMoveState &&
+                   player != nullptr && g_image != nullptr) {
+            // Rework owns one persistent desired crouch state and applies the
+            // actual move state directly. Black Plague exposes the equivalent
+            // cPlayer::ChangeMoveState boundary at 0x9C750; its native crouch
+            // handlers prove state 4=crouch and state 0=walk. Do not route the
+            // persistent policy back through configurable press/release toggle
+            // callbacks, which can undo the state on the next native edge.
+            reinterpret_cast<ChangeMoveState>(g_image + kChangeMoveStateRva)(
+                player, kCrouchMoveState, false);
+            move_state = Read<std::int32_t>(player, kPlayerMoveStateIndexOffset);
+            if (move_state == kCrouchMoveState) {
                 g_vr_crouch_owned = true;
                 ++g_native_crouch_entries;
             }
             known = ReadNativeCrouchShape(player, crouched);
         }
     } else if (g_vr_crouch_owned) {
-        if (known && crouched && player != nullptr && g_image != nullptr) {
-            reinterpret_cast<CrouchAction>(g_image + kStopCrouchRva)(player);
-            bool after = true;
-            bool after_known = ReadNativeCrouchShape(player, after);
-            if (after_known && after) {
-                // In Black Plague's native toggle-crouch mode the release path
-                // intentionally leaves the stance latched. A second press is
-                // the game's own request to return from crouch to standing.
-                reinterpret_cast<CrouchAction>(g_image + kStartCrouchRva)(player);
-                after_known = ReadNativeCrouchShape(player, after);
-            }
-            if (after_known) {
-                if (!after) {
-                    g_vr_crouch_owned = false;
-                    ++g_native_crouch_exits;
-                } else {
-                    ++g_native_crouch_stand_retries;
-                }
-            }
+        if (move_state == kCrouchMoveState && player != nullptr && g_image != nullptr) {
+            reinterpret_cast<ChangeMoveState>(g_image + kChangeMoveStateRva)(
+                player, kWalkMoveState, false);
+            move_state = Read<std::int32_t>(player, kPlayerMoveStateIndexOffset);
             known = ReadNativeCrouchShape(player, crouched);
-        } else if (known && !crouched) {
+            if (move_state != kCrouchMoveState) {
+                g_vr_crouch_owned = false;
+                ++g_native_crouch_exits;
+            } else {
+                ++g_native_crouch_stand_retries;
+            }
+        } else if (move_state_known && move_state != kCrouchMoveState) {
             g_vr_crouch_owned = false;
             ++g_native_crouch_exits;
         }
     }
 
-    if (known && desired != crouched) ++g_native_crouch_mismatch_frames;
+    if (move_state_known && desired != (move_state == kCrouchMoveState))
+        ++g_native_crouch_mismatch_frames;
     status.native_shape_known = known;
     status.native_crouched = known && crouched;
+    status.native_move_state_known = move_state_known;
+    status.native_move_state = move_state;
     status.vr_stance_owned = g_vr_crouch_owned;
     status.native_crouch_entries = g_native_crouch_entries;
     status.native_crouch_exits = g_native_crouch_exits;
@@ -526,7 +531,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     ReleaseSRWLockExclusive(&g_crouch_lock);
     // Shared policy owns VR/legacy crouch state. Do not feed its held/released
     // representation back through Black Plague's configurable toggle handler;
-    // the exact native start/stop methods above apply the desired body state.
+    // the direct ChangeMoveState boundary above applies the desired move state.
     frame.input.state.crouch = {};
     g_direct_locomotion = false;
     g_direct_native_axis_observed = false;
@@ -706,14 +711,23 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
     if (!ReadBytes(g_image + 0x9CD00, actual_yaw.data(), actual_yaw.size()) || actual_yaw != yaw) {
         error = "Native yaw entry mismatch"; return false;
     }
-    constexpr std::array<std::uint8_t, 8> crouch_action{
-        0x8A, 0x81, 0x6C, 0x02, 0x00, 0x00, 0x84, 0xC0};
-    std::array<std::uint8_t, crouch_action.size()> actual_crouch{};
-    if (!ReadBytes(g_image + kStartCrouchRva, actual_crouch.data(),
-            actual_crouch.size()) || actual_crouch != crouch_action ||
-        !ReadBytes(g_image + kStopCrouchRva, actual_crouch.data(),
-            actual_crouch.size()) || actual_crouch != crouch_action) {
-        error = "Native crouch action entry mismatch";
+    constexpr std::array<std::uint8_t, 13> change_move_state{
+        0x56, 0x8B, 0xF1, 0x8B, 0x96, 0xD0, 0x02, 0x00, 0x00,
+        0x8B, 0x4C, 0x24, 0x08};
+    std::array<std::uint8_t, change_move_state.size()> actual_change_move_state{};
+    if (!ReadBytes(g_image + kChangeMoveStateRva,
+            actual_change_move_state.data(), actual_change_move_state.size()) ||
+        actual_change_move_state != change_move_state) {
+        error = "Native ChangeMoveState entry mismatch";
+        return false;
+    }
+    constexpr std::array<std::uint8_t, 8> crouch_state_proof{
+        0x83, 0xFA, 0x04, 0x75, 0x08, 0x6A, 0x00, 0xE8};
+    std::array<std::uint8_t, crouch_state_proof.size()> actual_crouch_state_proof{};
+    if (!ReadBytes(g_image + 0xAEEE4, actual_crouch_state_proof.data(),
+            actual_crouch_state_proof.size()) ||
+        actual_crouch_state_proof != crouch_state_proof) {
+        error = "Native crouch move-state mapping mismatch";
         return false;
     }
     bool ok = true;
