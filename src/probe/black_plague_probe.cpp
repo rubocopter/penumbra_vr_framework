@@ -480,6 +480,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         render_world.stereo_failed ||
         !render_world.stereo_camera_restored ||
         render_world.hmd_visibility_failures != 0 ||
+        render_world.presentation_pose_acquisitions != 0 ||
+        render_world.presentation_pose_reuses != 0 ||
+        render_world.presentation_pose_stale_rejects != 0 ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
         float movement_yaw = 0.0F;
@@ -507,6 +510,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "stereo_failed=%u stereo_error=%s "
             "hmd_visibility_updates=%lu hmd_visibility_failures=%lu "
             "presentation_pose_acquisitions=%lu presentation_pose_reuses=%lu "
+            "presentation_pose_stale_rejects=%lu "
             "hmd_visibility_camera_restored=%u hmd_visibility_error=%s "
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
@@ -582,6 +586,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.hmd_visibility_failures),
             static_cast<unsigned long>(render_world.presentation_pose_acquisitions),
             static_cast<unsigned long>(render_world.presentation_pose_reuses),
+            static_cast<unsigned long>(render_world.presentation_pose_stale_rejects),
             render_world.hmd_visibility_camera_restored ? 1U : 0U,
             render_world.hmd_visibility_error.data(),
             static_cast<unsigned long>(render_world.eye_scissor_remapped),

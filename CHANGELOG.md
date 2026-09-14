@@ -1,5 +1,22 @@
 # Changelog
 
+- 2026-09-14: invalidated the follow-up Black Plague headset candidate
+  `ca099ca` after PID 6016 reproduced OpenVR compositor error 108 on the
+  menu-to-gameplay transition. The prior nested-visibility fix was necessary
+  but incomplete: a valid presentation snapshot remained reusable after a
+  successful world `Submit`, so a later `RenderWorld` without a newly published
+  visibility sample could submit the same compositor sequence again. Presentation
+  sequences are now single-consumption: sequence 0, an already-submitted
+  sequence, or an older sequence is rejected before rendering/submission.
+  Telemetry records stale-sequence rejects and now logs every acquisition,
+  nested reuse and stale reject. Debug, Release and SDK-less Release each pass
+  34/34 root tests, including the new presentation-sequence policy cases, and
+  metadata validation passes. The exact-build BP verifier input and mapping are
+  unchanged by this presentation-only patch; its script invocation was blocked
+  by the local tool safety layer in this iteration, so no new verifier run is
+  claimed. Headset validation is still required before this correction is
+  promoted.
+
 - 2026-09-14: invalidated headset candidate `3333be1` after Black Plague PIDs
   23656 and 21396 both failed their first gameplay stereo transition with
   OpenVR compositor error 108 (`VRCompositorError_AlreadySubmitted`). The new

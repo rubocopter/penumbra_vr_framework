@@ -4,6 +4,24 @@ This file prevents repeated symptom-level fixes from replacing evidence-backed i
 
 ## Current offline checkpoint (2026-09-14)
 
+PID 6016 showed that `ca099ca` did not close the compositor regression. The
+transition log contained one successful tracked-menu submission, then gameplay,
+then a left-eye `VRCompositorError_AlreadySubmitted (108)`. The added
+acquisition/reuse counters were `0/0` in the logged failure frame, proving the
+earlier diagnosis of nested visibility acquisition was not sufficient. The
+remaining contract violation was stale snapshot reuse across world frames: the
+presentation snapshot was freshness-bounded by time but not by consumption.
+The current code records the last successfully submitted presentation sequence
+and rejects any zero/equal/older sequence before rendering eyes. Do not remove
+this gate to make a stalled frame render; a skipped world submit is preferable
+to submitting an eye twice between `WaitGetPoses` calls. Telemetry now logs
+`presentation_pose_stale_rejects` plus every acquisition/reuse event so the next
+headset run can distinguish missing visibility publication from duplicate
+consumption. Debug, Release and SDK-less Release each pass 34/34 after the
+change; metadata validation passes. The exact-build verifier was not freshly
+rerun because its invocation was blocked by the local tool safety layer; no
+new verifier claim is made. Headset evidence is pending.
+
 The first two headset attempts from candidate `3333be1` (PIDs 23656 and 21396)
 failed at the presentation boundary, not at locomotion/crouch ownership. Both
 initialized the probe/controller path, then the first gameplay stereo submit

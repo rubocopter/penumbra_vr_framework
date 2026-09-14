@@ -12,7 +12,17 @@ namespace {
 } // namespace
 
 int main() {
+    using penumbra_vr::runtime::IsFreshPresentationSequence;
     using penumbra_vr::runtime::PlanStereoWorldRendering;
+
+    if (IsFreshPresentationSequence(0, 0) ||
+        !IsFreshPresentationSequence(1, 0) ||
+        IsFreshPresentationSequence(1, 1) ||
+        IsFreshPresentationSequence(4, 5) ||
+        !IsFreshPresentationSequence(6, 5)) {
+        std::cerr << "Presentation sequence single-consumption policy failed\n";
+        return 5;
+    }
 
     constexpr float kFrameTime = 1.0F / 60.0F;
     const auto headset_only =

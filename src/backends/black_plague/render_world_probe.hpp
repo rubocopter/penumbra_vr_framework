@@ -69,6 +69,7 @@ struct RenderWorldFrameTelemetry {
     std::uint32_t hmd_visibility_failures = 0;
     std::uint32_t presentation_pose_acquisitions = 0;
     std::uint32_t presentation_pose_reuses = 0;
+    std::uint32_t presentation_pose_stale_rejects = 0;
     bool hmd_visibility_camera_restored = true;
     std::array<char, 192> hmd_visibility_error{};
     EyeTargetProbeTelemetry eye_targets;

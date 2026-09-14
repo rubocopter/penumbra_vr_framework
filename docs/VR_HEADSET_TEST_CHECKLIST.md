@@ -4,6 +4,29 @@ Actualizado: 2026-09-14.
 
 ## Gate del candidato Release
 
+Antes de cualquier prueba de crouch, room-scale o interacción, realiza un gate
+de presentación de 20-30 segundos. Los candidatos `3333be1` y `ca099ca` quedan
+descartados: ambos reprodujeron `VRCompositorError_AlreadySubmitted (108)` al
+pasar de menú a gameplay, y PID 6016 demostró que el segundo todavía podía
+reutilizar un snapshot de compositor ya enviado. En el candidato actual:
+
+1. entra al menú con visor y mandos activos;
+2. carga una partida y permanece quieto 10 segundos;
+3. mueve sólo la cabeza y verifica imagen estéreo continua durante otros 10-20
+   segundos;
+4. si el visor se queda negro, vuelve a escritorio o aparece cualquier pérdida
+   de controles, cierra el juego ahí y no continúes con los demás gates;
+5. el log debe mostrar secuencias de presentación nuevas y puede mostrar
+   `presentation_pose_stale_rejects`, pero no debe contener
+   `VRCompositorError_AlreadySubmitted (108)`.
+
+Analiza una ejecución cerrada con
+`tools\Analyze-BlackPlaguePresentation.ps1 -ProcessId <PID>` antes de interpretar
+el resto de la tanda.
+
+La DLL Release preparada para este gate tiene SHA-256
+`48489A2573BC96F56C55F0E0C2E3559450D8E4BD249767C349777B92F1BE1A76`.
+
 La siguiente build Release debe tratarse como **candidato de validación**, no
 como release soportada. El trabajo nuevo de crouch/Y, transacción cuerpo/tracking,
 lifecycle, interacción/contacto y locomoción restringida sigue como máximo en

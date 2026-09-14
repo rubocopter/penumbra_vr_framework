@@ -291,6 +291,7 @@ struct PresentationSnapshot {
 SRWLOCK g_presentation_lock = SRWLOCK_INIT;
 PresentationSnapshot g_presentation_snapshot;
 std::atomic<std::uint64_t> g_presentation_sequence{0};
+std::atomic<std::uint64_t> g_last_submitted_presentation_sequence{0};
 std::atomic<std::uint64_t> g_presentation_pose_epoch{1};
 std::atomic<std::uint64_t> g_presentation_yaw_epoch{1};
 SRWLOCK g_tracking_yaw_lock = SRWLOCK_INIT;
@@ -933,6 +934,15 @@ void __fastcall HookedUpdateRenderList(
             InvalidateWorldTracking();
             return result;
         }
+        const auto last_submitted =
+            g_last_submitted_presentation_sequence.load(std::memory_order_acquire);
+        if (!runtime::IsFreshPresentationSequence(
+                presentation.pose.identity.sequence, last_submitted)) {
+            AcquireSRWLockExclusive(&g_telemetry_lock);
+            ++g_telemetry.presentation_pose_stale_rejects;
+            ReleaseSRWLockExclusive(&g_telemetry_lock);
+            return result;
+        }
         pose = presentation.pose;
         presentation_from_visibility = true;
     } else if (session != nullptr) {
@@ -1117,6 +1127,10 @@ void __fastcall HookedUpdateRenderList(
             FailStereoMatrixValidation(
                 "Could not submit the rendered stereo pair: " + error);
             return result;
+        }
+        if (presentation_from_visibility) {
+            g_last_submitted_presentation_sequence.store(
+                presentation.pose.identity.sequence, std::memory_order_release);
         }
         glFlush();
     }
@@ -1361,6 +1375,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
     g_stereo_room_scale_sample = {};
+    g_last_submitted_presentation_sequence.store(0, std::memory_order_release);
     g_stereo_requested_frames.store(0, std::memory_order_release);
     g_stereo_completed_frames.store(0, std::memory_order_release);
     g_stereo_cancel.store(false, std::memory_order_release);
@@ -1725,6 +1740,7 @@ bool StartTrackedStereoPresentation(
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
     g_stereo_room_scale_sample = {};
+    g_last_submitted_presentation_sequence.store(0, std::memory_order_release);
     g_stereo_persistent.store(true, std::memory_order_release);
     g_menu_anchor_valid = false;
     g_stereo_state.store(StereoMatrixState::pending, std::memory_order_release);

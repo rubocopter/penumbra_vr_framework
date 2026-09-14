@@ -10,6 +10,26 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Second presentation regression checkpoint (2026-09-14): PID 6016 reproduced
+  `VRCompositorError_AlreadySubmitted (108)` on commit `ca099ca`. The fresh log
+  proved the first gameplay transition still failed after a menu frame had
+  submitted successfully. `ca099ca` fixed nested `UpdateRenderList`
+  reacquisition, but presentation snapshots still lacked consumption state: a
+  world frame could reuse a sequence that had already been submitted when no
+  newer visibility sample was published. The current correction records the
+  last successfully submitted presentation sequence and refuses sequence 0,
+  equal or older samples before eye rendering. Telemetry now includes
+  `presentation_pose_stale_rejects`, and presentation acquisition/reuse/reject
+  activity forces a frame log entry. Debug, Release and SDK-less Release each
+  pass 34/34 root tests with a pure sequence-policy regression test; metadata
+  validation also passes. The Release probe DLL for this candidate has SHA-256
+  `48489A2573BC96F56C55F0E0C2E3559450D8E4BD249767C349777B92F1BE1A76`.
+  Treat both `3333be1` and `ca099ca` as failed headset candidates. The
+  exact-build BP verifier script could not be re-invoked in this iteration due
+  to the local tool safety layer; its image/mapping inputs are unchanged, so do
+  not report a fresh verifier pass. The current correction remains host-tested
+  until a fresh menu-to-gameplay headset run sustains stereo without error 108.
+
 - Headset-candidate regression found on 2026-09-14: PIDs 23656 and 21396
   initialized the Black Plague probe and controller path, but the first gameplay
   stereo transition failed with OpenVR compositor error `108`

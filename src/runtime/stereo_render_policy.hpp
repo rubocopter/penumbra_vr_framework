@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 
 namespace penumbra_vr::runtime {
 
@@ -22,5 +23,12 @@ struct StereoRenderPlan {
     float frame_time,
     bool continuous_stereo,
     bool monitor_mirror_enabled) noexcept;
+
+// A compositor presentation sample is single-use. Reusing the same sequence
+// after a successful Submit would submit an eye twice before the next
+// WaitGetPoses call and OpenVR reports VRCompositorError_AlreadySubmitted.
+[[nodiscard]] bool IsFreshPresentationSequence(
+    std::uint64_t sequence,
+    std::uint64_t last_submitted_sequence) noexcept;
 
 } // namespace penumbra_vr::runtime
