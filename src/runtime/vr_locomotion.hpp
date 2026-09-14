@@ -17,6 +17,7 @@ inline constexpr float kRejectedMotionEpsilon = 0.002F;
 inline constexpr float kNormalSpeedMetersPerSecond = 1.5F;
 inline constexpr float kConstrainedSpeedMetersPerSecond = 0.5F;
 inline constexpr float kSprintMultiplier = 1.5F;
+inline constexpr float kVrStepDistanceMeters = 0.85F;
 
 } // namespace vr_locomotion_policy
 
