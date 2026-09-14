@@ -78,6 +78,37 @@ VrPhysicalReconciliationResult ReconcilePhysicalBodyMotion(
     return result.valid ? result : VrPhysicalReconciliationResult{};
 }
 
+std::array<float, 3> FilterPhysicalRenderPrediction(
+    const std::array<float, 3>& render_prediction,
+    const VrPhysicalReconciliationResult& reconciliation) noexcept {
+    if (!FiniteVector(render_prediction)) return {};
+    if (!reconciliation.valid ||
+        reconciliation.rejected_distance <=
+            vr_locomotion_policy::kRejectedMotionEpsilon ||
+        !FiniteVector(reconciliation.anchor_correction)) {
+        return render_prediction;
+    }
+
+    const std::array<float, 3> rejected_direction{
+        -reconciliation.anchor_correction[0],
+        0.0F,
+        -reconciliation.anchor_correction[2],
+    };
+    const float rejected_length = HorizontalLength(rejected_direction);
+    if (!std::isfinite(rejected_length) || rejected_length <= 1.0e-6F) {
+        return render_prediction;
+    }
+
+    const float direction_x = rejected_direction[0] / rejected_length;
+    const float direction_z = rejected_direction[2] / rejected_length;
+    const float rejected_component = std::max(0.0F,
+        render_prediction[0] * direction_x +
+            render_prediction[2] * direction_z);
+    auto filtered = render_prediction;
+    filtered[0] -= direction_x * rejected_component;
+    filtered[2] -= direction_z * rejected_component;
+    return FiniteVector(filtered) ? filtered : std::array<float, 3>{};
+}
 std::array<float, 3> CarryHeadAnchorWithLocomotion(
     const std::array<float, 3>& head_anchor,
     const VrAcceptedBodyMotion& motion) noexcept {

@@ -159,6 +159,8 @@ struct StereoProcessingResult {
         0.0F,
         -sine * tracking_delta_x + cosine * tracking_delta_z,
     };
+    render_prediction = runtime::FilterPhysicalRenderPrediction(
+        render_prediction, room_scale.physical_reconciliation);
     render_head_anchor = room_scale.predicted_head_anchor;
     render_head_anchor[0] += render_prediction[0];
     render_head_anchor[2] += render_prediction[2];

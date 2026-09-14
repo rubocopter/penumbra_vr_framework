@@ -63,7 +63,7 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [ ] Achieve acceptable frame pacing at the headset's target refresh rate
 - [x] Implement default-off positional tracking from the reconciled game/body boundary
 - [ ] Headset-validate positional tracking with game/body calibration
-- [ ] Live-validate direct VR startup and menu/gameplay transitions
+- [x] Live-validate direct VR startup and menu/gameplay transitions (PID 22096)
 
 **Current milestone note:** native stereo/head rotation, the player/body boundary,
 the default-off reconciliation shadow path and the bounded collision-aware
@@ -112,9 +112,15 @@ game did not hold its real crouch/stealth state. Exact-build decoding now pins
 state `4` is crouch and state `0` is walk. The current host-tested build applies
 the shared Rework desired state directly through that native transition and the
 focused helper now requires collider shape and move-state to agree, including a
-stable button-only crouch and Hybrid latch. Release compilation and all 30 host
-tests pass; headset validation remains open. Tracking-world-yaw turn ownership
-remains separate.
+stable button-only crouch and Hybrid latch. PID 22096 then sustained the current
+presentation path through gameplay with zero stereo failures and exposed a more
+specific short-X/Z comfort boundary: render-rate prediction could continue into
+the direction rejected by the previous physical solve before the next body tick
+snapped back. The current host-tested filter removes only that rejected
+prediction component, preserving tangential slide and motion away from the wall.
+Release/Debug/SDK-less Release all pass 34/34 host tests; blocked-stand/low-ceiling/Y-correlation edges and the new
+comfort filter still require a fresh headset run. Tracking-world-yaw turn
+ownership remains separate.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.
@@ -177,7 +183,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
 - [x] Implement Rework-derived physical crouch policy and explicit desired/native stance synchronization through Black Plague's existing input owner
-- [ ] Headset-validate physical crouch entry/exit, final native shape recovery, continuous tracked Y and short-range X/Z comfort
+- [ ] Headset-validate remaining blocked-stand/low-ceiling crouch edges, explicit continuous tracked-Y correlation and short-range X/Z wall/slide comfort
 - [ ] Validate long-body interaction and mechanism-specific states
 - [ ] Inventory, notes, menus, HUD and subtitles
 - [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy

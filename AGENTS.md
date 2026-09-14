@@ -146,6 +146,21 @@ final native standing state, short X/Z comfort and no regression of the PID
 8092 stick path. Keep tracking-world-yaw turn ownership and final
 footstep/body-bob behavior as separate validation gates.
 
+PID 22096 then supplied positive headset evidence for the presentation owner in
+`7f84235`: the closed run contains 15,990 frames, 15,887 gameplay frames and no
+stereo/compositor failures, so the prior menu-to-gameplay error-108 regression
+is no longer the active blocker. The same run also supplied headset evidence for ordinary posture modes and all-direction direct locomotion. The log provided the first useful
+collision-comfort correlation for the remaining short-X/Z pullback: 2,060
+meaningful physical samples include 215 blocked and 90 partial outcomes, with
+render prediction resets occurring around a subset of those rejected solves.
+Rework presents the reconciled horizontal anchor rather than unvalidated raw
+X/Z. Black Plague still needs render-rate continuation between its ~60 Hz body
+ticks, so the current Framework change carries the last physical reconciliation
+to render and removes only the prediction component continuing into the last
+rejected direction. Tangential motion and retreat are preserved. This filter is
+**host-tested only**; do not close the PID 20520 comfort report until a fresh
+headset run confirms short motion, wall block and slide without pullback.
+
 ## Black Plague constraints
 
 Do not add a fake head collider, guessed camera offset or arbitrary movement multiplier.

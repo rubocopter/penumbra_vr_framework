@@ -10,6 +10,26 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Current presentation/comfort checkpoint (2026-09-14): PID 22096 exercised
+  `7f84235` from menu into sustained gameplay with 15,990 logged frames, 15,887
+  gameplay frames, 15,885 presentation frames and **zero stereo failures**.
+  This is positive headset evidence for the single-consumption presentation
+  sequence fix. The same run supplied headset evidence for ordinary physical,
+  button and Hybrid crouch plus direct locomotion in every tested direction; do not continue treating compositor error 108 as the current
+  blocker unless a fresh run reproduces it. The same closed log was re-analysed
+  with `Analyze-BlackPlaguePresentation.ps1 -CollisionComfort`: 2,060 meaningful
+  physical samples contained 1,755 free, 215 blocked and 90 partial outcomes,
+  and repeated render-prediction resets occurred around rejected body solves.
+  Comparison with Rework confirms the remaining structural difference: BP
+  predicts a newer HMD pose between its ~60 Hz body ticks. The current working
+  tree carries the last physical reconciliation into render and removes only
+  the prediction component that continues into the rejected direction, while
+  preserving tangential slide and movement away from the obstacle. Release,
+  Debug and SDK-less Release pass 34/34 CTest; metadata, the exact-build BP
+  verifier and Overture `-Full` (Release/LAA + 289/289 tracking checks) pass.
+  The new collision-comfort filter is **host-tested only** and requires a fresh
+  headset run before closing PID 20520's pullback report.
+
 - Second presentation regression checkpoint (2026-09-14): PID 6016 reproduced
   `VRCompositorError_AlreadySubmitted (108)` on commit `ca099ca`. The fresh log
   proved the first gameplay transition still failed after a menu frame had
@@ -25,10 +45,9 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   validation also passes. The Release probe DLL for this candidate has SHA-256
   `48489A2573BC96F56C55F0E0C2E3559450D8E4BD249767C349777B92F1BE1A76`.
   Treat both `3333be1` and `ca099ca` as failed headset candidates. The
-  exact-build BP verifier script could not be re-invoked in this iteration due
-  to the local tool safety layer; its image/mapping inputs are unchanged, so do
-  not report a fresh verifier pass. The current correction remains host-tested
-  until a fresh menu-to-gameplay headset run sustains stereo without error 108.
+  exact-build BP verifier script was later rerun successfully. This paragraph is
+  retained as the failed-candidate history; PID 22096 above supersedes its
+  pending-headset status for the presentation-sequence fix.
 
 - Headset-candidate regression found on 2026-09-14: PIDs 23656 and 21396
   initialized the Black Plague probe and controller path, but the first gameplay
@@ -84,11 +103,12 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   exposed a stale extracted `VRHandNominalRecoveryAnchor` call; that call was
   fixed and the subsequent product gate passed the Release build, Large Address
   Aware check and 289-check `VRTrackingTest`.
-- Validation state remains **host-tested only** for the new BP crouch,
-  presentation/body transaction and lifecycle work. Existing PID 8092
-  headset evidence covers the earlier direct stick/collision route; it does
-  not validate the new crouch or positional comfort. No headset or supported
-  claim is made here.
+- Validation state remains **host-tested only** for the new
+  rejected-direction render-prediction filter, body transaction extensions and
+  lifecycle work. PID 22096 supplies headset evidence for presentation-sequence ownership,
+  ordinary posture modes and directional locomotion have positive headset evidence.
+  Remaining posture edge cases, explicit vertical correlation and the new short-X/Z comfort filter remain open.
+  Status remains below the final validation tier.
 
 - Audit baseline (2026-09-14): implementation began from
   `73c70f0aad6fd2f33dc27983a44971ec44215f4a`. Black Plague
@@ -115,9 +135,11 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   changes are **host-tested only**. The real NativeInputBridge harness and
   systematic lifecycle install/remove fault injection are now covered by the
   34/34 suite and must not be promoted beyond host-tested evidence.
-- Still open in this working tree: headset comfort for short physical motion,
-  presentation pose identity/time and pose/yaw epoch live correlation, and the
-  Black Plague palm gameplay adapter. Do not claim those contracts complete.
+- Still open in this working tree: headset comfort for short physical motion
+  after the rejected-direction filter, crouch/Y correlation, presentation
+  pose/yaw epoch live correlation beyond the now-passing sequence-consumption
+  gate, and the Black Plague palm gameplay adapter. Do not claim those contracts
+  complete.
 - Palm-collision reference research is now pinned more narrowly. Rework
   `23c890f` creates player-owned hand collision shapes once per world, reuses
   them for overlap/sweep-style sampling, and destroys them on world teardown;

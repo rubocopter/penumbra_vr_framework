@@ -40,7 +40,14 @@ la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
   usa ahora la política directa `1.5/2.25 m/s` de Rework dentro del único request
   `0xD7281`; PID 8092 aportó evidencia de visor para esa ruta técnica. PID 20520
   detectó después que el primer crouch físico no sincronizaba la salida nativa y
-  que el movimiento X/Z corto todavía podía sentirse como un pullback. PID 23260
+  que el movimiento X/Z corto todavía podía sentirse como un pullback. PID 22096
+  validó después la corrección de presentación de `7f84235` con 15.990 frames y
+  cero fallos estéreo, y su log permitió aislar mejor el pullback: la predicción
+  HMD entre ticks podía seguir avanzando en la dirección que el último solve
+  físico acababa de rechazar. El filtro actual transporta esa reconciliación al
+  render y elimina solo la componente hacia la dirección rechazada; slide y
+  movimiento de salida se conservan. Esta corrección es todavía host-tested y
+  necesita una nueva prueba con visor. PID 23260
   confirmó que latch/altura y botón sí llegaban al runtime, pero la salida nativa
   seguía bloqueada por la semántica toggle del dispatch release. PID 24948 mostró
   que compensar con release/segundo press seguía alternando el collider sin
@@ -48,7 +55,8 @@ la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
   `cPlayer::ChangeMoveState` en `0x9C750`; los handlers originales prueban
   crouch=`4`, walk=`0`. El backend actual conserva el desired state de Rework y
   aplica esos estados directamente. El tracking Y continuo y esta adaptación
-  están corregidos y host-tested. El siguiente gate focalizado es
+  están corregidos y host-tested. El siguiente gate focalizado debe validar a la
+  vez crouch/Y y el nuevo filtro de confort X/Z mediante
 `tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
 automáticamente.
 Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y

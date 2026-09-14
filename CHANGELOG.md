@@ -1,5 +1,22 @@
 # Changelog
 
+- 2026-09-14: PID 22096 supplied the first positive headset run for the
+  presentation-sequence fix in `7f84235`: 15,990 logged frames, 15,887 gameplay
+  frames and zero stereo/compositor failures after menu-to-gameplay transition.
+  Re-analysis of the same run isolated the remaining short-X/Z comfort defect:
+  2,060 meaningful physical samples included 215 blocked and 90 partial cases,
+  while the render stream contained repeated prediction resets around rejected
+  collision motion. Rework keeps raw horizontal tracking out of presentation
+  until body reconciliation; Black Plague needs render-rate continuation between
+  its ~60 Hz body ticks, so the Framework now carries the last physical
+  reconciliation into render and removes only the prediction component that
+  continues into the last rejected direction. Tangential slide and motion away
+  from the obstacle remain untouched. Release, Debug and SDK-less Release pass
+  34/34 CTest; metadata and the exact-build BP verifier pass; Overture `-Full`
+  passes Release/LAA and 289/289 `VRTrackingTest`. This collision-comfort change
+  is still **host-tested only** and needs a fresh headset run before the PID
+  20520 pullback report can be closed.
+
 - 2026-09-14: invalidated the follow-up Black Plague headset candidate
   `ca099ca` after PID 6016 reproduced OpenVR compositor error 108 on the
   menu-to-gameplay transition. The prior nested-visibility fix was necessary

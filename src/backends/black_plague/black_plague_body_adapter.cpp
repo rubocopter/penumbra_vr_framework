@@ -222,6 +222,8 @@ void PublishRoomScaleCameraSampleLocked(
     g_room_scale_camera_sample.valid = true;
     g_room_scale_camera_sample.body_generation = tick.body_generation;
     g_room_scale_camera_sample.horizontal_world_offset = offset;
+    g_room_scale_camera_sample.physical_reconciliation =
+        shadow_sample.physical_reconciliation;
     g_room_scale_camera_sample.predicted_head_anchor =
         shadow_sample.predicted_anchor;
     g_room_scale_camera_sample.body_position =

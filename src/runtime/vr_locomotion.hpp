@@ -57,6 +57,14 @@ struct VrPhysicalReconciliationResult {
     const VrBodyReconciliationPlan& plan,
     const VrAcceptedBodyMotion& physical_motion) noexcept;
 
+// Between body ticks Black Plague may render a newer HMD pose than the pose
+// already resolved by collision.  Keep the render-rate continuation tangent to
+// the last rejected physical direction so a wall rejection cannot be presented
+// for one frame and then snapped back on the next native body tick.
+[[nodiscard]] std::array<float, 3> FilterPhysicalRenderPrediction(
+    const std::array<float, 3>& render_prediction,
+    const VrPhysicalReconciliationResult& reconciliation) noexcept;
+
 [[nodiscard]] std::array<float, 3> CarryHeadAnchorWithLocomotion(
     const std::array<float, 3>& head_anchor,
     const VrAcceptedBodyMotion& motion) noexcept;

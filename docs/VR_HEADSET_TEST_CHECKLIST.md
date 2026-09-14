@@ -8,7 +8,11 @@ Antes de cualquier prueba de crouch, room-scale o interacción, realiza un gate
 de presentación de 20-30 segundos. Los candidatos `3333be1` y `ca099ca` quedan
 descartados: ambos reprodujeron `VRCompositorError_AlreadySubmitted (108)` al
 pasar de menú a gameplay, y PID 6016 demostró que el segundo todavía podía
-reutilizar un snapshot de compositor ya enviado. En el candidato actual:
+reutilizar un snapshot de compositor ya enviado. PID 22096 probó después la
+corrección de consumo único de `7f84235`: 15.990 frames registrados, 15.887 de
+gameplay y **cero fallos estéreo/compositor**. Ese resultado cierra el error 108
+como bloqueo actual, pero cada candidato posterior debe repetir este gate breve
+antes de validar confort. En el candidato actual:
 
 1. entra al menú con visor y mandos activos;
 2. carga una partida y permanece quieto 10 segundos;
@@ -21,8 +25,9 @@ reutilizar un snapshot de compositor ya enviado. En el candidato actual:
    `VRCompositorError_AlreadySubmitted (108)`.
 
 Analiza una ejecución cerrada con
-`tools\Analyze-BlackPlaguePresentation.ps1 -ProcessId <PID>` antes de interpretar
-el resto de la tanda.
+`tools\Analyze-BlackPlaguePresentation.ps1 -ProcessId <PID> -CollisionComfort`
+antes de interpretar el resto de la tanda. Sin `-CollisionComfort` el script
+sigue dando el resumen de presentación habitual.
 
 La DLL Release preparada para este gate tiene SHA-256
 `48489A2573BC96F56C55F0E0C2E3559450D8E4BD249767C349777B92F1BE1A76`.
@@ -71,13 +76,14 @@ validación visual/contacto de la futura palma completa.
 
 ### Build preparada para la siguiente sesión
 
-El candidato anterior `3333be1` queda descartado: PIDs 23656 y 21396 fallaron
-en la primera transición real a gameplay con OpenVR compositor error 108. La
-build actual contiene la corrección de ownership de la muestra de presentación:
-las cámaras de transición/UI no consumen una muestra y los callbacks de
-visibilidad ejecutados dentro de los dos eye passes reutilizan el snapshot del
-owner previo a RenderWorld. Este cambio sigue **host-tested**, pendiente del
-primer gate de presentación indicado arriba.
+Los candidatos `3333be1` y `ca099ca` quedan descartados por error 108. `7f84235`
+es ahora el baseline de presentación con evidencia positiva de visor en PID
+22096: menú -> gameplay sostenido sin fallos estéreo. El candidato actual añade
+encima el filtro de confort X/Z: la reconciliación física del último tick viaja
+al renderer y la predicción entre ticks elimina únicamente la componente que
+continúa hacia la dirección rechazada, preservando slide tangencial y movimiento
+de salida. Este cambio de confort sigue **host-tested** hasta repetir pared,
+slide y movimientos físicos de `5–10 cm` con visor.
 
 El candidato de prueba con visor se genera directamente en
 `build\bin\Release`. No hace falta crear una release pública ni copiar DLLs al

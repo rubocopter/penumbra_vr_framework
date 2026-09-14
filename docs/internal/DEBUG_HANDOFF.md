@@ -4,6 +4,19 @@ This file prevents repeated symptom-level fixes from replacing evidence-backed i
 
 ## Current offline checkpoint (2026-09-14)
 
+PID 22096 is the current presentation evidence. The `7f84235` run crossed
+menu -> gameplay and produced 15,990 logged frames, 15,887 gameplay frames and
+zero stereo/compositor failures. The single-consumption sequence gate therefore
+has positive headset evidence; do not reopen compositor error 108 without a new
+contradicting run. The same log is also the current evidence source for the
+remaining short-X/Z comfort defect. Offline analysis found 2,060 meaningful
+physical samples (`1755 free / 215 blocked / 90 partial`) and repeated render
+prediction resets around a subset of rejected collision solves. The active
+working-tree fix carries the last physical reconciliation into render and
+projects out only the prediction component that continues into the rejected
+direction. This preserves tangential slide and retreat. It is **host-tested
+only** until a new headset run repeats short motion, direct wall block and slide.
+
 PID 6016 showed that `ca099ca` did not close the compositor regression. The
 transition log contained one successful tracked-menu submission, then gameplay,
 then a left-eye `VRCompositorError_AlreadySubmitted (108)`. The added
@@ -18,9 +31,9 @@ to submitting an eye twice between `WaitGetPoses` calls. Telemetry now logs
 `presentation_pose_stale_rejects` plus every acquisition/reuse event so the next
 headset run can distinguish missing visibility publication from duplicate
 consumption. Debug, Release and SDK-less Release each pass 34/34 after the
-change; metadata validation passes. The exact-build verifier was not freshly
-rerun because its invocation was blocked by the local tool safety layer; no
-new verifier claim is made. Headset evidence is pending.
+change; metadata validation passes. The exact-build verifier was later rerun
+successfully. This paragraph is retained as failed-candidate history; PID 22096
+above is the later positive headset result.
 
 The first two headset attempts from candidate `3333be1` (PIDs 23656 and 21396)
 failed at the presentation boundary, not at locomotion/crouch ownership. Both
@@ -33,18 +46,20 @@ fix rejects non-gameplay visibility cameras before sampling and makes nested
 eye callbacks reuse the existing presentation snapshot. Debug, Release and
 SDK-less Release each pass 34/34 after the fix; metadata, the exact-build BP
 verifier and the Overture `-Full` regression also pass. Treat `3333be1` as a
-failed headset candidate; the fix remains host-tested until a new headset run
-proves normal menu/gameplay transition and sustained stereo submission.
+failed headset candidate; PID 22096 later proved normal menu/gameplay transition
+and sustained stereo submission for the single-consumption fix.
 
-The working tree contains the five-phase offline intervention. Debug, Release
-and SDK-less Release pass 34/34 CTest tests. Metadata validation and the
+The working tree contains the five-phase offline intervention plus the
+rejected-direction render-prediction comfort filter. Debug, Release and
+SDK-less Release pass 34/34 CTest tests. Metadata validation and the
 supported-image BP verifier pass without modifying a process. The body
-transaction, crouch ownership, presentation epochs, interaction generation
-checks and partial lifecycle ledger are host-tested only. The Overture `-Full`
-gate passed after correcting its stale extracted recovery-helper reference.
+transaction, crouch ownership, presentation epochs beyond sequence consumption,
+interaction generation checks, comfort filter and partial lifecycle ledger are
+host-tested only. Overture `-Full` passes Release/LAA and 289/289 tracking
+checks.
 
-Do not promote the new BP crouch, short physical-motion comfort, yaw gate,
-palms or lifecycle live behavior without a fresh live run. Static supported-
+Remaining posture edge cases, short physical-motion comfort, yaw, palms and lifecycle
+retain their documented validation states until fresh live evidence covers them.
 image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, its nine stack
 arguments, callback slot, legacy contact layout, body matrix/shape accessors,
 CreateBoxShape, shape user count and destruction route. A default-off no-write
@@ -430,9 +445,18 @@ adapter completes from B1 only when tick/body/generation match. Recenter/body
 replacement invalidates the transaction rather than carrying a request across
 epochs. The body harness covers presentation rates above the 60 Hz physics tick,
 repeated poses, ramp/stop, block/slide/jitter and same-tick physical/stick
-partitioning. Debug/Release and SDK-less Release currently pass 30/30 host tests.
+partitioning. Debug/Release and SDK-less Release currently pass 34/34 host tests.
 
-This does not yet prove the headset pullback is gone. The direct-stick producer
+PID 22096 then showed that same-tick body ownership was not the whole comfort
+story. The body solve could reject a physical direction while the render path,
+running between body ticks, still extrapolated the newer HMD pose into that same
+direction and then snapped back when the next reconciled anchor arrived. The
+current `FilterPhysicalRenderPrediction` fix uses the last physical
+reconciliation to remove only the into-rejection component; tangent and retreat
+remain available. Host tests cover free, blocked and away prediction. This does
+not yet prove the headset pullback is gone.
+
+The direct-stick producer
 now publishes logical direction/magnitude/sprint plus the identified head pose;
 the body transaction integrates that intent with its physics `delta_seconds`.
 Do not reopen the input-callback `dt` path. Exact-build analysis now identifies

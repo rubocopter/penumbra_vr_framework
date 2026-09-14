@@ -37,7 +37,17 @@ int main() {
     CHECK(full.valid && Near(full.rejected_distance,0) && Near(full.head_anchor[0],0.1F));
     auto blocked = rt::ReconcilePhysicalBodyMotion(plan,Motion(body,body));
     CHECK(blocked.valid && Near(blocked.head_anchor[0],0.05F));
-    auto partial = rt::ReconcilePhysicalBodyMotion(plan,Motion(body,{0.02F,0.825F,0}));
+    auto free_prediction = rt::FilterPhysicalRenderPrediction(
+        {0.01F,0,0.004F},full);
+    CHECK(Near(free_prediction[0],0.01F) && Near(free_prediction[2],0.004F));
+    auto blocked_prediction = rt::FilterPhysicalRenderPrediction(
+        {0.01F,0,0.004F},blocked);
+    CHECK(Near(blocked_prediction[0],0) && Near(blocked_prediction[2],0.004F));
+    auto away_prediction = rt::FilterPhysicalRenderPrediction(
+        {-0.01F,0,0.004F},blocked);
+    CHECK(Near(away_prediction[0],-0.01F) && Near(away_prediction[2],0.004F));
+    auto partial = rt::ReconcilePhysicalBodyMotion(
+        plan,Motion(body,{0.02F,0.825F,0}));
     CHECK(Near(partial.rejected_distance,0.03F) && Near(partial.head_anchor[0],0.07F));
     // Lateral sliding must not be mistaken for distance along the request.
     auto slide = rt::ReconcilePhysicalBodyMotion(plan,Motion(body,{0.02F,1.3F,0.04F}));

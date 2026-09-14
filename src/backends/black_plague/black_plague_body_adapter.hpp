@@ -116,6 +116,7 @@ struct BlackPlagueRoomScaleCameraSample {
     bool valid = false;
     std::uint64_t body_generation = 0;
     std::array<float, 3> horizontal_world_offset{};
+    runtime::VrPhysicalReconciliationResult physical_reconciliation{};
     std::array<float, 3> predicted_head_anchor{};
     std::array<float, 3> body_position{};
     runtime::VrMatrix34 observed_tracking_pose{};
