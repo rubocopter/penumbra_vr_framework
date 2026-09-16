@@ -6,6 +6,7 @@
 #include <GL/gl.h>
 
 #include "vr_math.hpp"
+#include "vr_rework_hand_profile.hpp"
 
 #include <array>
 #include <cmath>
@@ -289,10 +290,15 @@ bool DrawReworkHandMesh(
     glPushMatrix();
     // Exact Rework hand HUD profile. HPL's XYZ helper produces Rz*Ry*Rx;
     // fixed-function calls below post-multiply in that same final order.
-    glTranslatef(0.0F, 0.0F, 0.05F);
-    glRotatef(-1.1F * kRadiansToDegrees, 0.0F, 0.0F, 1.0F);
-    glRotatef(0.525F * kRadiansToDegrees, 0.0F, 1.0F, 0.0F);
-    glScalef(0.006F, 0.006F, 0.006F);
+    glTranslatef(0.0F, 0.0F,
+        runtime::rework_hand_profile::kVisualTranslationZ);
+    glRotatef(runtime::rework_hand_profile::kVisualRotationZ * kRadiansToDegrees,
+        0.0F, 0.0F, 1.0F);
+    glRotatef(runtime::rework_hand_profile::kVisualRotationY * kRadiansToDegrees,
+        0.0F, 1.0F, 0.0F);
+    glScalef(runtime::rework_hand_profile::kMeshScale,
+        runtime::rework_hand_profile::kMeshScale,
+        runtime::rework_hand_profile::kMeshScale);
 
     const GLuint texture = HandTexture();
     if (texture != 0U) {
