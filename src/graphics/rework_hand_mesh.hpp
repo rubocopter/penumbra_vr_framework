@@ -6,9 +6,14 @@
 
 #ifdef _WIN32
 // rework_hand_mesh.cpp decodes the original Rework JPEG through GDI+ while
-// keeping WIN32_LEAN_AND_MEAN for the renderer implementation. GDI+ still
-// requires the COM stream/property declarations omitted by the lean Windows
-// header, so make those declarations available before gdiplus.h is parsed.
+// keeping the Windows surface lean. GDI+ still requires the COM stream/property
+// declarations omitted by WIN32_LEAN_AND_MEAN, so include them explicitly.
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 #include <objidl.h>
 #include <propidl.h>
