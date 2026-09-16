@@ -4,6 +4,16 @@
 
 #include <cstddef>
 
+#ifdef _WIN32
+// rework_hand_mesh.cpp decodes the original Rework JPEG through GDI+ while
+// keeping WIN32_LEAN_AND_MEAN for the renderer implementation. GDI+ still
+// requires the COM stream/property declarations omitted by the lean Windows
+// header, so make those declarations available before gdiplus.h is parsed.
+#include <windows.h>
+#include <objidl.h>
+#include <propidl.h>
+#endif
+
 namespace penumbra_vr::graphics {
 
 struct ReworkHandMeshStats {
