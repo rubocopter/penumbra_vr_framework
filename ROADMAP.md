@@ -170,6 +170,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Headset-validate the supported controller profiles on Black Plague and close any per-profile feature gaps before controller parity is claimed
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's `0.18 m` physical reach
+- [x] Port Rework `23c890f` collision-stopped-hand acquisition semantics: visible/held palms stay resolved while target intent follows the raw controller by at most `0.18 m`
 - [ ] Complete palm collision, jointed mechanisms and definitive tool/light geometry/profile validation
   - [x] Pin the supported BP `CheckShapeWorldCollision` ABI, callback/contact
     layout, shape accessors and reference-counted destruction; host-test a
@@ -190,7 +191,10 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
     jointed/mechanism bodies remain native
   - [ ] Headset-validate palm contact plus `Grab=6` / `Move=2` placement after a
     clean reboot and compare palm-collision on/off frame pacing; PID 23000 is
-    inconclusive because the run also had severe FPS loss and a controller drop
+    inconclusive because the run also had severe FPS loss and a controller drop;
+    PID 4720 also does not count because the old focused helper launched palms
+    with room-scale/physical displacement disabled. The helper now composes the
+    palm gate with the validated room-scale/crouch stack and checks that state.
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership

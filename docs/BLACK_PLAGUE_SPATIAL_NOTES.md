@@ -343,11 +343,21 @@ lifecycle/resolution está live-tested en PID 8644 detrás de
 `--validate-palm-resolver`: un create, reuse, seis queries y un destroy
 equilibrados, `user_count=0` y sin cambios en la memoria gameplay seleccionada.
 La integración posterior ya publica el body sujeto por cada mano en `skip_body`
-y entrega el grip resuelto a manos visibles, interacción física y herramientas;
-el aim continúa usando tracking raw. Esa conexión gameplay es host-tested.
+y entrega el grip resuelto a manos visibles, objetos ya poseídos y herramientas;
+el aim continúa usando tracking raw. La adquisición sigue ahora la separación de
+Rework `23c890f`: parte de la palma resuelta pero puede seguir el controlador raw
+hasta `0,18 m` para no perder asas/props cuando la mano visible queda detenida por
+colisión. Esa conexión gameplay es host-tested.
 PID 23000 llegó a ejercitarla con visor, pero la misma sesión tuvo FPS muy bajos
 y pérdida del controlador derecho, así que no sirve para promover contacto,
 rendimiento ni sensación de agarre a headset-validated.
+
+PID 4720 tampoco demuestra una regresión de room-scale: el log arrancó con
+`physical_displacement_validation=0`, `room_scale_validation=0` y
+`positional_translation_enabled=0`, mientras la colisión de palma sí se activó.
+Era una composición incorrecta del helper de prueba. El helper de palms activa
+ahora también los mutex de desplazamiento físico/room-scale y exige telemetría
+de room-scale aplicado y crouch con tracking válido.
 
 ### Articulación de dedos: BP no debe degradarse
 
@@ -364,6 +374,14 @@ futuro pequeño es mantener `VrHandArticulation`/curls independientes en runtime
 y dejar en un perfil/adapter de malla los ejes, deadzone/suavizado opcionales y
 poses de agarre. Overture debería adaptarse a esa salida común cuando exista
 una segunda malla real; BP no debe copiar ahora la pose rígida de Overture.
+
+La geometría de Rework ya está disponible dentro del propio repositorio en
+`products/overture/data/models/hud_objects/hud_object_hand_rig.dae` y
+`hud_object_hand_left_rig.dae`, con sus recursos HUD/material. Es reutilizable
+como candidata de presentación, pero BP dibuja hoy `DrawTrackedHands` con cajas
+OpenGL inmediatas: hace falta un consumidor real de malla/rig y revisar la
+procedencia de esos assets antes de sustituir la mano procedural. Ese cambio no
+debe perder los curls/curvas/spread/oposición de pulgar actuales.
 
 ## Rutas integradas
 
@@ -417,8 +435,11 @@ mano mientras algunas tablas largas se comportaban mejor llevó a separar
 seleccionado y lo llevan hacia la palma mediante la fuerza física derivada de
 `cPlayerState_Move_VR` de Rework. Los cuerpos con joints, puertas, palancas y
 otros mecanismos conservan su mecánica nativa. La colisión de palmas ya está
-conectada host-side al grip resuelto, pero PID 23000 fue inconcluso para visor por
-FPS/controlador. El rayo secundario de examinar durante Grab sigue pendiente.
+conectada host-side al grip resuelto. La selección usa la extensión raw limitada
+de Rework y la adquisición revalida contra esa misma pose; el hold continúa en
+la palma resuelta. PID 23000 fue inconcluso para visor por FPS/controlador y PID
+4720 no tenía room-scale activo por el helper antiguo. El rayo secundario de
+examinar durante Grab sigue pendiente.
 
 La liberación ya no usa una única lectura instantánea del mando. Conserva las
 cinco últimas muestras finitas y aplica la mediana por componente; con menos de

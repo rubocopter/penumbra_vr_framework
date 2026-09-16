@@ -1,5 +1,17 @@
 # Changelog
 
+- 2026-09-16: Corrected the Black Plague palm validation composition after PID
+  4720 showed `physical_displacement_validation=0`, `room_scale_validation=0`
+  and `positional_translation_enabled=0` while palm collision was enabled. The
+  focused palm helper now enables the existing physical-displacement and
+  room-scale mutexes, keeps the mirror on and requires live room-scale plus
+  tracked-crouch telemetry before the run can pass. Exact Rework `23c890f`
+  comparison also found that target acquisition follows the raw controller by at
+  most `0.18 m` beyond a collision-stopped visible palm. Black Plague now ports
+  that bounded acquisition rule while visible hands, held-object motion and
+  tools continue to consume the resolved palm. Release build, 34/34 CTest and
+  the supported-image verifier pass; headset promotion remains pending.
+
 - 2026-09-16: Synchronized the operational documentation with the current
   Black Plague evidence after the gameplay-palm integration. PID 25484 is now
   consistently recorded as positive headset evidence for tracked Y, current

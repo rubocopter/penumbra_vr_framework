@@ -76,12 +76,18 @@ La palma collision-aware ya está conectada al gameplay en estado host-tested.
 PID 28412 cerró el query nativo no-write y PID 8644 cerró
 `--validate-palm-resolver` en proceso real, con lifecycle equilibrado y sin
 cambios de memoria gameplay. El path actual publica el held body por mano,
-mantiene aim en tracking raw y usa la palma resuelta para manos, interacción y
-herramientas; `Grab=6` y el `Move=2` free-body tienen ownership distinto. PID
+mantiene aim en tracking raw y usa la palma resuelta para manos, objetos ya
+poseídos y herramientas; la adquisición puede seguir el controlador raw hasta
+`0,18 m` desde la palma detenida, como Rework. `Grab=6` y el `Move=2` free-body
+tienen ownership distinto. PID
 23000 llegó a este path con visor, pero la pérdida severa de FPS y la caída del
 mando derecho invalidan la tanda como evidencia de promoción. La siguiente
-validación debe ser un A/B limpio tras reinicio, palma off/on, ambos mandos
-estables, objetos representativos, pared/slide y un mecanismo nativo.
+validación debe usar `tools\Start-BlackPlaguePalmCollisionValidation.ps1` tras
+reinicio: el helper corregido activa también room-scale/desplazamiento físico y
+comprueba la composición. Antes y después del contacto de palma verifica
+desplazamiento físico X/Z corto y crouch/stand, además de ambos mandos, objetos
+representativos, pared/slide y un mecanismo nativo. PID 4720 no sirve para
+comparar room-scale porque el helper antiguo lo lanzó con esa ruta desactivada.
 
 ### Build preparada para la siguiente sesión
 

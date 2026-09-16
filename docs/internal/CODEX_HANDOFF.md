@@ -182,9 +182,18 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   The successor owned-shape/resolver path is live-tested in PID 8644 behind
   `--validate-palm-resolver`. The subsequent gameplay path is host-tested: it
   publishes the held body per hand, substitutes the resolved grip for hands,
-  physical interaction and tools, and leaves aim on raw tracking. PID 23000 is
+  held-object motion and tools, and leaves aim on raw tracking. Target
+  acquisition now matches Rework `23c890f`: it follows raw controller
+  translation by at most `0.18 m` from the collision-resolved palm while the
+  actual hold remains anchored to the resolved palm. PID 23000 is
   inconclusive for headset promotion because severe FPS loss and a right-hand
   controller dropout occurred during that same session.
+- PID 4720 is not evidence that the previously good room-scale/crouch behavior
+  regressed. Startup explicitly recorded `physical_displacement_validation=0`,
+  `room_scale_validation=0` and `positional_translation_enabled=0` while the
+  palm mutex was active. The focused palm helper now requests physical
+  displacement + room-scale + palms together and requires active room-scale
+  rendering plus tracked-crouch telemetry before accepting the run.
 - PID 21548 reran the corrected active room-scale path and passed its complete
   automatic gate: queued/consumed/injected/matched were `201/201`, all four
   collision outcomes were observed, crouch/stand recovery passed and in-place
@@ -704,7 +713,12 @@ by Rework: `collideCharacter=false` skips every body whose character byte is set
 while the fourth argument independently skips exactly one `skip_body`. The host
 resolver harness verifies Black Plague calls that ABI with character collision
 disabled and the supplied skip body. The gameplay integration now publishes the
-current held body per hand and feeds the resolved grip to gameplay consumers.
+current held body per hand and feeds the resolved grip to visible hands,
+held-object motion and tools. Rework `23c890f` was rechecked after the reported
+pickup difficulty: target acquisition deliberately follows the raw controller a
+bounded `0.18 m` beyond the collision-stopped hand. Black Plague now mirrors
+that rule for selection/revalidation while keeping the resolved palm
+authoritative once the body is owned.
 Supported-image work also separated action-state `Move=2` from `Grab=6`: free
 Move bodies retain the native picked contact and follow the resolved palm using
 Rework's physical-force behavior, while jointed/mechanism bodies remain native.
@@ -739,14 +753,20 @@ mine-gallery EFX parameter set, including echo, modulation and room-rolloff
 fields. This strengthens the offline reference; Black Plague/Requiem audio hook
 integration still requires game-specific evidence.
 
-1. clean-reboot headset A/B with palm collision off/on, verify normal FPS and
-   both controllers, then exercise representative palm contact and both hands;
+1. run the corrected focused palm helper after a clean reboot; verify normal FPS,
+   both controllers and that short physical X/Z movement plus crouch/stand still
+   feel like the PID 25484 room-scale baseline before and after palm contact;
 2. verify several small/free props that previously floated, long wooden bars or
    tables, and one jointed mechanism across the separate `Grab=6` / `Move=2`
    ownership paths;
-3. definitive per-game tool/glowstick geometry/profile and headset validation;
-4. inventory, notes, menus, HUD and subtitles;
-5. comfort/haptics and representative chapter-level validation.
+3. replace the provisional Black Plague procedural hand presentation with a
+   real rig/mesh path. The Rework hand rigs already exist under
+   `products/overture/data/models/hud_objects`; reuse their geometry only after
+   verifying resource provenance and preserve Black Plague's richer shared
+   finger-articulation output rather than copying Overture's rig behavior;
+4. definitive per-game tool/glowstick geometry/profile and headset validation;
+5. inventory, notes, menus, HUD and subtitles;
+6. comfort/haptics and representative chapter-level validation.
 
 Long bars and mechanisms must not be fixed by arbitrary springs or rigid palm offsets. Map native joint/slider/hinge state.
 

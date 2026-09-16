@@ -17,6 +17,11 @@ publication is now connected and host-tested, including per-hand held-body
 exclusion plus distinct `Grab=6` and free-body `Move=2` ownership. PID 23000 is
 inconclusive because severe FPS loss and a right-controller dropout occurred in
 the same headset run, so palm gameplay remains below headset-validated/supported.
+PID 4720 later showed why the focused palm run also cannot be used to judge the
+known-good room-scale path: its helper had room-scale, physical displacement and
+positional translation disabled. The helper now composes those gates. A fresh
+`23c890f` comparison also restored Rework's bounded raw-controller acquisition
+pose while leaving visible/held palms collision-resolved.
 
 Penumbra VR is GPLv3-or-later and records adapted components/provenance in `THIRD_PARTY.md` and the relevant product/source notes.
 
@@ -186,7 +191,7 @@ Current order:
    inherit PID 8092's headset status.
 8. Preserve PID 8092 as headset evidence for corrected direct locomotion and the collision route, PID 22096 as positive presentation-sequence evidence, and PID 25484 as positive evidence for the current tracked-Y/crouch/short-X/Z comfort composition. Keep deliberate wall/slide and the exact PID 20520 pullback reproduction as narrower edge gates.
 9. Close only the remaining crouch edges: capture Hybrid release-hold after the physical source clears, then exercise blocked-stand/low-ceiling recovery. Do not rerun the full PID 25484 batch merely to reproduce already captured evidence.
-10. Preserve the live-tested BP palm query (PID 28412) and owned lifecycle/resolver (PID 8644). Cleanly headset-validate the host-tested gameplay integration after reboot with palm collision off/on, both hands, representative `Grab=6` and free-body `Move=2` props, wall/slide contact and one native jointed mechanism; PID 23000 is inconclusive because FPS and one controller failed in the same run.
+10. Preserve the live-tested BP palm query (PID 28412) and owned lifecycle/resolver (PID 8644). Cleanly headset-validate the host-tested gameplay integration after reboot with the corrected combined helper: room-scale/crouch must remain active while both hands exercise representative `Grab=6` and free-body `Move=2` props, wall/slide contact and one native jointed mechanism. PID 23000 is inconclusive because FPS and one controller failed; PID 4720 launched the old palm helper without room-scale and therefore cannot be used as regression evidence for that stack.
 11. Continue mechanism-state, definitive tool/light profile, tracking-world-yaw and final camera/body/footstep-bob work as separate evidence gates.
 12. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
 
@@ -194,11 +199,19 @@ This order proves each boundary in isolation and prevents a game-adapter defect 
 
 ## Black Plague interaction priority
 
-Generic controller picking remains capped to the shared Rework direct physical reach of `0.18 m`. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
+Generic controller picking keeps the shared `0.18 m` bounded physical policy. Rework `23c890f` additionally lets acquisition follow the raw controller by at most `0.18 m` from a collision-stopped palm; Black Plague now ports that intent pose for selection and acquisition guards while visible hands and owned bodies remain on the resolved palm. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
 
 Long boards/bars following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
 
 Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; definitive placement still requires final hand geometry and headset/light-direction validation.
+
+The actual Rework hand rig assets are already carried by the Framework-owned
+Overture product. Reusing those meshes for Black Plague is viable as a
+presentation/profile step, but the binary backend currently renders procedural
+OpenGL hands and has no DAE/skinned-mesh consumer. The geometry import must
+therefore establish that narrow rendering boundary and preserve Black Plague's
+richer game-neutral articulation output; it must not regress finger semantics to
+the Overture rig implementation.
 
 ## Extracted so far
 

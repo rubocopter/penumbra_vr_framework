@@ -135,17 +135,46 @@ void SetVelocity(void* body, std::uintptr_t target, const Vec& value) {
 void AddForceAtPosition(void* body, const Vec& force, const Vec& position) {
     reinterpret_cast<void(__thiscall*)(void*,const Vec*,const Vec*)>(g_image+0x19C9E0)(body,&force,&position);
 }
-bool HandPose(runtime::VrHand hand, bool aim, Matrix& pose, Vec& velocity, Vec& angular) {
+bool RawHandPose(runtime::VrHand hand, bool aim, Matrix& pose, Vec& velocity, Vec& angular) {
     const auto frame = ReadNativeControllerFrame();
     if (!frame.focused) return false;
     const auto& sample = frame.hands[hand == runtime::VrHand::left ? 0 : 1];
     const auto& tracking = aim && sample.aim.pose_valid ? sample.aim : sample.grip;
-    if (!ControllerWorldPose(tracking,pose,velocity,angular)) return false;
+    return ControllerWorldPose(tracking,pose,velocity,angular);
+}
+bool HandPose(runtime::VrHand hand, bool aim, Matrix& pose, Vec& velocity, Vec& angular) {
+    if (!RawHandPose(hand,aim,pose,velocity,angular)) return false;
     if (!aim) {
         runtime::VrMatrix44 resolved{};
         const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
         if (ReadGameplayPalmPose(hand_index,resolved)) pose=resolved;
     }
+    return true;
+}
+bool InteractionHandPose(runtime::VrHand hand, Matrix& pose, Vec& velocity, Vec& angular) {
+    Matrix raw{};
+    if (!RawHandPose(hand,false,raw,velocity,angular)) return false;
+    pose=raw;
+    runtime::VrMatrix44 resolved{};
+    const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
+    if (!ReadGameplayPalmPose(hand_index,resolved)) return true;
+
+    const Vec reach{
+        raw.values[3]-resolved.values[3],
+        raw.values[7]-resolved.values[7],
+        raw.values[11]-resolved.values[11]};
+    const float distance=std::hypot(reach[0],reach[1],reach[2]);
+    if (!std::isfinite(distance)) return false;
+    const float scale=distance>runtime::vr_interaction_policy::kMaximumCollisionInteractionReach && distance>0 ?
+        runtime::vr_interaction_policy::kMaximumCollisionInteractionReach/distance : 1.0F;
+
+    // Rework 23c890f keeps the visible/physical palm collision-resolved, but
+    // lets target acquisition follow the real controller a bounded distance
+    // beyond it. Preserve raw orientation and clamp only the translation from
+    // the resolved palm toward the raw palm.
+    pose.values[3]=resolved.values[3]+reach[0]*scale;
+    pose.values[7]=resolved.values[7]+reach[1]*scale;
+    pose.values[11]=resolved.values[11]+reach[2]*scale;
     return true;
 }
 void __fastcall HookedHandsUpdate(void* hands, void*, float dt) {
@@ -200,7 +229,7 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
         const auto frame = ReadNativeControllerFrame();
         Matrix pose; Vec velocity{},angular{},from{},to{};
         if (Copy(origin,from.data(),sizeof(from)) && Copy(end,to.data(),sizeof(to)) &&
-            HandPose(frame.interact_source,false,pose,velocity,angular)) {
+            InteractionHandPose(frame.interact_source,pose,velocity,angular)) {
             const float native_length = std::hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
             if (std::isfinite(native_length) && native_length > 0 && native_length <= 20) {
                 // Rework uses palm overlap for props and reserves long-range
@@ -258,8 +287,9 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation) {
         Read<int>(player,0x2BC)!=2 || !BodyMatches(body) ||
         Read<void*>(body,0x330)!=nullptr || Read<void*>(body,0x10)!=nullptr ||
         reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(body)!=0) return;
-    Matrix palm,body_pose; Vec velocity{},angular{};
+    Matrix palm,interaction_pose,body_pose; Vec velocity{},angular{},interaction_velocity{},interaction_angular{};
     if (!HandPose(frame.interact_source,false,palm,velocity,angular) ||
+        !InteractionHandPose(frame.interact_source,interaction_pose,interaction_velocity,interaction_angular) ||
         !Copy(static_cast<std::uint8_t*>(body)+0x34,&body_pose,sizeof(body_pose))) return;
     const float max_linear=Read<float>(body,0x42C),max_angular=Read<float>(body,0x430);
     const float mass=Read<float>(body,0x434);
@@ -268,8 +298,8 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation) {
     const auto local_body_contact=Read<Vec>(state,0x38);
     const auto world_contact=TransformPoint(body_pose,local_body_contact);
     const float contact_distance=std::hypot(
-        world_contact[0]-palm.values[3], world_contact[1]-palm.values[7],
-        world_contact[2]-palm.values[11]);
+        world_contact[0]-interaction_pose.values[3], world_contact[1]-interaction_pose.values[7],
+        world_contact[2]-interaction_pose.values[11]);
     if (!std::isfinite(contact_distance) || contact_distance>
         runtime::vr_interaction_policy::kMaximumCollisionInteractionReach+
             runtime::vr_interaction_policy::kInteractionContactTolerance) {
@@ -374,8 +404,10 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation) {
         Read<int>(player,0x2BC)!=6 || !BodyMatches(body) || Read<void*>(body,0x330)!=nullptr ||
         Read<void*>(body,0x10)!=nullptr ||
         reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(body)!=0) return;
-    Matrix palm,body_pose; Vec velocity{},angular{};
-    if (!HandPose(frame.interact_source,false,palm,velocity,angular) || !Copy(static_cast<std::uint8_t*>(body)+0x34,&body_pose,sizeof(body_pose))) return;
+    Matrix palm,interaction_pose,body_pose; Vec velocity{},angular{},interaction_velocity{},interaction_angular{};
+    if (!HandPose(frame.interact_source,false,palm,velocity,angular) ||
+        !InteractionHandPose(frame.interact_source,interaction_pose,interaction_velocity,interaction_angular) ||
+        !Copy(static_cast<std::uint8_t*>(body)+0x34,&body_pose,sizeof(body_pose))) return;
     const float max_linear=Read<float>(body,0x42C),max_angular=Read<float>(body,0x430);
     const float mass=Read<float>(body,0x434);
     if (!std::isfinite(max_linear) || !std::isfinite(max_angular) || max_linear<0 || max_angular<0 ||
@@ -387,9 +419,9 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation) {
     const auto local_contact=Read<Vec>(state,0x14);
     const auto world_contact=TransformPoint(body_pose,local_contact);
     const float contact_distance=std::hypot(
-        world_contact[0]-palm.values[3],
-        world_contact[1]-palm.values[7],
-        world_contact[2]-palm.values[11]);
+        world_contact[0]-interaction_pose.values[3],
+        world_contact[1]-interaction_pose.values[7],
+        world_contact[2]-interaction_pose.values[11]);
     if (!std::isfinite(contact_distance) || contact_distance>
         runtime::vr_interaction_policy::kMaximumCollisionInteractionReach+
             runtime::vr_interaction_policy::kInteractionContactTolerance) {

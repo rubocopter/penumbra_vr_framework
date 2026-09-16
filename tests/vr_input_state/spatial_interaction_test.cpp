@@ -108,6 +108,17 @@ int RunSpatialTest() {
     if (!HandPose(runtime::VrHand::right,true,resolved_check,resolved_velocity,resolved_angular) ||
         resolved_check.values[3]!=0 || resolved_check.values[7]!=0 || resolved_check.values[11]!=0)
         return 31;
+    // Match Rework 23c890f target acquisition: the visible palm stays at the
+    // resolved position while interaction intent follows the raw controller by
+    // at most 18 cm.
+    test_resolved_palm=runtime::IdentityMatrix();
+    test_resolved_palm.values[3]=-0.19F;
+    Matrix interaction_check; Vec interaction_velocity{},interaction_angular{};
+    if (!InteractionHandPose(runtime::VrHand::right,interaction_check,
+            interaction_velocity,interaction_angular) ||
+        std::abs(interaction_check.values[3]+0.01F)>0.00001F ||
+        interaction_check.values[7]!=0 || interaction_check.values[11]!=0)
+        return 37;
     test_resolved_palm_valid=false;
     auto begin=[&] {
         g_enabled.store(true); Put(player.data(),0x2BC,0);
@@ -154,6 +165,22 @@ int RunSpatialTest() {
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || Read<bool>(body.data(),0x3C8)) return 21;
     Put(body.data(),0x3C8,true);
+
+    // A collision-stopped visible palm must not make a nearby selected prop
+    // impossible to acquire. The hold itself still anchors to the resolved
+    // palm after the bounded raw-controller acquisition succeeds.
+    const float collision_body_x=Read<Matrix>(body.data(),0x34).values[3];
+    hand.device_to_absolute.values[3]=collision_body_x;
+    test_resolved_palm=runtime::IdentityMatrix();
+    test_resolved_palm.values[3]=collision_body_x-0.19F;
+    test_resolved_palm_valid=true;
+    begin();
+    if (!g_held.load()) return 38;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load()) return 39;
+    test_resolved_palm_valid=false;
+
     begin(); hand.pose_valid=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 6;
@@ -168,9 +195,8 @@ int RunSpatialTest() {
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 10;
 
-    // Acquisition revalidates the resolved contact against the same grip pose
-    // used for selection. A selected body outside the physical reach is not a
-    // valid VR grab even if the native state transition itself commits.
+    // Acquisition still rejects a selected body beyond Rework's bounded raw
+    // interaction reach even if the native state transition itself commits.
     const float body_x=Read<Matrix>(body.data(),0x34).values[3];
     hand.device_to_absolute.values[3]=body_x+0.25F;
     begin();

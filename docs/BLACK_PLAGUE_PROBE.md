@@ -311,7 +311,10 @@ Rework: `collideCharacter=false` excludes character bodies and `skip_body`
 excludes exactly the supplied body. The host resolver harness verifies that
 argument contract. The subsequent host-tested gameplay path now publishes the
 owning held body per hand into `skip_body` and substitutes the resolved grip for
-visible hands, physical interaction and tools; controller aim remains raw.
+visible hands, owned-body motion and tools; controller aim remains raw. Target
+acquisition separately follows Rework `23c890f`: its pose may advance from the
+collision-resolved palm toward the raw controller by at most `0.18 m`, and the
+final Grab/Move acquisition guard uses that same bounded pose.
 
 Black Plague also has two distinct free-prop interaction routes. `Grab=6` keeps
 the existing rigid palm-relative adapter. Supported-image analysis and the
@@ -323,6 +326,12 @@ palm path but had severe FPS loss and a right-controller dropout in the same
 session, so it is inconclusive rather than a failed headset gate. These gameplay
 changes remain host-tested until a clean rebooted A/B run checks performance,
 contact, representative free props and a jointed mechanism.
+
+PID 4720 later showed that the old focused palm helper was not exercising the
+known-good room-scale composition at all: startup logged physical displacement,
+room-scale and positional translation disabled while palm collision was enabled.
+The helper now requests all three transient validation paths together and will
+reject a session unless room-scale rendering and tracked crouch are both seen.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes

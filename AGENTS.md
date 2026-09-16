@@ -176,15 +176,23 @@ live-tested the backend-owned palm-shape lifecycle plus the isolated
 Rework-derived resolver. The supported-image verifier now pins Black Plague's
 independent character and exact `skip_body` exclusions. The gameplay path is
 implemented and host-tested: each hand publishes its held body, resolved palms
-drive visible hands/interaction/tools while aim stays raw, `Grab=6` retains the
-rigid palm-relative free-body path, and eligible free `Move=2` bodies preserve
-their picked contact and follow the palm through the Rework-derived force path.
-Jointed/mechanism bodies remain native. PID 23000 reached this gameplay path in
-the headset, but severe FPS loss and a right-controller dropout made the run
-inconclusive. The next palm gate is therefore a clean-reboot headset A/B with
-palm collision off/on, both controllers healthy, representative contact plus
-`Grab=6`/`Move=2`, and at least one native jointed mechanism. Do not promote
-gameplay palms beyond host-tested until that clean evidence exists.
+drive visible hands/owned-body motion/tools while aim stays raw, `Grab=6`
+retains the rigid palm-relative free-body path, and eligible free `Move=2`
+bodies preserve their picked contact and follow the palm through the
+Rework-derived force path. Exact Rework `23c890f` comparison after the reported
+pickup difficulty restored its separate acquisition rule: selection may follow
+the raw controller by at most `0.18 m` from a collision-stopped palm, while the
+actual hold remains resolved. Jointed/mechanism bodies remain native. PID 23000
+reached this gameplay path in the headset, but severe FPS loss and a
+right-controller dropout made the run inconclusive. PID 4720 also cannot judge
+room-scale regressions because the old focused palm helper started with physical
+displacement, room-scale and positional translation disabled. The helper now
+composes palms with the known-good room-scale/crouch stack and verifies that
+composition in telemetry. The next palm gate is therefore a clean-reboot run of
+that combined helper with both controllers healthy, representative contact plus
+`Grab=6`/`Move=2`, short physical X/Z + crouch checks before/after contact, and
+at least one native jointed mechanism. Do not promote gameplay palms beyond
+host-tested until that clean evidence exists.
 
 ## Black Plague constraints
 

@@ -38,11 +38,22 @@ if ($existingGame.Count -ne 0) {
     throw 'A penumbra.exe process is already running. Close it first; this validation request is sampled when the probe initializes.'
 }
 
-$request = New-Object System.Threading.Mutex -ArgumentList $false,
+$mirrorExitCode = 0
+& $launcher '--set-vr-mirror' 'on'
+$mirrorExitCode = $LASTEXITCODE
+if ($mirrorExitCode -ne 0) {
+    throw 'Could not enable the persisted monitor mirror for palm/room-scale validation.'
+}
+
+$physicalRequest = New-Object System.Threading.Mutex -ArgumentList $false,
+    'Local\PenumbraVR.BlackPlague.PhysicalDisplacementValidation'
+$roomScaleRequest = New-Object System.Threading.Mutex -ArgumentList $false,
+    'Local\PenumbraVR.BlackPlague.RoomScaleValidation'
+$palmRequest = New-Object System.Threading.Mutex -ArgumentList $false,
     'Local\PenumbraVR.BlackPlague.PalmCollisionValidation'
 $gameProcess = $null
 try {
-    Write-Host 'Starting Black Plague with tracked palm collision validation requested.'
+    Write-Host 'Starting Black Plague with tracked palms on the validated physical-displacement/room-scale stack.'
     & $launcher '--launch-vr' $GamePath
     if ($LASTEXITCODE -ne 0) {
         throw "Probe launcher failed with exit code $LASTEXITCODE."
@@ -60,30 +71,36 @@ try {
 
     $probeLog = Join-Path $logRoot "black-plague-probe-$($gameProcess.Id).log"
     $activationDeadline = (Get-Date).AddSeconds(30)
-    $activation = $null
+    $palmActivation = $null
+    $roomScaleActivation = $null
     do {
         Start-Sleep -Milliseconds 200
         if (Test-Path -LiteralPath $probeLog -PathType Leaf) {
-            $activation = Get-Content -LiteralPath $probeLog |
+            $palmActivation = Get-Content -LiteralPath $probeLog |
                 Select-String -Pattern 'palm_collision enabled=1 source=mutex ' |
                 Select-Object -Last 1
+            $roomScaleActivation = Get-Content -LiteralPath $probeLog |
+                Select-String -Pattern 'Black Plague body adapter installed=.*physical_displacement_validation enabled=1 source=mutex.*room_scale_validation enabled=1 source=mutex.*positional_translation_enabled=1' |
+                Select-Object -Last 1
         }
-    } while ($null -eq $activation -and -not $gameProcess.HasExited -and
+    } while (($null -eq $palmActivation -or $null -eq $roomScaleActivation) -and
+             -not $gameProcess.HasExited -and
              (Get-Date) -lt $activationDeadline)
-    if ($null -eq $activation) {
-        throw "PID $($gameProcess.Id) did not report palm-collision activation. Check '$probeLog'."
+    if ($null -eq $palmActivation -or $null -eq $roomScaleActivation) {
+        throw "PID $($gameProcess.Id) did not report the combined palm + room-scale activation. Check '$probeLog'."
     }
 
-    Write-Host "Palm collision is active in PID $($gameProcess.Id)."
+    Write-Host "Palm collision and reconciled room-scale translation are active in PID $($gameProcess.Id)."
     Write-Host "Probe log: $probeLog"
     Write-Host 'Run this focused headset gate, then close the game normally:'
-    Write-Host '1. In open space, move both tracked hands around your torso and head. They must follow normally and must not stop on the player character body.'
-    Write-Host '2. Press each palm slowly into a wall or table, then sweep sideways. The visible palm should stop at the surface and slide along it instead of crossing or snapping through.'
-    Write-Host '3. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
-    Write-Host '4. Grab several small free props that previously appeared far from the hand. Move them in clear space and confirm the selected point stays aligned with the owning palm instead of retaining native distance manipulation.'
-    Write-Host '5. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab.'
-    Write-Host '6. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
-    Write-Host '7. Confirm stick locomotion, head translation and the other hand still behave normally. Close Black Plague when finished.'
+    Write-Host '1. Before touching props, physically translate 5-10 cm in X/Z and crouch/stand once. Room movement, tracked Y and overall embodied feel should match the previously good room-scale build.'
+    Write-Host '2. In open space, move both tracked hands around your torso and head. They must follow normally and must not stop on the player character body.'
+    Write-Host '3. Press each palm slowly into a wall or table, then sweep sideways. The visible palm should stop at the surface and slide along it instead of crossing or snapping through.'
+    Write-Host '4. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
+    Write-Host '5. Grab several small free props that previously appeared far from or difficult to acquire. Selection may follow the real controller up to the Rework 18 cm bound while the visible palm remains collision-constrained; once held, the object must stay aligned with the owning palm.'
+    Write-Host '6. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab.'
+    Write-Host '7. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
+    Write-Host '8. Repeat the short physical translation/crouch check after the palm interactions, confirm stick locomotion still behaves normally, then close Black Plague.'
 
     Wait-Process -Id $gameProcess.Id
 
@@ -100,7 +117,17 @@ try {
     [uint64]$failures = 0
     [uint64]$creates = 0
     $enabledSeen = $false
+    $roomScaleApplied = $false
+    $trackedCrouch = $false
     foreach ($line in Get-Content -LiteralPath $probeLog) {
+        if ($line -like '*render_world_calls=*' -and
+            $line -match 'room_scale_enabled=1 room_scale_sample_valid=1 positional_translation_applied=1') {
+            $roomScaleApplied = $true
+        }
+        if ($line -like '*physical_crouch *' -and
+            $line -match 'enabled=1 tracking_valid=1') {
+            $trackedCrouch = $true
+        }
         if ($line -notmatch $pattern) { continue }
         if ($Matches.enabled -eq '1' -and $Matches.source -eq 'mutex') {
             $enabledSeen = $true
@@ -129,10 +156,13 @@ try {
     if ($held -eq 0) {
         throw 'No per-hand held-body skip was captured. Repeat the gate while holding a small eligible free prop for several seconds.'
     }
-    Write-Host 'Tracked palm live gate telemetry passed. Preserve the user comfort/contact observations with this log before promoting headset validation.'
+    if (-not $roomScaleApplied -or -not $trackedCrouch) {
+        throw 'The palm run did not prove that the known-good room-scale/tracked-crouch stack remained active. Do not use this session for palm promotion.'
+    }
+    Write-Host 'Tracked palm telemetry passed with room-scale and tracked-crouch composition active. Preserve the user comfort/contact observations with this log before promoting headset validation.'
 }
 finally {
-    if ($null -ne $request) {
-        $request.Dispose()
-    }
+    if ($null -ne $palmRequest) { $palmRequest.Dispose() }
+    if ($null -ne $roomScaleRequest) { $roomScaleRequest.Dispose() }
+    if ($null -ne $physicalRequest) { $physicalRequest.Dispose() }
 }

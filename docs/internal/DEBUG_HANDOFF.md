@@ -91,7 +91,9 @@ the default-off no-write query with one callback/eight contacts and no selected
 native-memory change. PID 8644 then live-tested the backend-owned shape lifecycle
 plus the Rework-derived resolver behind the second default-off gate. Gameplay is
 now connected and host-tested: held-body exclusions feed the resolver and the
-resolved palm drives visible hands, interaction and tools. PID 23000 reached that
+resolved palm drives visible hands, held-object motion and tools. Acquisition
+intent separately follows Rework's bounded raw-controller extension from the
+collision-stopped palm. PID 23000 reached that
 path in the headset, but severe FPS loss and a right-controller dropout make it
 inconclusive for promotion; the next palm evidence must come from a clean A/B
 run.
@@ -452,6 +454,24 @@ but severe FPS loss and a right-controller dropout make the session inconclusive
 repeat representative contact only after a clean reboot and compare palm
 collision disabled/enabled before attributing the frame-rate issue.
 
+PID 4720 then produced an apparent room-scale/crouch regression during the
+focused palm helper. The log disproves a body-path conclusion from that run:
+startup had `physical_displacement_validation=0`, `room_scale_validation=0` and
+`positional_translation_enabled=0`; only the palm mutex became active. The palm
+helper now requests the known-good physical-displacement/room-scale stack in the
+same process and checks for active room-scale rendering plus valid tracked-crouch
+telemetry before it accepts the session.
+
+The same report that picking had become difficult exposed a real Framework /
+Rework difference. Exact `23c890f` uses the collision-resolved palm for visible
+contact and ownership, but constructs an interaction pose whose translation may
+follow the raw controller by up to `0.18 m`. The old Black Plague adapter used
+the stopped palm for both ray selection and the final contact-distance guard,
+so a prop just beyond a blocked visible palm could be rejected on acquisition.
+The adapter now uses the bounded Rework interaction pose for
+selection/revalidation and keeps the resolved palm for the actual Grab/Move
+anchor. The synthetic adapter test covers that regression.
+
 The same PID 23000 session exposed a separate placement symptom: many props
 appeared far from the hand while long wooden boards/bars behaved better. Exact
 state analysis showed that only action-state `Grab=6` used the rigid VR grab;
@@ -488,6 +508,15 @@ Map the exact joint/slider/hinge state and update boundary for one representativ
 ### Established facts
 
 Black Plague and Rework use different DAE resources. Rework's exact grip constants therefore cannot be copied blindly. The Framework now shares the proven attachment composition rule (local model-to-hand orientation followed by translation of the measured grip point to the hand origin), while Black Plague keeps its own measured flashlight/glowstick points and +90-degree X orientation. Existing exact matrix tests prove that this refactor preserves the prior BP placement numerically. The current BP profile is still visibly wrong against provisional hand geometry, so it is not a definitive placement result.
+
+The Rework hand meshes/rigs themselves are already present in this repository as
+`products/overture/data/models/hud_objects/hud_object_hand_rig.dae` and
+`hud_object_hand_left_rig.dae` with their HUD/material resources. Black Plague's
+current presentation is an immediate-mode procedural hand in `DrawTrackedHands`,
+so adopting those assets requires a real mesh/rig consumer or an engine-owned
+model boundary; copying the files alone cannot replace the current renderer.
+Preserve the richer Black Plague articulation semantics when that geometry work
+is done.
 
 ### Do not try again
 
