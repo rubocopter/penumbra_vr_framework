@@ -109,8 +109,8 @@ pressed/released dispatches and preserve the game's hold/toggle setting. PID
 ownership boundary: the body repeatedly changed between `1.65/0.95 m`, but the
 game did not hold its real crouch/stealth state. Exact-build decoding now pins
 `cPlayer::ChangeMoveState` at `0x9C750`; the original crouch handlers prove
-state `4` is crouch and state `0` is walk. The current host-tested build applies
-the shared Rework desired state directly through that native transition and the
+state `4` is crouch and state `0` is walk. The current build applies the shared
+Rework desired state directly through that native transition and the
 focused helper now requires collider shape and move-state to agree, including a
 stable button-only crouch and Hybrid latch. PID 22096 then sustained the current
 presentation path through gameplay with zero stereo failures and exposed a more

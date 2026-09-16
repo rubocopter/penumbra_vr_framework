@@ -170,6 +170,22 @@ Treat this as positive headset comfort evidence for the filter while keeping
 deliberate wall/slide edge cases and the more specific PID 20520 pullback
 symptom distinct unless a run explicitly checks them.
 
+Black Plague palm collision has also advanced beyond the research-only stage.
+PID 28412 live-tested the default-off no-write native query and PID 8644
+live-tested the backend-owned palm-shape lifecycle plus the isolated
+Rework-derived resolver. The supported-image verifier now pins Black Plague's
+independent character and exact `skip_body` exclusions. The gameplay path is
+implemented and host-tested: each hand publishes its held body, resolved palms
+drive visible hands/interaction/tools while aim stays raw, `Grab=6` retains the
+rigid palm-relative free-body path, and eligible free `Move=2` bodies preserve
+their picked contact and follow the palm through the Rework-derived force path.
+Jointed/mechanism bodies remain native. PID 23000 reached this gameplay path in
+the headset, but severe FPS loss and a right-controller dropout made the run
+inconclusive. The next palm gate is therefore a clean-reboot headset A/B with
+palm collision off/on, both controllers healthy, representative contact plus
+`Grab=6`/`Move=2`, and at least one native jointed mechanism. Do not promote
+gameplay palms beyond host-tested until that clean evidence exists.
+
 ## Black Plague constraints
 
 Do not add a fake head collider, guessed camera offset or arbitrary movement multiplier.

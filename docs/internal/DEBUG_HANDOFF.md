@@ -71,14 +71,14 @@ verifier and the Overture `-Full` regression also pass. Treat `3333be1` as a
 failed headset candidate; PID 22096 later proved normal menu/gameplay transition
 and sustained stereo submission for the single-consumption fix.
 
-The working tree contains the five-phase offline intervention plus the
-rejected-direction render-prediction comfort filter. Debug, Release and
-SDK-less Release pass 34/34 CTest tests. Metadata validation and the
-supported-image BP verifier pass without modifying a process. The body
-transaction, crouch ownership, presentation epochs beyond sequence consumption,
-interaction generation checks, comfort filter and partial lifecycle ledger are
-host-tested only. Overture `-Full` passes Release/LAA and 289/289 tracking
-checks.
+The current tree contains the five-phase intervention plus the rejected-direction
+render-prediction comfort filter. Debug, Release and SDK-less Release pass the
+documented root CTest gate. Metadata validation and the supported-image BP
+verifier pass without modifying a process. PID 25484 gives headset evidence for
+the current crouch/Y, direct-locomotion and short-X/Z comfort path; presentation
+epochs beyond sequence consumption, interaction generation edge cases and the
+partial lifecycle ledger still require their narrower validation. Overture
+`-Full` remains the shared-runtime regression gate.
 
 Remaining Hybrid release-hold, blocked-stand/low-ceiling posture edges, yaw,
 palms and lifecycle retain their documented validation states until fresh live
@@ -88,9 +88,13 @@ Static exact-image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, it
 arguments, callback slot, legacy contact layout, body matrix/shape accessors,
 CreateBoxShape, shape user count and destruction route. PID 28412 live-tested
 the default-off no-write query with one callback/eight contacts and no selected
-native-memory change. Backend-owned shape lifecycle plus the Rework-derived
-resolver are now host-tested behind a second default-off gate and remain
-disconnected from gameplay.
+native-memory change. PID 8644 then live-tested the backend-owned shape lifecycle
+plus the Rework-derived resolver behind the second default-off gate. Gameplay is
+now connected and host-tested: held-body exclusions feed the resolver and the
+resolved palm drives visible hands, interaction and tools. PID 23000 reached that
+path in the headset, but severe FPS loss and a right-controller dropout make it
+inconclusive for promotion; the next palm evidence must come from a clean A/B
+run.
 
 ## 0. Hook and loader lifecycle
 
@@ -182,9 +186,11 @@ difference alone is not proof of a bug.
   locomotion. PID 13672 headset-exercised the subsequent render-placement
   correction and removed the reported continuous shake. PID 11804
   headset-exercised the subsequent tracking-only stick heading and confirmed its
-  direction, but exposed native-axis speed asymmetry. The direct metric
-  locomotion correction described below is host-tested only, so the full path
-  still lacks headset validation.
+  direction, but exposed native-axis speed asymmetry. PID 8092 later supplied
+  headset evidence for the corrected direct metric locomotion and collision
+  route, and PID 25484 adds focused evidence for the current crouch/Y and comfort
+  composition. Keep the narrower constrained-state, deliberate wall/slide and
+  yaw ownership gates separate.
 - `cPlayer+0x274` maps to the native `iCharacterBody` on the supported exact build.
 - Current/previous position, active size, physics body and physics world are mapped and live-observed.
 - The active standing player shape is a `0.70 x 1.65 x 0.70 m` cylinder, radius `0.35 m`.

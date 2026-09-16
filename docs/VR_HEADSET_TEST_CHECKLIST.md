@@ -29,14 +29,17 @@ Analiza una ejecución cerrada con
 antes de interpretar el resto de la tanda. Sin `-CollisionComfort` el script
 sigue dando el resumen de presentación habitual.
 
-La DLL Release preparada para este gate tiene SHA-256
-`48489A2573BC96F56C55F0E0C2E3559450D8E4BD249767C349777B92F1BE1A76`.
+El SHA-256 `48489A2573BC96F56C55F0E0C2E3559450D8E4BD249767C349777B92F1BE1A76`
+corresponde al candidato histórico del gate de presentación. No identifica la
+build actual con integración gameplay de palmas; valida siempre el candidato
+recién compilado y el ejecutable exact-build antes de iniciar la tanda.
 
 La siguiente build Release debe tratarse como **candidato de validación**, no
-como release soportada. El trabajo nuevo de crouch/Y, transacción cuerpo/tracking,
-lifecycle, interacción/contacto y locomoción restringida sigue como máximo en
-`host-tested` hasta obtener la evidencia indicada aquí. Black Plague permanece
-default-off fuera de los gates transitorios de validación.
+como release soportada. PID 25484 ya aporta evidencia con visor para el
+crouch/Y actual, locomoción directa y el filtro X/Z; los edges de postura,
+locomoción restringida, lifecycle y la integración gameplay de palmas conservan
+su nivel documentado hasta obtener la evidencia específica indicada aquí. Black
+Plague permanece default-off fuera de los gates transitorios de validación.
 
 Para cerrar el candidato con visor, la tanda debe cubrir, en este orden:
 
@@ -69,12 +72,16 @@ Para cerrar el candidato con visor, la tanda debe cubrir, en este orden:
 11. yaw/footstep-body-bob como gate de confort separado antes de cualquier
     promoción a `supported`.
 
-La palma collision-aware completa sigue fuera de este candidato. PID 28412 cerró
-el query nativo no-write y PID 8644 cerró `--validate-palm-resolver` en proceso
-real, con lifecycle equilibrado y sin cambios de memoria gameplay. Ninguno de
-esos gates requirió visor. La siguiente validación de palmas sí debe tratar la
-conexión al tracking real, exclusiones character/held-body y contacto visual/
-físico antes de cualquier promoción a headset-validated.
+La palma collision-aware ya está conectada al gameplay en estado host-tested.
+PID 28412 cerró el query nativo no-write y PID 8644 cerró
+`--validate-palm-resolver` en proceso real, con lifecycle equilibrado y sin
+cambios de memoria gameplay. El path actual publica el held body por mano,
+mantiene aim en tracking raw y usa la palma resuelta para manos, interacción y
+herramientas; `Grab=6` y el `Move=2` free-body tienen ownership distinto. PID
+23000 llegó a este path con visor, pero la pérdida severa de FPS y la caída del
+mando derecho invalidan la tanda como evidencia de promoción. La siguiente
+validación debe ser un A/B limpio tras reinicio, palma off/on, ambos mandos
+estables, objetos representativos, pared/slide y un mecanismo nativo.
 
 ### Build preparada para la siguiente sesión
 

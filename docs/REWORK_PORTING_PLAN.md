@@ -2,19 +2,21 @@
 
 This plan treats `rubocopter/penumbra_vr_rework` revision `23c890f` as the proven Overture reference. When Rework already solves a VR behavior, its implementation and observed behavior are the primary source of truth for the Overture path. The Framework should extract game-neutral policy and adapt only the game-specific mechanism.
 
-## 2026-09-14 implementation checkpoint
+## 2026-09-16 implementation checkpoint
 
-The current working tree has host-tested implementations for the shared play
-mode policy, identified tracking samples and yaw epochs, the single-tick body
-transaction, generation-safe crouch and holds, and partial probe lifecycle
-rollback. The extracted hand-contact mathematics is used by Overture and has a
-host test. Black Plague has pinned exact-image shape-query/callback/lifetime
-evidence; PID 28412 live-tested the default-off no-write query and PID 8644
-live-tested the corrected backend-owned palm-shape lifecycle plus isolated
-Rework-derived resolver behind `--validate-palm-resolver`. Gameplay hand
-publication remains disconnected. Debug, Release and SDK-less Release pass
-34/34 tests. This checkpoint promotes only that isolated lifecycle/resolver to
-live-tested; palm gameplay remains below headset-validated/supported.
+The current tree keeps the shared play-mode policy, identified tracking samples
+and yaw epochs, same-tick body transaction, generation-safe crouch/holds and
+partial probe lifecycle rollback behind their documented evidence levels. PID
+25484 supplies focused headset evidence for the current crouch/Y, direct
+locomotion and rejected-direction short-X/Z comfort composition. The extracted
+hand-contact mathematics is shared with Overture; Black Plague has pinned
+exact-image shape-query/callback/lifetime evidence, PID 28412 live-tested the
+default-off no-write query and PID 8644 live-tested the corrected backend-owned
+palm-shape lifecycle plus isolated Rework-derived resolver. Gameplay hand
+publication is now connected and host-tested, including per-hand held-body
+exclusion plus distinct `Grab=6` and free-body `Move=2` ownership. PID 23000 is
+inconclusive because severe FPS loss and a right-controller dropout occurred in
+the same headset run, so palm gameplay remains below headset-validated/supported.
 
 Penumbra VR is GPLv3-or-later and records adapted components/provenance in `THIRD_PARTY.md` and the relevant product/source notes.
 
@@ -143,7 +145,7 @@ Do not force these into the first common body contract:
 
 The first shared contract exists to separate **policy** from **native mechanism**, not to flatten every game difference immediately.
 
-## Current priority — Black Plague active room-scale validation
+## Current priority — Black Plague focused headset validation
 
 The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is adapted to Black Plague's one native tick. PID 28996 exposed the final indexed-state mapping defect in its permission predicate, and PID 8092 supplied headset evidence for the corrected stick/collision route. PID 20520 then exposed two remaining boundaries: the first physical-crouch edge mapping failed to synchronize standing, and short physical X/Z motion could still feel like a pullback. PID 22096 subsequently proved the single-consumption presentation sequence through sustained headset gameplay with zero stereo failures and narrowed the pullback to render-rate prediction continuing briefly into a direction already rejected by the previous physical solve. PID 25484 then supplied positive headset evidence for the corrected desired/native crouch path, continuous tracked Y, direct locomotion and the rejected-direction comfort filter. The remaining focused posture work is the uncaptured Hybrid release-hold interval plus blocked-stand/low-ceiling recovery; deliberate wall/slide remains a separate edge gate.
 
@@ -182,12 +184,10 @@ Current order:
    body updates because the target exposes only one live-tested native update
    owner. The new constrained-state mapping is host-tested only and must not
    inherit PID 8092's headset status.
-8. Preserve PID 8092 as headset evidence for corrected direct locomotion and the collision route. Preserve PID 22096 as positive presentation-sequence evidence and as diagnosis evidence for the short-X/Z pullback, but keep PID 20520's comfort report open until the rejected-direction prediction filter passes a fresh headset wall/slide/short-motion gate.
-9. Preserve the host-tested Rework crouch latch/height policy and Black Plague exact native stance service. The next headset run must correlate policy with native shape and final standing rather than aggregate counters.
-10. Validate shared tracked-Y placement from the reconciled feet anchor together with crouch. Keep final camera/body/footstep bob as the separate comfort track.
-11. Run the no-write BP shape query live without VR, then add palm-shape
-    creation/destruction and the Rework resolver behind separate evidence gates.
-    Continue mechanism state and definitive tool/light profile work afterward.
+8. Preserve PID 8092 as headset evidence for corrected direct locomotion and the collision route, PID 22096 as positive presentation-sequence evidence, and PID 25484 as positive evidence for the current tracked-Y/crouch/short-X/Z comfort composition. Keep deliberate wall/slide and the exact PID 20520 pullback reproduction as narrower edge gates.
+9. Close only the remaining crouch edges: capture Hybrid release-hold after the physical source clears, then exercise blocked-stand/low-ceiling recovery. Do not rerun the full PID 25484 batch merely to reproduce already captured evidence.
+10. Preserve the live-tested BP palm query (PID 28412) and owned lifecycle/resolver (PID 8644). Cleanly headset-validate the host-tested gameplay integration after reboot with palm collision off/on, both hands, representative `Grab=6` and free-body `Move=2` props, wall/slide contact and one native jointed mechanism; PID 23000 is inconclusive because FPS and one controller failed in the same run.
+11. Continue mechanism-state, definitive tool/light profile, tracking-world-yaw and final camera/body/footstep-bob work as separate evidence gates.
 12. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
 
 This order proves each boundary in isolation and prevents a game-adapter defect from being mistaken for a shared-runtime defect.

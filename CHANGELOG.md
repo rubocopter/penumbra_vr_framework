@@ -1,5 +1,16 @@
 # Changelog
 
+- 2026-09-16: Synchronized the operational documentation with the current
+  Black Plague evidence after the gameplay-palm integration. PID 25484 is now
+  consistently recorded as positive headset evidence for tracked Y, current
+  crouch/direct locomotion and the rejected-direction X/Z comfort filter;
+  Hybrid release-hold, blocked-stand/low-ceiling and deliberate wall/slide stay
+  open. The palm path is consistently marked host-tested after PID 28412/PID
+  8644 closed the native query/lifecycle-resolver gates; PID 23000 remains
+  inconclusive because severe FPS loss and a right-controller dropout occurred
+  in the same headset run. No gameplay behavior changed in this documentation
+  sync.
+
 - 2026-09-16: Connected the Black Plague palm resolver to gameplay hands on the
   host-tested path and published each hand's currently owned body into the native
   `skip_body` query. Visible hands, physical interaction and tools consume the

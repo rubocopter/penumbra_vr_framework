@@ -88,8 +88,9 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 - Release-candidate checkpoint (2026-09-14): keep the next Black Plague Release
   as a validation candidate, not a supported/public release. The authoritative
   headset gate is `docs/VR_HEADSET_TEST_CHECKLIST.md`; it now explicitly groups
-  the remaining crouch/Y, short-X/Z comfort, constrained Push/Move locomotion,
-  recenter/tracking-loss, hold-generation, mirror/focus and yaw/bob checks. The
+  the remaining Hybrid/blocked-stand posture edges, deliberate wall/slide,
+  constrained Push/Move locomotion, recenter/tracking-loss, hold-generation,
+  gameplay palms, mirror/focus and yaw/bob checks. The
   palm no-write query is live-tested in PID 28412 and its successor,
   `--validate-palm-resolver`, is live-tested in PID 8644 with balanced
   create/reuse/query/destroy and unchanged selected gameplay memory. This still
@@ -125,12 +126,13 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   exposed a stale extracted `VRHandNominalRecoveryAnchor` call; that call was
   fixed and the subsequent product gate passed the Release build, Large Address
   Aware check and 289-check `VRTrackingTest`.
-- Validation state remains **host-tested only** for the body transaction
-  extensions and lifecycle work. PID 22096 supplies headset evidence for
-  presentation-sequence ownership, while PID 25484 adds focused headset evidence
-  for explicit tracked-Y correlation, direct locomotion and the
-  rejected-direction short-X/Z comfort filter. Remaining Hybrid release-hold,
-  blocked-stand/low-ceiling and other posture edge cases remain open.
+- Lifecycle hardening and uncaptured transaction edge cases remain
+  **host-tested only**. PID 22096 supplies headset evidence for
+  presentation-sequence ownership, while PID 25484 supplies focused headset
+  evidence for the current same-tick body path, explicit tracked-Y correlation,
+  direct locomotion and the rejected-direction short-X/Z comfort filter.
+  Remaining Hybrid release-hold, blocked-stand/low-ceiling and deliberate
+  wall/slide edge cases remain open.
   Status remains below the final validation tier.
 
 - Audit baseline (2026-09-14): implementation began from
@@ -160,10 +162,11 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   34/34 suite and must not be promoted beyond host-tested evidence.
 - Still open in this working tree: Hybrid release-hold and blocked-stand/
   low-ceiling posture edges, presentation pose/yaw epoch live correlation beyond
-  the now-passing sequence-consumption gate, and the Black Plague palm gameplay
-  adapter. PID 25484 supplies positive headset evidence for short physical-motion
-  comfort and tracked-Y correlation, but does not close every deliberate
-  wall/slide or posture edge. Do not claim the remaining contracts complete.
+  the now-passing sequence-consumption gate, and clean headset validation of the
+  host-tested Black Plague palm gameplay path. PID 25484 supplies positive
+  headset evidence for short physical-motion comfort and tracked-Y correlation,
+  but does not close every deliberate wall/slide or posture edge. Do not claim
+  the remaining contracts complete.
 - Palm-collision reference research is now pinned more narrowly. Rework
   `23c890f` creates player-owned hand collision shapes once per world, reuses
   them for overlap/sweep-style sampling, and destroys them on world teardown;
