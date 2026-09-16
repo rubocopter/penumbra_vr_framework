@@ -3,6 +3,7 @@
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <gdiplus.h>
 #include <GL/gl.h>
 
 #include "vr_math.hpp"
@@ -12,6 +13,8 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace penumbra_vr::graphics {
 namespace {
@@ -191,6 +194,90 @@ std::array<Matrix, 17> SkinMatrices(
     return skin;
 }
 
+bool GdiplusReady() noexcept {
+    // This renderer lives in an injected DLL. Keep the GDI+ token for process
+    // lifetime so no GdiplusShutdown call can run from CRT teardown while the
+    // Windows loader lock is held.
+    static ULONG_PTR token = 0;
+    static const bool ready = []() noexcept {
+        Gdiplus::GdiplusStartupInput input;
+        return Gdiplus::GdiplusStartup(&token, &input, nullptr) == Gdiplus::Ok;
+    }();
+    return ready;
+}
+
+bool LoadExternalHandTexture(
+    std::vector<std::uint8_t>& rgb,
+    UINT& width,
+    UINT& height) noexcept {
+    width = 0;
+    height = 0;
+    rgb.clear();
+    if (!GdiplusReady()) return false;
+
+    MEMORY_BASIC_INFORMATION memory{};
+    if (VirtualQuery(generated::kHandTextureRgb.data(), &memory,
+            sizeof(memory)) == 0 || memory.AllocationBase == nullptr) {
+        return false;
+    }
+    std::array<wchar_t, 32768> module_path{};
+    const DWORD length = GetModuleFileNameW(
+        static_cast<HMODULE>(memory.AllocationBase), module_path.data(),
+        static_cast<DWORD>(module_path.size()));
+    if (length == 0 || length >= module_path.size()) return false;
+    std::wstring path(module_path.data(), length);
+    const auto separator = path.find_last_of(L"\\/");
+    if (separator == std::wstring::npos) return false;
+    path.resize(separator + 1);
+    path += L"assets\\rework\\HAND_Low_C.jpg";
+
+    Gdiplus::Bitmap bitmap(path.c_str(), FALSE);
+    if (bitmap.GetLastStatus() != Gdiplus::Ok) return false;
+    width = bitmap.GetWidth();
+    height = bitmap.GetHeight();
+    if (width == 0 || height == 0 || width > 8192U || height > 8192U) {
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    Gdiplus::Rect rectangle(0, 0, static_cast<INT>(width),
+        static_cast<INT>(height));
+    Gdiplus::BitmapData data{};
+    if (bitmap.LockBits(&rectangle, Gdiplus::ImageLockModeRead,
+            PixelFormat24bppRGB, &data) != Gdiplus::Ok || data.Scan0 == nullptr) {
+        width = 0;
+        height = 0;
+        return false;
+    }
+
+    try {
+        rgb.resize(static_cast<std::size_t>(width) * height * 3U);
+        for (UINT y = 0; y < height; ++y) {
+            const auto* row = static_cast<const std::uint8_t*>(data.Scan0) +
+                static_cast<std::ptrdiff_t>(y) * data.Stride;
+            for (UINT x = 0; x < width; ++x) {
+                const std::size_t destination =
+                    (static_cast<std::size_t>(y) * width + x) * 3U;
+                const std::size_t source = static_cast<std::size_t>(x) * 3U;
+                // GDI+ exposes PixelFormat24bppRGB in BGR byte order.
+                rgb[destination + 0U] = row[source + 2U];
+                rgb[destination + 1U] = row[source + 1U];
+                rgb[destination + 2U] = row[source + 0U];
+            }
+        }
+    } catch (...) {
+        rgb.clear();
+    }
+    bitmap.UnlockBits(&data);
+    if (rgb.empty()) {
+        width = 0;
+        height = 0;
+        return false;
+    }
+    return true;
+}
+
 GLuint HandTexture() noexcept {
     struct Cache { HGLRC context = nullptr; GLuint texture = 0; };
     thread_local Cache cache;
@@ -208,6 +295,20 @@ GLuint HandTexture() noexcept {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F); // GL_CLAMP_TO_EDGE
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+
+    std::vector<std::uint8_t> external_rgb;
+    UINT texture_width = 0;
+    UINT texture_height = 0;
+    const bool external = LoadExternalHandTexture(
+        external_rgb, texture_width, texture_height);
+    const auto* pixels = external
+        ? external_rgb.data()
+        : generated::kHandTextureRgb.data();
+    if (!external) {
+        texture_width = generated::kHandTextureWidth;
+        texture_height = generated::kHandTextureHeight;
+    }
+
     // Pixel-store state is client state and is not covered by the caller's
     // glPushAttrib(GL_ALL_ATTRIB_BITS). HPL uploads dynamic textures and may
     // leave row/skip state behind, so make this one-time renderer upload
@@ -218,8 +319,8 @@ GLuint HandTexture() noexcept {
     glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
     glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
-        generated::kHandTextureWidth, generated::kHandTextureHeight,
-        0, GL_RGB, GL_UNSIGNED_BYTE, generated::kHandTextureRgb.data());
+        static_cast<GLsizei>(texture_width), static_cast<GLsizei>(texture_height),
+        0, GL_RGB, GL_UNSIGNED_BYTE, pixels);
     glPopClientAttrib();
     return cache.texture;
 }
