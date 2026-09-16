@@ -15,12 +15,16 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   before the first OpenGL hook-install result. Windows Error Reporting recorded
   `0xc0000005` in the game's `SDL.dll` plus a BEX in `nvoglv32.dll`. The launch
   readiness gate had only proved that the protected RenderWorld call bytes were
-  initialized; that can precede completion of SDL/OpenGL window setup. The
-  launcher now additionally requires a visible game-owned client window with a
-  nonzero selected pixel format before injection. Release launcher build and
-  35/35 CTest pass. Treat this as **host-tested** startup hardening until a fresh
-  combined palm/room-scale launch proves the crash is gone; do not attribute the
-  PID 28872 failure to the new hand/render timing code without contrary evidence.
+  initialized; that can precede completion of SDL/OpenGL window setup. The first
+  follow-up gate avoided the crash but never entered VR because the launcher
+  required `GetPixelFormat(GetDC(hwnd)) != 0`. That assumption is invalid for
+  SDL 1.2/private-DC fullscreen paths. The launcher now requires a non-empty
+  game-owned top-level client window with stable handle and dimensions for 20
+  consecutive 25 ms polls, without visibility or cross-thread pixel-format
+  assumptions. Release launcher build, 35/35 CTest and the exact-build verifier
+  pass. Treat this as **host-tested** startup hardening until a fresh combined
+  palm/room-scale launch reaches VR; do not attribute PID 28872 to the new
+  hand/render timing code without contrary evidence.
 
 - Performance baseline checkpoint (2026-09-16): presentation-state setup now
   caches the current-context OpenGL function pointers, texture-unit count and

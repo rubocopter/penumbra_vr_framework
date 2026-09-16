@@ -102,14 +102,16 @@ bool WaitForRemoteModule(
 
 struct GameWindowReadiness {
     DWORD process_id = 0;
-    bool ready = false;
+    HWND window = nullptr;
+    LONG width = 0;
+    LONG height = 0;
 };
 
-BOOL CALLBACK FindReadyGameWindow(HWND window, LPARAM context) {
+BOOL CALLBACK FindGameWindow(HWND window, LPARAM context) {
     auto* readiness = reinterpret_cast<GameWindowReadiness*>(context);
     DWORD window_process_id = 0;
     GetWindowThreadProcessId(window, &window_process_id);
-    if (window_process_id != readiness->process_id || !IsWindowVisible(window)) {
+    if (window_process_id != readiness->process_id) {
         return TRUE;
     }
 
@@ -119,24 +121,17 @@ BOOL CALLBACK FindReadyGameWindow(HWND window, LPARAM context) {
         return TRUE;
     }
 
-    HDC device_context = GetDC(window);
-    if (device_context == nullptr) {
-        return TRUE;
-    }
-    const int pixel_format = GetPixelFormat(device_context);
-    ReleaseDC(window, device_context);
-    if (pixel_format <= 0) {
-        return TRUE;
-    }
-
-    readiness->ready = true;
+    readiness->window = window;
+    readiness->width = client.right - client.left;
+    readiness->height = client.bottom - client.top;
     return FALSE;
 }
 
-bool HasReadyGameWindow(DWORD process_id) {
-    GameWindowReadiness readiness{process_id, false};
-    EnumWindows(&FindReadyGameWindow, reinterpret_cast<LPARAM>(&readiness));
-    return readiness.ready;
+GameWindowReadiness ReadGameWindow(DWORD process_id) {
+    GameWindowReadiness readiness{};
+    readiness.process_id = process_id;
+    EnumWindows(&FindGameWindow, reinterpret_cast<LPARAM>(&readiness));
+    return readiness;
 }
 
 bool WaitForBlackPlagueInitializedCode(
@@ -147,7 +142,10 @@ bool WaitForBlackPlagueInitializedCode(
     std::wstring& error) {
     const ULONGLONG deadline = GetTickCount64() + timeout_ms;
     bool initialized_code = false;
-    bool graphics_window = false;
+    bool saw_graphics_window = false;
+    GameWindowReadiness previous_window{};
+    std::uint32_t stable_window_samples = 0;
+    constexpr std::uint32_t kRequiredStableWindowSamples = 20;
     do {
         const std::uintptr_t module_base = FindRemoteModuleBase(
             process_id, executable_path.filename().c_str());
@@ -170,11 +168,29 @@ bool WaitForBlackPlagueInitializedCode(
         // The protected code bytes become readable before SDL has necessarily
         // finished creating the game's OpenGL window. Installing the OpenGL
         // IAT hooks in that interval races SDL/wgl driver initialization and
-        // can crash inside SDL or the display driver. A visible client window
-        // with a selected pixel format is the first host-visible evidence that
-        // SDL has completed the window/pixel-format side of OpenGL setup.
-        graphics_window = HasReadyGameWindow(process_id);
-        if (initialized_code && graphics_window) {
+        // can crash inside SDL or the display driver. SDL 1.2 may use a private
+        // DC (especially for fullscreen), so GetPixelFormat(GetDC(hwnd)) is not
+        // a reliable cross-thread readiness signal. Instead require the game's
+        // non-empty top-level client window to remain unchanged for a short
+        // sequence of polls. This observes the end of the create/resize phase
+        // without depending on visibility or a particular WGL/DC ownership.
+        const auto current_window = ReadGameWindow(process_id);
+        if (current_window.window != nullptr) {
+            saw_graphics_window = true;
+            if (current_window.window == previous_window.window &&
+                current_window.width == previous_window.width &&
+                current_window.height == previous_window.height) {
+                ++stable_window_samples;
+            } else {
+                previous_window = current_window;
+                stable_window_samples = 1;
+            }
+        } else {
+            previous_window = {};
+            stable_window_samples = 0;
+        }
+        if (initialized_code &&
+            stable_window_samples >= kRequiredStableWindowSamples) {
             return true;
         }
 
@@ -190,12 +206,14 @@ bool WaitForBlackPlagueInitializedCode(
         Sleep(25);
     } while (GetTickCount64() < deadline);
 
-    if (!initialized_code && !graphics_window) {
-        error = L"Timed out waiting for initialized Black Plague code and its SDL/OpenGL render window";
+    if (!initialized_code && !saw_graphics_window) {
+        error = L"Timed out waiting for initialized Black Plague code and its SDL game window";
     } else if (!initialized_code) {
         error = L"Timed out waiting for the exact initialized RenderWorld call bytes";
+    } else if (!saw_graphics_window) {
+        error = L"Timed out waiting for the SDL game window to be created";
     } else {
-        error = L"Timed out waiting for the SDL/OpenGL render window to finish initialization";
+        error = L"Timed out waiting for the SDL game window to reach a stable client size";
     }
     return false;
 }

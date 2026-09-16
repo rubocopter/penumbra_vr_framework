@@ -6,10 +6,14 @@
   `nvoglv32.dll`. The launcher previously treated the exact initialized
   RenderWorld call bytes as sufficient runtime readiness even though those bytes
   can become available while SDL/OpenGL is still creating the render window.
-  Startup now also waits for a visible game-owned client window with a selected
-  pixel format before injecting/installing OpenGL hooks. Release launcher build
-  and 35/35 CTest pass. This startup correction is **host-tested** only until the
-  next `Start-BlackPlaguePalmCollisionValidation.ps1` run reaches VR normally.
+  The first hardening attempt then prevented the crash but timed out because it
+  required `GetPixelFormat(GetDC(hwnd)) != 0`; SDL 1.2 can own a private DC, so
+  that cross-thread GDI query is not a reliable readiness signal. Startup now
+  waits for a non-empty game-owned top-level client window to keep the same
+  handle and dimensions for 20 consecutive 25 ms polls before injection. It no
+  longer depends on visibility or pixel-format readback. Release launcher build,
+  35/35 CTest and the exact-build verifier pass. This remains **host-tested**
+  until the next `Start-BlackPlaguePalmCollisionValidation.ps1` run reaches VR.
 
 - 2026-09-16: Added a host-tested presentation optimization/baseline before the
   next Rework graphics port. The fixed-function presentation state now caches
