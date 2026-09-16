@@ -6,6 +6,7 @@
 #include "render_world_probe.hpp"
 #include "vr_grab_pose.hpp"
 #include "vr_interaction_policy.hpp"
+#include "vr_rework_hand_profile.hpp"
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
 #define NOMINMAX
@@ -103,7 +104,7 @@ struct MoveHold {
 
 [[nodiscard]] Vec InverseTransformPoint(const Matrix& matrix, const Vec& point) noexcept {
     const Vec delta{
-        point[0]-matrix.values[3], point[1]-matrix.values[7], point[2]-matrix.values[11]};
+        point[0]-matrix.values[3], matrix.values[7] == matrix.values[7] ? point[1]-matrix.values[7] : 0.0F, point[2]-matrix.values[11]};
     return {
         matrix.values[0]*delta[0] + matrix.values[4]*delta[1] + matrix.values[8]*delta[2],
         matrix.values[1]*delta[0] + matrix.values[5]*delta[1] + matrix.values[9]*delta[2],
@@ -148,6 +149,7 @@ bool HandPose(runtime::VrHand hand, bool aim, Matrix& pose, Vec& velocity, Vec& 
         runtime::VrMatrix44 resolved{};
         const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
         if (ReadGameplayPalmPose(hand_index,resolved)) pose=resolved;
+        pose=runtime::rework_hand_profile::ApplyVisualLocalPose(pose);
     }
     return true;
 }
@@ -157,24 +159,28 @@ bool InteractionHandPose(runtime::VrHand hand, Matrix& pose, Vec& velocity, Vec&
     pose=raw;
     runtime::VrMatrix44 resolved{};
     const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
-    if (!ReadGameplayPalmPose(hand_index,resolved)) return true;
+    if (ReadGameplayPalmPose(hand_index,resolved)) {
+        const Vec reach{
+            raw.values[3]-resolved.values[3],
+            raw.values[7]-resolved.values[7],
+            raw.values[11]-resolved.values[11]};
+        const float distance=std::hypot(reach[0],reach[1],reach[2]);
+        if (!std::isfinite(distance)) return false;
+        const float scale=distance>runtime::vr_interaction_policy::kMaximumCollisionInteractionReach && distance>0 ?
+            runtime::vr_interaction_policy::kMaximumCollisionInteractionReach/distance : 1.0F;
 
-    const Vec reach{
-        raw.values[3]-resolved.values[3],
-        raw.values[7]-resolved.values[7],
-        raw.values[11]-resolved.values[11]};
-    const float distance=std::hypot(reach[0],reach[1],reach[2]);
-    if (!std::isfinite(distance)) return false;
-    const float scale=distance>runtime::vr_interaction_policy::kMaximumCollisionInteractionReach && distance>0 ?
-        runtime::vr_interaction_policy::kMaximumCollisionInteractionReach/distance : 1.0F;
-
-    // Rework 23c890f keeps the visible/physical palm collision-resolved, but
-    // lets target acquisition follow the real controller a bounded distance
-    // beyond it. Preserve raw orientation and clamp only the translation from
-    // the resolved palm toward the raw palm.
-    pose.values[3]=resolved.values[3]+reach[0]*scale;
-    pose.values[7]=resolved.values[7]+reach[1]*scale;
-    pose.values[11]=resolved.values[11]+reach[2]*scale;
+        // Rework 23c890f keeps the visible/physical palm collision-resolved,
+        // but lets target acquisition follow the real controller a bounded
+        // distance beyond it. Preserve raw orientation and clamp only the
+        // translation from the resolved palm toward the raw palm.
+        pose.values[3]=resolved.values[3]+reach[0]*scale;
+        pose.values[7]=resolved.values[7]+reach[1]*scale;
+        pose.values[11]=resolved.values[11]+reach[2]*scale;
+    }
+    // Rework GetHandPalmPose appends the same imported hand translation and
+    // rotation used by the renderer. Keep selection, held props and tools on
+    // that visible palm frame rather than the controller origin.
+    pose=runtime::rework_hand_profile::ApplyVisualLocalPose(pose);
     return true;
 }
 void __fastcall HookedHandsUpdate(void* hands, void*, float dt) {
