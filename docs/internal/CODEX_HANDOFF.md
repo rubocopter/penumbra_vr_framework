@@ -10,6 +10,18 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Startup regression checkpoint (2026-09-16): PID 28872 failed during
+  `PenumbraVR_Initialize` immediately after the input/presentation profile log,
+  before the first OpenGL hook-install result. Windows Error Reporting recorded
+  `0xc0000005` in the game's `SDL.dll` plus a BEX in `nvoglv32.dll`. The launch
+  readiness gate had only proved that the protected RenderWorld call bytes were
+  initialized; that can precede completion of SDL/OpenGL window setup. The
+  launcher now additionally requires a visible game-owned client window with a
+  nonzero selected pixel format before injection. Release launcher build and
+  35/35 CTest pass. Treat this as **host-tested** startup hardening until a fresh
+  combined palm/room-scale launch proves the crash is gone; do not attribute the
+  PID 28872 failure to the new hand/render timing code without contrary evidence.
+
 - Performance baseline checkpoint (2026-09-16): presentation-state setup now
   caches the current-context OpenGL function pointers, texture-unit count and
   rectangle-texture capability rather than repeating extension/capability

@@ -100,6 +100,45 @@ bool WaitForRemoteModule(
     return false;
 }
 
+struct GameWindowReadiness {
+    DWORD process_id = 0;
+    bool ready = false;
+};
+
+BOOL CALLBACK FindReadyGameWindow(HWND window, LPARAM context) {
+    auto* readiness = reinterpret_cast<GameWindowReadiness*>(context);
+    DWORD window_process_id = 0;
+    GetWindowThreadProcessId(window, &window_process_id);
+    if (window_process_id != readiness->process_id || !IsWindowVisible(window)) {
+        return TRUE;
+    }
+
+    RECT client{};
+    if (!GetClientRect(window, &client) || client.right <= client.left ||
+        client.bottom <= client.top) {
+        return TRUE;
+    }
+
+    HDC device_context = GetDC(window);
+    if (device_context == nullptr) {
+        return TRUE;
+    }
+    const int pixel_format = GetPixelFormat(device_context);
+    ReleaseDC(window, device_context);
+    if (pixel_format <= 0) {
+        return TRUE;
+    }
+
+    readiness->ready = true;
+    return FALSE;
+}
+
+bool HasReadyGameWindow(DWORD process_id) {
+    GameWindowReadiness readiness{process_id, false};
+    EnumWindows(&FindReadyGameWindow, reinterpret_cast<LPARAM>(&readiness));
+    return readiness.ready;
+}
+
 bool WaitForBlackPlagueInitializedCode(
     HANDLE process,
     DWORD process_id,
@@ -107,6 +146,8 @@ bool WaitForBlackPlagueInitializedCode(
     DWORD timeout_ms,
     std::wstring& error) {
     const ULONGLONG deadline = GetTickCount64() + timeout_ms;
+    bool initialized_code = false;
+    bool graphics_window = false;
     do {
         const std::uintptr_t module_base = FindRemoteModuleBase(
             process_id, executable_path.filename().c_str());
@@ -122,8 +163,19 @@ bool WaitForBlackPlagueInitializedCode(
                     &bytes_read) &&
                 bytes_read == bytes.size() &&
                 bytes == kBlackPlagueRenderWorldCall) {
-                return true;
+                initialized_code = true;
             }
+        }
+
+        // The protected code bytes become readable before SDL has necessarily
+        // finished creating the game's OpenGL window. Installing the OpenGL
+        // IAT hooks in that interval races SDL/wgl driver initialization and
+        // can crash inside SDL or the display driver. A visible client window
+        // with a selected pixel format is the first host-visible evidence that
+        // SDL has completed the window/pixel-format side of OpenGL setup.
+        graphics_window = HasReadyGameWindow(process_id);
+        if (initialized_code && graphics_window) {
+            return true;
         }
 
         DWORD process_exit_code = 0;
@@ -138,7 +190,13 @@ bool WaitForBlackPlagueInitializedCode(
         Sleep(25);
     } while (GetTickCount64() < deadline);
 
-    error = L"Timed out waiting for the exact initialized RenderWorld call bytes";
+    if (!initialized_code && !graphics_window) {
+        error = L"Timed out waiting for initialized Black Plague code and its SDL/OpenGL render window";
+    } else if (!initialized_code) {
+        error = L"Timed out waiting for the exact initialized RenderWorld call bytes";
+    } else {
+        error = L"Timed out waiting for the SDL/OpenGL render window to finish initialization";
+    }
     return false;
 }
 

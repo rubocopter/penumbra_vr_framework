@@ -1,5 +1,16 @@
 # Changelog
 
+- 2026-09-16: Hardened Black Plague VR startup after PID 28872 crashed during
+  probe initialization before any hook-install result was logged. Windows Error
+  Reporting recorded `0xc0000005` faults in the game's SDL 1.2 DLL and a BEX in
+  `nvoglv32.dll`. The launcher previously treated the exact initialized
+  RenderWorld call bytes as sufficient runtime readiness even though those bytes
+  can become available while SDL/OpenGL is still creating the render window.
+  Startup now also waits for a visible game-owned client window with a selected
+  pixel format before injecting/installing OpenGL hooks. Release launcher build
+  and 35/35 CTest pass. This startup correction is **host-tested** only until the
+  next `Start-BlackPlaguePalmCollisionValidation.ps1` run reaches VR normally.
+
 - 2026-09-16: Added a host-tested presentation optimization/baseline before the
   next Rework graphics port. The fixed-function presentation state now caches
   context-owned OpenGL entry points, texture-unit count and rectangle-texture
