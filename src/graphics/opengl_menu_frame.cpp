@@ -25,15 +25,48 @@ template<class T> T Proc(const char* name) noexcept {
     return reinterpret_cast<T>(p);
 }
 
+struct ContextStateApi {
+    HGLRC context = nullptr;
+    ActiveTexture active = nullptr;
+    UseProgram use = nullptr;
+    GLint texture_units = 0;
+    bool texture_rectangle = false;
+};
+
+ContextStateApi& CurrentContextStateApi() noexcept {
+    thread_local ContextStateApi api;
+    const HGLRC current = wglGetCurrentContext();
+    if (api.context == current) return api;
+
+    api = {};
+    api.context = current;
+    if (!current) return api;
+
+    api.active = Proc<ActiveTexture>("glActiveTexture");
+    api.use = Proc<UseProgram>("glUseProgram");
+    if (!api.active || !api.use) return api;
+
+    const auto* extensions = reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
+    api.texture_rectangle = extensions &&
+        (std::strstr(extensions, "GL_ARB_texture_rectangle") ||
+         std::strstr(extensions, "GL_EXT_texture_rectangle") ||
+         std::strstr(extensions, "GL_NV_texture_rectangle"));
+    glGetIntegerv(0x84E2, &api.texture_units); // GL_MAX_TEXTURE_UNITS
+    return api;
+}
+
 // HPL mixes fixed-function, ARB programs and texture units. Matrix stacks and
 // GLSL program binding are not covered by glPushAttrib and need explicit saves.
 struct State {
-    ActiveTexture active = Proc<ActiveTexture>("glActiveTexture");
-    UseProgram use = Proc<UseProgram>("glUseProgram");
+    ActiveTexture active = nullptr;
+    UseProgram use = nullptr;
     GLint program = 0;
     GLint matrix_mode = GL_MODELVIEW;
     bool valid = false;
     State() {
+        const auto& api = CurrentContextStateApi();
+        active = api.active;
+        use = api.use;
         if (!active || !use) return;
         glGetIntegerv(GL_MATRIX_MODE, &matrix_mode);
         glGetIntegerv(0x8B8D, &program); // GL_CURRENT_PROGRAM
@@ -41,16 +74,11 @@ struct State {
         use(0);
         glDisable(0x8620); // GL_VERTEX_PROGRAM_ARB (supported by mapped HPL build)
         glDisable(0x8804); // GL_FRAGMENT_PROGRAM_ARB
-        GLint units = 0;
-        const auto* extensions=reinterpret_cast<const char*>(glGetString(GL_EXTENSIONS));
-        const bool rectangle=extensions && (std::strstr(extensions,"GL_ARB_texture_rectangle") ||
-            std::strstr(extensions,"GL_EXT_texture_rectangle") || std::strstr(extensions,"GL_NV_texture_rectangle"));
-        glGetIntegerv(0x84E2, &units); // GL_MAX_TEXTURE_UNITS
-        for (GLint unit = 0; unit < units; ++unit) {
+        for (GLint unit = 0; unit < api.texture_units; ++unit) {
             active(kTexture0 + static_cast<GLenum>(unit));
             glDisable(GL_TEXTURE_1D); glDisable(GL_TEXTURE_2D);
             glDisable(0x806F); glDisable(0x8513); // 3D / cube
-            if (rectangle) glDisable(0x84F5); // Rectangle takes precedence over 2D in fixed-function rendering.
+            if (api.texture_rectangle) glDisable(0x84F5); // Rectangle takes precedence over 2D in fixed-function rendering.
             glDisable(GL_TEXTURE_GEN_S); glDisable(GL_TEXTURE_GEN_T);
             glDisable(GL_TEXTURE_GEN_R); glDisable(GL_TEXTURE_GEN_Q);
         }

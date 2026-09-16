@@ -23,12 +23,22 @@
 #include <array>
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <limits>
 
 namespace penumbra_vr::backends::black_plague {
 namespace {
+
+using PerformanceClock = std::chrono::steady_clock;
+
+[[nodiscard]] std::uint64_t ElapsedNanoseconds(
+    const PerformanceClock::time_point& start) noexcept {
+    return static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            PerformanceClock::now() - start).count());
+}
 
 constexpr std::uintptr_t kRenderWorldRva = 0x0012CB10;
 constexpr std::uintptr_t kRenderWorldCallSiteRva = 0x000EE010;
@@ -794,6 +804,8 @@ void __fastcall HookedUpdateRenderList(
     std::size_t eye_index,
     float frame_time,
     bool& world_rendered,
+    std::uint64_t& world_render_cpu_ns,
+    std::uint64_t& hand_draw_cpu_ns,
     std::string& error) noexcept {
     world_rendered = false;
     runtime::VrMatrix44 eye_view;
@@ -826,7 +838,9 @@ void __fastcall HookedUpdateRenderList(
     {
         hooks::ScopedEyeScissor scissor({
             binding.previous_viewport[2], binding.previous_viewport[3]});
+        const auto world_render_start = PerformanceClock::now();
         original(renderer, world, camera, frame_time);
+        world_render_cpu_ns += ElapsedNanoseconds(world_render_start);
         world_rendered = true;
         AcquireSRWLockExclusive(&g_telemetry_lock);
         g_telemetry.eye_scissor_remapped += scissor.remapped();
@@ -864,7 +878,9 @@ void __fastcall HookedUpdateRenderList(
         // Hands are optional decoration: never interrupt the world/compositor
         // if the fixed-function compatibility path is unavailable.
         std::string hand_error;
+        const auto hand_draw_start = PerformanceClock::now();
         static_cast<void>(graphics::DrawTrackedHands(hands,eye_view,g_stereo_projections[eye_index],hand_error));
+        hand_draw_cpu_ns += ElapsedNanoseconds(hand_draw_start);
     }
 
     std::string camera_error;
@@ -932,6 +948,7 @@ void __fastcall HookedUpdateRenderList(
         FailStereoMatrixValidation("The original RenderWorld target is unavailable");
         return result;
     }
+    const auto stereo_start = PerformanceClock::now();
 
     runtime::OpenVrSession* session =
         g_stereo_session.load(std::memory_order_acquire);
@@ -1101,6 +1118,8 @@ void __fastcall HookedUpdateRenderList(
             false); // Mirror now copies an eye at swap, not a third native world pass.
 
     std::uint32_t completed_eye_passes = 0;
+    std::uint64_t eye_world_cpu_ns = 0;
+    std::uint64_t hand_draw_cpu_ns = 0;
     for (std::size_t eye_index = 0; eye_index < g_stereo_eyes.size(); ++eye_index) {
         bool world_rendered = false;
         if (!RenderStereoEye(
@@ -1112,6 +1131,8 @@ void __fastcall HookedUpdateRenderList(
                 eye_index,
                 render_plan.eye_frame_times[eye_index],
                 world_rendered,
+                eye_world_cpu_ns,
+                hand_draw_cpu_ns,
                 error)) {
             if (world_rendered && eye_index == 0 &&
                 render_plan.frame_time_owned_by_first_eye) {
@@ -1134,6 +1155,7 @@ void __fastcall HookedUpdateRenderList(
         return result;
     }
 
+    std::uint64_t compositor_submit_cpu_ns = 0;
     if (session != nullptr) {
         std::array<std::uint32_t, 2> color_textures{};
         if (!GetPersistentEyeColorTextures(color_textures, error)) {
@@ -1141,6 +1163,7 @@ void __fastcall HookedUpdateRenderList(
                 "Could not obtain the rendered eye textures: " + error);
             return result;
         }
+        const auto compositor_submit_start = PerformanceClock::now();
         if (!session->SubmitOpenGlEyeTextures(color_textures, error)) {
             FailStereoMatrixValidation(
                 "Could not submit the rendered stereo pair: " + error);
@@ -1151,11 +1174,18 @@ void __fastcall HookedUpdateRenderList(
                 presentation.pose.identity.sequence, std::memory_order_release);
         }
         glFlush();
+        compositor_submit_cpu_ns = ElapsedNanoseconds(compositor_submit_start);
     }
+
+    const std::uint64_t stereo_cpu_ns = ElapsedNanoseconds(stereo_start);
 
     AcquireSRWLockExclusive(&g_telemetry_lock);
     ++g_telemetry.stereo_frames;
     g_telemetry.stereo_eye_passes += completed_eye_passes;
+    g_telemetry.stereo_cpu_ns += stereo_cpu_ns;
+    g_telemetry.eye_world_cpu_ns += eye_world_cpu_ns;
+    g_telemetry.hand_draw_cpu_ns += hand_draw_cpu_ns;
+    g_telemetry.compositor_submit_cpu_ns += compositor_submit_cpu_ns;
     if (session != nullptr) {
         ++g_telemetry.compositor_submitted_frames;
         g_telemetry.compositor_hmd_pose_valid = true;

@@ -10,6 +10,21 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Performance baseline checkpoint (2026-09-16): presentation-state setup now
+  caches the current-context OpenGL function pointers, texture-unit count and
+  rectangle-texture capability rather than repeating extension/capability
+  discovery for each eye/hand draw. Keep the hand renderer's explicit
+  client-array/VBO save/restore intact; that boundary is what fixed the PID
+  26940 black/rainbow corruption. Render telemetry now exposes accumulated
+  `stereo_cpu_ns`, `eye_world_cpu_ns`, `hand_draw_cpu_ns` and
+  `compositor_submit_cpu_ns`, and the probe logs them as milliseconds. Use these
+  as the baseline before importing Rework lighting/shadow/effect work so
+  eye-independent updates remain once-per-game-frame and only view-dependent
+  drawing repeats per eye. Release builds, 35/35 CTest, the hostile-state WGL
+  regression and the supported-image exact-build verifier pass. This is
+  **host-tested** only; do not infer a headset FPS improvement until the next
+  clean combined run supplies timing/frame-pacing evidence.
+
 - Latest regression/fix checkpoint (2026-09-16): PID 26940 reached the combined
   Black Plague room-scale + gameplay-palm path and produced two concrete
   regressions. The headset frame showed the imported Rework hands mostly black

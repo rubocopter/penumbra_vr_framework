@@ -58,6 +58,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Preserve functional keyboard and mouse input
 - [x] Implement one-step Steam launch, VR activation and read-only preflight
 - [x] Host-test tracked menu panels and controller-ray projection
+- [x] Add host-tested stereo/world/hand/compositor timing telemetry and cache
+  per-context presentation GL capability discovery for the graphics baseline
 - [ ] Implement a reliable desktop monitor mirror
 - [ ] Headset-validate medium-distance lamp lighting and scissor-hook performance
 - [ ] Achieve acceptable frame pacing at the headset's target refresh rate

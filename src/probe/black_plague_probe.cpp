@@ -516,6 +516,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
             "stereo_frames=%lu menu_frames=%lu stereo_eye_passes=%lu stereo_lifetime_frames=%llu "
+            "stereo_cpu_ms=%.3f eye_world_cpu_ms=%.3f hand_draw_cpu_ms=%.3f compositor_submit_cpu_ms=%.3f "
             "stereo_camera_restored=%u "
             "submitted_frames=%lu submitted_pose_valid=%u "
             "tracked_head_frames=%lu tracking_anchor_captured=%u "
@@ -568,6 +569,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.menu_frames),
             static_cast<unsigned long>(render_world.stereo_eye_passes),
             render_world.stereo_lifetime_frames,
+            static_cast<double>(render_world.stereo_cpu_ns) / 1000000.0,
+            static_cast<double>(render_world.eye_world_cpu_ns) / 1000000.0,
+            static_cast<double>(render_world.hand_draw_cpu_ns) / 1000000.0,
+            static_cast<double>(render_world.compositor_submit_cpu_ns) / 1000000.0,
             render_world.stereo_camera_restored ? 1U : 0U,
             static_cast<unsigned long>(render_world.compositor_submitted_frames),
             render_world.compositor_hmd_pose_valid ? 1U : 0U,

@@ -1,5 +1,18 @@
 # Changelog
 
+- 2026-09-16: Added a host-tested presentation optimization/baseline before the
+  next Rework graphics port. The fixed-function presentation state now caches
+  context-owned OpenGL entry points, texture-unit count and rectangle-texture
+  capability instead of resolving/querying them again for each eye/hand draw.
+  The hostile-state WGL regression still proves VBO/color-array restoration and
+  per-finger hand articulation. Black Plague render telemetry now also records
+  wall-clock CPU time spent in the complete stereo pipeline, native eye-world
+  rendering, tracked-hand drawing and compositor submission so future lighting,
+  shadows and effects can be measured against a concrete baseline. Release
+  builds, 35/35 CTest and the supported-image exact-build verifier pass. This is
+  **host-tested** only; headset frame pacing and the real runtime gain remain to
+  be measured in the next clean combined palm/room-scale run.
+
 - 2026-09-16: Extracted two additional game-neutral interaction policies from
   the proven Rework `23c890f` implementation. `vr_magnetic_pickup_policy.hpp`
   now owns the item-only magnetic targeting ranges/biases, cone/scoring math,
