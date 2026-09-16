@@ -30,8 +30,10 @@ struct MeshView {
     const MeshVec3* positions = nullptr;
     std::size_t position_count = 0;
     const std::uint8_t* bones = nullptr;
-    const MeshCorner* corners = nullptr;
-    std::size_t corner_count = 0;
+    const MeshCorner* render_vertices = nullptr;
+    std::size_t render_vertex_count = 0;
+    const std::uint16_t* triangle_indices = nullptr;
+    std::size_t index_count = 0;
     const MeshVec3* translations = nullptr;
     const std::int8_t* parents = nullptr;
     const std::array<float, 16>* inverse_bind = nullptr;
@@ -41,7 +43,40 @@ constexpr float kRadiansToDegrees = 57.29577951308232F;
 constexpr float kDegreesToRadians = 0.017453292519943295F;
 constexpr GLenum kTexture0 = 0x84C0;
 constexpr GLenum kClientActiveTexture = 0x84E1;
+constexpr GLenum kArrayBuffer = 0x8892;
+constexpr GLenum kElementArrayBuffer = 0x8893;
+constexpr GLenum kArrayBufferBinding = 0x8894;
+constexpr GLenum kElementArrayBufferBinding = 0x8895;
 using ClientActiveTexture = void(APIENTRY*)(GLenum);
+using BindBuffer = void(APIENTRY*)(GLenum, GLuint);
+
+template<class T>
+T ExtensionProc(const char* name) noexcept {
+    const auto proc = wglGetProcAddress(name);
+    if (!proc || proc == reinterpret_cast<PROC>(1) || proc == reinterpret_cast<PROC>(2) ||
+        proc == reinterpret_cast<PROC>(3) || proc == reinterpret_cast<PROC>(-1)) return nullptr;
+    return reinterpret_cast<T>(proc);
+}
+
+struct ClientArrayApi {
+    HGLRC context = nullptr;
+    ClientActiveTexture active_texture = nullptr;
+    BindBuffer bind_buffer = nullptr;
+};
+
+ClientArrayApi& CurrentClientArrayApi() noexcept {
+    thread_local ClientArrayApi api;
+    const HGLRC current = wglGetCurrentContext();
+    if (api.context == current) return api;
+    api = {};
+    api.context = current;
+    api.active_texture = ExtensionProc<ClientActiveTexture>("glClientActiveTexture");
+    if (!api.active_texture)
+        api.active_texture = ExtensionProc<ClientActiveTexture>("glClientActiveTextureARB");
+    api.bind_buffer = ExtensionProc<BindBuffer>("glBindBuffer");
+    if (!api.bind_buffer) api.bind_buffer = ExtensionProc<BindBuffer>("glBindBufferARB");
+    return api;
+}
 
 Matrix Translation(const MeshVec3& value) noexcept {
     Matrix result = runtime::IdentityMatrix();
@@ -92,13 +127,17 @@ MeshView View(bool left) noexcept {
     if (left) {
         return {
             generated::kLeftPositions.data(), generated::kLeftPositions.size(),
-            generated::kLeftPositionBones.data(), generated::kLeftCorners.data(), generated::kLeftCorners.size(),
+            generated::kLeftPositionBones.data(),
+            generated::kLeftRenderVertices.data(), generated::kLeftRenderVertices.size(),
+            generated::kLeftTriangleIndices.data(), generated::kLeftTriangleIndices.size(),
             generated::kLeftLocalTranslations.data(), generated::kLeftParents.data(), generated::kLeftInverseBind.data(),
         };
     }
     return {
         generated::kRightPositions.data(), generated::kRightPositions.size(),
-        generated::kRightPositionBones.data(), generated::kRightCorners.data(), generated::kRightCorners.size(),
+        generated::kRightPositionBones.data(),
+        generated::kRightRenderVertices.data(), generated::kRightRenderVertices.size(),
+        generated::kRightTriangleIndices.data(), generated::kRightTriangleIndices.size(),
         generated::kRightLocalTranslations.data(), generated::kRightParents.data(), generated::kRightInverseBind.data(),
     };
 }
@@ -185,13 +224,13 @@ std::array<float, 21> PoseKey(const runtime::VrHandArticulation& articulation) n
     return key;
 }
 
-const std::array<DrawVertex, generated::kRightCorners.size()>& DrawVertices(
+const std::array<DrawVertex, generated::kRightRenderVertices.size()>& DrawVertices(
     const MeshView& mesh,
     const runtime::VrHandArticulation& articulation,
     bool left) noexcept {
     struct Cache {
         std::array<float, 21> key{};
-        std::array<DrawVertex, generated::kRightCorners.size()> vertices{};
+        std::array<DrawVertex, generated::kRightRenderVertices.size()> vertices{};
         bool valid = false;
     };
     thread_local std::array<Cache, 2> caches{};
@@ -206,8 +245,8 @@ const std::array<DrawVertex, generated::kRightCorners.size()>& DrawVertices(
         if (bone >= skin.size()) continue;
         skinned[index] = TransformPoint(skin[bone], mesh.positions[index]);
     }
-    for (std::size_t index = 0; index < mesh.corner_count; ++index) {
-        const auto& corner = mesh.corners[index];
+    for (std::size_t index = 0; index < mesh.render_vertex_count; ++index) {
+        const auto& corner = mesh.render_vertices[index];
         if (corner.position >= skinned.size() || corner.uv >= generated::kHandUvs.size()) continue;
         const auto& uv = generated::kHandUvs[corner.uv];
         const auto& position = skinned[corner.position];
@@ -222,7 +261,7 @@ const std::array<DrawVertex, generated::kRightCorners.size()>& DrawVertices(
 
 ReworkHandMeshStats GetReworkHandMeshStats(bool left) noexcept {
     const MeshView mesh = View(left);
-    return {mesh.position_count, mesh.corner_count / 3U, 17U};
+    return {mesh.position_count, mesh.index_count / 3U, 17U};
 }
 
 bool DrawReworkHandMesh(
@@ -230,9 +269,11 @@ bool DrawReworkHandMesh(
     bool left) noexcept {
     if (wglGetCurrentContext() == nullptr) return false;
     const MeshView mesh = View(left);
-    if (mesh.position_count == 0U || mesh.corner_count == 0U || mesh.corner_count % 3U != 0U) return false;
+    if (mesh.position_count == 0U || mesh.render_vertex_count == 0U ||
+        mesh.index_count == 0U || mesh.index_count % 3U != 0U) return false;
     if (mesh.position_count != generated::kRightPositions.size() ||
-        mesh.corner_count != generated::kRightCorners.size()) return false;
+        mesh.render_vertex_count != generated::kRightRenderVertices.size() ||
+        mesh.index_count != generated::kRightTriangleIndices.size()) return false;
     const auto& vertices = DrawVertices(mesh, articulation, left);
 
     glPushMatrix();
@@ -252,21 +293,35 @@ bool DrawReworkHandMesh(
         glDisable(GL_TEXTURE_2D);
     }
     glColor4f(1.0F, 1.0F, 1.0F, 1.0F);
-    const auto client_active = reinterpret_cast<ClientActiveTexture>(
-        wglGetProcAddress("glClientActiveTexture"));
-    const auto client_active_arb = client_active ? client_active :
-        reinterpret_cast<ClientActiveTexture>(wglGetProcAddress("glClientActiveTextureARB"));
+    auto& client_api = CurrentClientArrayApi();
     GLint previous_client_texture = static_cast<GLint>(kTexture0);
-    if (client_active_arb) glGetIntegerv(kClientActiveTexture, &previous_client_texture);
+    GLint previous_array_buffer = 0;
+    GLint previous_element_buffer = 0;
+    if (client_api.active_texture) glGetIntegerv(kClientActiveTexture, &previous_client_texture);
+    if (client_api.bind_buffer) {
+        // HPL1 uses VBOs. Client pointers become byte offsets whenever one of
+        // these bindings is non-zero, so isolate both before supplying our
+        // renderer-owned CPU arrays and restore them after the hand draw.
+        glGetIntegerv(kArrayBufferBinding, &previous_array_buffer);
+        glGetIntegerv(kElementArrayBufferBinding, &previous_element_buffer);
+        client_api.bind_buffer(kArrayBuffer, 0);
+        client_api.bind_buffer(kElementArrayBuffer, 0);
+    }
     glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT);
-    if (client_active_arb) client_active_arb(kTexture0);
+    if (client_api.active_texture) client_api.active_texture(kTexture0);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_VERTEX_ARRAY);
     glTexCoordPointer(2, GL_FLOAT, sizeof(DrawVertex), &vertices[0].u);
     glVertexPointer(3, GL_FLOAT, sizeof(DrawVertex), &vertices[0].x);
-    glDrawArrays(GL_TRIANGLES, 0, static_cast<GLsizei>(mesh.corner_count));
+    glDrawElements(GL_TRIANGLES, static_cast<GLsizei>(mesh.index_count),
+        GL_UNSIGNED_SHORT, mesh.triangle_indices);
     glPopClientAttrib();
-    if (client_active_arb) client_active_arb(static_cast<GLenum>(previous_client_texture));
+    if (client_api.bind_buffer) {
+        client_api.bind_buffer(kArrayBuffer, static_cast<GLuint>(previous_array_buffer));
+        client_api.bind_buffer(kElementArrayBuffer, static_cast<GLuint>(previous_element_buffer));
+    }
+    if (client_api.active_texture)
+        client_api.active_texture(static_cast<GLenum>(previous_client_texture));
     glPopMatrix();
     return true;
 }

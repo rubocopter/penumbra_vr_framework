@@ -172,11 +172,11 @@ Comprobación sin abrir el juego ni SteamVR:
    Corregido el orden de Enter: el juego publica el estado Grab después de
    regresar de Enter. La adquisición espera al estado confirmado; antes podía
    quedar en el agarre nativo de escritorio. Regresión añadida con ese orden.
-5. Guantes geométricos provisionales para ambas manos, dedos según curls OpenVR
-   (o postura aproximada sin skeleton), rayo de apuntado y oclusión por profundidad
-   en cada ojo. No son las mallas/esqueletos HPL de Rework y no proyectan sombras.
-   Las manos se sitúan respecto al HMD actual para convivir con el tracking
-   rotacional existente; esto no añade room-scale ni colisión de las palmas.
+5. Mallas/rigs derecha e izquierda de Rework para ambas manos, animadas con los
+   curls OpenVR y la articulación compartida de Black Plague, con rayo de apuntado
+   y oclusión por profundidad en cada ojo. El renderer preprocesa los assets a
+   datos propios y aplica CPU skinning; no proyectan sombras. Escala, orientación
+   y rendimiento siguen pendientes de la próxima prueba con visor.
 6. Mirror en partida: copia de la textura del ojo izquierdo al escritorio justo
    antes del swap, conservando proporción y bandas negras. No renderiza un tercer
    mundo nativo. Los menús conservan la captura/presentación nativa del escritorio.
@@ -190,9 +190,9 @@ hitos de gameplay estén terminados**.
 ## Lo que NO está terminado
 
 - El tercer hito original sigue parcial: puertas/palancas y cuerpos con joints
-  o padres conservan el comportamiento nativo. La colisión de palmas tiene ya
-  query y resolver/lifecycle live-tested, pero falta conectar las palmas al
-  tracking real y validar sus exclusiones/contacto en gameplay;
+  o padres conservan el comportamiento nativo. La colisión de palmas tiene query
+  y resolver/lifecycle live-tested y ya está conectada al tracking/gameplay; falta
+  la validación limpia con visor de exclusiones, contacto, objetos y rendimiento;
   validar físicamente la exclusión conservadora cuerpo/character, las mallas HPL
   de Rework y calibrar físicamente las herramientas/luces ancladas. Durante un
   agarre espacial todavía no se actualiza el rayo secundario de examinar como hace Rework.

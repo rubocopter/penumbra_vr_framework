@@ -371,8 +371,11 @@ scissor enable and box state, clearing inherited clipping before each eye.
 `eye_scissor_remapped` and `eye_scissor_bypassed` expose per-frame activity in
 the standard log. Host tests cover actual GL pixel coverage and hook teardown;
 the [lighting checklist](VR_LIGHTING_VALIDATION.md) remains pending in game.
-As of 2026-09-06, real VR input, native intents, tracked menus, provisional gloves
-and free-body grab/throw are implemented and code-tested, not headset-validated.
+The 2026-09-06 checkpoint had real VR input, native intents, tracked menus,
+procedural gloves and free-body grab/throw implemented/code-tested. The current
+renderer has since replaced those gloves with the Rework right/left mesh rigs,
+preserving Black Plague's richer shared articulation; that presentation is
+host-tested and still awaits scale/orientation/performance validation in headset.
 See [startup/controller status](VR_STARTUP_AND_CONTROLLERS.md) and
 [spatial adapter evidence](BLACK_PLAGUE_SPATIAL_NOTES.md). The exact-build
 player link (`cPlayer+0x274`), native character-body tick (`D460A -> D6E00`),

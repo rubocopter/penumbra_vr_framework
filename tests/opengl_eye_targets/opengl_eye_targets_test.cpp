@@ -16,6 +16,22 @@
 namespace {
 
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
+constexpr GLenum kGlArrayBuffer = 0x8892;
+constexpr GLenum kGlElementArrayBuffer = 0x8893;
+constexpr GLenum kGlArrayBufferBinding = 0x8894;
+constexpr GLenum kGlElementArrayBufferBinding = 0x8895;
+
+template<class T>
+T GlProc(const char* core, const char* extension = nullptr) noexcept {
+    auto proc = wglGetProcAddress(core);
+    if ((!proc || proc == reinterpret_cast<PROC>(1) || proc == reinterpret_cast<PROC>(2) ||
+         proc == reinterpret_cast<PROC>(3) || proc == reinterpret_cast<PROC>(-1)) && extension) {
+        proc = wglGetProcAddress(extension);
+    }
+    if (!proc || proc == reinterpret_cast<PROC>(1) || proc == reinterpret_cast<PROC>(2) ||
+        proc == reinterpret_cast<PROC>(3) || proc == reinterpret_cast<PROC>(-1)) return nullptr;
+    return reinterpret_cast<T>(proc);
+}
 
 class TestOpenGlContext final {
 public:
@@ -400,9 +416,37 @@ int main() {
             hands[1].visible=true;
             hands[1].palm=penumbra_vr::runtime::IdentityMatrix();
             hands[1].palm.values[11]=-0.5F;
+            using GenBuffers = void(APIENTRY*)(GLsizei, GLuint*);
+            using BindBuffer = void(APIENTRY*)(GLenum, GLuint);
+            using BufferData = void(APIENTRY*)(GLenum, std::ptrdiff_t, const void*, GLenum);
+            using DeleteBuffers = void(APIENTRY*)(GLsizei, const GLuint*);
+            const auto gen_buffers=GlProc<GenBuffers>("glGenBuffers","glGenBuffersARB");
+            const auto bind_buffer=GlProc<BindBuffer>("glBindBuffer","glBindBufferARB");
+            const auto buffer_data=GlProc<BufferData>("glBufferData","glBufferDataARB");
+            const auto delete_buffers=GlProc<DeleteBuffers>("glDeleteBuffers","glDeleteBuffersARB");
+            const bool sentinel_vbos=gen_buffers && bind_buffer && buffer_data && delete_buffers;
+            std::array<GLuint,2> sentinel_buffers{};
+            if (sentinel_vbos) {
+                gen_buffers(static_cast<GLsizei>(sentinel_buffers.size()),sentinel_buffers.data());
+                const std::array<std::uint8_t,16> sentinel_data{};
+                bind_buffer(kGlArrayBuffer,sentinel_buffers[0]);
+                buffer_data(kGlArrayBuffer,static_cast<std::ptrdiff_t>(sentinel_data.size()),sentinel_data.data(),0x88E4);
+                bind_buffer(kGlElementArrayBuffer,sentinel_buffers[1]);
+                buffer_data(kGlElementArrayBuffer,static_cast<std::ptrdiff_t>(sentinel_data.size()),sentinel_data.data(),0x88E4);
+            }
             glDepthFunc(GL_GREATER); glDepthMask(GL_FALSE);
             if (!penumbra_vr::graphics::DrawTrackedHands(hands,penumbra_vr::runtime::IdentityMatrix(),projection,error) ||
                 !ScissorEquals({1,2,3,4},true)) return 34;
+            if (sentinel_vbos) {
+                GLint array_binding=0,element_binding=0;
+                glGetIntegerv(kGlArrayBufferBinding,&array_binding);
+                glGetIntegerv(kGlElementArrayBufferBinding,&element_binding);
+                if (array_binding!=static_cast<GLint>(sentinel_buffers[0]) ||
+                    element_binding!=static_cast<GLint>(sentinel_buffers[1])) return 42;
+                bind_buffer(kGlArrayBuffer,0);
+                bind_buffer(kGlElementArrayBuffer,0);
+                delete_buffers(static_cast<GLsizei>(sentinel_buffers.size()),sentinel_buffers.data());
+            }
             GLint depth_func=0; GLboolean depth_write=GL_TRUE;
             glGetIntegerv(GL_DEPTH_FUNC,&depth_func); glGetBooleanv(GL_DEPTH_WRITEMASK,&depth_write);
             if (depth_func!=GL_GREATER || depth_write!=GL_FALSE) return 35;

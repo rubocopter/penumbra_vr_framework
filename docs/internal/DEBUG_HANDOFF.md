@@ -507,7 +507,15 @@ Map the exact joint/slider/hinge state and update boundary for one representativ
 
 ### Established facts
 
-Black Plague and Rework use different DAE resources. Rework's exact grip constants therefore cannot be copied blindly. The Framework now shares the proven attachment composition rule (local model-to-hand orientation followed by translation of the measured grip point to the hand origin), while Black Plague keeps its own measured flashlight/glowstick points and +90-degree X orientation. Existing exact matrix tests prove that this refactor preserves the prior BP placement numerically. The current BP profile is still visibly wrong against provisional hand geometry, so it is not a definitive placement result.
+Black Plague and Rework use different tool DAE resources. Rework's exact grip
+constants therefore cannot be copied blindly. The Framework now shares the
+proven attachment composition rule (local model-to-hand orientation followed by
+translation of the measured model grip point to the hand origin), while Black
+Plague keeps its own measured flashlight/glowstick points and +90-degree X
+orientation. Existing exact matrix tests prove that refactor preserves the prior
+BP placement numerically. The hand geometry is now definitive enough for the
+next socket calibration pass, but the BP tool profile itself remains provisional
+until hand/tool scale and light direction are checked together in the headset.
 
 The Rework hand meshes/rigs already present at
 `products/overture/data/models/hud_objects/hud_object_hand_rig.dae` and
@@ -519,12 +527,17 @@ diffuse material. `DrawTrackedHands` keeps the collision-resolved Black Plague
 palm as its world transform and maps the richer shared `VrHandArticulation`
 output onto Rework's demonstrated long-finger/thumb axes. No HPL mesh hook or
 new exact-build ownership boundary was added. The real-driver OpenGL path is
-host-tested; hand scale/orientation/articulation and frame pacing remain a
-headset gate.
+host-tested. Generated draw data deduplicates the authored 18,102 triangle
+corners to 3,376 position/UV vertices plus 18,102 uint16 indices per hand. The
+draw path also clears/restores any HPL1 array/element VBO bindings before using
+CPU client pointers; the WGL test reproduces non-zero bindings explicitly.
+Hand scale/orientation/articulation and frame pacing remain a headset gate.
 
 ### Do not try again
 
-Do not tune the final socket against provisional hand geometry and then retune it again when definitive meshes/rigs land.
+Do not copy Rework's tool grip constants onto Black Plague's different tool
+meshes. Calibrate the BP socket against the now-integrated hand geometry and
+validate it with the real tool/light presentation.
 
 ### Next evidence
 

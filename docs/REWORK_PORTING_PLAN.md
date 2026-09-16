@@ -203,7 +203,7 @@ Generic controller picking keeps the shared `0.18 m` bounded physical policy. Re
 
 Long boards/bars following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
 
-Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; definitive placement still requires final hand geometry and headset/light-direction validation.
+Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different tool DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; the hand geometry is now integrated, so definitive placement requires recalibrating those BP-specific sockets against it and validating hand/tool scale plus light direction in the headset.
 
 The actual Rework hand rig assets carried by the Framework-owned Overture
 product now feed a narrow renderer-owned import for Black Plague. A deterministic
@@ -212,8 +212,11 @@ hierarchy/inverse binds and reduced diffuse material as checked-in renderer data
 runtime code therefore needs no DAE parser or new HPL hook. The adapter maps
 Black Plague's richer game-neutral `VrHandArticulation` output onto the proven
 Rework rig axes, so the imported geometry does not regress finger semantics to
-Overture's simpler pose policy. This path is host-tested; headset presentation
-and frame pacing remain open.
+Overture's simpler pose policy. Generated draw topology deduplicates the authored
+18,102 triangle corners to 3,376 position/UV vertices plus uint16 indices, and
+the client-array path explicitly isolates/restores HPL1 VBO bindings before
+supplying CPU pointers. This path is host-tested; headset presentation and frame
+pacing remain open.
 
 ## Extracted so far
 

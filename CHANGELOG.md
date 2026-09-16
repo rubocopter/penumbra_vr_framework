@@ -1,5 +1,14 @@
 # Changelog
 
+- 2026-09-16: Hardened and reduced the host-tested Rework hand renderer before
+  its first headset gate. The generated mesh now deduplicates each authored
+  position/UV pair (3,376 draw vertices instead of 18,102 expanded corners per
+  hand) and uses the unchanged 18,102-index / 6,034-triangle topology. The
+  client-array draw also explicitly clears and restores HPL1's current
+  `GL_ARRAY_BUFFER` / `GL_ELEMENT_ARRAY_BUFFER` bindings so CPU pointers cannot
+  be misread as VBO offsets; the real-driver WGL test now enters the hand draw
+  with both sentinel VBO bindings active and verifies exact restoration.
+
 - 2026-09-16: Replaced Black Plague's provisional procedural tracked-hand boxes
   with a renderer-owned import of the proven Rework `23c890f` right/left hand
   DAE rigs. A deterministic generator validates the 3,053-position, 6,034-

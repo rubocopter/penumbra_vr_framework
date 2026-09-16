@@ -697,6 +697,15 @@ shared input conditioning -> shared articulation output
 per-game rig/profile adapter
 ```
 
+Black Plague's rig/profile adapter now consumes the Rework right/left DAE hand
+geometry through generated renderer data while preserving the richer shared
+articulation. The host path deduplicates 18,102 authored triangle corners to
+3,376 position/UV draw vertices plus uint16 indices per hand. Its client-array
+draw explicitly isolates/restores HPL1 array and element VBO bindings; the WGL
+gate reproduces both non-zero bindings before drawing. This remains host-tested
+until the combined headset gate checks scale, orientation, articulation and
+frame pacing.
+
 Release validation is host-only: the full autonomous Overture Release regression passes, including 289 `VRTrackingTest` checks. The current root suite has 34 tests. Do not mark this extraction live/headset validated until controller hardware is exercised. Do not degrade Black Plague articulation to match Overture merely because Overture is the historical reference.
 
 ## Interaction priorities after body reconciliation

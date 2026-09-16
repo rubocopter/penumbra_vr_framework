@@ -221,6 +221,22 @@ def emit_corner_array(name: str, values: list[tuple[int, int]]) -> str:
     return f"inline constexpr std::array<MeshCorner, {len(rows)}> {name}{{{{\n{format_rows(rows, 6)}\n}}}};\n"
 
 
+def index_corners(values: list[tuple[int, int]]) -> tuple[list[tuple[int, int]], list[int]]:
+    unique: list[tuple[int, int]] = []
+    indices: list[int] = []
+    lookup: dict[tuple[int, int], int] = {}
+    for corner in values:
+        index = lookup.get(corner)
+        if index is None:
+            index = len(unique)
+            if index > 0xFFFF:
+                raise ValueError("generated hand render vertex index exceeds uint16")
+            lookup[corner] = index
+            unique.append(corner)
+        indices.append(index)
+    return unique, indices
+
+
 def emit_matrix_array(name: str, values: list[tuple[float, ...]]) -> str:
     rows = ["{{" + ", ".join(f32(component) for component in value) + "}}" for value in values]
     return f"inline constexpr std::array<std::array<float, 16>, {len(rows)}> {name}{{{{\n{format_rows(rows, 1)}\n}}}};\n"
@@ -248,10 +264,12 @@ def generate() -> str:
     output.write("// Source: Rework 23c890f hand DAE/material assets already carried by this repository.\n\n")
     output.write(emit_vec_array("kHandUvs", "MeshVec2", right["uvs"]))
     for prefix, hand in (("Right", right), ("Left", left)):
+        render_vertices, triangle_indices = index_corners(hand["corners"])
         output.write("\n")
         output.write(emit_vec_array(f"k{prefix}Positions", "MeshVec3", hand["positions"]))
         output.write(emit_scalar_array(f"k{prefix}PositionBones", "std::uint8_t", hand["bones"]))
-        output.write(emit_corner_array(f"k{prefix}Corners", hand["corners"]))
+        output.write(emit_corner_array(f"k{prefix}RenderVertices", render_vertices))
+        output.write(emit_scalar_array(f"k{prefix}TriangleIndices", "std::uint16_t", triangle_indices))
         output.write(emit_vec_array(f"k{prefix}LocalTranslations", "MeshVec3", hand["translation"]))
         output.write(emit_scalar_array(f"k{prefix}Parents", "std::int8_t", hand["parent"], 17))
         output.write(emit_matrix_array(f"k{prefix}InverseBind", hand["inverse_bind"]))
