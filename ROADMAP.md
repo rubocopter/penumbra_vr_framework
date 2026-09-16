@@ -177,8 +177,10 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
   - [x] Live-test the no-write query in PID 28412 without native-memory changes
   - [x] Implement and host-test backend-owned palm-shape lifecycle plus the
     Rework sweep/refinement/recovery resolver behind a default-off gate
-  - [ ] Live-test `--validate-palm-resolver` before wiring resolved palms into
-    gameplay interaction or generalizing body/held-body exclusions
+  - [x] Live-test `--validate-palm-resolver` (PID 8644: create/reuse/query/
+    destroy balanced, `user_count=0`, gameplay memory unchanged)
+  - [ ] Validate character/held-body exclusion, then wire resolved palms into
+    tracked gameplay interaction without folding mechanism bodies into this path
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership

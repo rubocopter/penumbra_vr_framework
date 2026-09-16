@@ -9,12 +9,12 @@ mode policy, identified tracking samples and yaw epochs, the single-tick body
 transaction, generation-safe crouch and holds, and partial probe lifecycle
 rollback. The extracted hand-contact mathematics is used by Overture and has a
 host test. Black Plague has pinned exact-image shape-query/callback/lifetime
-evidence; PID 28412 live-tested the default-off no-write query. Backend-owned
-palm-shape lifecycle and the Rework-derived resolver are now implemented and
-host-tested behind `--validate-palm-resolver`, while gameplay hand publication
-remains disconnected. Debug, Release and SDK-less Release pass 34/34 tests.
-This checkpoint does not promote the owned palm lifecycle/resolver beyond
-host-tested or any palm gameplay behavior to headset-validated/supported.
+evidence; PID 28412 live-tested the default-off no-write query and PID 8644
+live-tested the corrected backend-owned palm-shape lifecycle plus isolated
+Rework-derived resolver behind `--validate-palm-resolver`. Gameplay hand
+publication remains disconnected. Debug, Release and SDK-less Release pass
+34/34 tests. This checkpoint promotes only that isolated lifecycle/resolver to
+live-tested; palm gameplay remains below headset-validated/supported.
 
 Penumbra VR is GPLv3-or-later and records adapted components/provenance in `THIRD_PARTY.md` and the relevant product/source notes.
 
@@ -229,9 +229,9 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
   contacts and verifies selected native bytes remain unchanged. Its synthetic
   harness is host-tested and PID 28412 live-tested the no-write query. The same
   backend now owns the shared-size palm box lifecycle and feeds native contacts
-  into the shared Rework-derived resolver. That resolver/lifecycle is
-  host-tested behind `--validate-palm-resolver`; its real-process gate and
-  gameplay connection remain pending.
+  into the shared Rework-derived resolver. PID 8644 live-tested that isolated
+  lifecycle/resolver behind `--validate-palm-resolver`; gameplay connection and
+  character/held-body exclusion evidence remain pending.
 - `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
 - `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and `CarryHeadAnchorWithLocomotion` now provide the shared stateless reconciliation phases used by Overture and the Black Plague shadow consumer.
 - `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.

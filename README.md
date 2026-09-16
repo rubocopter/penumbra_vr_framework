@@ -24,7 +24,7 @@ Black Plague already has native stereo, rotational and positional HMD tracking, 
 
 The current body path uses a **single same-tick tracking/body transaction**. PID 25484 (2026-09-16) added positive headset evidence for the current crouch/Y and short-range room-scale path: 12,858 presentation frames with zero stereo failures, three physical crouch entry/exit cycles, final native standing state, `0.961 m` tracked-Y range and 650 accepted direct-locomotion samples. The user reported that the session felt good.
 
-The remaining gates are narrower: capture the Hybrid release-hold interval that PID 25484 missed, exercise blocked-stand/low-ceiling behavior, complete deliberate wall/slide edge checks, validate constrained `0.5 m/s` Push/Move locomotion, then continue with palms/interactions, tracking-world-yaw/bob and mirror/focus work. PID 28412 has already live-tested the no-write native palm query. Backend-owned palm-shape lifecycle plus the Rework-derived resolver are now implemented and host-tested behind a separate default-off validation command; they are still disconnected from gameplay hands.
+The remaining gates are narrower: capture the Hybrid release-hold interval that PID 25484 missed, exercise blocked-stand/low-ceiling behavior, complete deliberate wall/slide edge checks, validate constrained `0.5 m/s` Push/Move locomotion, then continue with palms/interactions, tracking-world-yaw/bob and mirror/focus work. PID 28412 live-tested the no-write native palm query, and PID 8644 live-tested the corrected backend-owned palm-shape lifecycle plus the isolated Rework-derived resolver. Resolved palms are still disconnected from gameplay hands and character/held-body exclusions remain a separate evidence gate.
 
 ### Requiem
 
@@ -51,7 +51,7 @@ Requiem will reuse validated game-neutral policy while repeating exact-build res
 ## Next steps
 
 1. Close the remaining focused Black Plague posture edges: Hybrid release-hold capture and blocked-stand/low-ceiling recovery.
-2. Run `--validate-palm-resolver <pid>` in a loaded Black Plague map to live-test the already host-tested owned shape lifecycle and isolated Rework sweep/refinement/recovery resolver before connecting it to gameplay palms.
+2. Connect the already live-tested owned palm lifecycle/resolver to tracked gameplay palms only after character/held-body exclusion has its own evidence; keep mechanism bodies separate from the free-body path.
 3. Validate the remaining constrained locomotion, deliberate wall/slide, recenter/tracking-loss and yaw/bob comfort gates without reopening the body owner that already has headset evidence.
 4. Continue interaction work through native mechanism state, tool/light geometry, UI/HUD coverage and representative chapter testing.
 5. Start Requiem exact-build research only after the Black Plague backend has a stable playable-alpha boundary.

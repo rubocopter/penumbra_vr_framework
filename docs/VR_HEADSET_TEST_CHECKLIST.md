@@ -69,12 +69,12 @@ Para cerrar el candidato con visor, la tanda debe cubrir, en este orden:
 11. yaw/footstep-body-bob como gate de confort separado antes de cualquier
     promoción a `supported`.
 
-La palma collision-aware completa sigue fuera de este candidato. PID 28412 ya
-cerró el query nativo no-write en proceso real. El siguiente gate es
-`--validate-palm-resolver <pid>`: crea/reutiliza/destruye el shape propio y
-ejercita el resolver Rework portado sin publicar la pose a gameplay. Ese gate
-live tampoco requiere visor y no debe confundirse con la futura validación
-visual/contacto de las palmas conectadas al tracking real.
+La palma collision-aware completa sigue fuera de este candidato. PID 28412 cerró
+el query nativo no-write y PID 8644 cerró `--validate-palm-resolver` en proceso
+real, con lifecycle equilibrado y sin cambios de memoria gameplay. Ninguno de
+esos gates requirió visor. La siguiente validación de palmas sí debe tratar la
+conexión al tracking real, exclusiones character/held-body y contacto visual/
+físico antes de cualquier promoción a headset-validated.
 
 ### Build preparada para la siguiente sesión
 

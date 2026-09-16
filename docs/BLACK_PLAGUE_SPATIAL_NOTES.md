@@ -340,9 +340,11 @@ real con un callback, ocho contactos y `native_memory_changed=false`.
 El siguiente nivel sigue aislado de gameplay: el backend ya crea, reutiliza y
 destruye un box de palma propio mediante la ABI exacta fijada y alimenta sus
 contactos al resolver común portado de Rework. Esa lifecycle/resolution está
-implementada y host-tested detrás de `--validate-palm-resolver`; falta su gate
-live. La pose resuelta todavía no se publica a las manos del jugador y las
-exclusiones de character/held-body siguen requiriendo evidencia separada.
+live-tested en PID 8644 detrás de `--validate-palm-resolver`: un create, reuse,
+seis queries y un destroy equilibrados, `user_count=0` y sin cambios en la
+memoria gameplay seleccionada. La pose resuelta todavía no se publica a las
+manos del jugador y las exclusiones de character/held-body siguen requiriendo
+evidencia separada.
 
 ### Articulación de dedos: BP no debe degradarse
 
@@ -481,8 +483,9 @@ ruta stick/collision. PID 20520 dejó abiertos el pullback de movimientos físic
 cortos y la salida de crouch. La transacción por tick y la política/correlación
 de crouch que corrigen esas fronteras son host-tested y necesitan visor.
 
-La ABI/contactos/lifetime base de shapes BP ya está demostrada de forma estática
-y el diagnóstico sin escrituras está host-tested. Falta ejecutarlo live sin VR;
-después siguen pendientes el shape de palma, la adaptación del resolver de
-Rework, herramientas definitivas y mecanismos articulados. Ninguna de esas
-partes se considera live-tested ni soportada.
+La ABI/contactos/lifetime base de shapes BP ya está demostrada de forma estática.
+PID 28412 live-tested el diagnóstico sin escrituras y PID 8644 live-tested el
+shape de palma propio más el resolver Rework aislado. Siguen pendientes la
+conexión a manos reales, exclusiones character/held-body, herramientas
+definitivas y mecanismos articulados; el gate live no implica validación con
+visor ni soporte.

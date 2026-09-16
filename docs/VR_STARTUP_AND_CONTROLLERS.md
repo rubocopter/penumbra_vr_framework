@@ -33,8 +33,9 @@ mejora visual validada hasta una nueva prueba.
   locomoción métrica que corrige la velocidad por eje está host-tested y requiere
   otra tanda.
 - **Deliberadamente no terminado en gameplay:** la frontera de colisión de
-  palmas ya tiene query live-tested y resolver/lifecycle host-tested, pero aún
-  falta su gate live y conexión a las manos; puertas/palancas/joints, modelos
+  palmas ya tiene query y resolver/lifecycle live-tested (PID 28412/PID 8644),
+  pero aún falta conexión a las manos y evidencia de exclusión character/
+  held-body; puertas/palancas/joints, modelos
   HPL de Rework y Enhanced visuals GPU también siguen abiertos.
 
 La tanda posterior añadió `native_update_timing`, contadores de herramientas y
@@ -190,8 +191,8 @@ hitos de gameplay estén terminados**.
 
 - El tercer hito original sigue parcial: puertas/palancas y cuerpos con joints
   o padres conservan el comportamiento nativo. La colisión de palmas tiene ya
-  query live-tested y resolver/lifecycle host-tested, pero falta validarla y
-  conectarla a gameplay;
+  query y resolver/lifecycle live-tested, pero falta conectar las palmas al
+  tracking real y validar sus exclusiones/contacto en gameplay;
   validar físicamente la exclusión conservadora cuerpo/character, las mallas HPL
   de Rework y calibrar físicamente las herramientas/luces ancladas. Durante un
   agarre espacial todavía no se actualiza el rayo secundario de examinar como hace Rework.

@@ -427,12 +427,12 @@ it must not be described as validated until exercised in the headset.
 
 ### Next evidence
 
-Run `--validate-palm-resolver <pid>` in a loaded map without starting VR. It
-must report one balanced owned-shape lifecycle, reuse on the second sample,
-valid native queries and `gameplay_memory_changed=false`. Only after that live
-gate should resolved controller palms be connected, with character/held-body
-exclusion validated separately. Headset-test only small free bodies after those
-gates and confirm no player displacement or normal-world-collision regression.
+PID 8644 passed `--validate-palm-resolver` in a loaded map without VR: one
+create, one reuse, six native queries and one destroy, with `shape_type=1`,
+`shape_users=0` and `gameplay_memory_changed=false`. The lifecycle/resolver gate
+is therefore live-tested. Resolved controller palms still need character/
+held-body exclusion evidence before gameplay connection; headset-test
+representative contact only after those boundaries are in place.
 
 PID 30032 reached this gate and failed at the creation-validation boundary before
 resolver execution. Review against Rework/HPL1 exposed the host assumption that
@@ -440,9 +440,8 @@ caused the false negative: `iCollideShape` starts at zero users and
 `CreateBoxShape` does not increment it; bodies increment the count only when
 they adopt a shape. The host fixture had used one user and therefore failed to
 model the native standalone lifecycle. The boundary and fixture now require
-`user_count=0` plus exact box type/world/vtable identity. This correction is
-host-tested only until the gate is rerun in a fresh Black Plague process; the
-probe DLL remains resident after detach.
+`user_count=0` plus exact box type/world/vtable identity. PID 8644 then passed
+the corrected gate in a fresh process, closing that false-negative boundary.
 
 ## 6. Long bars, doors and mechanisms
 

@@ -1,5 +1,13 @@
 # Changelog
 
+- 2026-09-16: PID 8644 live-tested the corrected default-off Black Plague
+  owned-palm lifecycle/resolver gate. The run created one standalone box shape,
+  reused it on the second sample, issued six native world queries, destroyed it
+  once, preserved `user_count=0` throughout its standalone lifetime and left
+  selected gameplay memory unchanged. No contacts were present at the sampled
+  pose, so this closes the lifecycle/resolver real-process gate without claiming
+  headset/contact-feel validation or gameplay hand integration.
+
 - 2026-09-16: PID 30032 reached the new owned-palm live gate and failed at its
   creation-validation boundary before resolver execution. Review against the
   proven HPL1/Rework implementation exposed an invalid Framework assumption:
@@ -7,9 +15,8 @@
   that count; a body increments it only when adopting the shape. The host fixture
   had incorrectly initialized owned shapes with one user, masking the mismatch.
   The owned-palm boundary now requires the exact box type, world and vtable with
-  `user_count=0`, and the host fixture mirrors that native lifecycle. A fresh
-  process is required to rerun the live gate because the injected probe DLL
-  remains resident after detach.
+  `user_count=0`, and the host fixture mirrors that native lifecycle. PID 8644
+  subsequently passed the corrected live gate described above.
 
 - 2026-09-16: PID 28412 live-tested the default-off Black Plague no-write palm
   query on the supported build: one callback, eight contacts, unchanged native

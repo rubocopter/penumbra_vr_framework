@@ -90,10 +90,10 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   headset gate is `docs/VR_HEADSET_TEST_CHECKLIST.md`; it now explicitly groups
   the remaining crouch/Y, short-X/Z comfort, constrained Push/Move locomotion,
   recenter/tracking-loss, hold-generation, mirror/focus and yaw/bob checks. The
-  palm no-write query is now live-tested in PID 28412. Its successor,
-  `--validate-palm-resolver`, remains a separate live gate that does not require
-  a headset. Do not promote the owned palm lifecycle/resolver beyond host-tested
-  solely because a Release package builds.
+  palm no-write query is live-tested in PID 28412 and its successor,
+  `--validate-palm-resolver`, is live-tested in PID 8644 with balanced
+  create/reuse/query/destroy and unchanged selected gameplay memory. This still
+  does not validate tracked gameplay palms or contact feel with a headset.
 - The candidate is now rebuilt and offline-validated for the next headset
   session. Release, Debug and SDK-less Release each pass 34/34 root CTest;
   metadata and the exact-build Black Plague verifier pass; Overture `-Full`
@@ -176,7 +176,7 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   default-off no-write query on the existing post-`D6E00` owner and its
   synthetic clear/contact/mutation harness passes. PID 28412 live-tested that
   query with one callback, eight contacts and no selected native-memory change.
-  The successor owned-shape/resolver path is host-tested behind
+  The successor owned-shape/resolver path is live-tested in PID 8644 behind
   `--validate-palm-resolver` and remains disconnected from gameplay hands.
 - PID 21548 reran the corrected active room-scale path and passed its complete
   automatic gate: queued/consumed/injected/matched were `201/201`, all four
@@ -690,10 +690,10 @@ sweep/refinement and recovery thresholds/predicates) is now Framework-owned in
 legacy `VRHandCollisionPolicy` namespace. Black Plague now has the exact native
 query/callback boundary and PID 28412 live-tested its no-write diagnostic. The
 backend-owned palm shape lifecycle and the game-neutral Rework resolver are
-implemented and host-tested behind `--validate-palm-resolver`; the gate creates,
-reuses/replaces and destroys the shape without publishing a resolved gameplay
-hand pose. It still needs a successful live resolver/lifecycle gate and separate
-character/held-body exclusion evidence before becoming a gameplay feature.
+live-tested in PID 8644 behind `--validate-palm-resolver`; the gate creates,
+reuses and destroys the shape without publishing a resolved gameplay hand pose.
+It still needs separate character/held-body exclusion evidence and tracked-hand
+integration before becoming a gameplay feature.
 
 Rework's semantic haptic profiles are also Framework-owned in
 `vr_haptics.hpp`, including strength clamping/scaling and per-event cooldowns.
@@ -723,8 +723,8 @@ mine-gallery EFX parameter set, including echo, modulation and room-rolloff
 fields. This strengthens the offline reference; Black Plague/Requiem audio hook
 integration still requires game-specific evidence.
 
-1. live-test `--validate-palm-resolver`, then connect resolved palms only after
-   character/body exclusion has its own evidence;
+1. validate character/body and held-body exclusion, then connect the already
+   live-tested resolver to tracked palms and headset-test representative contact;
 2. jointed mechanisms / doors / levers through native mechanism state;
 3. definitive per-game tool/glowstick geometry/profile and headset validation;
 4. inventory, notes, menus, HUD and subtitles;
