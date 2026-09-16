@@ -1,6 +1,7 @@
 #include "hand_contact_probe.hpp"
 #include "vr_hand_contact.hpp"
 #include "vr_interaction_policy.hpp"
+#include "vr_rework_hand_profile.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -277,10 +278,12 @@ struct GameplaySnapshot {
 
     using namespace runtime::vr_interaction_policy;
     const Vec3 size{kCollisionSizeX, kCollisionSizeY, kCollisionSizeZ};
+    Matrix local_transform{};
+    local_transform.values = runtime::rework_hand_profile::CollisionLocalPose().values;
     void* shape = nullptr;
     __try {
         const auto create = reinterpret_cast<CreateBoxShape>(image + kCreateBoxShape);
-        shape = create(world, &size, nullptr);
+        shape = create(world, &size, &local_transform);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         shape = nullptr;
     }
