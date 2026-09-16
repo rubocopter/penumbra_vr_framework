@@ -1,5 +1,6 @@
 #include "hand_contact_probe.hpp"
 #include "vr_interaction_policy.hpp"
+#include "vr_rework_hand_profile.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -76,6 +77,8 @@ std::atomic<std::uint32_t> g_create_count{0};
 std::atomic<std::uint32_t> g_destroy_count{0};
 std::uint8_t* g_fake_image = nullptr;
 std::uint8_t* g_fake_palm_shape = nullptr;
+Matrix g_last_create_transform{};
+bool g_last_create_transform_valid = false;
 void* g_last_skip_body = nullptr;
 bool g_last_skip_static = false;
 bool g_last_is_character = false;
@@ -133,11 +136,13 @@ void* __fastcall FakeCreateBoxShape(
     void* world,
     void*,
     const Vec3* size,
-    Matrix*) {
-    if (world == nullptr || size == nullptr || g_fake_image == nullptr ||
-        g_fake_palm_shape == nullptr) {
+    Matrix* transform) {
+    if (world == nullptr || size == nullptr || transform == nullptr ||
+        g_fake_image == nullptr || g_fake_palm_shape == nullptr) {
         return nullptr;
     }
+    g_last_create_transform = *transform;
+    g_last_create_transform_valid = true;
     ++g_create_count;
     std::memset(g_fake_palm_shape, 0, 0x100);
     *reinterpret_cast<void**>(g_fake_palm_shape) =
@@ -158,6 +163,18 @@ void __fastcall FakeDestroyShape(void*, void*, void* shape) {
 
 bool NearlyEqual(float left, float right) {
     return std::fabs(left - right) < 1.0e-6F;
+}
+
+bool MatchesExpectedPalmTransform() {
+    if (!g_last_create_transform_valid) return false;
+    const auto expected = runtime::rework_hand_profile::CollisionLocalPose();
+    for (std::size_t index = 0; index < expected.values.size(); ++index) {
+        if (!NearlyEqual(g_last_create_transform.values[index],
+                expected.values[index])) {
+            return false;
+        }
+    }
+    return true;
 }
 
 struct Fixture {
@@ -225,6 +242,8 @@ struct Fixture {
         g_fake_palm_shape = palm_shape.data();
         g_create_count.store(0, std::memory_order_relaxed);
         g_destroy_count.store(0, std::memory_order_relaxed);
+        g_last_create_transform = {};
+        g_last_create_transform_valid = false;
         g_last_skip_body = nullptr;
         g_last_skip_static = true;
         g_last_is_character = true;
@@ -371,6 +390,7 @@ int main() {
         resolver.shape_user_count != 0 || resolver.shape_type != 1 ||
         g_create_count.load(std::memory_order_relaxed) != 1 ||
         g_destroy_count.load(std::memory_order_relaxed) != 1 ||
+        !MatchesExpectedPalmTransform() ||
         !NearlyEqual(resolver.shape_size[0],
             penumbra_vr::runtime::vr_interaction_policy::kCollisionSizeX) ||
         !NearlyEqual(resolver.shape_size[1],
@@ -382,7 +402,7 @@ int main() {
         g_last_collide_character || g_last_debug ||
         !NearlyEqual(resolver.second_raw_position[0],
             resolver.second_resolved_position[0])) {
-        std::cerr << "owned palm resolver lifecycle failed: " << error << '\n';
+        std::cerr << "owned palm resolver lifecycle/profile failed: " << error << '\n';
         return 1;
     }
 
@@ -395,6 +415,7 @@ int main() {
         !replacement.shape_destroyed || !replacement.world_replaced ||
         replacement.gameplay_memory_changed || replacement.create_count != 2 ||
         replacement.destroy_count != 2 ||
+        !MatchesExpectedPalmTransform() ||
         g_create_count.load(std::memory_order_relaxed) != 2 ||
         g_destroy_count.load(std::memory_order_relaxed) != 2) {
         std::cerr << "owned palm world replacement failed: " << error << '\n';
@@ -431,6 +452,7 @@ int main() {
         gameplay.queries < 2 || gameplay.contacts != 0 ||
         gameplay.held_body_skips != 1 || gameplay.query_failures != 0 ||
         gameplay.shape_creates != 1 || gameplay.shape_destroys != 0 ||
+        !MatchesExpectedPalmTransform() ||
         g_last_skip_body != held_body || g_last_skip_static ||
         g_last_is_character || g_last_collide_character || g_last_debug ||
         !NearlyEqual(gameplay_resolved.values[3], left_raw.values[3])) {
@@ -466,6 +488,6 @@ int main() {
     bp::PublishGameplayPalmHeldBody(0, nullptr);
     SetEnvironmentVariableA("PVR_BP_PALM_COLLISION_VALIDATION", nullptr);
 
-    std::cout << "Black Plague hand-contact query/lifecycle tests passed\n";
+    std::cout << "Black Plague hand-contact query/lifecycle/profile tests passed\n";
     return 0;
 }
