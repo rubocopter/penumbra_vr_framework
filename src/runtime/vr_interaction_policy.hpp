@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vr_magnetic_pickup_policy.hpp"
+
 namespace penumbra_vr::runtime::vr_interaction_policy {
 
 // Proven Overture palm collision policy from Rework 23c890f. The runtime owns
@@ -37,9 +39,10 @@ inline constexpr float kMaximumCollisionInteractionReach = 0.18F;
 inline constexpr float kMaxCollisionInteractionReach =
     kMaximumCollisionInteractionReach;
 
-// Long-range assistance is a separate, item-only path. Backends must not use
-// this value for ordinary props or mechanisms.
-inline constexpr float kMagneticItemRange = 2.35F;
+// Compatibility alias for the separately owned item-only magnetic policy.
+// Backends must not use this value for ordinary props or mechanisms.
+inline constexpr float kMagneticItemRange =
+    vr_magnetic_pickup_policy::kMaximumRange;
 
 // Rework 23c890f maps measured handle radius to the forced hand closure used
 // while an attachment is held. Geometry, grip points and twist remain profile

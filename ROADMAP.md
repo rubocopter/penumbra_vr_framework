@@ -147,6 +147,10 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Extract and host-test Rework tracked-menu pointer ownership, aim/grip fallback, off-hand takeover, edge clamping and `0.40` cursor smoothing; Black Plague consumes the shared policy while native menu projection/application remains backend-owned
 - [x] Extract and host-test shared attachment-socket composition while retaining measured model grip points/orientation as per-game profile data; Black Plague consumes it for the current flashlight/glowstick sockets
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
+  - [x] Extract and host-test Rework's item-only magnetic targeting policy (range/bias profiles, cone/scoring, ranked visibility sampling) while keeping entity classification and physics queries game-owned
+  - [x] Extract and host-test Rework's free/slider/hinge servo math and velocity caps while keeping joint selection and per-game mechanism profiles/adapters game-owned
+  - [ ] Map Black Plague item classification/visibility and one representative native jointed mechanism before consuming those shared policies there
+  - [ ] Keep dimmer, staged loading/fade and game UI lifecycle product-owned until a second backend exposes a compatible ownership boundary
 - [x] Keep Overture's existing build and tests green during extraction
 - [x] Port Rework's tracking space, room-scale rejection and locomotion policy
 - [x] Introduce the initial narrow Overture body/jump backend contract

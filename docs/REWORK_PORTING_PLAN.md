@@ -245,6 +245,17 @@ pacing remain open.
   predicates. Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so
   future Black Plague/Requiem palm adapters can reuse the same policy while
   keeping native collision queries and body exclusions game-specific.
+- `src/runtime/vr_magnetic_pickup_policy.hpp` owns Rework's item-only magnetic
+  targeting policy: the three demonstrated range/bias profiles, aim-cone and
+  scoring math, top-five ranking limit, closest-AABB visibility sample and
+  `0.03 m` sight overshoot. Overture consumes it directly while its item enum,
+  portal traversal and dual hand/HMD physics raycasts remain product-owned.
+- `src/runtime/vr_mechanism_policy.hpp` owns Rework's demonstrated
+  unconstrained, slider and hinge servo math plus the associated motion caps.
+  Overture consumes it directly while native joint graph selection, HPL body
+  writes and entity/mass-specific hinge lightness remain product-owned. Black
+  Plague still leaves jointed mechanisms native until one exact mechanism
+  state/update boundary is mapped.
 - `src/backends/black_plague/hand_contact_probe.*` owns a default-off diagnostic
   for the now-pinned BP `CheckShapeWorldCollision` ABI. It fans out after the
   existing native body update, reuses the current body shape, records callback
@@ -280,10 +291,11 @@ pacing remain open.
 
 ## Current host-only extraction frontier
 
-The remaining Rework-specific VR code was re-audited after the shared
-attachment-socket extraction. No additional game-neutral behavior currently has
-enough evidence for another shared runtime abstraction without either a second
-backend consumer or target-specific validation:
+The remaining Rework-specific VR code was re-audited on 2026-09-16 after the
+magnetic-pickup and mechanism-servo extraction. Those two pure policies are
+host-tested through an isolated regression target and the full Overture Release
+gate. Further extraction currently needs either a second backend consumer or a
+target-specific ownership boundary:
 
 - Rework's VR dimmer has a separable scalar ramp, but its ownership and render
   placement are currently only demonstrated by Overture inventory/message/panel
@@ -299,9 +311,11 @@ backend consumer or target-specific validation:
 - inventory/notes/HUD/subtitle integration still depends on each game's menu,
   draw-order and native state boundaries. The reusable panel/pointer/settings
   policy already extracted should be consumed once those boundaries are mapped.
-- doors, levers, sliders and other jointed mechanisms require a mapped native
-  mechanism state/update boundary before any shared interaction policy can be
-  justified.
+  Magnetic item targeting is already separated, but Black Plague still needs a
+  safe item classifier plus native visibility/query boundary before consuming it.
+- doors, levers, sliders and other jointed mechanisms now have shared Rework
+  servo math, but Black Plague still requires a mapped native joint/mechanism
+  state and update boundary before that policy can drive gameplay there.
 
 This is a deliberate host-only stopping point, not completion of the unchecked
 "remaining demonstrated reusable systems" milestone. Resume extraction when

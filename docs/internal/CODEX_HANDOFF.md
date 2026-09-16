@@ -813,16 +813,24 @@ integration still requires game-specific evidence.
 
 Long bars and mechanisms must not be fixed by arbitrary springs or rigid palm offsets. Map native joint/slider/hinge state.
 
-The remaining Rework VR code was re-audited host-only on 2026-09-12 after the
-attachment-socket extraction. There is no further justified shared-runtime
-extraction at the current evidence level: the VR dimmer is only consumed by
-Overture UI flows; staged loading is tied to Overture's map/compositor lifecycle;
-physical crouch now has a narrow Black Plague desired/native boundary but still
-needs headset and blocked-stand evidence; inventory,
-notes, HUD and subtitles need native menu/draw-state boundaries; and jointed
-mechanisms need one mapped native mechanism consumer. Do not manufacture a
-generic abstraction to make the roadmap checkbox move. Resume this audit when a
-second backend boundary is demonstrated or after the relevant live/headset gate.
+The remaining Rework VR code was re-audited host-only on 2026-09-16. Two more
+pure policies are now Framework-owned and consumed by Overture:
+`vr_magnetic_pickup_policy.hpp` carries the item-only range/bias, cone/scoring,
+top-five visibility-sample and sight-overshoot rules; `vr_mechanism_policy.hpp`
+carries the free/slider/hinge servo math and motion caps. Overture still owns its
+item enum, portal/physics queries, native joint selection and entity/mass-specific
+hinge lightness. The isolated interaction-policy test, `check-project.ps1`, the
+full Overture Release rebuild/unit gate (`289` checks) and Framework CTest
+(`35/35`) pass. These policies are **host-tested** only.
+
+The host-only frontier now starts at the game boundaries: Black Plague needs a
+safe item classifier/visibility query before using magnetic pickup and one mapped
+native mechanism state/update boundary before using the shared joint servo. The
+VR dimmer remains demonstrated only inside Overture UI flows; staged loading is
+tied to Overture's map/compositor lifecycle; physical crouch still needs the
+remaining headset/blocked-stand evidence; inventory, notes, HUD and subtitles
+need native menu/draw-state boundaries. Do not manufacture another generic
+abstraction until one of those boundaries is demonstrated.
 
 ## Requiem
 

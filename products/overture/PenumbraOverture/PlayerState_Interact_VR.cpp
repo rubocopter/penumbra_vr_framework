@@ -26,9 +26,22 @@
 #include "GameObject.h"
 #include "VRHelper.hpp"
 #include "VRHaptics.h"
+#include "vr_mechanism_policy.hpp"
 
 namespace
 {
+	namespace vr_mechanism = penumbra_vr::runtime::vr_mechanism_policy;
+
+	vr_mechanism::Vec3 ToVrMechanismVector(const cVector3f& value)
+	{
+		return {value.x, value.y, value.z};
+	}
+
+	cVector3f FromVrMechanismVector(const vr_mechanism::Vec3& value)
+	{
+		return cVector3f(value[0], value[1], value[2]);
+	}
+
 	// A body may be the parent of one mechanism and the child of another.
 	// The joint that actually constrains this body's motion is normally the
 	// one where it is the child.  This matters for the outside hatch: its lid
@@ -630,14 +643,14 @@ void cPlayerState_Move_VR::OnUpdate(float afTimeStep)
       if (jointType == ePhysicsJointType_Slider)
       {
         // Prismatic/slider joint (drawers, chests): project velocity onto pinDir
-        cVector3f vDragVel = destDiff * 10.0f;
-        float fDotSlide = cMath::Vector3Dot(vDragVel, vPinDir);
-        cVector3f vSlideVel = vPinDir * fDotSlide;
-        float fSlideSpeed = vSlideVel.Length();
-        if (fSlideSpeed > 3.5f)
-          vSlideVel = vSlideVel * (3.5f / fSlideSpeed);
+        const vr_mechanism::VrMechanismMotionPlan plan =
+          vr_mechanism::PlanSlider(
+            ToVrMechanismVector(destDiff), ToVrMechanismVector(vPinDir));
+        const cVector3f vSlideVel =
+          FromVrMechanismVector(plan.linear_velocity);
         mpPushBody->SetLinearVelocity(vSlideVel);
-        mpPushBody->SetAngularVelocity(cVector3f(0, 0, 0));
+        mpPushBody->SetAngularVelocity(
+          FromVrMechanismVector(plan.angular_velocity));
         static unsigned long slNextJointLogMs = 0;
         unsigned long lNowMs = GetApplicationTime();
         if (lNowMs >= slNextJointLogMs)
@@ -651,36 +664,16 @@ void cPlayerState_Move_VR::OnUpdate(float afTimeStep)
       }
       else
       {
-        // Hinge joint (doors): angular velocity must be ALONG the pin axis.
-        // Measure the lever arm at the held point and remove its component
-        // along the pin. The old full 3D body-centre distance included most
-        // of a locker's height, making its angular response several times too
-        // small even when the hand was pulling at the outer edge.
-        cVector3f vRadial = mvPickPoint - vPivot;
-        vRadial -= vPinDir * cMath::Vector3Dot(vRadial, vPinDir);
-        float fRadius = vRadial.Length();
-        if (fRadius < 0.03f)
-        {
-          vRadial = mpPushBody->GetWorldPosition() - vPivot;
-          vRadial -= vPinDir * cMath::Vector3Dot(vRadial, vPinDir);
-          fRadius = vRadial.Length();
-        }
-        if (fRadius < 0.03f) fRadius = 0.3f;
-
-        // At the held point v = omega x r. Project the hand request onto
-        // that tangent so Newton only receives motion the hinge can satisfy.
-        cVector3f vPerpDir = cMath::Vector3Normalize(
-            cMath::Vector3Cross(vPinDir, vRadial));
-        cVector3f vDragVel = destDiff * 10.0f;
-        float fDotPerp = cMath::Vector3Dot(vDragVel, vPerpDir);
-        float fAllowedSpeed = fabsf(fDotPerp);
-        // Apply lightness factor for heavy hinged objects (taquilla, cofre)
-        fAllowedSpeed *= mfHingeLightnessFactor;
-        if (fAllowedSpeed > 3.5f * mfHingeLightnessFactor)
-          fAllowedSpeed = 3.5f * mfHingeLightnessFactor;
-        float fAngSpeed = fAllowedSpeed / fRadius;
-        // Angular velocity along pin axis; sign from fDotPerp
-        cVector3f vAngVel = vPinDir * fAngSpeed * (fDotPerp >= 0.0f ? 1.0f : -1.0f);
+        // Rework's hinge servo math is shared; Overture still owns which
+        // native joint is selected and the per-entity lightness profile.
+        const vr_mechanism::VrMechanismMotionPlan plan =
+          vr_mechanism::PlanHinge(
+            ToVrMechanismVector(destDiff), ToVrMechanismVector(vPinDir),
+            ToVrMechanismVector(vPivot), ToVrMechanismVector(mvPickPoint),
+            ToVrMechanismVector(mpPushBody->GetWorldPosition()),
+            mfHingeLightnessFactor);
+        const cVector3f vAngVel =
+          FromVrMechanismVector(plan.angular_velocity);
 
         static unsigned long slNextJointLogMs = 0;
         unsigned long lNowMs = GetApplicationTime();
@@ -694,35 +687,25 @@ void cPlayerState_Move_VR::OnUpdate(float afTimeStep)
               mfHingeLightnessFactor);
         }
 
-        // Keep the body's requested translation on the circular hinge path;
-        // feeding the pin-parallel offset into this term could visibly pull
-        // a door away from its axis under a strong VR motion.
-        cVector3f vBodyRadial = mpPushBody->GetWorldPosition() - vPivot;
-        vBodyRadial -= vPinDir * cMath::Vector3Dot(vBodyRadial, vPinDir);
-        mpPushBody->SetLinearVelocity(cMath::Vector3Cross(vAngVel, vBodyRadial));
+        mpPushBody->SetLinearVelocity(
+          FromVrMechanismVector(plan.linear_velocity));
         mpPushBody->SetAngularVelocity(vAngVel);
       }
     }
     else
     {
-      cVector3f vDragVel = destDiff * 10.0f;
-      float fDragSpeed = vDragVel.Length();
-      if (fDragSpeed > 3.5f)
-        vDragVel = vDragVel * (3.5f / fDragSpeed);
-      mpPushBody->SetLinearVelocity(vDragVel);
-      mpPushBody->SetAngularVelocity(cVector3f(0.0f, 0.0f, 0.0f));
+      const vr_mechanism::VrMechanismMotionPlan plan =
+        vr_mechanism::PlanUnconstrainedJointDrag(ToVrMechanismVector(destDiff));
+      mpPushBody->SetLinearVelocity(FromVrMechanismVector(plan.linear_velocity));
+      mpPushBody->SetAngularVelocity(FromVrMechanismVector(plan.angular_velocity));
     }
   }
   else if (mbHasSlideAxis)
   {
-    cVector3f vDragVel = destDiff * 10.0f;
-    float fDotSlide = cMath::Vector3Dot(vDragVel, mvSlideAxis);
-    cVector3f vSlideVel = mvSlideAxis * fDotSlide;
-    float fSlideSpeed = vSlideVel.Length();
-    if (fSlideSpeed > 3.5f)
-      vSlideVel = vSlideVel * (3.5f / fSlideSpeed);
-    mpPushBody->SetLinearVelocity(vSlideVel);
-    mpPushBody->SetAngularVelocity(cVector3f(0.0f, 0.0f, 0.0f));
+    const vr_mechanism::VrMechanismMotionPlan plan = vr_mechanism::PlanSlider(
+      ToVrMechanismVector(destDiff), ToVrMechanismVector(mvSlideAxis));
+    mpPushBody->SetLinearVelocity(FromVrMechanismVector(plan.linear_velocity));
+    mpPushBody->SetAngularVelocity(FromVrMechanismVector(plan.angular_velocity));
   }
   else
   {
@@ -926,8 +909,12 @@ void cPlayerState_Move_VR::EnterState(iPlayerState* apPrevState)
 	// servo is not strangled by Newton's per-step clamp.
 	mfDefaultMaxLinSpeed = mpPushBody->GetMaxLinearSpeed();
 	mfDefaultMaxAngSpeed = mpPushBody->GetMaxAngularSpeed();
-	mpPushBody->SetMaxLinearSpeed(mpPushBody->GetJointNum() > 0 ? 5.0f : 10.0f);
-	mpPushBody->SetMaxAngularSpeed(mpPushBody->GetJointNum() > 0 ? 8.0f : 15.0f);
+	mpPushBody->SetMaxLinearSpeed(mpPushBody->GetJointNum() > 0
+		? vr_mechanism::kJointedMaximumLinearSpeed
+		: vr_mechanism::kFreeMoveMaximumLinearSpeed);
+	mpPushBody->SetMaxAngularSpeed(mpPushBody->GetJointNum() > 0
+		? vr_mechanism::kJointedMaximumAngularSpeed
+		: vr_mechanism::kFreeMoveMaximumAngularSpeed);
 
   // Use the actual selected surface point. The old VR path substituted the
   // palm position, which can lie several centimetres outside a small drawer
@@ -1048,7 +1035,8 @@ void cPlayerState_Move_VR::EnterState(iPlayerState* apPrevState)
       else
         mfHingeLightnessFactor = 1.35f;
       // Increase max angular speed cap for lightness factor
-      mpPushBody->SetMaxAngularSpeed(8.0f * mfHingeLightnessFactor);
+      mpPushBody->SetMaxAngularSpeed(
+        vr_mechanism::kJointedMaximumAngularSpeed * mfHingeLightnessFactor);
     }
     else
     {

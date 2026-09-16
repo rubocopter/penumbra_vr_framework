@@ -32,13 +32,16 @@
 #include "VRHelper.hpp"
 #include "VRHaptics.h"
 #include "VRHandCollisionPolicy.h"
+#include "vr_magnetic_pickup_policy.hpp"
 
 namespace
 {
+  namespace vr_magnetic = penumbra_vr::runtime::vr_magnetic_pickup_policy;
+
   const float kVRNudgeMinHandSpeed = 0.03f;
   const float kVRNudgeBroadPhasePadding = 0.15f;
-  const float kVRMagneticItemRange = 2.35f;
-  const int kVRMagneticRankedCandidateCount = 5;
+  const int kVRMagneticRankedCandidateCount =
+    static_cast<int>(vr_magnetic::kRankedCandidateCount);
 
   iPhysicsJoint *GetVRNudgeJoint(iPhysicsBody *apBody)
   {
@@ -90,6 +93,8 @@ namespace
     // equipment remains eligible, but only when the hand intent is closer and
     // more deliberate. "Normal" includes keys and map-authored small tools.
     const eGameItemType itemType = static_cast<cGameItem*>(apEntity)->GetItemType();
+    vr_magnetic::VrMagneticPickupClass pickupClass =
+      vr_magnetic::VrMagneticPickupClass::unsupported;
     switch(itemType)
     {
     case eGameItemType_Battery:
@@ -97,26 +102,27 @@ namespace
     case eGameItemType_GlowStick:
     case eGameItemType_Flare:
     case eGameItemType_Painkillers:
-      afRange = kVRMagneticItemRange;
-      afPriorityBias = -0.20f;
+      pickupClass = vr_magnetic::VrMagneticPickupClass::consumable;
       break;
     case eGameItemType_Normal:
     case eGameItemType_Note:
     case eGameItemType_Map:
-      afRange = 1.90f;
-      afPriorityBias = -0.10f;
+      pickupClass = vr_magnetic::VrMagneticPickupClass::ordinary;
       break;
     case eGameItemType_Notebook:
     case eGameItemType_Flashlight:
     case eGameItemType_WeaponMelee:
     case eGameItemType_Throw:
-      afRange = 1.45f;
-      afPriorityBias = 0.0f;
+      pickupClass = vr_magnetic::VrMagneticPickupClass::equipment;
       break;
     default:
       return false;
     }
-    return true;
+    const vr_magnetic::VrMagneticPickupProfile profile =
+      vr_magnetic::Profile(pickupClass);
+    afRange = profile.range;
+    afPriorityBias = profile.priority_bias;
+    return profile.eligible;
   }
 
   // The normal pick callback is intentionally interaction-oriented: areas and
@@ -171,7 +177,8 @@ namespace
 
     // Continue a few centimetres into the target so a sample exactly on its
     // AABB surface still produces a physics hit.
-    const cVector3f vEnd = avPoint + vRay * (0.03f / fRayLength);
+    const cVector3f vEnd = avPoint +
+      vRay * (vr_magnetic::kSightOvershoot / fRayLength);
     cVRSolidSightCallback callback(apCandidate);
     apPhysicsWorld->CastRay(&callback, avOrigin, vEnd,
       true, false, true, true);
@@ -227,9 +234,10 @@ namespace
     // Query a tight axis-aligned box around the aim segment instead of a large
     // cube around the hand. On long corridors this substantially reduces the
     // number of portal entities considered by both hands every frame.
-    const cVector3f vSearchEnd = vOrigin + vDirection * kVRMagneticItemRange;
+    const cVector3f vSearchEnd =
+      vOrigin + vDirection * vr_magnetic::kMaximumRange;
     const cVector3f vSearchDelta = vSearchEnd - vOrigin;
-    const float fSearchPadding = 0.50f;
+    const float fSearchPadding = vr_magnetic::kSearchPadding;
     cBoundingVolume searchBV;
     searchBV.SetSize(cVector3f(fabsf(vSearchDelta.x) + fSearchPadding * 2.0f,
       fabsf(vSearchDelta.y) + fSearchPadding * 2.0f,
@@ -265,14 +273,14 @@ namespace
       const cVector3f vTargetCenter = pBodyBV->GetWorldCenter();
       const cVector3f vToTarget = vTargetCenter - vOrigin;
       const float fForward = cMath::Vector3Dot(vToTarget, vDirection);
-      if(fForward <= 0.08f || fForward > fCandidateRange) continue;
+      if(!vr_magnetic::ForwardDistanceEligible(fForward, fCandidateRange))
+        continue;
 
       cVector3f vPerpendicular = vToTarget - vDirection * fForward;
       const float fPerpendicularSq = vPerpendicular.SqrLength();
-      float fBodyAllowance = pBodyBV->GetRadius();
-      if(fBodyAllowance > 0.12f) fBodyAllowance = 0.12f;
-      const float fConeRadius = 0.07f + fForward * 0.12f + fBodyAllowance;
-      if(fPerpendicularSq > fConeRadius * fConeRadius) continue;
+      const float fConeRadius =
+        vr_magnetic::ConeRadius(fForward, pBodyBV->GetRadius());
+      if(!vr_magnetic::InsideAimCone(fPerpendicularSq, fConeRadius)) continue;
 
       // Aim at the closest portion of the body's AABB to the hand ray. This
       // keeps partly visible items selectable when their centre lies behind a
@@ -280,14 +288,16 @@ namespace
       const cVector3f vAimPoint = vOrigin + vDirection * fForward;
       const cVector3f vMin = pBodyBV->GetMin();
       const cVector3f vMax = pBodyBV->GetMax();
-      cVector3f vVisibleSample(
-        cMath::Clamp(vAimPoint.x, vMin.x, vMax.x),
-        cMath::Clamp(vAimPoint.y, vMin.y, vMax.y),
-        cMath::Clamp(vAimPoint.z, vMin.z, vMax.z));
-      vVisibleSample = vVisibleSample * 0.9f + vTargetCenter * 0.1f;
+      const std::array<float, 3> visibleSample = vr_magnetic::VisibleSample(
+        {vAimPoint.x, vAimPoint.y, vAimPoint.z},
+        {vMin.x, vMin.y, vMin.z},
+        {vMax.x, vMax.y, vMax.z},
+        {vTargetCenter.x, vTargetCenter.y, vTargetCenter.z});
+      const cVector3f vVisibleSample(
+        visibleSample[0], visibleSample[1], visibleSample[2]);
 
-      float fScore = fPerpendicularSq / (fConeRadius * fConeRadius) +
-        fForward * 0.02f + fPriorityBias;
+      const float fScore = vr_magnetic::CandidateScore(
+        fPerpendicularSq, fConeRadius, fForward, fPriorityBias);
 
       cVRMagneticCandidate candidate = {
         pBody, vVisibleSample, vTargetCenter, fScore

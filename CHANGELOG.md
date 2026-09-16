@@ -1,5 +1,21 @@
 # Changelog
 
+- 2026-09-16: Extracted two additional game-neutral interaction policies from
+  the proven Rework `23c890f` implementation. `vr_magnetic_pickup_policy.hpp`
+  now owns the item-only magnetic targeting ranges/biases, cone/scoring math,
+  ranked-candidate limit, visibility sample and ray overshoot while Overture
+  retains item classification, portal traversal and physics visibility queries.
+  `vr_mechanism_policy.hpp` now owns the demonstrated unconstrained/slider/hinge
+  servo math and velocity caps while Overture retains native joint selection,
+  HPL application and its entity/mass-specific hinge-lightness profile. The
+  Overture source host consumes both policies directly and `check-project.ps1`
+  prevents those formulas from silently returning to product-local copies. The
+  new host regression plus the full Overture Release rebuild/unit gate and the
+  Framework suite pass (`289` Overture checks, `35/35` CTest). Black Plague does
+  not consume magnetic pickup or jointed mechanism motion yet; those adapters
+  still require its native item classifier/visibility and mechanism-state
+  boundaries. This extraction is **host-tested** only.
+
 - 2026-09-16: Investigated the PID 26940 Black Plague headset regression after
   importing the Rework hand rigs. The captured frame confirmed real hand-render
   corruption: mostly black surfaces with changing multicolored triangles. The

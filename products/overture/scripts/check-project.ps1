@@ -608,8 +608,41 @@ if ($playerSource -match [regex]::Escape('mpScene->GetWorld3D()->GetPhysicsWorld
 
 $vrHandCollisionPolicy = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\VRHandCollisionPolicy.h')
 $sharedInteractionPolicy = Get-Content -Raw -LiteralPath (Join-Path $frameworkRoot 'src\runtime\vr_interaction_policy.hpp')
+$sharedMagneticPickupPolicy = Get-Content -Raw -LiteralPath (Join-Path $frameworkRoot 'src\runtime\vr_magnetic_pickup_policy.hpp')
+$sharedMechanismPolicy = Get-Content -Raw -LiteralPath (Join-Path $frameworkRoot 'src\runtime\vr_mechanism_policy.hpp')
 $vrMathTests = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'tests\VRTrackingTest\main.cpp')
 $vrTrackingTestProject = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'tests\VRTrackingTest\VRTrackingTest.vcxproj')
+foreach ($requiredMagneticPolicySnippet in @(
+    '#include "vr_magnetic_pickup_policy.hpp"',
+    'vr_magnetic::Profile(',
+    'vr_magnetic::ConeRadius(',
+    'vr_magnetic::CandidateScore(',
+    'vr_magnetic::VisibleSample('
+)) {
+    if ($vrInteractionSource -notmatch [regex]::Escape($requiredMagneticPolicySnippet)) {
+        throw "Overture magnetic pickup must consume shared Rework policy '$requiredMagneticPolicySnippet'."
+    }
+}
+foreach ($requiredMechanismPolicySnippet in @(
+    '#include "vr_mechanism_policy.hpp"',
+    'vr_mechanism::PlanSlider(',
+    'vr_mechanism::PlanHinge(',
+    'vr_mechanism::PlanUnconstrainedJointDrag('
+)) {
+    if ($vrHeldObjectSource -notmatch [regex]::Escape($requiredMechanismPolicySnippet)) {
+        throw "Overture mechanism drag must consume shared Rework policy '$requiredMechanismPolicySnippet'."
+    }
+}
+foreach ($requiredSharedInteractionConstant in @(
+    'kMaximumRange = 2.35F',
+    'kRankedCandidateCount = 5',
+    'kServoGain = 10.0F',
+    'kMaximumServoSpeed = 3.5F'
+)) {
+    if (($sharedMagneticPickupPolicy + $sharedMechanismPolicy) -notmatch [regex]::Escape($requiredSharedInteractionConstant)) {
+        throw "Shared Rework interaction policy is missing '$requiredSharedInteractionConstant'."
+    }
+}
 foreach ($requiredHandCollisionSnippet in @(
     'kCollisionSizeX = 0.190F',
     'kCollisionSizeY = 0.052F',
