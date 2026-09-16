@@ -10,6 +10,25 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Focused headset checkpoint (2026-09-16): PID 25484 exercised the current
+  Black Plague crouch/Y and short-range room-scale candidate. Presentation
+  analysis found 12,949 logged frames, 12,859 gameplay frames, 12,858
+  presentation frames and **zero stereo failures**. Collision-comfort analysis
+  found 2,477 meaningful body samples (`2407 free / 43 blocked / 27 partial`)
+  across 5,488 active room-scale render samples. The run calibrated standing,
+  recorded three physical crouch entries/exits, ended in native move-state `0`
+  with the `1.65 m` body and VR ownership released, captured a stable
+  button-only state-`4` crouch, reached `0.961 m` tracked render-Y range and
+  contained 650 accepted direct-locomotion samples. The user reported that the
+  session felt good. This is positive headset evidence for the current
+  crouch/Y, direct-locomotion and rejected-direction comfort path. One automatic
+  focused-gate requirement remains uncaptured: the run saw the Hybrid combined
+  state (`physical=1`, latch=1, state `4`) but no later periodic sample with
+  `physical=0`, latch=1 and state `4`. Keep that Hybrid release-hold subgate,
+  blocked-stand/low-ceiling, yaw/bob and the other explicitly separate gates
+  open; do not repeat the entire focused batch solely to re-prove evidence PID
+  25484 already supplied.
+
 - Current presentation/comfort checkpoint (2026-09-14): PID 22096 exercised
   `7f84235` from menu into sustained gameplay with 15,990 logged frames, 15,887
   gameplay frames, 15,885 presentation frames and **zero stereo failures**.
@@ -27,8 +46,10 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   preserving tangential slide and movement away from the obstacle. Release,
   Debug and SDK-less Release pass 34/34 CTest; metadata, the exact-build BP
   verifier and Overture `-Full` (Release/LAA + 289/289 tracking checks) pass.
-  The new collision-comfort filter is **host-tested only** and requires a fresh
-  headset run before closing PID 20520's pullback report.
+  PID 25484 later supplied positive headset comfort evidence for this filter;
+  retain PID 20520's specifically reported pullback symptom as a narrower edge
+  until it is explicitly checked rather than inferring its absence from a
+  general "felt good" report.
 
 - Second presentation regression checkpoint (2026-09-14): PID 6016 reproduced
   `VRCompositorError_AlreadySubmitted (108)` on commit `ca099ca`. The fresh log
@@ -103,11 +124,12 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   exposed a stale extracted `VRHandNominalRecoveryAnchor` call; that call was
   fixed and the subsequent product gate passed the Release build, Large Address
   Aware check and 289-check `VRTrackingTest`.
-- Validation state remains **host-tested only** for the new
-  rejected-direction render-prediction filter, body transaction extensions and
-  lifecycle work. PID 22096 supplies headset evidence for presentation-sequence ownership,
-  ordinary posture modes and directional locomotion have positive headset evidence.
-  Remaining posture edge cases, explicit vertical correlation and the new short-X/Z comfort filter remain open.
+- Validation state remains **host-tested only** for the body transaction
+  extensions and lifecycle work. PID 22096 supplies headset evidence for
+  presentation-sequence ownership, while PID 25484 adds focused headset evidence
+  for explicit tracked-Y correlation, direct locomotion and the
+  rejected-direction short-X/Z comfort filter. Remaining Hybrid release-hold,
+  blocked-stand/low-ceiling and other posture edge cases remain open.
   Status remains below the final validation tier.
 
 - Audit baseline (2026-09-14): implementation began from
@@ -120,9 +142,9 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   was updated to prove same-tick injection/reconciliation, native movement before
   injection, recenter invalidation and combined physical/stick accounting.
   Debug and Release both pass 30/30 root CTest after rebuilding these sources;
-  the SDK-less Release build also passes 30/30. This work is **host-tested only**.
-  It does not close the prior short physical-motion pullback report without a
-  fresh headset run.
+  the SDK-less Release build also passes 30/30. The broader body-transaction
+  extensions remain **host-tested only**, while PID 25484 later supplied fresh
+  headset comfort evidence for the short physical-motion path.
 - The same intervention hardens crouch ownership and lifecycle without changing
   exact-build owners. Crouch preserves native queries outside VR ownership,
   ties VR stance/pending legacy edges to session and player generation, keeps
@@ -135,11 +157,12 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   changes are **host-tested only**. The real NativeInputBridge harness and
   systematic lifecycle install/remove fault injection are now covered by the
   34/34 suite and must not be promoted beyond host-tested evidence.
-- Still open in this working tree: headset comfort for short physical motion
-  after the rejected-direction filter, crouch/Y correlation, presentation
-  pose/yaw epoch live correlation beyond the now-passing sequence-consumption
-  gate, and the Black Plague palm gameplay adapter. Do not claim those contracts
-  complete.
+- Still open in this working tree: Hybrid release-hold and blocked-stand/
+  low-ceiling posture edges, presentation pose/yaw epoch live correlation beyond
+  the now-passing sequence-consumption gate, and the Black Plague palm gameplay
+  adapter. PID 25484 supplies positive headset evidence for short physical-motion
+  comfort and tracked-Y correlation, but does not close every deliberate
+  wall/slide or posture edge. Do not claim the remaining contracts complete.
 - Palm-collision reference research is now pinned more narrowly. Rework
   `23c890f` creates player-owned hand collision shapes once per world, reuses
   them for overlap/sweep-style sampling, and destroys them on world teardown;
@@ -445,7 +468,7 @@ feeds the matched physical observation into shared reconciliation. A separate
 default-off active consumer can now expose the resulting horizontal anchor/body
 offset to rendering during the next validation gate.
 
-## Current milestone — physical crouch/Y correction awaiting headset validation
+## Current milestone — physical crouch/Y validated; focused posture edges remain
 
 The shared stateless phases live in `vr_locomotion.*`:
 `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and
@@ -615,16 +638,15 @@ described in the repository checkpoint. PID 23260 confirmed that physical
 policy exit and button latching were correct but the native toggle release did
 not restore standing. PID 24948 then showed that release/press compensation
 could restore the collider while repeatedly toggling the native state and never
-holding the real crouch/stealth behavior. The current host-tested build applies
-the desired state through exact `ChangeMoveState(4/0)` instead. The next gate remains
-`tools/Start-BlackPlagueRoomScaleValidation.ps1`, now in focused crouch mode. It
-must prove two tracked-height entry/exit cycles correlated with native
-move states `4/0` and `0.95/1.65 m` shapes, final standing/ownership release,
-stable button-only crouch/stealth and Hybrid
-composition, at least `0.15 m` of continuous tracked Y, short-range X/Z comfort,
-direct stick movement, hands and mirror. It does not require walking, sprint or
-wall cases in the user's limited play area. Do not promote the corrected build
-from host-tested until both telemetry and subjective comfort pass.
+holding the real crouch/stealth behavior. The current build applies the desired
+state through exact `ChangeMoveState(4/0)` instead. PID 25484 then captured
+three physical entry/exit cycles, final native standing/ownership release,
+stable button-only state-4 crouch, `0.961 m` tracked render-Y range, direct
+locomotion and positive subjective comfort. It also captured the Hybrid
+combined state, but not the subsequent `physical=0 + latch=1 + state 4`
+release-hold interval. The next focused posture test should therefore be short
+and targeted at that interval plus blocked-stand/low-ceiling recovery rather
+than replaying the entire PID 25484 batch.
 
 Two presentation regressions from the earlier headset session remain separate.
 PID 19192 refined the mirror-off evidence: gameplay frames reported

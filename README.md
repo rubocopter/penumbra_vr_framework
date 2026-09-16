@@ -20,13 +20,11 @@ The Framework builds and packages its own `Penumbra_vr.exe`. The earlier [Penumb
 
 ### Black Plague
 
-Black Plague already has native stereo, rotational HMD tracking, OpenVR controller input, tracked menus, provisional hands, native body/collision integration and direct VR locomotion through the exact supported build.
+Black Plague already has native stereo, rotational and positional HMD tracking, OpenVR controller input, tracked menus, provisional hands, native body/collision integration, direct VR locomotion and Rework-derived physical crouch through the exact supported build.
 
-The post-audit work replaced the old cross-tick body plan with a **single same-tick tracking/body transaction**, hardened crouch and lifecycle ownership, introduced identified presentation/tracking epochs and pinned the native palm-query ABI. The current single-consumption presentation path completed a sustained headset run without the earlier compositor error-108 regression.
+The current body path uses a **single same-tick tracking/body transaction**. PID 25484 (2026-09-16) added positive headset evidence for the current crouch/Y and short-range room-scale path: 12,858 presentation frames with zero stereo failures, three physical crouch entry/exit cycles, final native standing state, `0.961 m` tracked-Y range and 650 accepted direct-locomotion samples. The user reported that the session felt good.
 
-Important remaining gates are deliberately separate: short-range physical X/Z wall/slide comfort with the current rejected-direction prediction filter; low-ceiling stand recovery and tracked-Y correlation; constrained `0.5 m/s` Push/Move validation; tracking-world-yaw and final bob behavior; mirror/focus; interaction lifecycle; and the real-process no-write palm query before collision-resolved gameplay palms are connected.
-
-See [Audit status](docs/AUDIT_STATUS.md) for the finding-by-finding reconciliation and [Current implementation plan](docs/IMPLEMENTATION_PLAN.md) for the active priority order.
+The remaining gates are narrower: capture the Hybrid release-hold interval that PID 25484 missed, exercise blocked-stand/low-ceiling behavior, complete deliberate wall/slide edge checks, validate constrained `0.5 m/s` Push/Move locomotion, then continue with palms/interactions, tracking-world-yaw/bob and mirror/focus work. The real-process no-write palm query is a separate live gate and does not require a headset.
 
 ### Requiem
 
@@ -36,21 +34,27 @@ Requiem will reuse validated game-neutral policy while repeating exact-build res
 
 ### Start here
 
-- [Current audit reconciliation](docs/AUDIT_STATUS.md) — what changed after the Astra audit and what is actually still open.
-- [Current implementation plan](docs/IMPLEMENTATION_PLAN.md) — ordered remaining work and validation gates.
+- [Roadmap](ROADMAP.md) — current feature and validation state plus remaining milestones.
+- [Architecture](ARCHITECTURE.md) — ownership boundaries and integration model.
 - [Design decisions and invariants](docs/DESIGN_DECISIONS.md) — boundaries that should not be reopened without contradictory evidence.
-- [Codex / Sol implementation prompt](docs/CODEX_IMPLEMENTATION_PROMPT.md) — continuation objective that begins from the actual current HEAD.
-- [Complete Astra High audit](docs/audits/ASTRA_HIGH_AUDIT.md) — preserved historical diagnosis, six-phase plan, validation protocol and original Sol prompt.
+- [Headset validation checklist](docs/VR_HEADSET_TEST_CHECKLIST.md) — current Black Plague live/headset gates.
+- [Operational handoff](docs/internal/CODEX_HANDOFF.md) — detailed current engineering checkpoint.
 
 ### Project references
 
-- [Roadmap](ROADMAP.md)
-- [Architecture](ARCHITECTURE.md)
 - [Supported builds](docs/SUPPORTED_BUILDS.md)
 - [Rework porting plan](docs/REWORK_PORTING_PLAN.md)
 - [Black Plague probe notes](docs/BLACK_PLAGUE_PROBE.md)
 - [Black Plague spatial notes](docs/BLACK_PLAGUE_SPATIAL_NOTES.md)
-- [Headset validation checklist](docs/VR_HEADSET_TEST_CHECKLIST.md)
+- [Historical Astra High audit](docs/audits/ASTRA_HIGH_AUDIT.md)
+
+## Next steps
+
+1. Close the remaining focused Black Plague posture edges: Hybrid release-hold capture and blocked-stand/low-ceiling recovery.
+2. Run the already host-tested no-write palm query against a real Black Plague process; if clean, add owned palm shapes and port the proven Rework sweep/refinement/recovery behavior.
+3. Validate the remaining constrained locomotion, deliberate wall/slide, recenter/tracking-loss and yaw/bob comfort gates without reopening the body owner that already has headset evidence.
+4. Continue interaction work through native mechanism state, tool/light geometry, UI/HUD coverage and representative chapter testing.
+5. Start Requiem exact-build research only after the Black Plague backend has a stable playable-alpha boundary.
 
 ## Design principles
 

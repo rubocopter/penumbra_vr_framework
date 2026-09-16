@@ -33,12 +33,12 @@ Validation states are architectural metadata and must be kept distinct:
 
 A build or synthetic test does not imply in-game behavior. A live binary boundary does not imply headset comfort. A successful headset run for one contract does not promote unrelated contracts.
 
-The historical Astra audit and its current reconciliation are documented in:
+The historical Astra audit and the current architectural constraints are documented in:
 
 - [`docs/audits/ASTRA_HIGH_AUDIT.md`](docs/audits/ASTRA_HIGH_AUDIT.md)
-- [`docs/AUDIT_STATUS.md`](docs/AUDIT_STATUS.md)
-- [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md)
 - [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md)
+- [`ROADMAP.md`](ROADMAP.md)
+- [`docs/internal/CODEX_HANDOFF.md`](docs/internal/CODEX_HANDOFF.md)
 
 ## Shared runtime boundary
 
@@ -329,14 +329,14 @@ The current research launcher/probe path is not yet the final production install
 
 ## Current implementation boundary
 
-Do not interpret this architecture document as a request to redesign already-host-tested contracts. The active order is maintained in [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md).
+Do not interpret this architecture document as a request to redesign already-tested contracts. The active order is maintained in [`ROADMAP.md`](ROADMAP.md) and the current engineering checkpoint in [`docs/internal/CODEX_HANDOFF.md`](docs/internal/CODEX_HANDOFF.md).
 
 At the current checkpoint, the principal remaining evidence/implementation boundaries are:
 
-1. successful real-process no-write Black Plague palm query;
-2. focused headset validation of short-X/Z comfort, low-ceiling stand recovery/tracked-Y, constrained locomotion and recenter/tracking-loss;
-3. interaction lifecycle/tool geometry validation;
-4. gameplay collision-resolved palms after the no-write live gate;
-5. mirror/focus, tracking-world-yaw and final body/footstep bob as separate gates;
+1. close the remaining focused Black Plague posture edges after PID 25484: Hybrid release-hold capture and blocked-stand/low-ceiling recovery;
+2. run the real-process no-write Black Plague palm query, then add owned palm shapes and the proven Rework resolver if that gate passes;
+3. finish deliberate wall/slide, constrained locomotion, recenter/tracking-loss and yaw/bob comfort gates;
+4. interaction lifecycle/tool geometry validation;
+5. mirror/focus as a separate presentation gate;
 6. mechanisms, broader UI/gameplay coverage and production deployment;
 7. Requiem exact-build backend research.

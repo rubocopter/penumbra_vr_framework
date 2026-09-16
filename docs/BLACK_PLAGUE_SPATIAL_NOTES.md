@@ -46,8 +46,8 @@ la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
   HMD entre ticks podía seguir avanzando en la dirección que el último solve
   físico acababa de rechazar. El filtro actual transporta esa reconciliación al
   render y elimina solo la componente hacia la dirección rechazada; slide y
-  movimiento de salida se conservan. Esta corrección es todavía host-tested y
-  necesita una nueva prueba con visor. PID 23260
+  movimiento de salida se conservan. PID 25484 aportó evidencia positiva con
+  visor para este camino y el usuario informó de buena sensación general. PID 23260
   confirmó que latch/altura y botón sí llegaban al runtime, pero la salida nativa
   seguía bloqueada por la semántica toggle del dispatch release. PID 24948 mostró
   que compensar con release/segundo press seguía alternando el collider sin
@@ -55,12 +55,12 @@ la cámara nativa; el consumidor BP retenía una muestra corporal de 60 Hz sobre
   `cPlayer::ChangeMoveState` en `0x9C750`; los handlers originales prueban
   crouch=`4`, walk=`0`. El backend actual conserva el desired state de Rework y
   aplica esos estados directamente. El tracking Y continuo y esta adaptación
-  están corregidos y host-tested. El siguiente gate focalizado debe validar a la
-  vez crouch/Y y el nuevo filtro de confort X/Z mediante
-`tools/Start-BlackPlagueRoomScaleValidation.ps1`; no ampliar reversing
-automáticamente.
-Véase el [informe de implementación](internal/TRACKING_BODY_RECONCILIATION.md) y
-[el seguimiento post-push](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
+  están corregidos. PID 25484 registró tres entradas/salidas físicas, estado
+  final de pie, `0.961 m` de rango Y renderizado y 650 muestras aceptadas de
+  locomoción directa. Falta capturar el intervalo Hybrid con la fuente física
+  ya liberada mientras el latch mantiene state `4`, además del stand bloqueado
+  bajo techo y los casos deliberados de pared/slide. No ampliar reversing
+  automáticamente.
 
 ## Player/body/movement/collision: mapa estático e instrumentación
 

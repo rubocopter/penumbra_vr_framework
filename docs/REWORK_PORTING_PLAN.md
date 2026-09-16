@@ -144,7 +144,7 @@ The first shared contract exists to separate **policy** from **native mechanism*
 
 ## Current priority — Black Plague active room-scale validation
 
-The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is adapted to Black Plague's one native tick. PID 28996 exposed the final indexed-state mapping defect in its permission predicate, and PID 8092 supplied headset evidence for the corrected stick/collision route. PID 20520 then exposed two remaining boundaries: the first physical-crouch edge mapping failed to synchronize standing, and short physical X/Z motion could still feel like a pullback. PID 22096 subsequently proved the single-consumption presentation sequence through sustained headset gameplay with zero stereo failures and narrowed the pullback to render-rate prediction continuing briefly into a direction already rejected by the previous physical solve. The current host-tested filter removes only that rejected prediction component while preserving tangential slide and retreat. The corrected Rework latch, explicit Black Plague desired/native stance service, shared tracked-Y composition and this comfort filter are the next focused headset gate.
+The body/collision/adapter mapping milestone is complete enough that more probing should require a concrete contradiction. The shared reconciliation extraction and its default-off Black Plague shadow consumer are live-tested through PID 28172. The bounded physical X/Z request at exact-build RVA `0xD7281` is live-tested through PID 26144 with positional translation still zero. PID 21548 proved that the combined-tick carry correction removed locomotion from in-place head tilt. PID 13672 then headset-exercised render-rate anchor placement and reported the prior continuous shake gone. PID 11804 confirmed that current HMD heading chooses the correct stick direction without recenter, but exposed speed inherited from the hidden signed native body axes. Rework's shared direct `1.5/2.25 m/s` displacement is adapted to Black Plague's one native tick. PID 28996 exposed the final indexed-state mapping defect in its permission predicate, and PID 8092 supplied headset evidence for the corrected stick/collision route. PID 20520 then exposed two remaining boundaries: the first physical-crouch edge mapping failed to synchronize standing, and short physical X/Z motion could still feel like a pullback. PID 22096 subsequently proved the single-consumption presentation sequence through sustained headset gameplay with zero stereo failures and narrowed the pullback to render-rate prediction continuing briefly into a direction already rejected by the previous physical solve. PID 25484 then supplied positive headset evidence for the corrected desired/native crouch path, continuous tracked Y, direct locomotion and the rejected-direction comfort filter. The remaining focused posture work is the uncaptured Hybrid release-hold interval plus blocked-stand/low-ceiling recovery; deliberate wall/slide remains a separate edge gate.
 
 PID 23260 narrowed the crouch failure further. Physical height transitions and the
 button latch both reached shared policy, but the native body stayed at `0.95 m`
@@ -154,12 +154,13 @@ inside those callbacks was still insufficient: the native body alternated
 between standing/crouched shapes (`native_entries=14`, `native_exits=14`) while
 the game did not hold the expected crouch/stealth state. Exact-build decoding
 identifies `cPlayer::ChangeMoveState` at `0x9C750`; Black Plague's own normal
-crouch handlers prove state `4` is crouch and `0` is walk. The current
-host-tested backend therefore ports Rework's actual ownership model: shared
-runtime owns one desired state and the existing game-thread backend applies it
-directly with `ChangeMoveState(4/0)`. Native body replacement and clearance
-remain authoritative. Release compilation, exact-image verification and all 30
-host tests pass; the next headset gate must validate stable state-4 crouch/stealth.
+crouch handlers prove state `4` is crouch and `0` is walk. The current backend
+therefore ports Rework's actual ownership model: shared runtime owns one desired
+state and the existing game-thread backend applies it directly with
+`ChangeMoveState(4/0)`. Native body replacement and clearance remain
+authoritative. PID 25484 provides focused headset evidence for stable state-4
+crouch/stealth, physical entry/exit, final standing state and tracked Y; the
+Hybrid release-hold and blocked-stand/low-ceiling edges remain open.
 
 Current order:
 
@@ -291,19 +292,13 @@ For any reported regression, compare:
 
 The next Black Plague body work should consume existing evidence, not restart it.
 
-## Historical tracking/body extraction checkpoint (2026-09-11)
+## Tracking/body extraction checkpoint
 
-The remaining plan/rebase, physical rejection correction and native anchor carry
-phases had moved from `OvertureBackend` to `vr_locomotion.*`. At this dated
-checkpoint the BP consumer was shadow-only and default-off and could not inject
-a physical request. Portable
-tests and the Overture differential trace passed during implementation. Post-push
-Windows CI then passed root metadata/Debug/Release tests and the autonomous
-Overture Release regression gate. The exact Rework sequence, ownership table,
-API and implementation-time test results remain in
-[the internal report](internal/TRACKING_BODY_RECONCILIATION.md); the post-push
-host result and next live gate are recorded in
-[the validation follow-up](internal/TRACKING_BODY_VALIDATION_FOLLOWUP.md).
+The plan/rebase, physical rejection correction and native anchor carry phases
+have moved from `OvertureBackend` to `vr_locomotion.*`. Windows host gates and
+the autonomous Overture Release regression pass. Black Plague subsequently
+live-tested the shadow path, the bounded `0xD7281` request and the combined
+room-scale/direct-locomotion transaction.
 
 Subsequent work live-tested that shadow path in PID 28172 and the separate
 default-off `0xD7281` bounded X/Z request in PID 26144. PID 21548 proved the

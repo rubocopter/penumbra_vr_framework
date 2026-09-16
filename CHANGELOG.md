@@ -1,5 +1,18 @@
 # Changelog
 
+- 2026-09-16: PID 25484 supplied focused Black Plague headset evidence for the
+  current crouch/Y and short-range room-scale candidate. The run produced 12,858
+  presentation frames with zero stereo failures, 2,477 meaningful body samples
+  (`2407 free / 43 blocked / 27 partial`), three physical crouch entries/exits,
+  final native move-state `0` with the `1.65 m` body, `0.961 m` tracked-Y range
+  and 650 accepted direct-locomotion samples. The user reported that the session
+  felt good. The run also captured stable button-only crouch and a combined
+  Hybrid state, but not the later `physical=0 + latch=1 + state 4` release-hold
+  sample; that subgate plus blocked-stand/low-ceiling and deliberate wall/slide
+  edges remain open. Documentation was consolidated around the current roadmap,
+  architecture, handoffs and validation checklist; superseded post-audit plans
+  and tracking/body implementation snapshots were removed.
+
 - 2026-09-14: PID 22096 supplied the first positive headset run for the
   presentation-sequence fix in `7f84235`: 15,990 logged frames, 15,887 gameplay
   frames and zero stereo/compositor failures after menu-to-gameplay transition.

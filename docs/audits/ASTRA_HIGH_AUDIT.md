@@ -9,7 +9,7 @@ This directory preserves the complete Astra High technical audit that was delive
 - Rework behavioral reference: `23c890f7dbd06b939be9951d282e6e948d9a6623`
 - The audit itself made no source/documentation/configuration changes.
 
-The audit is intentionally preserved as a historical snapshot. Several findings were subsequently implemented or narrowed by new evidence. **Do not use the historical plan as a current unchecked task list.** Read [`../AUDIT_STATUS.md`](../AUDIT_STATUS.md) for the current reconciliation and [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) for the active plan.
+The audit is intentionally preserved as a historical snapshot. Several findings were subsequently implemented or narrowed by new evidence. **Do not use the historical plan as a current unchecked task list.** Use [`../../ROADMAP.md`](../../ROADMAP.md), [`../DESIGN_DECISIONS.md`](../DESIGN_DECISIONS.md) and [`../internal/CODEX_HANDOFF.md`](../internal/CODEX_HANDOFF.md) for current state.
 
 ## Complete audit
 
@@ -23,12 +23,11 @@ The original handoff is split only to keep the repository documents readable. Re
 
 ## Current continuation documents
 
-Use these after reading the historical audit:
+Use these for current work:
 
-- [`../AUDIT_STATUS.md`](../AUDIT_STATUS.md) — finding-by-finding reconciliation against the post-audit repository state.
-- [`../IMPLEMENTATION_PLAN.md`](../IMPLEMENTATION_PLAN.md) — current priority order and remaining evidence/implementation gates.
+- [`../../ROADMAP.md`](../../ROADMAP.md) — current feature/validation state and remaining milestones.
 - [`../DESIGN_DECISIONS.md`](../DESIGN_DECISIONS.md) — invariants and decisions that should not be reopened without contradictory evidence.
-- [`../CODEX_IMPLEMENTATION_PROMPT.md`](../CODEX_IMPLEMENTATION_PROMPT.md) — current Codex/Sol objective, written to start from the actual HEAD rather than replay the historical audit.
+- [`../internal/CODEX_HANDOFF.md`](../internal/CODEX_HANDOFF.md) — current operational checkpoint.
 
 ## Reading rule for future agents
 

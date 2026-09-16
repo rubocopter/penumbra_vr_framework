@@ -116,10 +116,16 @@ stable button-only crouch and Hybrid latch. PID 22096 then sustained the current
 presentation path through gameplay with zero stereo failures and exposed a more
 specific short-X/Z comfort boundary: render-rate prediction could continue into
 the direction rejected by the previous physical solve before the next body tick
-snapped back. The current host-tested filter removes only that rejected
-prediction component, preserving tangential slide and motion away from the wall.
-Release/Debug/SDK-less Release all pass 34/34 host tests; blocked-stand/low-ceiling/Y-correlation edges and the new
-comfort filter still require a fresh headset run. Tracking-world-yaw turn
+snapped back. The filter removes only that rejected prediction component,
+preserving tangential slide and motion away from the wall. PID 25484 then
+supplied focused headset evidence: 12,858 presentation frames with zero stereo
+failures, 2,477 meaningful body samples (`2407 free / 43 blocked / 27 partial`),
+physical crouch entries/exits `3/3`, final native standing state, `0.961 m`
+tracked-Y range and 650 accepted direct-locomotion samples. The user reported
+that the session felt good. The automatic focused gate remains incomplete only
+where the log failed to capture the Hybrid release-hold interval after the
+combined physical+latch state; blocked-stand/low-ceiling and deliberate
+wall/slide edges remain separate validation work. Tracking-world-yaw turn
 ownership remains separate.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
@@ -183,7 +189,9 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
 - [x] Implement Rework-derived physical crouch policy and explicit desired/native stance synchronization through Black Plague's existing input owner
-- [ ] Headset-validate remaining blocked-stand/low-ceiling crouch edges, explicit continuous tracked-Y correlation and short-range X/Z wall/slide comfort
+- [x] Headset-validate continuous tracked-Y correlation and focused short-range X/Z comfort (PID 25484)
+- [ ] Capture the remaining Hybrid release-hold interval and blocked-stand/low-ceiling crouch recovery
+- [ ] Exercise deliberate wall/slide edge cases for the current rejected-direction prediction filter
 - [ ] Validate long-body interaction and mechanism-specific states
 - [ ] Inventory, notes, menus, HUD and subtitles
 - [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy

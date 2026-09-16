@@ -129,7 +129,8 @@ real crouch/stealth state. Exact-build decoding identifies
 `cPlayer::ChangeMoveState` at `0x9C750`; the original handlers prove state `4`
 is crouch, state `0` is walk and state `3` is jump.
 
-The current correction is implemented and **host-tested** only. Shared
+The current correction is implemented and now has focused headset evidence from
+PID 25484 (2026-09-16). Shared
 `VrPhysicalCrouchPolicy` owns Rework's button latch, tracked-height baseline,
 `PhysicalCrouchDepth`, plausible `(0.90, 2.20) m` range and `0.08 m` hysteresis.
 The existing Black Plague game-thread owner applies that desired state directly
@@ -138,12 +139,17 @@ stand, and reports desired move-state/body correlation. It adds no hook.
 Rendering now uses shared `VrTrackingSpace` for
 continuous HMD Y and `HeightOffset`, with the reconciled body position as the
 feet anchor; a physical crouch does not also inherit the native full camera
-drop. The next headset gate is the focused run in
-`tools/Start-BlackPlagueRoomScaleValidation.ps1`. It must prove two correlated
-physical entry/exit cycles with move-state `4/0` and `0.95/1.65 m` shapes, a
-stable button-only crouch/stealth interval, Hybrid composition, continuous Y,
-final native standing state, short X/Z comfort and no regression of the PID
-8092 stick path. Keep tracking-world-yaw turn ownership and final
+drop. PID 25484 recorded calibrated standing, three physical crouch entries and
+three exits, native move-state/body correlation, final state `0` with the
+`1.65 m` body and VR ownership released, a stable button-only state-`4` crouch,
+`0.961 m` of tracked render-Y range, 650 accepted direct-locomotion samples and
+5,488 active room-scale render samples. The user reported that the session felt
+good. The run also captured the Hybrid combined state (`physical=1`, latch=1,
+state `4`), but no later periodic sample with the physical source released while
+the latch remained set, so that one Hybrid release-hold subgate remains open.
+Blocked-stand/low-ceiling behavior also remains a separate headset edge case.
+Do not rerun the whole focused gate merely to re-prove the already captured
+crouch/Y/stick evidence. Keep tracking-world-yaw turn ownership and final
 footstep/body-bob behavior as separate validation gates.
 
 PID 22096 then supplied positive headset evidence for the presentation owner in
@@ -157,9 +163,12 @@ Rework presents the reconciled horizontal anchor rather than unvalidated raw
 X/Z. Black Plague still needs render-rate continuation between its ~60 Hz body
 ticks, so the current Framework change carries the last physical reconciliation
 to render and removes only the prediction component continuing into the last
-rejected direction. Tangential motion and retreat are preserved. This filter is
-**host-tested only**; do not close the PID 20520 comfort report until a fresh
-headset run confirms short motion, wall block and slide without pullback.
+rejected direction. Tangential motion and retreat are preserved. PID 25484
+headset-exercised this filter with 2,477 meaningful body samples (`2407 free /
+43 blocked / 27 partial`) and the user reported that the session felt good.
+Treat this as positive headset comfort evidence for the filter while keeping
+deliberate wall/slide edge cases and the more specific PID 20520 pullback
+symptom distinct unless a run explicitly checks them.
 
 ## Black Plague constraints
 

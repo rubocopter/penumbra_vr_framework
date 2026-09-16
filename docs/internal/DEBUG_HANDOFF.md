@@ -2,7 +2,26 @@
 
 This file prevents repeated symptom-level fixes from replacing evidence-backed investigation. Read it before revisiting any of these issues.
 
-## Current offline checkpoint (2026-09-14)
+## Current headset/offline checkpoint (2026-09-16)
+
+PID 25484 is the newest focused headset evidence. The user reported that the
+session felt good. `Analyze-BlackPlaguePresentation.ps1 -CollisionComfort`
+reported 12,949 frames, 12,859 gameplay frames, 12,858 presentation frames,
+zero stereo failures and 2,477 body samples (`2407 free / 43 blocked / 27
+partial`) across 5,488 active room-scale render samples. Crouch telemetry
+calibrated standing, reached physical entries/exits `3/3`, native entries/exits
+`7/7`, ended standing in move-state `0` with VR ownership released, captured a
+stable button-only state-`4` interval and covered `0.961 m` of continuous tracked
+render Y. Direct metric locomotion was accepted in 650 body samples. This is
+positive headset evidence for the current crouch/Y, direct-locomotion and
+rejected-direction comfort path.
+
+The focused helper still cannot claim a complete automatic pass from this log:
+the Hybrid combined state was captured once, but there is no later periodic
+sample with `physical=0 button_latched=1 ... native_state=4` after that combined
+state. Treat the Hybrid release-hold interval as missing evidence, not as a
+demonstrated gameplay failure. Blocked-stand/low-ceiling and yaw/bob remain
+separate gates.
 
 PID 22096 is the current presentation evidence. The `7f84235` run crossed
 menu -> gameplay and produced 15,990 logged frames, 15,887 gameplay frames and
@@ -14,8 +33,11 @@ physical samples (`1755 free / 215 blocked / 90 partial`) and repeated render
 prediction resets around a subset of rejected collision solves. The active
 working-tree fix carries the last physical reconciliation into render and
 projects out only the prediction component that continues into the rejected
-direction. This preserves tangential slide and retreat. It is **host-tested
-only** until a new headset run repeats short motion, direct wall block and slide.
+direction. This preserves tangential slide and retreat. PID 25484 subsequently
+headset-exercised the filter with positive subjective comfort and the collision
+sample distribution above. Keep deliberate wall/slide and the exact PID 20520
+pullback reproduction as narrower follow-up evidence rather than treating the
+filter as host-only.
 
 PID 6016 showed that `ca099ca` did not close the compositor regression. The
 transition log contained one successful tracked-menu submission, then gameplay,
@@ -58,8 +80,10 @@ interaction generation checks, comfort filter and partial lifecycle ledger are
 host-tested only. Overture `-Full` passes Release/LAA and 289/289 tracking
 checks.
 
-Remaining posture edge cases, short physical-motion comfort, yaw, palms and lifecycle
-retain their documented validation states until fresh live evidence covers them.
+Remaining Hybrid release-hold, blocked-stand/low-ceiling posture edges, yaw,
+palms and lifecycle retain their documented validation states until fresh live
+evidence covers them. Short physical-motion comfort now has positive PID 25484
+headset evidence, without implying every wall/slide edge was exercised.
 Static exact-image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, its nine stack
 arguments, callback slot, legacy contact layout, body matrix/shape accessors,
 CreateBoxShape, shape user count and destruction route. A default-off no-write

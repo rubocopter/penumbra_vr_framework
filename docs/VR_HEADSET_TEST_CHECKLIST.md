@@ -1,6 +1,6 @@
 # Black Plague — checklist de validación con visor
 
-Actualizado: 2026-09-14.
+Actualizado: 2026-09-16.
 
 ## Gate del candidato Release
 
@@ -76,14 +76,32 @@ validación visual/contacto de la futura palma completa.
 
 ### Build preparada para la siguiente sesión
 
+PID 25484 (2026-09-16) ya ha ejercitado el candidato actual con visor. El
+análisis cerrado registró 12.949 frames, 12.859 de gameplay, 12.858 de
+presentación y cero fallos estéreo; además contó 2.477 muestras de cuerpo
+(`2407 free / 43 blocked / 27 partial`) y 5.488 frames activos de room-scale.
+La telemetría de crouch obtuvo baseline válido, `3/3` entradas/salidas físicas,
+estado final `0` con body `1.65 m` y ownership VR liberado, toggle por botón
+estable en state `4`, `0.961 m` de recorrido Y renderizado y 650 muestras de
+locomoción directa aceptada. El usuario indicó que la sesión se sentía bien.
+
+No hace falta repetir toda la tanda para volver a demostrar esos puntos. El log
+sí capturó el estado Hybrid combinado (`physical=1`, latch=1, state `4`), pero no
+capturó después un sample periódico con la fuente física ya liberada y el latch
+todavía activo. Por tanto, el subgate Hybrid release-hold sigue pendiente de una
+repetición corta y dirigida. El stand bloqueado/techo bajo y los gates separados
+de yaw/bob siguen pendientes igualmente.
+
 Los candidatos `3333be1` y `ca099ca` quedan descartados por error 108. `7f84235`
 es ahora el baseline de presentación con evidencia positiva de visor en PID
 22096: menú -> gameplay sostenido sin fallos estéreo. El candidato actual añade
 encima el filtro de confort X/Z: la reconciliación física del último tick viaja
 al renderer y la predicción entre ticks elimina únicamente la componente que
 continúa hacia la dirección rechazada, preservando slide tangencial y movimiento
-de salida. Este cambio de confort sigue **host-tested** hasta repetir pared,
-slide y movimientos físicos de `5–10 cm` con visor.
+de salida. PID 25484 aporta evidencia positiva de visor y confort subjetivo para
+este cambio; pared/slide deliberados y la reproducción específica del antiguo
+pullback siguen siendo evidencias más estrechas si se necesitan para cerrar esos
+casos por separado.
 
 El candidato de prueba con visor se genera directamente en
 `build\bin\Release`. No hace falta crear una release pública ni copiar DLLs al
