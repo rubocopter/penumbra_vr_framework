@@ -1,5 +1,16 @@
 # Changelog
 
+- 2026-09-16: PID 30032 reached the new owned-palm live gate and failed at its
+  creation-validation boundary before resolver execution. Review against the
+  proven HPL1/Rework implementation exposed an invalid Framework assumption:
+  `iCollideShape` starts with zero users and `CreateBoxShape` does not increment
+  that count; a body increments it only when adopting the shape. The host fixture
+  had incorrectly initialized owned shapes with one user, masking the mismatch.
+  The owned-palm boundary now requires the exact box type, world and vtable with
+  `user_count=0`, and the host fixture mirrors that native lifecycle. A fresh
+  process is required to rerun the live gate because the injected probe DLL
+  remains resident after detach.
+
 - 2026-09-16: PID 28412 live-tested the default-off Black Plague no-write palm
   query on the supported build: one callback, eight contacts, unchanged native
   memory and continued normal game ticking. The next isolated stage is now

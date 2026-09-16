@@ -256,10 +256,15 @@ struct GameplaySnapshot {
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         shape = nullptr;
     }
+    // Rework/HPL1 creates standalone collision shapes with zero users. A body
+    // increments the count when it adopts a shape; this diagnostic palm never
+    // belongs to a body, so requiring a positive count rejects a valid freshly
+    // created box.
     if (shape == nullptr ||
         Read<void*>(shape, 0) != image + kCollideShapeNewtonVtable ||
         Read<void*>(shape, kShapeWorldOffset) != world ||
-        Read<std::int32_t>(shape, kShapeUserCountOffset) <= 0) {
+        Read<std::int32_t>(shape, kShapeUserCountOffset) != 0 ||
+        Read<std::int32_t>(shape, kShapeTypeOffset) != 1) {
         if (shape != nullptr) {
             g_owned_palm_shape = {image, world, shape};
             static_cast<void>(SafeDestroyOwnedPalmShape(&telemetry));

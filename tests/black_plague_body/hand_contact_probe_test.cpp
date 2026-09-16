@@ -135,7 +135,8 @@ void* __fastcall FakeCreateBoxShape(
     std::memcpy(g_fake_palm_shape + 0x08, &size->y, sizeof(float));
     std::memcpy(g_fake_palm_shape + 0x0C, &size->z, sizeof(float));
     *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeTypeOffset) = 1;
-    *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeUserCountOffset) = 1;
+    // HPL1 CreateBoxShape returns a standalone shape with no body users.
+    *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeUserCountOffset) = 0;
     *reinterpret_cast<void**>(g_fake_palm_shape + kShapeWorldOffset) = world;
     return g_fake_palm_shape;
 }
@@ -351,6 +352,7 @@ int main() {
         !resolver.shape_destroyed || resolver.world_replaced ||
         resolver.gameplay_memory_changed || resolver.create_count != 1 ||
         resolver.destroy_count != 1 || resolver.query_count < 2 ||
+        resolver.shape_user_count != 0 || resolver.shape_type != 1 ||
         g_create_count.load(std::memory_order_relaxed) != 1 ||
         g_destroy_count.load(std::memory_order_relaxed) != 1 ||
         !NearlyEqual(resolver.shape_size[0],

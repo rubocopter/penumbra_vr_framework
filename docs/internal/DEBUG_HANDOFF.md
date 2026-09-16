@@ -434,6 +434,16 @@ gate should resolved controller palms be connected, with character/held-body
 exclusion validated separately. Headset-test only small free bodies after those
 gates and confirm no player displacement or normal-world-collision regression.
 
+PID 30032 reached this gate and failed at the creation-validation boundary before
+resolver execution. Review against Rework/HPL1 exposed the host assumption that
+caused the false negative: `iCollideShape` starts at zero users and
+`CreateBoxShape` does not increment it; bodies increment the count only when
+they adopt a shape. The host fixture had used one user and therefore failed to
+model the native standalone lifecycle. The boundary and fixture now require
+`user_count=0` plus exact box type/world/vtable identity. This correction is
+host-tested only until the gate is rerun in a fresh Black Plague process; the
+probe DLL remains resident after detach.
+
 ## 6. Long bars, doors and mechanisms
 
 ### Established facts
