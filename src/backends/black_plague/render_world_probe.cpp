@@ -1,5 +1,6 @@
 #include "render_world_probe.hpp"
 #include "black_plague_body_adapter.hpp"
+#include "hand_contact_probe.hpp"
 
 #include "camera_matrix_override.hpp"
 #include "opengl_eye_scissor.hpp"
@@ -836,14 +837,29 @@ void __fastcall HookedUpdateRenderList(
     if (g_stereo_persistent.load(std::memory_order_acquire)) {
         const auto frame=ReadNativeControllerFrame();
         std::array<graphics::TrackedHandVisual,2> hands{};
+        std::array<runtime::VrMatrix44,2> raw_palms{};
+        std::array<bool,2> raw_palm_valid{};
+        runtime::VrMatrix44 head_pose{};
+        const bool head_valid=TrackedHeadWorldPose(head_pose);
         if (frame.focused) for (std::size_t i=0;i<hands.size();++i) {
             auto& hand=hands[i];
             std::array<float,3> velocity{},angular{};
-            hand.visible=ControllerWorldPose(frame.hands[i].grip,hand.palm,velocity,angular);
+            raw_palm_valid[i]=ControllerWorldPose(
+                frame.hands[i].grip,raw_palms[i],velocity,angular);
+            hand.visible=raw_palm_valid[i];
+            hand.palm=raw_palms[i];
             hand.ray=ControllerWorldPose(frame.hands[i].aim,hand.aim,velocity,angular) &&
                 i==(frame.interact_source==runtime::VrHand::left ? 0U : 1U);
             if (frame.hands[i].skeleton_valid) hand.curl=frame.hands[i].finger_curl;
             else hand.curl.fill(frame.input.state.interact.pressed && hand.ray ? 0.8F : 0.1F);
+        }
+        PublishGameplayPalmTracking(
+            raw_palms,raw_palm_valid,head_pose,head_valid);
+        for (std::size_t i=0;i<hands.size();++i) {
+            runtime::VrMatrix44 resolved{};
+            if (hands[i].visible && ReadGameplayPalmPose(i,resolved)) {
+                hands[i].palm=resolved;
+            }
         }
         // Hands are optional decoration: never interrupt the world/compositor
         // if the fixed-function compatibility path is unavailable.

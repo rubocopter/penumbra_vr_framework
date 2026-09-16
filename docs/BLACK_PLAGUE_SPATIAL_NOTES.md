@@ -337,14 +337,17 @@ cabecera del shape. El harness sintético prueba espacio libre, callback con dos
 contactos y rechazo de una mutación nativa. PID 28412 cerró este gate en proceso
 real con un callback, ocho contactos y `native_memory_changed=false`.
 
-El siguiente nivel sigue aislado de gameplay: el backend ya crea, reutiliza y
-destruye un box de palma propio mediante la ABI exacta fijada y alimenta sus
-contactos al resolver común portado de Rework. Esa lifecycle/resolution está
-live-tested en PID 8644 detrás de `--validate-palm-resolver`: un create, reuse,
-seis queries y un destroy equilibrados, `user_count=0` y sin cambios en la
-memoria gameplay seleccionada. La pose resuelta todavía no se publica a las
-manos del jugador y las exclusiones de character/held-body siguen requiriendo
-evidencia separada.
+El backend crea, reutiliza y destruye un box de palma propio mediante la ABI
+exacta fijada y alimenta sus contactos al resolver común portado de Rework. Esa
+lifecycle/resolution está live-tested en PID 8644 detrás de
+`--validate-palm-resolver`: un create, reuse, seis queries y un destroy
+equilibrados, `user_count=0` y sin cambios en la memoria gameplay seleccionada.
+La integración posterior ya publica el body sujeto por cada mano en `skip_body`
+y entrega el grip resuelto a manos visibles, interacción física y herramientas;
+el aim continúa usando tracking raw. Esa conexión gameplay es host-tested.
+PID 23000 llegó a ejercitarla con visor, pero la misma sesión tuvo FPS muy bajos
+y pérdida del controlador derecho, así que no sirve para promover contacto,
+rendimiento ni sensación de agarre a headset-validated.
 
 ### Articulación de dedos: BP no debe degradarse
 
@@ -375,6 +378,9 @@ Un fallo deja el comportamiento nativo y se registra; no invalida el estéreo.
 | Grab Update | slot 27D0D4 → ABA90 | Solo cuerpos adquiridos por un edge VR entran en seguimiento de palma |
 | Grab Enter / Leave | slots 27D12C / 27D130 → AC900 / AA4C0 | Se ejecutan siempre las transiciones originales |
 | Grab StopInteract | slot 27D0E4 → A9FD0 | Cambio de estado original para soltar desde el tick de juego |
+| Move Update | slot 27CF74 → AA690 | Cuerpos libres poseídos por VR siguen el contacto elegido con fuerza derivada de Rework; mecanismos permanecen nativos |
+| Move Enter / Leave | slots 27CFCC / 27CFD0 → AAC80 / AAED0 | La transición nativa se conserva y la adquisición VR solo ocurre para cuerpo libre elegible |
+| Move StopInteract | slot 27CF84 → AA030 | La salida sigue usando el cambio de estado nativo |
 | Normal Update | slot 27D13C → AD6C0 | Refresca picking antes del press; no integra tiempo |
 | Entity SetMatrix | CA120 | Copia matriz local y notifica transformación; callbacks actualizan Newton y escena |
 | Body GetJointNum | CCF00 | Se excluyen cuerpos con joints |
@@ -383,10 +389,13 @@ Un fallo deja el comportamiento nativo y se registra; no invalida el estéreo.
 | Body gravity | 19C590 | Slot +BC; la transición nativa conserva/restaura el estado previo |
 | Body CollideCharacter | campo +3C8 | Constructor CD877; mundo D4952; rayo D4E0E; contactos Newton 19D2D0/19D2E4 |
 
-Player: estado +2BC (Normal=0, Grab=6), vector de estados +2C4.
+Player: estado +2BC (Normal=0, Move=2, Grab=6), vector de estados +2C4.
 Grab state: player +10, contacto +14/+18/+1C, cuerpo +20, pick-at-point +E1.
 Las escrituras del contacto local están en ACBF0/ACBF6/ACBFF, después de invertir
 la matriz del cuerpo y transformar el punto seleccionado.
+Move state: player +10, contacto local +38/+3C/+40 y cuerpo seleccionado +54.
+Las escrituras del contacto están en AAE94/AAE9A/AAEA0 y AA6C5 transforma ese
+punto durante Update; el verificador fija esta ruta separadamente de Grab.
 Body: vtable 292C08, matriz local +34, padre nodo +10, padre entidad +330,
 masa Newton +434. Se rechazan padres, joints y masa no positiva/no finita.
 
@@ -400,10 +409,16 @@ sintética cubre restauración tanto de `true` como de un `false` definido por m
 
 Black Plague no contiene el `CollidePlayer` añadido posteriormente en el Rework:
 el filtro disponible afecta a cualquier character, no solo al jugador. Es una
-protección conservadora durante el agarre y todavía necesita prueba en el motor
-real. Tampoco existe colisión de palmas. Los cuerpos libres siguen la palma con
-SetMatrix nativo; puertas, palancas y estados Push/Move conservan su mecánica
-nativa. El rayo secundario de examinar durante Grab sigue pendiente.
+protección conservadora durante el agarre y todavía necesita prueba limpia en el
+motor real. `Grab=6` mantiene el seguimiento rígido de cuerpos libres con
+SetMatrix nativo. La observación de que numerosos props quedaban lejos de la
+mano mientras algunas tablas largas se comportaban mejor llevó a separar
+`Move=2`: los cuerpos libres de esa ruta conservan el punto de contacto realmente
+seleccionado y lo llevan hacia la palma mediante la fuerza física derivada de
+`cPlayerState_Move_VR` de Rework. Los cuerpos con joints, puertas, palancas y
+otros mecanismos conservan su mecánica nativa. La colisión de palmas ya está
+conectada host-side al grip resuelto, pero PID 23000 fue inconcluso para visor por
+FPS/controlador. El rayo secundario de examinar durante Grab sigue pendiente.
 
 La liberación ya no usa una única lectura instantánea del mando. Conserva las
 cinco últimas muestras finitas y aplica la mediana por componente; con menos de
@@ -485,7 +500,11 @@ de crouch que corrigen esas fronteras son host-tested y necesitan visor.
 
 La ABI/contactos/lifetime base de shapes BP ya está demostrada de forma estática.
 PID 28412 live-tested el diagnóstico sin escrituras y PID 8644 live-tested el
-shape de palma propio más el resolver Rework aislado. Siguen pendientes la
-conexión a manos reales, exclusiones character/held-body, herramientas
-definitivas y mecanismos articulados; el gate live no implica validación con
-visor ni soporte.
+shape de palma propio más el resolver Rework aislado. El binario inicializado
+fija ahora además dos filtros independientes de `D4830`: con
+`collideCharacter=false` se descartan los cuerpos de personaje y `skip_body`
+descarta exactamente el cuerpo suministrado. El harness host verifica que el
+resolver usa ese contrato. Sigue pendiente publicar por mano el cuerpo realmente
+sostenido y conectar las manos reales; herramientas definitivas y mecanismos
+articulados continúan separados, y el gate live no implica validación con visor
+ni soporte.

@@ -179,8 +179,18 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
     Rework sweep/refinement/recovery resolver behind a default-off gate
   - [x] Live-test `--validate-palm-resolver` (PID 8644: create/reuse/query/
     destroy balanced, `user_count=0`, gameplay memory unchanged)
-  - [ ] Validate character/held-body exclusion, then wire resolved palms into
-    tracked gameplay interaction without folding mechanism bodies into this path
+  - [x] Pin and host-test Black Plague's independent character/`skip_body`
+    filters at `0xD4830`; `collideCharacter=false` rejects all character bodies
+    while `skip_body` rejects exactly one body, matching Rework's query contract
+  - [x] Publish the owning held body per hand and wire resolved palms into
+    tracked gameplay hands/interaction while keeping aim on raw tracking
+  - [x] Host-test distinct Black Plague interaction ownership: `Grab=6` keeps
+    rigid palm-relative free-body placement; free-body `Move=2` preserves the
+    picked contact point and follows the palm with the Rework-derived force path;
+    jointed/mechanism bodies remain native
+  - [ ] Headset-validate palm contact plus `Grab=6` / `Move=2` placement after a
+    clean reboot and compare palm-collision on/off frame pacing; PID 23000 is
+    inconclusive because the run also had severe FPS loss and a controller drop
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership

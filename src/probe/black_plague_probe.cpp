@@ -305,12 +305,34 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     }
     if (frame_number%300==0) {
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
-        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu contact_reach_m=0.180",
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu contact_reach_m=0.180",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
             static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs),
             static_cast<unsigned long long>(spatial.grabs_acquired),static_cast<unsigned long long>(spatial.grabs_released),
+            static_cast<unsigned long long>(spatial.moves_acquired),static_cast<unsigned long long>(spatial.moves_released),
             static_cast<unsigned long long>(spatial.guarded_releases),static_cast<unsigned long long>(spatial.collision_restore_failures),
             static_cast<unsigned long long>(spatial.contact_rays));
+        const auto palms=penumbra_vr::backends::black_plague::
+            ConsumeGameplayPalmResolverTelemetry();
+        const char* palm_source="disabled";
+        if (palms.source == penumbra_vr::backends::black_plague::
+                GameplayPalmResolverRequestSource::environment) palm_source="environment";
+        else if (palms.source == penumbra_vr::backends::black_plague::
+                GameplayPalmResolverRequestSource::mutex) palm_source="mutex";
+        penumbra_vr::probe::WriteLog(
+            "palm_collision enabled=%u source=%s samples=%llu published=%llu queries=%llu contacts=%llu constrained=%llu held_body_skips=%llu stale_tracking=%llu failures=%llu creates=%llu destroys=%llu world_replacements=%llu",
+            palms.enabled ? 1U : 0U,palm_source,
+            static_cast<unsigned long long>(palms.samples),
+            static_cast<unsigned long long>(palms.published_poses),
+            static_cast<unsigned long long>(palms.queries),
+            static_cast<unsigned long long>(palms.contacts),
+            static_cast<unsigned long long>(palms.constrained_samples),
+            static_cast<unsigned long long>(palms.held_body_skips),
+            static_cast<unsigned long long>(palms.stale_tracking_samples),
+            static_cast<unsigned long long>(palms.query_failures),
+            static_cast<unsigned long long>(palms.shape_creates),
+            static_cast<unsigned long long>(palms.shape_destroys),
+            static_cast<unsigned long long>(palms.world_replacements));
     }
     const auto timing=penumbra_vr::backends::black_plague::ConsumeNativeUpdateTiming();
     if (timing.ready) penumbra_vr::probe::WriteLog(

@@ -177,7 +177,11 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   synthetic clear/contact/mutation harness passes. PID 28412 live-tested that
   query with one callback, eight contacts and no selected native-memory change.
   The successor owned-shape/resolver path is live-tested in PID 8644 behind
-  `--validate-palm-resolver` and remains disconnected from gameplay hands.
+  `--validate-palm-resolver`. The subsequent gameplay path is host-tested: it
+  publishes the held body per hand, substitutes the resolved grip for hands,
+  physical interaction and tools, and leaves aim on raw tracking. PID 23000 is
+  inconclusive for headset promotion because severe FPS loss and a right-hand
+  controller dropout occurred during that same session.
 - PID 21548 reran the corrected active room-scale path and passed its complete
   automatic gate: queued/consumed/injected/matched were `201/201`, all four
   collision outcomes were observed, crouch/stand recovery passed and in-place
@@ -692,8 +696,17 @@ query/callback boundary and PID 28412 live-tested its no-write diagnostic. The
 backend-owned palm shape lifecycle and the game-neutral Rework resolver are
 live-tested in PID 8644 behind `--validate-palm-resolver`; the gate creates,
 reuses and destroys the shape without publishing a resolved gameplay hand pose.
-It still needs separate character/held-body exclusion evidence and tracked-hand
-integration before becoming a gameplay feature.
+The initialized exact-build image now also pins the two exclusion branches used
+by Rework: `collideCharacter=false` skips every body whose character byte is set,
+while the fourth argument independently skips exactly one `skip_body`. The host
+resolver harness verifies Black Plague calls that ABI with character collision
+disabled and the supplied skip body. The gameplay integration now publishes the
+current held body per hand and feeds the resolved grip to gameplay consumers.
+Supported-image work also separated action-state `Move=2` from `Grab=6`: free
+Move bodies retain the native picked contact and follow the resolved palm using
+Rework's physical-force behavior, while jointed/mechanism bodies remain native.
+The exact-image verifier and synthetic interaction tests pin that ownership. The
+gameplay path remains host-tested pending a clean headset run.
 
 Rework's semantic haptic profiles are also Framework-owned in
 `vr_haptics.hpp`, including strength clamping/scaling and per-event cooldowns.
@@ -723,9 +736,11 @@ mine-gallery EFX parameter set, including echo, modulation and room-rolloff
 fields. This strengthens the offline reference; Black Plague/Requiem audio hook
 integration still requires game-specific evidence.
 
-1. validate character/body and held-body exclusion, then connect the already
-   live-tested resolver to tracked palms and headset-test representative contact;
-2. jointed mechanisms / doors / levers through native mechanism state;
+1. clean-reboot headset A/B with palm collision off/on, verify normal FPS and
+   both controllers, then exercise representative palm contact and both hands;
+2. verify several small/free props that previously floated, long wooden bars or
+   tables, and one jointed mechanism across the separate `Grab=6` / `Move=2`
+   ownership paths;
 3. definitive per-game tool/glowstick geometry/profile and headset validation;
 4. inventory, notes, menus, HUD and subtitles;
 5. comfort/haptics and representative chapter-level validation.
@@ -807,21 +822,22 @@ Keep states distinct:
 
 Compilation and CTest do not imply live or headset validation.
 
-Current root validation count is 30 CTest tests in the full configured suite,
-including the shared VR settings editor/store and Black Plague capability-map
-regressions. The hosted SDK-less CI executes the established suite with the
-real-driver `opengl_eye_targets` test excluded.
+Current root validation count is 34 CTest tests in the full configured suite.
+The hosted SDK-less CI executes 33 of them with the real-driver
+`opengl_eye_targets` test excluded.
 Overture retains its 289 historical `VRTrackingTest` checks plus
 shader/visual/texture/LAA gates, now also exercised by the dedicated
 `Overture Release regression` CI job. The latest complete local offline result
-on 2026-09-12 passed the full Release build and all **30/30** root CTest tests,
-including the real-driver `opengl_eye_targets` test. Metadata validation also
-passed with 6 catalogue entries, 2 exact-build manifests, 42 actions, 6 action
-sets and 8 controller bindings. `Build-OvertureProduct.ps1 -Configuration
-Release -Full` then passed its project, 16-shader, 8,752 visual-reference,
-231-texture decode, Large Address Aware and `VRTrackingTest` gates; the latter
-reported **289 checks, 0 failures**. These were host-side checks only: no game,
-SteamVR or headset process was launched.
+on 2026-09-16 passed all **34/34** Release root CTest tests, including the
+real-driver `opengl_eye_targets` test, and the separate SDK-less Release build
+passed its CI-equivalent **33/33** suite. Metadata validation passed with 6
+catalogue entries, 2 exact-build manifests, 42 actions, 6 action sets and 8
+controller bindings; the initialized Black Plague exact-image verifier also
+passed the Grab/Move and palm-query boundaries. `Build-OvertureProduct.ps1
+-Configuration Release -Full` passed its project, 16-shader, 8,752
+visual-reference, 231-texture decode, Large Address Aware and `VRTrackingTest`
+gates; the latter reported **289 checks, 0 failures**. These were host-side
+checks only: no new headset validation is implied.
 
 For meaningful changes update the smallest relevant set among:
 

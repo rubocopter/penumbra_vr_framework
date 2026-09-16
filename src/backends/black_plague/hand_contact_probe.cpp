@@ -68,6 +68,9 @@ constexpr std::uintptr_t kCheckShapeWorldCollision = 0xD4830;
 constexpr std::uintptr_t kCreateBoxShape = 0x18AC10;
 constexpr std::uintptr_t kDestroyShape = 0xD4210;
 constexpr std::uintptr_t kCreateBoxShapeVtableSlot = 0x30;
+constexpr wchar_t kGameplayPalmRequestMutexName[] =
+    L"Local\\PenumbraVR.BlackPlague.PalmCollisionValidation";
+constexpr std::uint64_t kGameplayPalmSampleMaximumAgeMilliseconds = 250;
 
 enum class RequestState : std::uint32_t {
     idle,
@@ -92,9 +95,32 @@ struct OwnedPalmShape {
     void* shape = nullptr;
 };
 
-OwnedPalmShape g_owned_palm_shape;
+OwnedPalmShape g_validation_palm_shape;
 runtime::VrHandResolveState g_resolver_state;
 bool g_resolver_first_tick_complete = false;
+
+OwnedPalmShape g_gameplay_palm_shape;
+std::atomic<bool> g_gameplay_shape_active{false};
+std::array<runtime::VrHandResolveState, 2> g_gameplay_resolver_state{};
+std::array<std::atomic<void*>, 2> g_gameplay_held_body{};
+SRWLOCK g_gameplay_tracking_lock = SRWLOCK_INIT;
+std::array<runtime::VrMatrix44, 2> g_gameplay_raw_poses{};
+std::array<bool, 2> g_gameplay_raw_valid{};
+runtime::VrMatrix44 g_gameplay_head_pose{};
+bool g_gameplay_head_valid = false;
+std::uint64_t g_gameplay_tracking_time = 0;
+SRWLOCK g_gameplay_pose_lock = SRWLOCK_INIT;
+std::array<runtime::VrMatrix44, 2> g_gameplay_resolved_poses{};
+std::array<bool, 2> g_gameplay_resolved_valid{};
+std::uint64_t g_gameplay_resolved_time = 0;
+SRWLOCK g_gameplay_telemetry_lock = SRWLOCK_INIT;
+GameplayPalmResolverTelemetry g_gameplay_telemetry{};
+bool g_gameplay_request_sampled = false;
+std::atomic<GameplayPalmResolverRequestSource> g_gameplay_request_source{
+    GameplayPalmResolverRequestSource::disabled};
+std::atomic<bool> g_gameplay_shutdown_requested{false};
+std::atomic<bool> g_gameplay_shutdown_complete{true};
+std::atomic<bool> g_gameplay_shutdown_succeeded{true};
 
 bool ReadBytes(const void* source, void* destination, std::size_t size) noexcept {
     if (source == nullptr || destination == nullptr) return false;
@@ -208,10 +234,11 @@ struct GameplaySnapshot {
 }
 
 [[nodiscard]] bool SafeDestroyOwnedPalmShape(
+    OwnedPalmShape& owned_shape,
     PalmResolverValidationTelemetry* telemetry) noexcept {
-    if (g_owned_palm_shape.shape == nullptr) return true;
-    const auto owner = g_owned_palm_shape;
-    g_owned_palm_shape = {};
+    if (owned_shape.shape == nullptr) return true;
+    const auto owner = owned_shape;
+    owned_shape = {};
     if (!ValidWorld(owner.image, owner.world)) {
         // A destroyed world owns and tears down its shape list. Forget a stale
         // handle instead of writing through a dead world pointer.
@@ -234,17 +261,18 @@ struct GameplaySnapshot {
 [[nodiscard]] bool EnsureOwnedPalmShape(
     std::uint8_t* image,
     void* world,
+    OwnedPalmShape& owned_shape,
     PalmResolverValidationTelemetry& telemetry) noexcept {
     if (!ValidWorld(image, world)) return false;
-    if (g_owned_palm_shape.shape != nullptr &&
-        g_owned_palm_shape.image == image &&
-        g_owned_palm_shape.world == world) {
+    if (owned_shape.shape != nullptr &&
+        owned_shape.image == image &&
+        owned_shape.world == world) {
         telemetry.shape_reused = true;
         return true;
     }
-    if (g_owned_palm_shape.shape != nullptr) {
+    if (owned_shape.shape != nullptr) {
         telemetry.world_replaced = true;
-        if (!SafeDestroyOwnedPalmShape(&telemetry)) return false;
+        if (!SafeDestroyOwnedPalmShape(owned_shape, &telemetry)) return false;
     }
 
     using namespace runtime::vr_interaction_policy;
@@ -266,12 +294,12 @@ struct GameplaySnapshot {
         Read<std::int32_t>(shape, kShapeUserCountOffset) != 0 ||
         Read<std::int32_t>(shape, kShapeTypeOffset) != 1) {
         if (shape != nullptr) {
-            g_owned_palm_shape = {image, world, shape};
-            static_cast<void>(SafeDestroyOwnedPalmShape(&telemetry));
+            owned_shape = {image, world, shape};
+            static_cast<void>(SafeDestroyOwnedPalmShape(owned_shape, &telemetry));
         }
         return false;
     }
-    g_owned_palm_shape = {image, world, shape};
+    owned_shape = {image, world, shape};
     telemetry.shape_created = true;
     ++telemetry.create_count;
     telemetry.shape_type = Read<std::int32_t>(shape, kShapeTypeOffset);
@@ -365,6 +393,11 @@ struct NativePalmQueryContext {
     __try {
         const auto query = reinterpret_cast<CheckShapeWorldCollision>(
             context->image + kCheckShapeWorldCollision);
+        // Exact-image evidence at D48FB/D4903 proves that the eighth stack
+        // argument rejects every body marked IsCharacter when false. D4919
+        // independently rejects the exact fourth-argument body. Rework uses
+        // those two filters together so the player never blocks a palm and a
+        // held body can later be supplied as this per-hand skip body.
         collided = query(context->world, &corrected, context->shape, &transform,
             context->skip_body, false, false, &callback, false, false);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
@@ -399,6 +432,52 @@ void PublishResult(
     g_result = result;
     ReleaseSRWLockExclusive(&g_result_lock);
     g_request_state.store(state, std::memory_order_release);
+}
+
+[[nodiscard]] GameplayPalmResolverRequestSource
+GameplayPalmResolverRequested() noexcept {
+    char option[2]{};
+    if (GetEnvironmentVariableA("PVR_BP_PALM_COLLISION_VALIDATION",
+            option, 2) == 1 && option[0] == '1') {
+        return GameplayPalmResolverRequestSource::environment;
+    }
+    HANDLE request = OpenMutexW(
+        SYNCHRONIZE, FALSE, kGameplayPalmRequestMutexName);
+    if (request == nullptr) {
+        return GameplayPalmResolverRequestSource::disabled;
+    }
+    CloseHandle(request);
+    return GameplayPalmResolverRequestSource::mutex;
+}
+
+void InvalidateGameplayPalmPoses() noexcept {
+    AcquireSRWLockExclusive(&g_gameplay_pose_lock);
+    g_gameplay_resolved_valid = {};
+    g_gameplay_resolved_time = 0;
+    ReleaseSRWLockExclusive(&g_gameplay_pose_lock);
+}
+
+void ResetGameplayPalmStates() noexcept {
+    for (auto& state : g_gameplay_resolver_state) {
+        runtime::ResetVrHandResolveState(state);
+    }
+    InvalidateGameplayPalmPoses();
+}
+
+[[nodiscard]] runtime::VrHandResolverFrame GameplayResolverFrame(
+    const runtime::VrMatrix44& head,
+    bool head_valid,
+    bool left_hand) noexcept {
+    runtime::VrHandResolverFrame frame;
+    frame.left_hand = left_hand;
+    frame.head_basis_valid = head_valid;
+    if (!head_valid) return frame;
+    frame.head = {head.values[3], head.values[7], head.values[11]};
+    frame.right = {head.values[0], head.values[4], head.values[8]};
+    frame.up = {head.values[1], head.values[5], head.values[9]};
+    // Framework world poses use OpenVR's -Z forward convention.
+    frame.forward = {-head.values[2], -head.values[6], -head.values[10]};
+    return frame;
 }
 
 } // namespace
@@ -682,7 +761,8 @@ void ServicePalmResolverValidation(
 
     auto fail = [&](PalmResolverValidationResult result) noexcept {
         g_resolver_working.result = result;
-        if (!SafeDestroyOwnedPalmShape(&g_resolver_working) &&
+        if (!SafeDestroyOwnedPalmShape(
+                g_validation_palm_shape, &g_resolver_working) &&
             result != PalmResolverValidationResult::shape_destroy_failed) {
             g_resolver_working.result =
                 PalmResolverValidationResult::shape_destroy_failed;
@@ -706,9 +786,10 @@ void ServicePalmResolverValidation(
         return;
     }
 
-    const bool had_shape = g_owned_palm_shape.shape != nullptr;
-    const void* previous_world = g_owned_palm_shape.world;
-    if (!EnsureOwnedPalmShape(image, world, g_resolver_working)) {
+    const bool had_shape = g_validation_palm_shape.shape != nullptr;
+    const void* previous_world = g_validation_palm_shape.world;
+    if (!EnsureOwnedPalmShape(
+            image, world, g_validation_palm_shape, g_resolver_working)) {
         fail(PalmResolverValidationResult::shape_create_failed);
         return;
     }
@@ -741,7 +822,7 @@ void ServicePalmResolverValidation(
     }
 
     NativePalmQueryContext query_context{
-        image, world, g_owned_palm_shape.shape, physics_body,
+        image, world, g_validation_palm_shape.shape, physics_body,
         &g_resolver_working, false};
     runtime::VrHandResolverFrame frame;
     runtime::VrMatrix44 resolved{};
@@ -778,7 +859,8 @@ void ServicePalmResolverValidation(
 
     g_resolver_working.second_raw_position = raw_position;
     g_resolver_working.second_resolved_position = resolved_position;
-    if (!SafeDestroyOwnedPalmShape(&g_resolver_working)) {
+    if (!SafeDestroyOwnedPalmShape(
+            g_validation_palm_shape, &g_resolver_working)) {
         fail(PalmResolverValidationResult::shape_destroy_failed);
         return;
     }
@@ -786,6 +868,238 @@ void ServicePalmResolverValidation(
     runtime::ResetVrHandResolveState(g_resolver_state);
     g_resolver_first_tick_complete = false;
     PublishResolverResult(g_resolver_working, RequestState::passed);
+}
+
+void PublishGameplayPalmTracking(
+    const std::array<runtime::VrMatrix44, 2>& raw_poses,
+    const std::array<bool, 2>& raw_valid,
+    const runtime::VrMatrix44& head_pose,
+    bool head_valid) noexcept {
+    AcquireSRWLockExclusive(&g_gameplay_tracking_lock);
+    g_gameplay_raw_poses = raw_poses;
+    g_gameplay_raw_valid = raw_valid;
+    g_gameplay_head_pose = head_pose;
+    g_gameplay_head_valid = head_valid;
+    g_gameplay_tracking_time = GetTickCount64();
+    ReleaseSRWLockExclusive(&g_gameplay_tracking_lock);
+}
+
+void PublishGameplayPalmHeldBody(
+    std::size_t hand_index,
+    void* body) noexcept {
+    if (hand_index >= g_gameplay_held_body.size()) return;
+    g_gameplay_held_body[hand_index].store(body, std::memory_order_release);
+}
+
+void ServiceGameplayPalmResolver(
+    std::uint8_t* image,
+    void* character_body) noexcept {
+    if (g_gameplay_shutdown_requested.exchange(
+            false, std::memory_order_acq_rel)) {
+        PalmResolverValidationTelemetry lifecycle{};
+        const bool destroyed = SafeDestroyOwnedPalmShape(
+            g_gameplay_palm_shape, &lifecycle);
+        g_gameplay_shape_active.store(false, std::memory_order_release);
+        ResetGameplayPalmStates();
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        g_gameplay_telemetry.enabled = false;
+        g_gameplay_telemetry.shape_destroys += lifecycle.destroy_count;
+        if (!destroyed) ++g_gameplay_telemetry.query_failures;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+        g_gameplay_request_source.store(
+            GameplayPalmResolverRequestSource::disabled,
+            std::memory_order_release);
+        g_gameplay_request_sampled = true;
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        g_gameplay_telemetry.source = GameplayPalmResolverRequestSource::disabled;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+        g_gameplay_shutdown_succeeded.store(destroyed, std::memory_order_release);
+        g_gameplay_shutdown_complete.store(true, std::memory_order_release);
+        return;
+    }
+
+    if (!g_gameplay_request_sampled) {
+        g_gameplay_request_source.store(
+            GameplayPalmResolverRequested(), std::memory_order_release);
+        g_gameplay_request_sampled = true;
+        const auto source =
+            g_gameplay_request_source.load(std::memory_order_acquire);
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        g_gameplay_telemetry.enabled =
+            source != GameplayPalmResolverRequestSource::disabled;
+        g_gameplay_telemetry.source = source;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+    }
+    if (g_gameplay_request_source.load(std::memory_order_acquire) ==
+        GameplayPalmResolverRequestSource::disabled) {
+        return;
+    }
+    if (image == nullptr || character_body == nullptr) return;
+
+    std::array<runtime::VrMatrix44, 2> raw_poses{};
+    std::array<bool, 2> raw_valid{};
+    runtime::VrMatrix44 head_pose{};
+    bool head_valid = false;
+    std::uint64_t tracking_time = 0;
+    AcquireSRWLockShared(&g_gameplay_tracking_lock);
+    raw_poses = g_gameplay_raw_poses;
+    raw_valid = g_gameplay_raw_valid;
+    head_pose = g_gameplay_head_pose;
+    head_valid = g_gameplay_head_valid;
+    tracking_time = g_gameplay_tracking_time;
+    ReleaseSRWLockShared(&g_gameplay_tracking_lock);
+
+    const std::uint64_t now = GetTickCount64();
+    if (tracking_time == 0 || now - tracking_time >
+            kGameplayPalmSampleMaximumAgeMilliseconds ||
+        (!raw_valid[0] && !raw_valid[1])) {
+        InvalidateGameplayPalmPoses();
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        ++g_gameplay_telemetry.stale_tracking_samples;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+        return;
+    }
+
+    void* const physics_body = Read<void*>(
+        character_body, kCharacterPhysicsBodyOffset);
+    void* const world = Read<void*>(
+        character_body, kCharacterPhysicsWorldOffset);
+    if (physics_body == nullptr || !ValidWorld(image, world) ||
+        Read<void*>(physics_body, 0) != image + kPhysicsBodyVtable) {
+        InvalidateGameplayPalmPoses();
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        ++g_gameplay_telemetry.query_failures;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+        return;
+    }
+
+    const void* previous_world = g_gameplay_palm_shape.world;
+    PalmResolverValidationTelemetry lifecycle{};
+    if (!EnsureOwnedPalmShape(
+            image, world, g_gameplay_palm_shape, lifecycle)) {
+        g_gameplay_shape_active.store(false, std::memory_order_release);
+        InvalidateGameplayPalmPoses();
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        ++g_gameplay_telemetry.query_failures;
+        g_gameplay_telemetry.shape_destroys += lifecycle.destroy_count;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+        return;
+    }
+    g_gameplay_shape_active.store(true, std::memory_order_release);
+    if (previous_world != nullptr && previous_world != world) {
+        ResetGameplayPalmStates();
+    }
+
+    std::array<runtime::VrMatrix44, 2> resolved_poses{};
+    std::array<bool, 2> resolved_valid{};
+    std::uint64_t published = 0;
+    std::uint64_t queries = 0;
+    std::uint64_t contacts = 0;
+    std::uint64_t constrained = 0;
+    std::uint64_t held_skips = 0;
+    std::uint64_t failures = 0;
+
+    for (std::size_t hand = 0; hand < raw_poses.size(); ++hand) {
+        if (!raw_valid[hand]) continue;
+        void* const skip_body =
+            g_gameplay_held_body[hand].load(std::memory_order_acquire);
+        PalmResolverValidationTelemetry query_telemetry{};
+        NativePalmQueryContext query_context{
+            image, world, g_gameplay_palm_shape.shape, skip_body,
+            &query_telemetry, false};
+        auto frame = GameplayResolverFrame(
+            head_pose, head_valid, hand == 0);
+        runtime::VrMatrix44 resolved{};
+        const bool ok = runtime::ResolveVrHandPose(
+            g_gameplay_resolver_state[hand], raw_poses[hand], frame,
+            &query_context, QueryOwnedPalmShape, resolved);
+        queries += query_telemetry.query_count;
+        contacts += query_telemetry.contact_count;
+        if (skip_body != nullptr) ++held_skips;
+        if (!ok) {
+            ++failures;
+            if (!g_gameplay_resolver_state[hand].valid) continue;
+        }
+        resolved_poses[hand] = resolved;
+        resolved_valid[hand] = true;
+        ++published;
+        const float dx = raw_poses[hand].values[3] - resolved.values[3];
+        const float dy = raw_poses[hand].values[7] - resolved.values[7];
+        const float dz = raw_poses[hand].values[11] - resolved.values[11];
+        if (g_gameplay_resolver_state[hand].constrained_frames > 0 ||
+            std::hypot(std::hypot(dx, dy), dz) > 0.001F) {
+            ++constrained;
+        }
+    }
+
+    AcquireSRWLockExclusive(&g_gameplay_pose_lock);
+    g_gameplay_resolved_poses = resolved_poses;
+    g_gameplay_resolved_valid = resolved_valid;
+    g_gameplay_resolved_time = published != 0 ? now : 0;
+    ReleaseSRWLockExclusive(&g_gameplay_pose_lock);
+
+    AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+    ++g_gameplay_telemetry.samples;
+    g_gameplay_telemetry.published_poses += published;
+    g_gameplay_telemetry.queries += queries;
+    g_gameplay_telemetry.contacts += contacts;
+    g_gameplay_telemetry.constrained_samples += constrained;
+    g_gameplay_telemetry.held_body_skips += held_skips;
+    g_gameplay_telemetry.query_failures += failures;
+    g_gameplay_telemetry.shape_creates += lifecycle.create_count;
+    g_gameplay_telemetry.shape_destroys += lifecycle.destroy_count;
+    g_gameplay_telemetry.world_replacements += lifecycle.world_replaced ? 1U : 0U;
+    ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+}
+
+bool ReadGameplayPalmPose(
+    std::size_t hand_index,
+    runtime::VrMatrix44& pose) noexcept {
+    if (hand_index >= g_gameplay_resolved_poses.size()) return false;
+    AcquireSRWLockShared(&g_gameplay_pose_lock);
+    pose = g_gameplay_resolved_poses[hand_index];
+    const bool valid = g_gameplay_resolved_valid[hand_index];
+    const std::uint64_t time = g_gameplay_resolved_time;
+    ReleaseSRWLockShared(&g_gameplay_pose_lock);
+    return valid && time != 0 &&
+        GetTickCount64() - time <= kGameplayPalmSampleMaximumAgeMilliseconds;
+}
+
+GameplayPalmResolverTelemetry ConsumeGameplayPalmResolverTelemetry() noexcept {
+    AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+    GameplayPalmResolverTelemetry result = g_gameplay_telemetry;
+    g_gameplay_telemetry = {};
+    const auto source =
+        g_gameplay_request_source.load(std::memory_order_acquire);
+    g_gameplay_telemetry.enabled =
+        source != GameplayPalmResolverRequestSource::disabled;
+    g_gameplay_telemetry.source = source;
+    ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+    return result;
+}
+
+bool ShutdownGameplayPalmResolver(std::string& error) noexcept {
+    error.clear();
+    InvalidateGameplayPalmPoses();
+    if (!g_gameplay_shape_active.load(std::memory_order_acquire)) {
+        return true;
+    }
+    g_gameplay_shutdown_complete.store(false, std::memory_order_release);
+    g_gameplay_shutdown_succeeded.store(false, std::memory_order_release);
+    g_gameplay_shutdown_requested.store(true, std::memory_order_release);
+    const std::uint64_t deadline = GetTickCount64() + 1000;
+    do {
+        if (g_gameplay_shutdown_complete.load(std::memory_order_acquire)) {
+            if (g_gameplay_shutdown_succeeded.load(std::memory_order_acquire)) {
+                return true;
+            }
+            error = "The gameplay palm shape could not be destroyed on the game thread";
+            return false;
+        }
+        Sleep(1);
+    } while (GetTickCount64() < deadline);
+    error = "The gameplay palm shape did not reach a current player-body tick for safe destruction";
+    return false;
 }
 
 } // namespace penumbra_vr::backends::black_plague

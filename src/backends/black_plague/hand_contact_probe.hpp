@@ -1,6 +1,9 @@
 #pragma once
 
+#include "vr_math.hpp"
+
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -60,6 +63,29 @@ struct PalmResolverValidationTelemetry {
     std::array<float, 3> second_resolved_position{};
 };
 
+enum class GameplayPalmResolverRequestSource : std::uint8_t {
+    disabled = 0,
+    environment = 1,
+    mutex = 2,
+};
+
+struct GameplayPalmResolverTelemetry {
+    bool enabled = false;
+    GameplayPalmResolverRequestSource source =
+        GameplayPalmResolverRequestSource::disabled;
+    std::uint64_t samples = 0;
+    std::uint64_t published_poses = 0;
+    std::uint64_t queries = 0;
+    std::uint64_t contacts = 0;
+    std::uint64_t constrained_samples = 0;
+    std::uint64_t held_body_skips = 0;
+    std::uint64_t stale_tracking_samples = 0;
+    std::uint64_t query_failures = 0;
+    std::uint64_t shape_creates = 0;
+    std::uint64_t shape_destroys = 0;
+    std::uint64_t world_replacements = 0;
+};
+
 // Requests one exact-build CheckShapeWorldCollision call on the existing
 // character-body update owner. The query reuses the current native body shape,
 // writes only to stack/DLL-owned storage and verifies selected world/body/shape
@@ -89,6 +115,34 @@ void ServiceNoWriteHandContactQuery(
 void ServicePalmResolverValidation(
     std::uint8_t* image,
     void* character_body) noexcept;
+
+// Render/input producers publish only DLL-owned snapshots. The actual native
+// shape query remains on the current player-body game thread and fans out after
+// the sole D6E00 update. hand_index is 0=left, 1=right.
+void PublishGameplayPalmTracking(
+    const std::array<runtime::VrMatrix44, 2>& raw_poses,
+    const std::array<bool, 2>& raw_valid,
+    const runtime::VrMatrix44& head_pose,
+    bool head_valid) noexcept;
+
+void PublishGameplayPalmHeldBody(
+    std::size_t hand_index,
+    void* body) noexcept;
+
+void ServiceGameplayPalmResolver(
+    std::uint8_t* image,
+    void* character_body) noexcept;
+
+[[nodiscard]] bool ReadGameplayPalmPose(
+    std::size_t hand_index,
+    runtime::VrMatrix44& pose) noexcept;
+
+[[nodiscard]] GameplayPalmResolverTelemetry
+ConsumeGameplayPalmResolverTelemetry() noexcept;
+
+// Teardown is requested from the remote control thread but native shape
+// destruction is performed by ServiceGameplayPalmResolver on the game thread.
+[[nodiscard]] bool ShutdownGameplayPalmResolver(std::string& error) noexcept;
 
 // Exact MSVC7 cCollideData view proved from the supported image. Exposed only
 // so the host harness can lock pointer/count/point-stride handling.

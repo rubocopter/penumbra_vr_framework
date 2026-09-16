@@ -17,6 +17,7 @@
 #include <vector>
 
 namespace bp = penumbra_vr::backends::black_plague;
+namespace runtime = penumbra_vr::runtime;
 
 namespace {
 
@@ -75,6 +76,11 @@ std::atomic<std::uint32_t> g_create_count{0};
 std::atomic<std::uint32_t> g_destroy_count{0};
 std::uint8_t* g_fake_image = nullptr;
 std::uint8_t* g_fake_palm_shape = nullptr;
+void* g_last_skip_body = nullptr;
+bool g_last_skip_static = false;
+bool g_last_is_character = false;
+bool g_last_collide_character = true;
+bool g_last_debug = true;
 
 template<class T>
 void Write(std::vector<std::uint8_t>& bytes, std::size_t offset, T value) {
@@ -87,12 +93,17 @@ bool __fastcall FakeCheckShapeWorldCollision(
     Vec3* resolved_position,
     void* shape,
     const Matrix*,
-    void*,
-    bool,
-    bool,
+    void* skip_body,
+    bool skip_static,
+    bool is_character,
     void* callback,
-    bool,
-    bool) {
+    bool collide_character,
+    bool debug) {
+    g_last_skip_body = skip_body;
+    g_last_skip_static = skip_static;
+    g_last_is_character = is_character;
+    g_last_collide_character = collide_character;
+    g_last_debug = debug;
     const FakeMode mode = g_mode.load(std::memory_order_relaxed);
     if (mode == FakeMode::clear) return false;
 
@@ -214,6 +225,11 @@ struct Fixture {
         g_fake_palm_shape = palm_shape.data();
         g_create_count.store(0, std::memory_order_relaxed);
         g_destroy_count.store(0, std::memory_order_relaxed);
+        g_last_skip_body = nullptr;
+        g_last_skip_static = true;
+        g_last_is_character = true;
+        g_last_collide_character = true;
+        g_last_debug = true;
     }
 
     ~Fixture() {
@@ -361,6 +377,9 @@ int main() {
             penumbra_vr::runtime::vr_interaction_policy::kCollisionSizeY) ||
         !NearlyEqual(resolver.shape_size[2],
             penumbra_vr::runtime::vr_interaction_policy::kCollisionSizeZ) ||
+        g_last_skip_body != fixture.physics_body.data() ||
+        g_last_skip_static || g_last_is_character ||
+        g_last_collide_character || g_last_debug ||
         !NearlyEqual(resolver.second_raw_position[0],
             resolver.second_resolved_position[0])) {
         std::cerr << "owned palm resolver lifecycle failed: " << error << '\n';
@@ -381,6 +400,71 @@ int main() {
         std::cerr << "owned palm world replacement failed: " << error << '\n';
         return 1;
     }
+
+    SetEnvironmentVariableA("PVR_BP_PALM_COLLISION_VALIDATION", "1");
+    g_mode.store(FakeMode::clear, std::memory_order_relaxed);
+    runtime::VrMatrix44 left_raw{};
+    left_raw.values[0] = left_raw.values[5] =
+        left_raw.values[10] = left_raw.values[15] = 1.0F;
+    left_raw.values[3] = 10.15F;
+    left_raw.values[7] = 20.0F;
+    left_raw.values[11] = 30.0F;
+    runtime::VrMatrix44 head{};
+    head.values[0] = head.values[5] = head.values[10] = head.values[15] = 1.0F;
+    head.values[3] = 10.0F;
+    head.values[7] = 21.4F;
+    head.values[11] = 30.0F;
+    std::array<runtime::VrMatrix44, 2> raw_poses{};
+    raw_poses[0] = left_raw;
+    const std::array<bool, 2> raw_valid{true, false};
+    void* const held_body = replacement_fixture.shape.data();
+    bp::PublishGameplayPalmHeldBody(0, held_body);
+    bp::PublishGameplayPalmTracking(raw_poses, raw_valid, head, true);
+    bp::ServiceGameplayPalmResolver(
+        replacement_fixture.image, replacement_fixture.character.data());
+    runtime::VrMatrix44 gameplay_resolved{};
+    auto gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
+    if (!bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
+        gameplay.enabled == false ||
+        gameplay.source != bp::GameplayPalmResolverRequestSource::environment ||
+        gameplay.samples != 1 || gameplay.published_poses != 1 ||
+        gameplay.queries < 2 || gameplay.contacts != 0 ||
+        gameplay.held_body_skips != 1 || gameplay.query_failures != 0 ||
+        gameplay.shape_creates != 1 || gameplay.shape_destroys != 0 ||
+        g_last_skip_body != held_body || g_last_skip_static ||
+        g_last_is_character || g_last_collide_character || g_last_debug ||
+        !NearlyEqual(gameplay_resolved.values[3], left_raw.values[3])) {
+        std::cerr << "gameplay palm publication/exclusion contract failed\n";
+        return 1;
+    }
+
+    std::atomic<bool> shutdown_done{false};
+    bool shutdown_ok = false;
+    std::string shutdown_error;
+    std::thread shutdown_thread([&] {
+        shutdown_ok = bp::ShutdownGameplayPalmResolver(shutdown_error);
+        shutdown_done.store(true, std::memory_order_release);
+    });
+    const auto shutdown_deadline = std::chrono::steady_clock::now() +
+        std::chrono::seconds(1);
+    while (!shutdown_done.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < shutdown_deadline) {
+        bp::ServiceGameplayPalmResolver(
+            replacement_fixture.image, replacement_fixture.character.data());
+        Sleep(1);
+    }
+    shutdown_thread.join();
+    gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
+    if (!shutdown_ok || !shutdown_error.empty() ||
+        bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
+        gameplay.enabled || gameplay.shape_destroys != 1 ||
+        g_destroy_count.load(std::memory_order_relaxed) != 3) {
+        std::cerr << "gameplay palm game-thread teardown failed: "
+                  << shutdown_error << '\n';
+        return 1;
+    }
+    bp::PublishGameplayPalmHeldBody(0, nullptr);
+    SetEnvironmentVariableA("PVR_BP_PALM_COLLISION_VALIDATION", nullptr);
 
     std::cout << "Black Plague hand-contact query/lifecycle tests passed\n";
     return 0;

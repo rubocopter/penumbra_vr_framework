@@ -24,7 +24,7 @@ Black Plague already has native stereo, rotational and positional HMD tracking, 
 
 The current body path uses a **single same-tick tracking/body transaction**. PID 25484 (2026-09-16) added positive headset evidence for the current crouch/Y and short-range room-scale path: 12,858 presentation frames with zero stereo failures, three physical crouch entry/exit cycles, final native standing state, `0.961 m` tracked-Y range and 650 accepted direct-locomotion samples. The user reported that the session felt good.
 
-The remaining gates are narrower: capture the Hybrid release-hold interval that PID 25484 missed, exercise blocked-stand/low-ceiling behavior, complete deliberate wall/slide edge checks, validate constrained `0.5 m/s` Push/Move locomotion, then continue with palms/interactions, tracking-world-yaw/bob and mirror/focus work. PID 28412 live-tested the no-write native palm query, and PID 8644 live-tested the corrected backend-owned palm-shape lifecycle plus the isolated Rework-derived resolver. Resolved palms are still disconnected from gameplay hands and character/held-body exclusions remain a separate evidence gate.
+The remaining gates are narrower: capture the Hybrid release-hold interval that PID 25484 missed, exercise blocked-stand/low-ceiling behavior, complete deliberate wall/slide edge checks, validate constrained `0.5 m/s` Push/Move locomotion, then continue with palms/interactions, tracking-world-yaw/bob and mirror/focus work. PID 28412 live-tested the no-write native palm query, and PID 8644 live-tested the corrected backend-owned palm-shape lifecycle plus the isolated Rework-derived resolver. Exact-image evidence pins Black Plague's independent character and `skip_body` filters. The gameplay path now publishes the held body per hand and feeds resolved palms to visible hands, physical interaction and tools while aim remains raw. `Grab=6` keeps the existing rigid palm-relative free-body path; free bodies entering `Move=2` now preserve the picked contact point and follow the palm through Rework-derived physical force, while jointed/mechanism bodies remain native. These gameplay-interaction changes are host-tested only. PID 23000 exercised them in the headset, but severe frame-rate loss plus a right-controller dropout made that session inconclusive for both performance and interaction feel.
 
 ### Requiem
 
@@ -51,7 +51,7 @@ Requiem will reuse validated game-neutral policy while repeating exact-build res
 ## Next steps
 
 1. Close the remaining focused Black Plague posture edges: Hybrid release-hold capture and blocked-stand/low-ceiling recovery.
-2. Connect the already live-tested owned palm lifecycle/resolver to tracked gameplay palms only after character/held-body exclusion has its own evidence; keep mechanism bodies separate from the free-body path.
+2. Headset-validate the host-tested gameplay palm path and the distinct `Grab=6` / free-body `Move=2` routes after a clean reboot, including representative small props, long wooden boards/bars, both hands, wall/slide contact and one native jointed mechanism; compare palm-collision on/off performance.
 3. Validate the remaining constrained locomotion, deliberate wall/slide, recenter/tracking-loss and yaw/bob comfort gates without reopening the body owner that already has headset evidence.
 4. Continue interaction work through native mechanism state, tool/light geometry, UI/HUD coverage and representative chapter testing.
 5. Start Requiem exact-build research only after the Black Plague backend has a stable playable-alpha boundary.

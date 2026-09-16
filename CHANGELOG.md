@@ -1,5 +1,32 @@
 # Changelog
 
+- 2026-09-16: Connected the Black Plague palm resolver to gameplay hands on the
+  host-tested path and published each hand's currently owned body into the native
+  `skip_body` query. Visible hands, physical interaction and tools consume the
+  resolved grip while aim remains raw. Investigation of the headset report that
+  many props floated away from the hand found a second native manipulation route:
+  `Grab=6` already used the rigid palm-relative free-body adapter, but many props
+  enter `Move=2` and retained Black Plague's distance manipulation. The exact
+  image now pins that state separately. Free `Move=2` bodies preserve the picked
+  surface point and follow the resolved palm with the Rework-derived force path;
+  jointed/mechanism bodies remain native. Release 34/34 CTest, the SDK-less
+  CI-equivalent 33/33 suite, metadata, the exact-image verifier and Overture
+  `-Full` (Release/LAA + 289/289 tracking checks) pass. PID 23000 is not a
+  headset-validation result:
+  the same run had severe FPS loss and a right-controller dropout, so a clean
+  rebooted A/B run remains required for performance, palm contact and placement.
+
+- 2026-09-16: Pinned the remaining Black Plague palm-query exclusion semantics
+  in the initialized exact-build image. `CheckShapeWorldCollision` at `0xD4830`
+  independently rejects character bodies when its `collideCharacter` argument
+  is false and rejects the exact fourth-argument `skip_body`. The exact-image
+  verifier now locks those branches, and the host palm-resolver test verifies
+  the backend supplies Rework's `skipStatic=false`, `isCharacter=false`,
+  `collideCharacter=false`, `debug=false` contract with the requested skip
+  body. This closed the static/host exclusion boundary; the later gameplay-path
+  entry above adds per-hand held-body publication while headset contact remains
+  pending clean validation.
+
 - 2026-09-16: PID 8644 live-tested the corrected default-off Black Plague
   owned-palm lifecycle/resolver gate. The run created one standalone box shape,
   reused it on the second sample, issued six native world queries, destroyed it

@@ -196,7 +196,7 @@ This order proves each boundary in isolation and prevents a game-adapter defect 
 
 Generic controller picking remains capped to the shared Rework direct physical reach of `0.18 m`. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
 
-Long bars/tables following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
+Long boards/bars following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
 
 Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; definitive placement still requires final hand geometry and headset/light-direction validation.
 
@@ -230,8 +230,16 @@ Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use
   harness is host-tested and PID 28412 live-tested the no-write query. The same
   backend now owns the shared-size palm box lifecycle and feeds native contacts
   into the shared Rework-derived resolver. PID 8644 live-tested that isolated
-  lifecycle/resolver behind `--validate-palm-resolver`; gameplay connection and
-  character/held-body exclusion evidence remain pending.
+  lifecycle/resolver behind `--validate-palm-resolver`. Exact-image evidence now
+  also pins BP's independent character and exact-`skip_body` filters, and the
+  host resolver harness locks the Rework-compatible argument contract. The
+  host-tested gameplay integration now publishes the held body per hand and
+  consumes the resolved palm for visible hands, interaction and tools while aim
+  remains raw. The interaction adapter also distinguishes native `Grab=6` from
+  `Move=2`: eligible free Move bodies preserve their picked contact and use the
+  Rework-derived force path; jointed/mechanism bodies stay native. PID 23000 is
+  inconclusive because FPS and the right controller failed in the same headset
+  session, so clean headset contact/performance validation remains pending.
 - `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
 - `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and `CarryHeadAnchorWithLocomotion` now provide the shared stateless reconciliation phases used by Overture and the Black Plague shadow consumer.
 - `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.

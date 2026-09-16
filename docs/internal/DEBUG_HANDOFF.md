@@ -415,6 +415,14 @@ it must not be described as validated until exercised in the headset.
   (`ret 0x24`), callback slot zero, the VC7 `cCollideData` pointer/count layout,
   `0x1C` contact stride, body matrix/shape accessors, CreateBoxShape and
   reference-counted destruction through `DestroyShape` at `0xD4210`.
+- The same exact image now pins the filtering order needed by the palm path:
+  `D48FB/D4903` rejects bodies marked as characters when stack argument 8
+  (`collideCharacter`) is false, while `D4919` independently rejects the exact
+  stack-argument-4 `skip_body`. The host resolver test verifies its native call
+  uses `skipStatic=false`, `isCharacter=false`, `collideCharacter=false` and the
+  supplied skip body. The current gameplay path now publishes the held body per
+  hand into that slot, but no tracked held-body contact has been promoted beyond
+  host-tested because the only headset exercise was inconclusive.
 - `hand_contact_probe.*` retains the live-tested default-off no-write diagnostic. It
   runs from the existing post-`D6E00` fan-out, reuses the current character
   body shape and rejects any selected native-byte mutation. PID 28412 passed it.
@@ -423,16 +431,28 @@ it must not be described as validated until exercised in the headset.
   same world, safely replaces it when world identity changes, destroys it through
   `0xD4210`, and feeds callback contacts to the shared Rework-derived resolver.
   Host tests cover normal reuse, world replacement and gameplay-memory guards.
-  No resolved pose is applied to a gameplay hand.
+  The gameplay integration now applies the resolved grip to visible hands,
+  physical interaction and tools while keeping aim raw.
 
 ### Next evidence
 
 PID 8644 passed `--validate-palm-resolver` in a loaded map without VR: one
 create, one reuse, six native queries and one destroy, with `shape_type=1`,
 `shape_users=0` and `gameplay_memory_changed=false`. The lifecycle/resolver gate
-is therefore live-tested. Resolved controller palms still need character/
-held-body exclusion evidence before gameplay connection; headset-test
-representative contact only after those boundaries are in place.
+is therefore live-tested. Character and single-body exclusion semantics are now
+exact-image pinned and host-tested. Per-hand held-body publication and gameplay
+resolved-palms are implemented and host-tested. PID 23000 exercised this path,
+but severe FPS loss and a right-controller dropout make the session inconclusive;
+repeat representative contact only after a clean reboot and compare palm
+collision disabled/enabled before attributing the frame-rate issue.
+
+The same PID 23000 session exposed a separate placement symptom: many props
+appeared far from the hand while long wooden boards/bars behaved better. Exact
+state analysis showed that only action-state `Grab=6` used the rigid VR grab;
+many props entered `Move=2` and retained native distance manipulation. The
+current host-tested fix pins Move's own state slots/contact fields and ports the
+Rework free-body behavior: preserve the selected local contact, drive that point
+to the resolved palm with force, and leave jointed/mechanism bodies native.
 
 PID 30032 reached this gate and failed at the creation-validation boundary before
 resolver execution. Review against Rework/HPL1 exposed the host assumption that

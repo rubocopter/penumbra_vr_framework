@@ -305,8 +305,24 @@ one destroy, `shape_type=1`, standalone `shape_users=0` and
 `gameplay_memory_changed=false`. The gate owns the shared-size palm box through
 the pinned Black Plague `CreateBoxShape`/`DestroyShape` ABI and exercises the
 Rework-derived sweep/refinement, slide, overlap recovery, reanchor and rotation
-resolver. It still applies no corrected pose to gameplay hands and does not
-establish character/held-body exclusion semantics.
+resolver. It still applies no corrected pose to gameplay hands. The initialized
+exact-build verifier now additionally pins the two independent filters used by
+Rework: `collideCharacter=false` excludes character bodies and `skip_body`
+excludes exactly the supplied body. The host resolver harness verifies that
+argument contract. The subsequent host-tested gameplay path now publishes the
+owning held body per hand into `skip_body` and substitutes the resolved grip for
+visible hands, physical interaction and tools; controller aim remains raw.
+
+Black Plague also has two distinct free-prop interaction routes. `Grab=6` keeps
+the existing rigid palm-relative adapter. Supported-image analysis and the
+exact-build verifier now pin action-state `Move=2` independently: for free bodies
+the adapter preserves the native picked contact point and drives that point to
+the resolved palm with the Rework-derived physical-force behavior. Bodies with
+joints stay on the native Move/mechanism path. PID 23000 exercised the gameplay
+palm path but had severe FPS loss and a right-controller dropout in the same
+session, so it is inconclusive rather than a failed headset gate. These gameplay
+changes remain host-tested until a clean rebooted A/B run checks performance,
+contact, representative free props and a jointed mechanism.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes

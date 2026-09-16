@@ -7,7 +7,12 @@ namespace penumbra_vr::backends::black_plague {
 namespace {
 runtime::VrControllerFrame test_frame;
 int test_joints=0, test_leaves=0, test_native_updates=0;
+int test_move_leaves=0, test_native_move_updates=0;
+Vec test_move_force{},test_move_force_position{};
 bool test_ui=false;
+std::array<void*,2> test_palm_held{};
+bool test_resolved_palm_valid=false;
+runtime::VrMatrix44 test_resolved_palm{};
 bool __cdecl NativeEqual(const void* value,const char* expected) {
     return std::strcmp(Read<const char*>(value,0),expected)==0;
 }
@@ -29,12 +34,23 @@ void __fastcall NativeStop(void* state, void*) {
     Put(Read<void*>(state,0x10),0x2BC,0);
 }
 int __fastcall JointCount(void*,void*) { return test_joints; }
+void __fastcall NativeMoveEnter(void*,void*,void*) {}
+void __fastcall NativeMoveLeave(void*,void*,void*) { ++test_move_leaves; }
+void __fastcall NativeMoveUpdate(void*,void*,float) { ++test_native_move_updates; }
+void __fastcall NativeMoveStop(void* state,void*) {
+    HookedMoveLeave(state,nullptr,nullptr);
+    Put(Read<void*>(state,0x10),0x2BC,0);
+}
 void __fastcall MaxLinear(void* body,void*,float value) { Put(body,0x42C,value); }
 void __fastcall MaxAngular(void* body,void*,float value) { Put(body,0x430,value); }
 void __fastcall Linear(void* body,void*,const Vec* value) { Put(body,0x450,*value); }
 void __fastcall Angular(void* body,void*,const Vec* value) { Put(body,0x460,*value); }
 void __fastcall Gravity(void* body,void*,bool value) { Put(body,0x428,value); }
 void __fastcall BodyMatrix(void* body,void*,const Matrix* value) { Put(body,0x34,*value); }
+void __fastcall BodyForceAtPosition(void*,void*,const Vec* force,const Vec* position) {
+    test_move_force=*force;
+    test_move_force_position=*position;
+}
 void Jump(std::uintptr_t rva,void* target) {
     auto* entry=g_image+rva;
     entry[0]=0xE9;
@@ -50,15 +66,26 @@ bool ControllerWorldPose(const runtime::VrHmdPose& hand, Matrix& pose, Vec& velo
     if (!hand.device_connected || !hand.pose_valid) return false;
     pose=runtime::ExpandMatrix(hand.device_to_absolute); velocity=hand.velocity; angular=hand.angular_velocity; return true;
 }
+void PublishGameplayPalmHeldBody(std::size_t hand_index,void* body) noexcept {
+    if (hand_index<test_palm_held.size()) test_palm_held[hand_index]=body;
+}
+bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
+    if (!test_resolved_palm_valid) return false;
+    pose=test_resolved_palm;
+    return true;
+}
 int RunSpatialTest() {
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     if (!g_image) return 1;
     Jump(0xAC900,reinterpret_cast<void*>(&NativeEnter)); Jump(0xAA4C0,reinterpret_cast<void*>(&NativeLeave));
     Jump(0xABA90,reinterpret_cast<void*>(&NativeUpdate)); Jump(0xA9FD0,reinterpret_cast<void*>(&NativeStop));
+    Jump(0xAAC80,reinterpret_cast<void*>(&NativeMoveEnter)); Jump(0xAAED0,reinterpret_cast<void*>(&NativeMoveLeave));
+    Jump(0xAA690,reinterpret_cast<void*>(&NativeMoveUpdate)); Jump(0xAA030,reinterpret_cast<void*>(&NativeMoveStop));
     Jump(0xCCF00,reinterpret_cast<void*>(&JointCount)); Jump(0xCA120,reinterpret_cast<void*>(&BodyMatrix));
     Jump(0x19C360,reinterpret_cast<void*>(&MaxLinear)); Jump(0x19C380,reinterpret_cast<void*>(&MaxAngular));
     Jump(0x19C2A0,reinterpret_cast<void*>(&Linear)); Jump(0x19C2C0,reinterpret_cast<void*>(&Angular));
     Jump(0x19C590,reinterpret_cast<void*>(&Gravity));
+    Jump(0x19C9E0,reinterpret_cast<void*>(&BodyForceAtPosition));
     std::array<std::uint8_t,0x500> body{},player{},state{};
     std::array<void*,10> states{}; states[6]=state.data();
     Put(player.data(),0x2C4,states.data());
@@ -71,6 +98,17 @@ int RunSpatialTest() {
     hand.pose_valid=true; hand.device_connected=true;
     hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
     hand.velocity={2,0,0}; hand.angular_velocity={0,2,0};
+    test_resolved_palm=runtime::IdentityMatrix();
+    test_resolved_palm.values[3]=5; test_resolved_palm.values[7]=6;
+    test_resolved_palm.values[11]=7; test_resolved_palm_valid=true;
+    Matrix resolved_check; Vec resolved_velocity{},resolved_angular{};
+    if (!HandPose(runtime::VrHand::right,false,resolved_check,resolved_velocity,resolved_angular) ||
+        resolved_check.values[3]!=5 || resolved_check.values[7]!=6 || resolved_check.values[11]!=7)
+        return 30;
+    if (!HandPose(runtime::VrHand::right,true,resolved_check,resolved_velocity,resolved_angular) ||
+        resolved_check.values[3]!=0 || resolved_check.values[7]!=0 || resolved_check.values[11]!=0)
+        return 31;
+    test_resolved_palm_valid=false;
     auto begin=[&] {
         g_enabled.store(true); Put(player.data(),0x2BC,0);
         test_frame.input.state.interact.pressed=true; test_frame.input.state.interact.just_pressed=true;
@@ -96,7 +134,8 @@ int RunSpatialTest() {
     // the native collision field and all of its required consumers.
     g_player_collision_filter_ready.store(true);
     begin();
-    if (!g_held.load() || Read<float>(body.data(),0x42C)!=20 || Read<bool>(body.data(),0x3C8)) return 2;
+    if (!g_held.load() || Read<float>(body.data(),0x42C)!=20 || Read<bool>(body.data(),0x3C8) ||
+        test_palm_held[1]!=body.data()) return 2;
     HookedGrabUpdate(state.data(),nullptr,0);
     if (!g_held.load() || test_leaves) return 3;
     hand.device_to_absolute.values[3]=0.2F;
@@ -108,7 +147,7 @@ int RunSpatialTest() {
     if (g_held.load() || test_leaves!=1 || Read<float>(body.data(),0x42C)!=3 ||
         Read<float>(body.data(),0x430)!=4 || Read<float>(body.data(),0x434)!=10 ||
         !Read<bool>(body.data(),0x428) || !Read<bool>(body.data(),0x3C8) ||
-        Read<Vec>(body.data(),0x450)!=Vec{2.5F,0,0}) return 5;
+        Read<Vec>(body.data(),0x450)!=Vec{2.5F,0,0} || test_palm_held[1]!=nullptr) return 5;
     // Bodies authored not to collide with characters must retain that policy.
     Put(body.data(),0x3C8,false); begin();
     test_frame.input.state.interact.pressed=false;
@@ -160,8 +199,54 @@ int RunSpatialTest() {
     if (g_held.load() || Read<bool>(body.data(),0x3C8)) return 27;
     Put(body.data(),0x3C8,true);
     ServiceSpatialInteraction(player.data(),false);
+
+    // Black Plague's action-state 2 is a separate Move interaction. Rework
+    // drives free Move bodies from the selected surface point to the tracked
+    // palm with force, while mechanisms retain their native joint path.
+    std::array<std::uint8_t,0x200> move_state{};
+    states[2]=move_state.data();
+    Put(move_state.data(),0x10,player.data()); Put(move_state.data(),0x54,body.data());
+    Put(move_state.data(),0x38,Vec{});
+    Put(body.data(),0x34,runtime::IdentityMatrix());
+    Put(body.data(),0x42C,3.0F); Put(body.data(),0x430,4.0F); Put(body.data(),0x434,2.0F);
+    hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
+    test_frame.interact_source=runtime::VrHand::right;
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load() || Read<float>(body.data(),0x42C)!=10 ||
+        Read<float>(body.data(),0x430)!=15 || test_palm_held[1]!=body.data()) return 32;
+    hand.device_to_absolute.values[3]=0.1F;
+    HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+    if (std::abs(test_move_force[0]-250.0F)>0.001F ||
+        test_move_force[1]!=0 || test_move_force[2]!=0 ||
+        test_move_force_position!=Vec{} || test_native_move_updates) return 33;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load() || test_move_leaves!=1 ||
+        Read<float>(body.data(),0x42C)!=3 || Read<float>(body.data(),0x430)!=4 ||
+        test_palm_held[1]!=nullptr) return 34;
+
+    // Jointed Move bodies stay on the native mechanism implementation.
+    test_joints=1;
+    hand.device_to_absolute.values[3]=0;
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load()) return 35;
+    HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+    if (test_native_move_updates!=1) return 36;
+    test_joints=0; Put(player.data(),0x2BC,0);
+
     const auto diagnostics=ConsumeSpatialDiagnostics();
     if (diagnostics.grabs_acquired<5 || diagnostics.grabs_released<5 ||
+        diagnostics.moves_acquired<1 || diagnostics.moves_released<1 ||
         diagnostics.guarded_releases<3 || diagnostics.collision_restore_failures) return 22;
     // Failed teardown keeps the release path resident; the native tick drains it.
     begin(); std::string error;

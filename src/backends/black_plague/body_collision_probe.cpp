@@ -427,6 +427,7 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
     if (observe) {
         ServiceNoWriteHandContactQuery(g_image, character_body);
         ServicePalmResolverValidation(g_image, character_body);
+        ServiceGameplayPalmResolver(g_image, character_body);
         const Vec3 position_after = Read<Vec3>(
             character_body, kCharacterPositionOffset);
         if (Finite(position_after)) {
@@ -702,6 +703,9 @@ bool InstallBodyCollisionProbe(std::string& error) noexcept {
 
 bool RemoveBodyCollisionProbe(std::string& error) noexcept {
     error.clear();
+    if (!ShutdownGameplayPalmResolver(error)) {
+        return false;
+    }
     bool success = hooks::RemoveRel32JumpHook(g_physical_request_hook, error);
     if (success) {
         g_physical_request_owner_installed.store(false, std::memory_order_release);
