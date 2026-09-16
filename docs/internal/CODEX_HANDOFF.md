@@ -10,6 +10,32 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Latest regression/fix checkpoint (2026-09-16): PID 26940 reached the combined
+  Black Plague room-scale + gameplay-palm path and produced two concrete
+  regressions. The headset frame showed the imported Rework hands mostly black
+  with changing multicolored triangles. The cause is inherited HPL client-array
+  state: a VBO-backed `GL_COLOR_ARRAY` can remain enabled and override the hand
+  renderer's `glColor4f`, so indexed hand vertices read unrelated host colors.
+  `rework_hand_mesh.cpp` now isolates/restores client vertex-array state,
+  disables inherited color/normal/index/edge arrays and normalizes/restores
+  pixel-unpack state around the generated diffuse upload. The real-driver WGL
+  regression enters from hostile VBO/color-array state and also proves that
+  changing only the index-finger curl changes the rendered framebuffer. Black
+  Plague still preserves the richer five-channel shared articulation; the probe
+  now logs skeleton validity plus all ten finger curls for live diagnosis.
+  PID 26940's large log also correlated the reported repeated wall-contact
+  mini-jumps with native step climbing: X/Z-only physical requests produced
+  repeated ~5 cm vertical body changes around blocked/partial solves. The BP
+  exact-build adapter now owns `0xD7361` in addition to the existing `0xD7281`
+  request boundary and skips only the native step-climb phase for a
+  physical-HMD-only tick with no direct/native horizontal motion. It does not
+  add a body update or bypass gravity/jump; direct/native locomotion keeps the
+  normal step path. Release build, 34/34 CTest, the supported-image verifier and
+  generated-hand determinism check pass. These corrections are **host-tested
+  only** until a fresh headset run verifies stable texture/articulation, no
+  repeated vertical bounce under gentle wall pressure, and ordinary stick
+  stair/ledge stepping.
+
 - Focused headset checkpoint (2026-09-16): PID 25484 exercised the current
   Black Plague crouch/Y and short-range room-scale candidate. Presentation
   analysis found 12,949 logged frames, 12,859 gameplay frames, 12,858
@@ -187,7 +213,10 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   translation by at most `0.18 m` from the collision-resolved palm while the
   actual hold remains anchored to the resolved palm. PID 23000 is
   inconclusive for headset promotion because severe FPS loss and a right-hand
-  controller dropout occurred during that same session.
+  controller dropout occurred during that same session. PID 26940 later reached
+  the combined path but exposed hand GL-state corruption and physical
+  step-climb bounce; those causes now have host-tested fixes and still require a
+  clean headset gate before palm gameplay can be promoted.
 - PID 4720 is not evidence that the previously good room-scale/crouch behavior
   regressed. Startup explicitly recorded `physical_displacement_validation=0`,
   `room_scale_validation=0` and `positional_translation_enabled=0` while the
@@ -763,18 +792,24 @@ mine-gallery EFX parameter set, including echo, modulation and room-rolloff
 fields. This strengthens the offline reference; Black Plague/Requiem audio hook
 integration still requires game-specific evidence.
 
-1. run the corrected focused palm helper after a clean reboot; verify normal FPS,
-   both controllers and that short physical X/Z movement plus crouch/stand still
-   feel like the PID 25484 room-scale baseline before and after palm contact;
-2. verify the imported Rework hands have plausible scale/orientation, remain on
-   the collision-resolved palms and articulate thumb/index/middle/ring/little
-   correctly without a visible frame-pacing regression;
-3. verify several small/free props that previously floated, long wooden bars or
+1. run `tools/Start-BlackPlaguePalmCollisionValidation.ps1` after a clean reboot;
+   verify normal FPS, both controllers and that short physical X/Z movement plus
+   crouch/stand still feel like the PID 25484 room-scale baseline before and
+   after palm contact;
+2. verify the imported Rework hands keep their diffuse texture without black/
+   rainbow corruption, remain on the collision-resolved palms and visibly
+   articulate thumb/index/middle/ring/little; correlate any failure with the new
+   skeleton/curl telemetry rather than replacing the shared five-channel policy;
+3. with no stick input, apply gentle physical pressure into a wall for several
+   seconds and slide along it. There must be no repeated vertical mini-jumps;
+   `physical_step_suppressed` should appear. Then use stick locomotion over an
+   ordinary stair/ledge to prove native step behavior is still retained there;
+4. verify several small/free props that previously floated, long wooden bars or
    tables, and one jointed mechanism across the separate `Grab=6` / `Move=2`
    ownership paths;
-4. definitive per-game tool/glowstick geometry/profile and headset validation;
-5. inventory, notes, menus, HUD and subtitles;
-6. comfort/haptics and representative chapter-level validation.
+5. definitive per-game tool/glowstick geometry/profile and headset validation;
+6. inventory, notes, menus, HUD and subtitles;
+7. comfort/haptics and representative chapter-level validation.
 
 Long bars and mechanisms must not be fixed by arbitrary springs or rigid palm offsets. Map native joint/slider/hinge state.
 

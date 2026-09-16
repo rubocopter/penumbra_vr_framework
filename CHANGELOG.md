@@ -1,5 +1,29 @@
 # Changelog
 
+- 2026-09-16: Investigated the PID 26940 Black Plague headset regression after
+  importing the Rework hand rigs. The captured frame confirmed real hand-render
+  corruption: mostly black surfaces with changing multicolored triangles. The
+  cause was leaked HPL client-array/VBO state, especially an enabled
+  `GL_COLOR_ARRAY`, which overrode the hand's constant white modulation and
+  indexed unrelated host VBO colors. The shared Rework-hand renderer now
+  isolates/restores client vertex-array state, disables inherited color/normal/
+  index/edge arrays for its draw and makes the one-time texture upload
+  deterministic across host pixel-store state. The real-driver WGL regression
+  now enters from a hostile bound-VBO/color-array state, verifies restoration
+  and verifies that an isolated index-finger curl changes the rendered image.
+  PID 26940 also correlated the reported repeated wall-contact mini-jumps with
+  Black Plague's native step-climb phase: X/Z-only physical requests produced
+  repeated ~5 cm vertical body changes around blocked/partial solves. The exact
+  backend now owns a second pinned boundary at `0xD7361` and skips only that
+  native step-climb phase on physical-HMD-only ticks with no direct/native
+  horizontal locomotion; the existing gravity/jump phase and sole `D6E00`
+  update remain native. Telemetry exposes `physical_step_suppressed` plus both
+  five-finger controller curl sets. Release build, 34/34 CTest, the exact-image
+  verifier and generated-hand determinism check pass. Both fixes remain
+  **host-tested** until one clean headset run verifies stable hand texture,
+  visible five-finger articulation, wall-pressure vertical stability and normal
+  stick stair/ledge behavior.
+
 - 2026-09-16: Hardened and reduced the host-tested Rework hand renderer before
   its first headset gate. The generated mesh now deduplicates each authored
   position/UV pair (3,376 draw vertices instead of 18,102 expanded corners per

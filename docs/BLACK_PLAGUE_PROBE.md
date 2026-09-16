@@ -327,6 +327,31 @@ session, so it is inconclusive rather than a failed headset gate. These gameplay
 changes remain host-tested until a clean rebooted A/B run checks performance,
 contact, representative free props and a jointed mechanism.
 
+PID 26940 later reached the combined gameplay-palm/room-scale path and exposed
+two separate regressions. The captured headset frame showed the imported Rework
+hands mostly black with changing multicolored triangular patches. HPL can leave
+VBO-backed client arrays enabled; an inherited `GL_COLOR_ARRAY` was overriding
+the hand renderer's constant color and indexing unrelated host color data. The
+shared renderer now isolates/restores client vertex-array state, disables
+inherited arrays it does not own and controls/restores unpack pixel state around
+the generated diffuse upload. Real-driver coverage reproduces hostile VBO/color
+state and verifies both the intended texture coloration and a visible
+single-finger articulation difference. The probe now logs skeleton validity and
+all five curls per hand so the next headset run can distinguish live input loss
+from rig/render faults.
+
+The PID 26940 log also correlated repeated physical wall-contact mini-jumps with
+Black Plague's native step-climb phase: physical VR requests are horizontal, but
+blocked/partial solves repeatedly produced roughly 5 cm vertical body changes.
+The exact-build body owner now pins `0xD7361` (`89 47 08 89 0F`) and routes that
+phase through a narrow gateway. A physical-HMD-only tick with no direct
+locomotion and no pre-injection native horizontal movement skips native step
+climbing after the horizontal solve; gravity/jump and the existing single
+`D6E00` update remain native. Stick/native movement retains the normal step
+path. `physical_step_suppressed` is emitted in body telemetry. This adaptation
+is host-tested only and must be checked under gentle wall pressure plus ordinary
+stick stair/ledge traversal before promotion.
+
 PID 4720 later showed that the old focused palm helper was not exercising the
 known-good room-scale composition at all: startup logged physical displacement,
 room-scale and positional translation disabled while palm collision was enabled.
@@ -335,8 +360,11 @@ reject a session unless room-scale rendering and tracked crouch are both seen.
 The same focused run is now also the headset presentation gate for the imported
 Rework hand rigs: both hands must have plausible scale/orientation, stay on the
 resolved palms, articulate all five shared finger channels and preserve normal
-frame pacing. The mesh/rig path is host-tested only until that observation is
-captured.
+frame pacing. It must also confirm stable diffuse texture with no black/rainbow
+corruption and no repeated vertical body bounce under physical-only wall
+pressure, followed by normal stair/ledge stepping with stick locomotion. The
+corrected mesh/rig and step-suppression paths are host-tested only until those
+observations are captured.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes

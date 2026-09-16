@@ -90,9 +90,19 @@ representativos, pared/slide y un mecanismo nativo. Esa misma tanda valida por
 primera vez la presentación de las manos reales importadas de Rework: ambas
 deben tener escala/orientación plausibles, permanecer sobre la palma resuelta,
 articular los cinco canales de dedos y no introducir una regresión evidente de
-frame pacing. La malla/rig está host-tested, no headset-validated. PID 4720 no
-sirve para comparar room-scale porque el helper antiguo lo lanzó con esa ruta
-desactivada.
+frame pacing. PID 26940 sí llegó a esta composición, pero mostró dos regresiones:
+las manos aparecían negras/con triángulos de colores por estado GL heredado y la
+presión física suave contra paredes producía mini-saltos verticales repetidos
+desde el step-climb nativo. Ambos tienen correcciones **host-tested** en el
+candidato actual. En la repetición comprueba expresamente que la textura de la
+mano permanece estable, que los cinco dedos se articulan, que
+`controller_skeletons`/`left_curls`/`right_curls` reflejan el movimiento y que,
+sin stick, mantener presión ligera contra una pared no genera rebote vertical;
+el log debe mostrar `physical_step_suppressed`. Después recorre con stick un
+escalón o borde normal para confirmar que el step nativo de locomoción sigue
+activo. La malla/rig y esta adaptación de colisión siguen host-tested, no
+headset-validated. PID 4720 no sirve para comparar room-scale porque el helper
+antiguo lo lanzó con esa ruta desactivada.
 
 ### Build preparada para la siguiente sesión
 

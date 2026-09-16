@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <iostream>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -428,11 +429,20 @@ int main() {
             std::array<GLuint,2> sentinel_buffers{};
             if (sentinel_vbos) {
                 gen_buffers(static_cast<GLsizei>(sentinel_buffers.size()),sentinel_buffers.data());
-                const std::array<std::uint8_t,16> sentinel_data{};
+                std::array<std::uint8_t,4096*4> sentinel_data{};
+                for (std::size_t i=0;i<sentinel_data.size();i+=4) {
+                    sentinel_data[i+0]=0;
+                    sentinel_data[i+1]=255;
+                    sentinel_data[i+2]=0;
+                    sentinel_data[i+3]=255;
+                }
                 bind_buffer(kGlArrayBuffer,sentinel_buffers[0]);
                 buffer_data(kGlArrayBuffer,static_cast<std::ptrdiff_t>(sentinel_data.size()),sentinel_data.data(),0x88E4);
+                glColorPointer(4,GL_UNSIGNED_BYTE,0,nullptr);
+                glEnableClientState(GL_COLOR_ARRAY);
                 bind_buffer(kGlElementArrayBuffer,sentinel_buffers[1]);
-                buffer_data(kGlElementArrayBuffer,static_cast<std::ptrdiff_t>(sentinel_data.size()),sentinel_data.data(),0x88E4);
+                const std::array<std::uint8_t,16> element_data{};
+                buffer_data(kGlElementArrayBuffer,static_cast<std::ptrdiff_t>(element_data.size()),element_data.data(),0x88E4);
             }
             glDepthFunc(GL_GREATER); glDepthMask(GL_FALSE);
             if (!penumbra_vr::graphics::DrawTrackedHands(hands,penumbra_vr::runtime::IdentityMatrix(),projection,error) ||
@@ -443,6 +453,8 @@ int main() {
                 glGetIntegerv(kGlElementArrayBufferBinding,&element_binding);
                 if (array_binding!=static_cast<GLint>(sentinel_buffers[0]) ||
                     element_binding!=static_cast<GLint>(sentinel_buffers[1])) return 42;
+                if (glIsEnabled(GL_COLOR_ARRAY)!=GL_TRUE) return 43;
+                glDisableClientState(GL_COLOR_ARRAY);
                 bind_buffer(kGlArrayBuffer,0);
                 bind_buffer(kGlElementArrayBuffer,0);
                 delete_buffers(static_cast<GLsizei>(sentinel_buffers.size()),sentinel_buffers.data());
@@ -457,6 +469,37 @@ int main() {
                 std::cerr<<"Hand pixel "<<static_cast<int>(palm[0])<<','<<static_cast<int>(palm[1])<<','
                     <<static_cast<int>(palm[2])<<" GL error "<<glGetError()<<'\n'; return 36;
             }
+            // The imported Rework mesh must still expose Black Plague's richer
+            // per-finger articulation. Render the exact same hand twice with
+            // only the index curl changed and require a visible framebuffer
+            // difference, so a future skinning/cache regression cannot turn
+            // the textured hand into a static prop while pose math still tests.
+            glDisable(GL_SCISSOR_TEST); glDepthMask(GL_TRUE); glClearDepth(1);
+            glDepthFunc(GL_LESS); glClearColor(0,0,0,1);
+            glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+            hands[1].curl.fill(0.0F);
+            if (!penumbra_vr::graphics::DrawTrackedHands(
+                    hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 44;
+            std::vector<GLubyte> open_hand(320U*240U*4U);
+            glReadPixels(0,0,320,240,GL_RGBA,GL_UNSIGNED_BYTE,open_hand.data());
+            glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+            hands[1].curl[1]=1.0F;
+            if (!penumbra_vr::graphics::DrawTrackedHands(
+                    hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 45;
+            std::vector<GLubyte> curled_hand(open_hand.size());
+            glReadPixels(0,0,320,240,GL_RGBA,GL_UNSIGNED_BYTE,curled_hand.data());
+            std::size_t changed_pixels=0;
+            for (std::size_t pixel=0;pixel<320U*240U;++pixel) {
+                const std::size_t at=pixel*4U;
+                if (open_hand[at]!=curled_hand[at] ||
+                    open_hand[at+1]!=curled_hand[at+1] ||
+                    open_hand[at+2]!=curled_hand[at+2]) ++changed_pixels;
+            }
+            if (changed_pixels<20U) {
+                std::cerr<<"Hand articulation changed only "<<changed_pixels<<" pixels\n";
+                return 46;
+            }
+            hands[1].curl.fill(0.0F);
             glDisable(GL_SCISSOR_TEST); glDepthMask(GL_TRUE); glClearDepth(0);
             glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
             if (!penumbra_vr::graphics::DrawTrackedHands(hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 37;

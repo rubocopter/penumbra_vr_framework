@@ -4,6 +4,36 @@ This file prevents repeated symptom-level fixes from replacing evidence-backed i
 
 ## Current headset/offline checkpoint (2026-09-16)
 
+PID 26940 is the newest regression evidence; PID 25484 remains the newest
+positive room-scale/crouch baseline. The PID 26940 headset frame showed the
+imported Rework hands rendering mostly black with changing multicolored
+triangles. This is a real renderer-state bug, not a missing diffuse asset. HPL
+can leave VBO-backed client arrays enabled; in particular an inherited
+`GL_COLOR_ARRAY` overrides `glColor4f` and makes the hand's indexed draw fetch
+unrelated host per-vertex colors. The shared hand renderer now saves/restores
+client vertex-array state, unbinds host VBOs for its CPU arrays, disables
+inherited color/normal/index/edge arrays and normalizes/restores unpack pixel
+state around the one-time texture upload. The real-driver WGL test reproduces a
+hostile green color-array/VBO state and proves both restoration and visible
+per-finger deformation. Do not replace Black Plague's five independent finger
+curls with Overture's simpler grab curves; the logical five-channel path is
+still present and the probe now logs `controller_skeletons`, `left_curls` and
+`right_curls` for the next headset run.
+
+The same PID 26940 log correlated the user's repeated wall-contact mini-jumps
+with Black Plague's native step-climb phase. Hundreds of blocked/partial
+physical solves included repeated roughly 5 cm vertical body changes even
+though the injected VR request was X/Z only. The current exact-build adaptation
+adds one owner at `0xD7361`: after the normal horizontal collision solve it
+skips only native step climbing when the tick contains a physical-HMD request,
+no direct locomotion request and no native horizontal displacement before VR
+injection. Gravity/jump and the sole native `D460A -> D6E00` update remain
+untouched; stick/native movement retains the native step path. This differs
+narrowly from Rework's source-level `vr_stepstaticonly` path and therefore stays
+backend-specific and **host-tested** until the headset verifies wall-pressure
+stability plus ordinary stick stair/ledge traversal. Telemetry records
+`physical_step_suppressed` for that gate.
+
 PID 25484 is the newest focused headset evidence. The user reported that the
 session felt good. `Analyze-BlackPlaguePresentation.ps1 -CollisionComfort`
 reported 12,949 frames, 12,859 gameplay frames, 12,858 presentation frames,
@@ -95,8 +125,10 @@ resolved palm drives visible hands, held-object motion and tools. Acquisition
 intent separately follows Rework's bounded raw-controller extension from the
 collision-stopped palm. PID 23000 reached that
 path in the headset, but severe FPS loss and a right-controller dropout make it
-inconclusive for promotion; the next palm evidence must come from a clean A/B
-run.
+inconclusive for promotion. PID 26940 then reached the combined palm/room-scale
+path with both controllers but exposed the renderer corruption and physical
+step-climb bounce described above, so it also cannot promote gameplay palms.
+The next palm evidence must come from a clean run of the corrected candidate.
 
 ## 0. Hook and loader lifecycle
 

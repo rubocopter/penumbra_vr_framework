@@ -193,15 +193,22 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
   - [x] Replace the provisional procedural hand presentation with generated
     renderer data from the proven Rework DAE rigs and diffuse material; keep
     `runtime::ArticulateVrHand` as pose authority and host-test real GL drawing
-    plus caller-state/depth restoration
+    plus caller-state/depth restoration. PID 26940 exposed inherited HPL VBO/
+    client-color-array state corrupting the indexed hand draw; the renderer now
+    isolates that shared GL client state and a real-driver regression proves both
+    texture coloration and visible per-finger articulation under hostile state.
   - [ ] Headset-validate palm contact plus `Grab=6` / `Move=2` placement after a
     clean reboot and compare palm-collision on/off frame pacing; PID 23000 is
     inconclusive because the run also had severe FPS loss and a controller drop;
     PID 4720 also does not count because the old focused helper launched palms
     with room-scale/physical displacement disabled. The helper now composes the
     palm gate with the validated room-scale/crouch stack and checks that state;
-    the same run must also check real-hand scale/orientation/articulation and
-    frame pacing before the mesh path is promoted beyond host-tested.
+    PID 26940 reached the combined path but exposed black/rainbow hand rendering
+    and repeated vertical mini-jumps under physical wall pressure. The next run
+    must verify the host-tested GL-state fix, five independent finger channels,
+    stable physical wall contact with `physical_step_suppressed`, normal stick
+    stairs/ledges, representative free props/mechanisms and frame pacing before
+    either corrected path is promoted beyond host-tested.
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
@@ -212,6 +219,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-validate that physical request through stationary/free/block/slide cases before enabling room-scale
 - [x] Implement a transient, fail-closed room-scale consumer through that reconciled request
 - [x] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset (PID 8092 technical gate)
+- [ ] Headset-validate the PID 26940 physical-only step-climb suppression against gentle wall pressure while confirming direct/native locomotion retains normal stair/ledge stepping
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
 - [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
 - [x] Implement Rework-derived physical crouch policy and explicit desired/native stance synchronization through Black Plague's existing input owner

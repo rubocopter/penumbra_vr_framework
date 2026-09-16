@@ -188,11 +188,22 @@ right-controller dropout made the run inconclusive. PID 4720 also cannot judge
 room-scale regressions because the old focused palm helper started with physical
 displacement, room-scale and positional translation disabled. The helper now
 composes palms with the known-good room-scale/crouch stack and verifies that
-composition in telemetry. The next palm gate is therefore a clean-reboot run of
-that combined helper with both controllers healthy, representative contact plus
-`Grab=6`/`Move=2`, short physical X/Z + crouch checks before/after contact, and
-at least one native jointed mechanism. Do not promote gameplay palms beyond
-host-tested until that clean evidence exists.
+composition in telemetry. PID 26940 reached that combined path and exposed two
+separate regressions: inherited HPL client-array/VBO state corrupted the imported
+hand draw into black/rainbow triangles, and physical-only wall pressure entered
+Black Plague's native step-climb phase and produced repeated vertical mini-jumps.
+The shared hand renderer now isolates/restores the relevant GL client and unpack
+state and has a real-driver hostile-state regression; the exact BP backend now
+owns a pinned `0xD7361` step boundary and skips only native step climbing on a
+physical-HMD-only tick with no direct/native horizontal motion. Gravity/jump and
+the sole `D6E00` update remain native, while stick/native movement retains normal
+step behavior. Both fixes are host-tested only. The next palm gate is therefore
+a clean-reboot run of the combined helper with both controllers healthy, stable
+hand texture plus five-finger articulation, gentle wall-pressure/slide without
+vertical bounce, ordinary stick stair/ledge traversal, representative contact
+plus `Grab=6`/`Move=2`, short physical X/Z + crouch checks before/after contact,
+and at least one native jointed mechanism. Do not promote gameplay palms or the
+new collision adaptation beyond host-tested until that clean evidence exists.
 
 ## Black Plague constraints
 

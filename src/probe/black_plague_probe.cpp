@@ -537,6 +537,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
             "controller_grips=%u controller_aims=%u controller_move=[%.3f,%.3f] controller_turn=%.3f "
+            "controller_skeletons=%u left_curls=[%.3f,%.3f,%.3f,%.3f,%.3f] "
+            "right_curls=[%.3f,%.3f,%.3f,%.3f,%.3f] "
             "movement_yaw_valid=%u movement_yaw_rad=%.5f controller_error=%s "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
@@ -623,6 +625,18 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.controller_frame.input.state.move.x,
             render_world.controller_frame.input.state.move.y,
             render_world.controller_frame.input.state.turn.x,
+            (render_world.controller_frame.hands[0].skeleton_valid ? 1U : 0U) |
+                (render_world.controller_frame.hands[1].skeleton_valid ? 2U : 0U),
+            render_world.controller_frame.hands[0].finger_curl[0],
+            render_world.controller_frame.hands[0].finger_curl[1],
+            render_world.controller_frame.hands[0].finger_curl[2],
+            render_world.controller_frame.hands[0].finger_curl[3],
+            render_world.controller_frame.hands[0].finger_curl[4],
+            render_world.controller_frame.hands[1].finger_curl[0],
+            render_world.controller_frame.hands[1].finger_curl[1],
+            render_world.controller_frame.hands[1].finger_curl[2],
+            render_world.controller_frame.hands[1].finger_curl[3],
+            render_world.controller_frame.hands[1].finger_curl[4],
             movement_yaw_valid ? 1U : 0U,
             movement_yaw,
             render_world.controller_error.data(),
@@ -649,7 +663,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "feet_before=[%.4f,%.4f,%.4f] feet_after=[%.4f,%.4f,%.4f] "
                 "collision_sample_valid=%u requested_delta=[%.5f,%.5f,%.5f] "
                 "solver_delta=[%.5f,%.5f,%.5f] accepted_delta=[%.5f,%.5f,%.5f] "
-                "physical_consumed=%u physical_injected=%u "
+                "physical_consumed=%u physical_injected=%u physical_step_suppressed=%u "
                 "physical_requested=[%.5f,%.5f,%.5f] "
                 "physical_injected_delta=[%.5f,%.5f,%.5f] "
                 "locomotion_consumed=%u locomotion_injected=%u "
@@ -694,6 +708,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 body.accepted_displacement[2],
                 body.physical_request_consumed ? 1U : 0U,
                 body.physical_request_injected ? 1U : 0U,
+                body.physical_step_climb_suppressed ? 1U : 0U,
                 body.physical_requested_displacement[0],
                 body.physical_requested_displacement[1],
                 body.physical_requested_displacement[2],

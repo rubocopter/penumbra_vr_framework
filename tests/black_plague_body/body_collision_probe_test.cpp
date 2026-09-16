@@ -109,6 +109,8 @@ int RunBodyCollisionProbeTest() {
         kCollisionCall.data(), kCollisionCall.size());
     std::memcpy(image + kPhysicalRequestInjection,
         kPhysicalRequestWindow.data(), kPhysicalRequestWindow.size());
+    std::memcpy(image + kPhysicalStepDecision,
+        kPhysicalStepWindow.data(), kPhysicalStepWindow.size());
     Jump(image, kCharacterUpdate, reinterpret_cast<void*>(&FakeUpdate));
     Jump(image, kCheckShapeWorldCollision,
         reinterpret_cast<void*>(&FakeCollision));
@@ -153,6 +155,25 @@ int RunBodyCollisionProbeTest() {
     const auto physical_boundary = ReadPhysicalBodyDisplacementBoundaryStatus();
     if (!physical_boundary.initialized || physical_boundary.live[0] != 0xE9)
         return 38;
+
+    // A physical-HMD-only tick bypasses Black Plague's native step-climb
+    // search after horizontal collision. Stick locomotion keeps that path so
+    // ordinary stair/ledge traversal remains native.
+    g_tick = {};
+    g_tick.character_body = g_body_storage.data();
+    g_tick.physical_request_injected = true;
+    if (!ShouldSuppressPhysicalStepClimb() ||
+        !g_tick.physical_step_climb_suppressed) return 87;
+    g_tick.physical_step_climb_suppressed = false;
+    g_tick.locomotion_request_injected = true;
+    if (ShouldSuppressPhysicalStepClimb() ||
+        g_tick.physical_step_climb_suppressed) return 88;
+    g_tick.locomotion_request_injected = false;
+    g_tick.position_before = {};
+    g_tick.physical_position_before = {0.01F, 0.0F, 0.0F};
+    if (ShouldSuppressPhysicalStepClimb() ||
+        g_tick.physical_step_climb_suppressed) return 90;
+    g_tick = {};
 
     if (QueuePhysicalBodyDisplacement(
             {NAN, 123.0F, 0.0F})) return 39;
@@ -626,6 +647,9 @@ int RunBodyCollisionProbeTest() {
     if (!std::equal(kPhysicalRequestWindow.begin(),
             kPhysicalRequestWindow.end(),
             image + kPhysicalRequestInjection)) return 48;
+    if (!std::equal(kPhysicalStepWindow.begin(),
+            kPhysicalStepWindow.end(),
+            image + kPhysicalStepDecision)) return 89;
 
     image[kPhysicsWorldCharacterUpdateCall] = 0x90;
     if (InstallForImage(image, error) || error.empty()) {

@@ -96,12 +96,13 @@ try {
     Write-Host '1. Before touching props, physically translate 5-10 cm in X/Z and crouch/stand once. Room movement, tracked Y and overall embodied feel should match the previously good room-scale build.'
     Write-Host '2. Inspect both imported Rework hand meshes in open space. Scale/orientation should look natural, each mesh must stay on its tracked/resolved palm, and thumb/index/middle/ring/little should articulate without an obvious frame-rate regression.'
     Write-Host '3. In open space, move both tracked hands around your torso and head. They must follow normally and must not stop on the player character body.'
-    Write-Host '4. Press each palm slowly into a wall or table, then sweep sideways. The visible hand/palm should stop at the surface and slide along it instead of crossing or snapping through.'
-    Write-Host '5. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
-    Write-Host '6. Grab several small free props that previously appeared far from or difficult to acquire. Selection may follow the real controller up to the Rework 18 cm bound while the visible palm remains collision-constrained; once held, the object must stay aligned with the owning palm.'
-    Write-Host '7. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab.'
-    Write-Host '8. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
-    Write-Host '9. Repeat the short physical translation/crouch check after the palm interactions, confirm stick locomotion still behaves normally and the hand meshes remain correctly aligned, then close Black Plague.'
+    Write-Host '4. Without stick input, physically move/lean the player body gently into a wall until horizontal room-scale motion is rejected, hold light pressure for a few seconds, then slide parallel to it. The view/body must remain vertically stable: no repeated mini-jumps or collision bounce.'
+    Write-Host '5. Press each palm slowly into a wall or table, then sweep sideways. The visible hand/palm should stop at the surface and slide along it instead of crossing or snapping through.'
+    Write-Host '6. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
+    Write-Host '7. Grab several small free props that previously appeared far from or difficult to acquire. Selection may follow the real controller up to the Rework 18 cm bound while the visible palm remains collision-constrained; once held, the object must stay aligned with the owning palm.'
+    Write-Host '8. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab.'
+    Write-Host '9. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
+    Write-Host '10. Repeat the short physical translation/crouch check after the palm interactions, confirm stick locomotion still behaves normally and the hand meshes remain textured/aligned, then close Black Plague.'
 
     Wait-Process -Id $gameProcess.Id
 
@@ -120,6 +121,7 @@ try {
     $enabledSeen = $false
     $roomScaleApplied = $false
     $trackedCrouch = $false
+    [uint64]$physicalStepSuppressed = 0
     foreach ($line in Get-Content -LiteralPath $probeLog) {
         if ($line -like '*render_world_calls=*' -and
             $line -match 'room_scale_enabled=1 room_scale_sample_valid=1 positional_translation_applied=1') {
@@ -128,6 +130,10 @@ try {
         if ($line -like '*physical_crouch *' -and
             $line -match 'enabled=1 tracking_valid=1') {
             $trackedCrouch = $true
+        }
+        if ($line -like '*body_collision *' -and
+            $line -match 'physical_step_suppressed=1') {
+            ++$physicalStepSuppressed
         }
         if ($line -notmatch $pattern) { continue }
         if ($Matches.enabled -eq '1' -and $Matches.source -eq 'mutex') {
@@ -143,7 +149,7 @@ try {
         $creates += [uint64]$Matches.creates
     }
 
-    Write-Host "Palm totals: samples=$samples published=$published queries=$queries contacts=$contacts constrained=$constrained held_body_skips=$held failures=$failures creates=$creates"
+    Write-Host "Palm totals: samples=$samples published=$published queries=$queries contacts=$contacts constrained=$constrained held_body_skips=$held failures=$failures creates=$creates physical_step_suppressed=$physicalStepSuppressed"
     if (-not $enabledSeen -or $samples -eq 0 -or $published -eq 0 -or
         $queries -eq 0 -or $creates -eq 0) {
         throw 'The tracked palm resolver did not produce the minimum live telemetry required by this gate.'

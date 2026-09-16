@@ -29,6 +29,7 @@ struct BodyCollisionTelemetry {
     std::array<float, 3> accepted_displacement{};
     bool physical_request_consumed = false;
     bool physical_request_injected = false;
+    bool physical_step_climb_suppressed = false;
     bool locomotion_request_consumed = false;
     bool locomotion_request_injected = false;
     std::array<float, 3> physical_requested_displacement{};

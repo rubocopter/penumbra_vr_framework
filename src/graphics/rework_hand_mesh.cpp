@@ -207,9 +207,19 @@ GLuint HandTexture() noexcept {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, 0x812F); // GL_CLAMP_TO_EDGE
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, 0x812F);
+    // Pixel-store state is client state and is not covered by the caller's
+    // glPushAttrib(GL_ALL_ATTRIB_BITS). HPL uploads dynamic textures and may
+    // leave row/skip state behind, so make this one-time renderer upload
+    // deterministic and restore the host state afterwards.
+    glPushClientAttrib(GL_CLIENT_PIXEL_STORE_BIT);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_SKIP_ROWS, 0);
+    glPixelStorei(GL_UNPACK_SKIP_PIXELS, 0);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB,
         generated::kHandTextureWidth, generated::kHandTextureHeight,
         0, GL_RGB, GL_UNSIGNED_BYTE, generated::kHandTextureRgb.data());
+    glPopClientAttrib();
     return cache.texture;
 }
 
@@ -298,6 +308,7 @@ bool DrawReworkHandMesh(
     GLint previous_array_buffer = 0;
     GLint previous_element_buffer = 0;
     if (client_api.active_texture) glGetIntegerv(kClientActiveTexture, &previous_client_texture);
+    glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT);
     if (client_api.bind_buffer) {
         // HPL1 uses VBOs. Client pointers become byte offsets whenever one of
         // these bindings is non-zero, so isolate both before supplying our
@@ -307,8 +318,16 @@ bool DrawReworkHandMesh(
         client_api.bind_buffer(kArrayBuffer, 0);
         client_api.bind_buffer(kElementArrayBuffer, 0);
     }
-    glPushClientAttrib(GL_CLIENT_VERTEX_ARRAY_BIT);
     if (client_api.active_texture) client_api.active_texture(kTexture0);
+    // HPL commonly leaves VBO-backed client arrays enabled. In particular an
+    // inherited color array overrides glColor4f and makes our hand indices
+    // fetch unrelated per-vertex colors from the game's VBO, producing the
+    // black/rainbow triangular corruption seen in-headset. Our hand renderer
+    // owns only vertex + unit-0 UV arrays for this draw.
+    glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(GL_NORMAL_ARRAY);
+    glDisableClientState(GL_INDEX_ARRAY);
+    glDisableClientState(GL_EDGE_FLAG_ARRAY);
     glEnableClientState(GL_TEXTURE_COORD_ARRAY);
     glEnableClientState(GL_VERTEX_ARRAY);
     glTexCoordPointer(2, GL_FLOAT, sizeof(DrawVertex), &vertices[0].u);
