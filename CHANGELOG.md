@@ -1,5 +1,22 @@
 # Changelog
 
+- 2026-09-16: PID 28412 live-tested the default-off Black Plague no-write palm
+  query on the supported build: one callback, eight contacts, unchanged native
+  memory and continued normal game ticking. The next isolated stage is now
+  implemented and host-tested. Black Plague owns `CreateBoxShape`/`DestroyShape`
+  through the pinned exact-build ABI, safely reuses or replaces the palm shape
+  with physics-world ownership, and feeds native contacts into a game-neutral
+  port of Rework `23c890f` sweep/refinement, slide, overlap recovery, reanchor,
+  constrained recovery and rotation resolution. `--validate-palm-resolver`
+  creates, queries, reuses and destroys the owned shape on the existing
+  post-`D6E00` game-thread owner without publishing the resolved pose to
+  gameplay. Synthetic tests cover clear sweep, wall slide, overlap recovery,
+  rotation blocking, malformed contacts, same-world reuse, world replacement
+  and native gameplay-memory guards. Release, Debug and SDK-less Release each
+  pass 34/34 CTest; metadata, the supported-image exact-build verifier and the
+  autonomous Overture `-Full` regression also pass. Owned palms/resolver remain
+  host-tested until the new live gate succeeds.
+
 - 2026-09-16: PID 25484 supplied focused Black Plague headset evidence for the
   current crouch/Y and short-range room-scale candidate. The run produced 12,858
   presentation frames with zero stereo failures, 2,477 meaningful body samples
@@ -84,9 +101,10 @@
   that reuses the current player-body shape on the existing post-`D6E00` game
   thread owner, writes only to DLL/stack output and rejects changes to selected
   native world/body/shape bytes. Its synthetic clear/contact/mutation harness
-  is host-tested, bringing root CTest to 34 tests. The query has not run in a
-  real BP process; no palm shape is created and gameplay palm collision remains
-  unconnected.
+  is host-tested, bringing root CTest to 34 tests. PID 28412 subsequently
+  live-tested that no-write query without selected native-memory changes. The
+  separate owned-palm lifecycle/resolver gate described above remains
+  disconnected from gameplay pending its own live validation.
 
 - Extracted the demonstrated Overture/Rework palm collision policy into
   `src/runtime/vr_interaction_policy.hpp`: palm dimensions, contact tolerances,

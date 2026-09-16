@@ -152,6 +152,9 @@ $contactConstants = @{
     kPhysicsBodyVtable = 0x292C08
     kCollideShapeNewtonVtable = 0x292D40
     kCheckShapeWorldCollision = 0xD4830
+    kCreateBoxShape = 0x18AC10
+    kDestroyShape = 0xD4210
+    kCreateBoxShapeVtableSlot = 0x30
 }
 foreach ($contactConstant in $contactConstants.GetEnumerator()) {
     $pattern = '\b{0}\s*=\s*0x([0-9A-Fa-f]+)\s*;' -f

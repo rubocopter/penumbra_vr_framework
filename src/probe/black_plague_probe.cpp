@@ -1504,6 +1504,42 @@ extern "C" DWORD WINAPI PenumbraVR_ValidatePalmQuery(void*) {
     return 1;
 }
 
+extern "C" DWORD WINAPI PenumbraVR_ValidatePalmResolver(void*) {
+    if (InterlockedCompareExchange(&g_state, 2, 2) != 2) return 0;
+
+    penumbra_vr::backends::black_plague::PalmResolverValidationTelemetry telemetry;
+    std::string error;
+    if (!penumbra_vr::backends::black_plague::RequestPalmResolverValidation(
+            telemetry, error)) {
+        penumbra_vr::probe::WriteLog(
+            "Owned palm resolver validation failed: %s", error.c_str());
+        return 0;
+    }
+    penumbra_vr::probe::WriteLog(
+        "Owned palm resolver validation passed: creates=%lu destroys=%lu "
+        "queries=%lu contacts=%lu reused=%s world_replaced=%s "
+        "shape_type=%ld shape_users=%ld shape=(%.6f,%.6f,%.6f) "
+        "first_raw=(%.6f,%.6f,%.6f) first_resolved=(%.6f,%.6f,%.6f) "
+        "second_raw=(%.6f,%.6f,%.6f) second_resolved=(%.6f,%.6f,%.6f) "
+        "gameplay_memory_changed=false",
+        static_cast<unsigned long>(telemetry.create_count),
+        static_cast<unsigned long>(telemetry.destroy_count),
+        static_cast<unsigned long>(telemetry.query_count),
+        static_cast<unsigned long>(telemetry.contact_count),
+        telemetry.shape_reused ? "true" : "false",
+        telemetry.world_replaced ? "true" : "false",
+        static_cast<long>(telemetry.shape_type),
+        static_cast<long>(telemetry.shape_user_count),
+        telemetry.shape_size[0], telemetry.shape_size[1], telemetry.shape_size[2],
+        telemetry.first_raw_position[0], telemetry.first_raw_position[1],
+        telemetry.first_raw_position[2], telemetry.first_resolved_position[0],
+        telemetry.first_resolved_position[1], telemetry.first_resolved_position[2],
+        telemetry.second_raw_position[0], telemetry.second_raw_position[1],
+        telemetry.second_raw_position[2], telemetry.second_resolved_position[0],
+        telemetry.second_resolved_position[1], telemetry.second_resolved_position[2]);
+    return 1;
+}
+
 extern "C" DWORD WINAPI PenumbraVR_CreatePersistentEyeTargets(void*) {
     if (InterlockedCompareExchange(&g_state, 2, 2) != 2) {
         return 0;

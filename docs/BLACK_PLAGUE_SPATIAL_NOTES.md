@@ -328,14 +328,21 @@ mide `0x1C`, con normal en `+0x0C` y profundidad en `+0x18`. Los accessors
 nativos de matriz local y shape del body están en `0xC9D90` (`body+0x34`) y
 `0xCCC30` (`body+0x340`). El verificador fija todos esos bytes y retornos.
 
-`hand_contact_probe.*` añade solamente un diagnóstico default-off. Una petición
+`hand_contact_probe.*` mantiene el diagnóstico default-off de query. Una petición
 remota `--validate-palm-query` se atiende después del único `D460A -> D6E00`,
 en el owner ya existente. Reutiliza el shape actual del cuerpo del jugador,
 escribe el resultado en pila/memoria de la DLL y compara antes/después la lista
 de shapes, posición del character body, matriz/puntero del physics body y
 cabecera del shape. El harness sintético prueba espacio libre, callback con dos
-contactos y rechazo de una mutación nativa. Aún no se ha ejecutado en un proceso
-BP real, no crea un shape de palma y no mueve ni corrige las manos.
+contactos y rechazo de una mutación nativa. PID 28412 cerró este gate en proceso
+real con un callback, ocho contactos y `native_memory_changed=false`.
+
+El siguiente nivel sigue aislado de gameplay: el backend ya crea, reutiliza y
+destruye un box de palma propio mediante la ABI exacta fijada y alimenta sus
+contactos al resolver común portado de Rework. Esa lifecycle/resolution está
+implementada y host-tested detrás de `--validate-palm-resolver`; falta su gate
+live. La pose resuelta todavía no se publica a las manos del jugador y las
+exclusiones de character/held-body siguen requiriendo evidencia separada.
 
 ### Articulación de dedos: BP no debe degradarse
 

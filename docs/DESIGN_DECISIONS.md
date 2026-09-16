@@ -107,7 +107,7 @@ A subsystem may legitimately have different statuses for different contracts. Do
 
 Free-body grab may place a body kinematically relative to a resolved grab pose. That is not the same as reproducing Rework's collision-resolved palm/contact behavior.
 
-The current Black Plague native shape-query ABI is pinned and a no-write diagnostic is host-tested, but owned palm shapes and the gameplay resolver remain gated on the real-process query.
+The Black Plague native shape-query ABI and no-write diagnostic are live-tested (PID 28412). Backend-owned palm shapes and the Rework-derived resolver are implemented and host-tested behind a default-off diagnostic gate; gameplay palm publication and any generalized character/held-body exclusion contract remain gated on live evidence.
 
 Do not solve long-body/contact defects with springs, global offsets or longer rays before validating the contact contract.
 

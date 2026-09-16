@@ -1,5 +1,7 @@
 #pragma once
 
+#include "vr_math.hpp"
+
 #include <array>
 
 namespace penumbra_vr::runtime {
@@ -55,5 +57,42 @@ struct VrHandCollisionDecision {
     const VrHandContactVector& up,
     const VrHandContactVector& forward,
     bool left_hand) noexcept;
+
+struct VrHandResolverFrame {
+    VrHandContactVector head{};
+    VrHandContactVector right{1.0F, 0.0F, 0.0F};
+    VrHandContactVector up{0.0F, 1.0F, 0.0F};
+    VrHandContactVector forward{0.0F, 0.0F, 1.0F};
+    bool head_basis_valid = false;
+    bool left_hand = false;
+    bool interaction_assist = false;
+};
+
+struct VrHandResolveState {
+    VrMatrix44 raw_pose{};
+    VrMatrix44 resolved_pose{};
+    bool valid = false;
+    int constrained_frames = 0;
+};
+
+using VrHandCollisionQuery = bool(*)(
+    void* context,
+    const VrMatrix44& pose,
+    const VrHandContactVector& motion,
+    float tolerance,
+    VrHandCollisionDecision& decision) noexcept;
+
+void ResetVrHandResolveState(VrHandResolveState& state) noexcept;
+
+// Game-neutral port of Rework 23c890f's per-hand collision resolver. Native
+// shape ownership, exact-build collision calls and body exclusions stay in the
+// backend-supplied query. A failed/malformed query never advances to raw input.
+[[nodiscard]] bool ResolveVrHandPose(
+    VrHandResolveState& state,
+    const VrMatrix44& raw_pose,
+    const VrHandResolverFrame& frame,
+    void* query_context,
+    VrHandCollisionQuery query,
+    VrMatrix44& resolved_pose) noexcept;
 
 } // namespace penumbra_vr::runtime

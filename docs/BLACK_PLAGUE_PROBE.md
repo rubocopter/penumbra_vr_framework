@@ -255,6 +255,9 @@ The correction hooks that earlier call while continuous stereo is active. After 
 # Without starting VR, run one no-write native shape query on the game thread
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-palm-query <pid>
 
+# Without starting VR, exercise the owned palm shape lifecycle and resolver
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --validate-palm-resolver <pid>
+
 # Keep a diagnostic pair alive until --detach performs render-thread teardown
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --hold-eye-targets <pid>
 
@@ -294,6 +297,14 @@ collision callback contacts, and verifies selected world/body/shape bytes are
 unchanged. It creates no palm shape, applies no corrected pose and does not
 start OpenVR. A timeout with no current body tick is a failed/unserviced request;
 a timeout after game-thread processing began is reported as indeterminate.
+
+PID 28412 live-tested that no-write query with one callback, eight contacts and
+`native_memory_changed=false`. `--validate-palm-resolver` is the next isolated
+gate: it owns the shared-size palm box through the pinned Black Plague
+`CreateBoxShape`/`DestroyShape` ABI, verifies same-world reuse and safe world
+replacement, and exercises the Rework-derived sweep/refinement, slide, overlap
+recovery, reanchor and rotation resolver. It still applies no corrected pose to
+gameplay hands and does not establish character/held-body exclusion semantics.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes

@@ -329,7 +329,8 @@ if(BUILD_TESTING)
         tests/black_plague_body/hand_contact_probe_test.cpp
         src/backends/black_plague/hand_contact_probe.cpp)
     target_include_directories(pvr_hand_contact_probe_test PRIVATE
-        src/backends/black_plague)
+        src/backends/black_plague src/runtime)
+    target_link_libraries(pvr_hand_contact_probe_test PRIVATE pvr_vr_math)
     pvr_enable_warnings(pvr_hand_contact_probe_test)
     add_test(NAME hand_contact_probe COMMAND pvr_hand_contact_probe_test)
 

@@ -86,10 +86,11 @@ evidence covers them. Short physical-motion comfort now has positive PID 25484
 headset evidence, without implying every wall/slide edge was exercised.
 Static exact-image evidence now pins `CheckShapeWorldCollision` at `0xD4830`, its nine stack
 arguments, callback slot, legacy contact layout, body matrix/shape accessors,
-CreateBoxShape, shape user count and destruction route. A default-off no-write
-diagnostic and synthetic harness are host-tested. The diagnostic has not yet
-run against a live BP process, creates no palm shape and is not gameplay palm
-collision.
+CreateBoxShape, shape user count and destruction route. PID 28412 live-tested
+the default-off no-write query with one callback/eight contacts and no selected
+native-memory change. Backend-owned shape lifecycle plus the Rework-derived
+resolver are now host-tested behind a second default-off gate and remain
+disconnected from gameplay.
 
 ## 0. Hook and loader lifecycle
 
@@ -414,19 +415,24 @@ it must not be described as validated until exercised in the headset.
   (`ret 0x24`), callback slot zero, the VC7 `cCollideData` pointer/count layout,
   `0x1C` contact stride, body matrix/shape accessors, CreateBoxShape and
   reference-counted destruction through `DestroyShape` at `0xD4210`.
-- `hand_contact_probe.*` is a default-off, host-tested no-write diagnostic. It
+- `hand_contact_probe.*` retains the live-tested default-off no-write diagnostic. It
   runs from the existing post-`D6E00` fan-out, reuses the current character
-  body shape and rejects any selected native-byte mutation. It is not the palm
-  resolver and has not run live.
+  body shape and rejects any selected native-byte mutation. PID 28412 passed it.
+- The same backend now owns a separate default-off palm resolver gate. It creates
+  the shared-size box through the pinned `CreateBoxShape` slot, reuses it in the
+  same world, safely replaces it when world identity changes, destroys it through
+  `0xD4210`, and feeds callback contacts to the shared Rework-derived resolver.
+  Host tests cover normal reuse, world replacement and gameplay-memory guards.
+  No resolved pose is applied to a gameplay hand.
 
 ### Next evidence
 
-First run `--validate-palm-query <pid>` in a loaded map without starting VR and
-confirm a clear or collided result plus `native_memory_changed=false`. Then add
-owned palm shapes with explicit world teardown and port the Rework resolver.
-Headset-test only small free bodies after those gates. Confirm zero collision-
-restore failures, no player displacement, correct restoration and no
-regressions to normal world collisions.
+Run `--validate-palm-resolver <pid>` in a loaded map without starting VR. It
+must report one balanced owned-shape lifecycle, reuse on the second sample,
+valid native queries and `gameplay_memory_changed=false`. Only after that live
+gate should resolved controller palms be connected, with character/held-body
+exclusion validated separately. Headset-test only small free bodies after those
+gates and confirm no player displacement or normal-world-collision regression.
 
 ## 6. Long bars, doors and mechanisms
 

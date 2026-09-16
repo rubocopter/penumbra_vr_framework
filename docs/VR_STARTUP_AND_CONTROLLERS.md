@@ -32,8 +32,10 @@ mejora visual validada hasta una nueva prueba.
   temblor continuo y PID 11804 confirmó dirección HMD correcta. La nueva
   locomoción métrica que corrige la velocidad por eje está host-tested y requiere
   otra tanda.
-- **Deliberadamente no terminado:** colisión de palmas, puertas/
-  palancas/joints, modelos HPL de Rework y Enhanced visuals GPU.
+- **Deliberadamente no terminado en gameplay:** la frontera de colisión de
+  palmas ya tiene query live-tested y resolver/lifecycle host-tested, pero aún
+  falta su gate live y conexión a las manos; puertas/palancas/joints, modelos
+  HPL de Rework y Enhanced visuals GPU también siguen abiertos.
 
 La tanda posterior añadió `native_update_timing`, contadores de herramientas y
 agarres rechazados por seguridad, además de ampliar el buffer de log. No se
@@ -187,7 +189,9 @@ hitos de gameplay estén terminados**.
 ## Lo que NO está terminado
 
 - El tercer hito original sigue parcial: puertas/palancas y cuerpos con joints
-  o padres conservan el comportamiento nativo. Falta la colisión de palmas,
+  o padres conservan el comportamiento nativo. La colisión de palmas tiene ya
+  query live-tested y resolver/lifecycle host-tested, pero falta validarla y
+  conectarla a gameplay;
   validar físicamente la exclusión conservadora cuerpo/character, las mallas HPL
   de Rework y calibrar físicamente las herramientas/luces ancladas. Durante un
   agarre espacial todavía no se actualiza el rayo secundario de examinar como hace Rework.

@@ -1,4 +1,5 @@
 #include "hand_contact_probe.hpp"
+#include "vr_interaction_policy.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -59,6 +60,9 @@ constexpr std::uintptr_t kPhysicsWorldVtable = 0x291B80;
 constexpr std::uintptr_t kPhysicsBodyVtable = 0x292C08;
 constexpr std::uintptr_t kCollideShapeNewtonVtable = 0x292D40;
 constexpr std::uintptr_t kCheckShapeWorldCollision = 0xD4830;
+constexpr std::uintptr_t kCreateBoxShape = 0x18AC10;
+constexpr std::uintptr_t kDestroyShape = 0xD4210;
+constexpr std::uintptr_t kCreateBoxShapeVtableSlot = 0x30;
 
 enum class FakeMode {
     clear,
@@ -67,6 +71,10 @@ enum class FakeMode {
 };
 
 std::atomic<FakeMode> g_mode{FakeMode::clear};
+std::atomic<std::uint32_t> g_create_count{0};
+std::atomic<std::uint32_t> g_destroy_count{0};
+std::uint8_t* g_fake_image = nullptr;
+std::uint8_t* g_fake_palm_shape = nullptr;
 
 template<class T>
 void Write(std::vector<std::uint8_t>& bytes, std::size_t offset, T value) {
@@ -110,6 +118,32 @@ bool __fastcall FakeCheckShapeWorldCollision(
     return true;
 }
 
+void* __fastcall FakeCreateBoxShape(
+    void* world,
+    void*,
+    const Vec3* size,
+    Matrix*) {
+    if (world == nullptr || size == nullptr || g_fake_image == nullptr ||
+        g_fake_palm_shape == nullptr) {
+        return nullptr;
+    }
+    ++g_create_count;
+    std::memset(g_fake_palm_shape, 0, 0x100);
+    *reinterpret_cast<void**>(g_fake_palm_shape) =
+        g_fake_image + kCollideShapeNewtonVtable;
+    std::memcpy(g_fake_palm_shape + 0x04, &size->x, sizeof(float));
+    std::memcpy(g_fake_palm_shape + 0x08, &size->y, sizeof(float));
+    std::memcpy(g_fake_palm_shape + 0x0C, &size->z, sizeof(float));
+    *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeTypeOffset) = 1;
+    *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeUserCountOffset) = 1;
+    *reinterpret_cast<void**>(g_fake_palm_shape + kShapeWorldOffset) = world;
+    return g_fake_palm_shape;
+}
+
+void __fastcall FakeDestroyShape(void*, void*, void* shape) {
+    if (shape == g_fake_palm_shape) ++g_destroy_count;
+}
+
 bool NearlyEqual(float left, float right) {
     return std::fabs(left - right) < 1.0e-6F;
 }
@@ -129,7 +163,25 @@ struct Fixture {
             reinterpret_cast<std::intptr_t>(gateway + 5));
         std::memcpy(gateway + 1, &displacement, sizeof(displacement));
 
+        auto install_gateway = [&](std::uintptr_t rva, void* target) {
+            auto* const entry = image + rva;
+            entry[0] = 0xE9;
+            const auto relative = static_cast<std::int32_t>(
+                reinterpret_cast<std::intptr_t>(target) -
+                reinterpret_cast<std::intptr_t>(entry + 5));
+            std::memcpy(entry + 1, &relative, sizeof(relative));
+        };
+        install_gateway(kCreateBoxShape,
+            reinterpret_cast<void*>(&FakeCreateBoxShape));
+        install_gateway(kDestroyShape,
+            reinterpret_cast<void*>(&FakeDestroyShape));
+
+        void* const create_slot = image + kCreateBoxShape;
+        std::memcpy(image + kPhysicsWorldVtable + kCreateBoxShapeVtableSlot,
+            &create_slot, sizeof(create_slot));
+
         Write(world, 0, image + kPhysicsWorldVtable);
+        Write(world2, 0, image + kPhysicsWorldVtable);
         Write(physics_body, 0, image + kPhysicsBodyVtable);
         Write(shape, 0, image + kCollideShapeNewtonVtable);
         Write(shape, 0x04, 0.6F);
@@ -156,16 +208,25 @@ struct Fixture {
         const Vec3 position{10.0F, 20.0F, 30.0F};
         std::memcpy(character.data() + kCharacterPositionOffset,
             &position, sizeof(position));
+
+        g_fake_image = image;
+        g_fake_palm_shape = palm_shape.data();
+        g_create_count.store(0, std::memory_order_relaxed);
+        g_destroy_count.store(0, std::memory_order_relaxed);
     }
 
     ~Fixture() {
+        g_fake_palm_shape = nullptr;
+        g_fake_image = nullptr;
         if (image != nullptr) VirtualFree(image, 0, MEM_RELEASE);
     }
 
     std::uint8_t* image = nullptr;
     std::vector<std::uint8_t> world = std::vector<std::uint8_t>(0x100);
+    std::vector<std::uint8_t> world2 = std::vector<std::uint8_t>(0x100);
     std::vector<std::uint8_t> physics_body = std::vector<std::uint8_t>(0x400);
     std::vector<std::uint8_t> shape = std::vector<std::uint8_t>(0x100);
+    std::vector<std::uint8_t> palm_shape = std::vector<std::uint8_t>(0x100);
     std::vector<std::uint8_t> character = std::vector<std::uint8_t>(0x300);
 };
 
@@ -192,6 +253,36 @@ bool RunQuery(
     }
     requester.join();
     return success == expected_success;
+}
+
+bool RunResolverValidation(
+    Fixture& fixture,
+    bp::PalmResolverValidationTelemetry& telemetry,
+    std::string& error,
+    bool replace_world = false) {
+    g_mode.store(FakeMode::clear, std::memory_order_relaxed);
+    bool success = false;
+    std::thread requester([&] {
+        success = bp::RequestPalmResolverValidation(telemetry, error);
+    });
+    const auto deadline = std::chrono::steady_clock::now() +
+        std::chrono::seconds(1);
+    while (!bp::PalmResolverValidationPending() &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    if (bp::PalmResolverValidationPending()) {
+        bp::ServicePalmResolverValidation(
+            fixture.image, fixture.character.data());
+        if (replace_world) {
+            Write(fixture.character, kCharacterPhysicsWorldOffset,
+                fixture.world2.data());
+        }
+        bp::ServicePalmResolverValidation(
+            fixture.image, fixture.character.data());
+    }
+    requester.join();
+    return success;
 }
 
 } // namespace
@@ -253,6 +344,42 @@ int main() {
         return 1;
     }
 
-    std::cout << "Black Plague no-write hand-contact query tests passed\n";
+    bp::PalmResolverValidationTelemetry resolver;
+    if (!RunResolverValidation(fixture, resolver, error) ||
+        resolver.result != bp::PalmResolverValidationResult::passed ||
+        !resolver.shape_created || !resolver.shape_reused ||
+        !resolver.shape_destroyed || resolver.world_replaced ||
+        resolver.gameplay_memory_changed || resolver.create_count != 1 ||
+        resolver.destroy_count != 1 || resolver.query_count < 2 ||
+        g_create_count.load(std::memory_order_relaxed) != 1 ||
+        g_destroy_count.load(std::memory_order_relaxed) != 1 ||
+        !NearlyEqual(resolver.shape_size[0],
+            penumbra_vr::runtime::vr_interaction_policy::kCollisionSizeX) ||
+        !NearlyEqual(resolver.shape_size[1],
+            penumbra_vr::runtime::vr_interaction_policy::kCollisionSizeY) ||
+        !NearlyEqual(resolver.shape_size[2],
+            penumbra_vr::runtime::vr_interaction_policy::kCollisionSizeZ) ||
+        !NearlyEqual(resolver.second_raw_position[0],
+            resolver.second_resolved_position[0])) {
+        std::cerr << "owned palm resolver lifecycle failed: " << error << '\n';
+        return 1;
+    }
+
+    Fixture replacement_fixture;
+    bp::PalmResolverValidationTelemetry replacement;
+    if (!RunResolverValidation(
+        replacement_fixture, replacement, error, true) ||
+        replacement.result != bp::PalmResolverValidationResult::passed ||
+        !replacement.shape_created ||
+        !replacement.shape_destroyed || !replacement.world_replaced ||
+        replacement.gameplay_memory_changed || replacement.create_count != 2 ||
+        replacement.destroy_count != 2 ||
+        g_create_count.load(std::memory_order_relaxed) != 2 ||
+        g_destroy_count.load(std::memory_order_relaxed) != 2) {
+        std::cerr << "owned palm world replacement failed: " << error << '\n';
+        return 1;
+    }
+
+    std::cout << "Black Plague hand-contact query/lifecycle tests passed\n";
     return 0;
 }
