@@ -26,6 +26,10 @@
   headset-validation result:
   the same run had severe FPS loss and a right-controller dropout, so a clean
   rebooted A/B run remains required for performance, palm contact and placement.
+  Fixed the focused palm-validation launcher so a successful PowerShell exact-build
+  verifier is not misclassified by a stale native `$LASTEXITCODE` value from the
+  caller; verifier failures still terminate the launcher through the script's
+  terminating error path.
 
 - 2026-09-16: Pinned the remaining Black Plague palm-query exclusion semantics
   in the initialized exact-build image. `CheckShapeWorldCollision` at `0xD4830`

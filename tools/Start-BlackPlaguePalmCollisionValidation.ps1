@@ -26,9 +26,11 @@ if (-not (Test-Path -LiteralPath $ImagePath -PathType Leaf)) {
 }
 
 Write-Host 'Validating the exact Black Plague image and palm filter contract...'
-& $verifier -ImagePath $ImagePath
-if ($LASTEXITCODE -ne 0) {
-    throw "Exact-build palm verifier failed with exit code $LASTEXITCODE."
+try {
+    & $verifier -ImagePath $ImagePath
+}
+catch {
+    throw "Exact-build palm verifier failed: $($_.Exception.Message)"
 }
 
 $existingGame = @(Get-Process -Name 'penumbra' -ErrorAction SilentlyContinue)
