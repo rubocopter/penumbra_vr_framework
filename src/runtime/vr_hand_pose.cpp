@@ -64,23 +64,27 @@ void SmoothVrHandCurls(std::array<float,5>& current,
     }
 }
 
-VrHandArticulation ArticulateVrHand(const std::array<float,5>& curls, bool left) noexcept {
+VrHandArticulation ArticulateVrHand(
+    const std::array<float,5>& curls, bool /*left*/) noexcept {
     VrHandArticulation result;
-    const float mirror=left ? -1.0F : 1.0F;
-    constexpr std::array<float,5> open_spread{0,4,0,-3,-7};
     for (std::size_t finger=0;finger<curls.size();++finger) {
-        const float curl=std::isfinite(curls[finger]) ? std::clamp(curls[finger],0.0F,1.0F) : 0;
+        const float curl=std::isfinite(curls[finger]) ?
+            std::clamp(curls[finger],0.0F,1.0F) : 0.0F;
         auto& pose=result.fingers[finger];
         if (finger==0) {
-            // Thumb: metacarpal opposition plus two phalange joints; do not
-            // treat it as a fourth identical three-phalange finger chain.
-            pose.flexion_degrees={20*curl,45*curl,60*curl};
-            result.thumb_yaw_degrees=mirror*(48-33*curl);
+            // Rework 23c890f authored the imported rigid-skin thumb around its
+            // diagonal bone axis at 22/28/16 degrees. Preserve Framework's
+            // independent thumb curl while keeping that proven geometry.
+            pose.flexion_degrees={22.0F*curl,28.0F*curl,16.0F*curl};
+        } else if (finger==1) {
+            // Rework's trigger/index pose. Higher procedural ranges fold this
+            // old skin over itself and were visible as contorted fingers.
+            pose.flexion_degrees={48.0F*curl,62.0F*curl,36.0F*curl};
         } else {
-            // Separate proximal/middle/distal flexion. Distal flexion follows
-            // the middle joint progressively rather than folding in lockstep.
-            pose.flexion_degrees={65*curl,85*curl,50*curl*curl};
-            pose.spread_degrees=mirror*open_spread[finger]*(1-curl);
+            // Middle, ring and little share the proven pure-flexion axis and
+            // 52/66/38 degree grab range. Five skeletal channels remain
+            // independent; only the imported mesh's safe range is shared.
+            pose.flexion_degrees={52.0F*curl,66.0F*curl,38.0F*curl};
         }
     }
     return result;
