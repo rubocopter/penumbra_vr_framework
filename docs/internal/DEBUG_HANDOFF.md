@@ -509,14 +509,18 @@ Map the exact joint/slider/hinge state and update boundary for one representativ
 
 Black Plague and Rework use different DAE resources. Rework's exact grip constants therefore cannot be copied blindly. The Framework now shares the proven attachment composition rule (local model-to-hand orientation followed by translation of the measured grip point to the hand origin), while Black Plague keeps its own measured flashlight/glowstick points and +90-degree X orientation. Existing exact matrix tests prove that this refactor preserves the prior BP placement numerically. The current BP profile is still visibly wrong against provisional hand geometry, so it is not a definitive placement result.
 
-The Rework hand meshes/rigs themselves are already present in this repository as
+The Rework hand meshes/rigs already present at
 `products/overture/data/models/hud_objects/hud_object_hand_rig.dae` and
-`hud_object_hand_left_rig.dae` with their HUD/material resources. Black Plague's
-current presentation is an immediate-mode procedural hand in `DrawTrackedHands`,
-so adopting those assets requires a real mesh/rig consumer or an engine-owned
-model boundary; copying the files alone cannot replace the current renderer.
-Preserve the richer Black Plague articulation semantics when that geometry work
-is done.
+`hud_object_hand_left_rig.dae` are now consumed by a narrow renderer-owned mesh
+adapter. `tools/generate-rework-hand-mesh.py` verifies the authored rigid
+one-bone-per-position skin, 17-joint hierarchy/inverse binds and triangle/UV
+streams and emits checked-in renderer data plus a reduced copy of the existing
+diffuse material. `DrawTrackedHands` keeps the collision-resolved Black Plague
+palm as its world transform and maps the richer shared `VrHandArticulation`
+output onto Rework's demonstrated long-finger/thumb axes. No HPL mesh hook or
+new exact-build ownership boundary was added. The real-driver OpenGL path is
+host-tested; hand scale/orientation/articulation and frame pacing remain a
+headset gate.
 
 ### Do not try again
 
@@ -524,7 +528,7 @@ Do not tune the final socket against provisional hand geometry and then retune i
 
 ### Next evidence
 
-Integrate definitive hand geometry, measure a per-game tool socket against that geometry, then validate light direction and model placement together.
+Use the now-integrated hand geometry to measure the definitive per-game tool socket, then validate hand/tool scale, light direction and model placement together in the headset.
 
 ## Debugging rule
 

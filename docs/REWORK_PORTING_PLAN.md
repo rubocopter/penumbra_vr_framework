@@ -205,13 +205,15 @@ Long boards/bars following the palm rigidly are a limitation of the free-body po
 
 Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; definitive placement still requires final hand geometry and headset/light-direction validation.
 
-The actual Rework hand rig assets are already carried by the Framework-owned
-Overture product. Reusing those meshes for Black Plague is viable as a
-presentation/profile step, but the binary backend currently renders procedural
-OpenGL hands and has no DAE/skinned-mesh consumer. The geometry import must
-therefore establish that narrow rendering boundary and preserve Black Plague's
-richer game-neutral articulation output; it must not regress finger semantics to
-the Overture rig implementation.
+The actual Rework hand rig assets carried by the Framework-owned Overture
+product now feed a narrow renderer-owned import for Black Plague. A deterministic
+generation tool validates the two DAE rigid skins and emits the geometry, bind
+hierarchy/inverse binds and reduced diffuse material as checked-in renderer data;
+runtime code therefore needs no DAE parser or new HPL hook. The adapter maps
+Black Plague's richer game-neutral `VrHandArticulation` output onto the proven
+Rework rig axes, so the imported geometry does not regress finger semantics to
+Overture's simpler pose policy. This path is host-tested; headset presentation
+and frame pacing remain open.
 
 ## Extracted so far
 
@@ -231,6 +233,10 @@ the Overture rig implementation.
   projection with edge clamping and Rework's `0.40` screen-pointer smoothing.
   Black Plague consumes these helpers while the native 800x600 cursor write and
   tracked-menu anchor remain backend-owned. This extraction is host-tested only.
+- `src/graphics/rework_hand_mesh.*` owns the renderer-side Rework hand
+  geometry/rig consumer. The generated data originates from the already-carried
+  Overture product assets; Black Plague supplies only resolved palm placement
+  and shared articulation intent. No exact-build renderer hook is introduced.
 - `src/runtime/vr_interaction_policy.hpp` now also owns Rework's demonstrated
   palm collision dimensions, contact/sweep/refinement constants and recovery
   predicates. Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so

@@ -94,13 +94,14 @@ try {
     Write-Host "Probe log: $probeLog"
     Write-Host 'Run this focused headset gate, then close the game normally:'
     Write-Host '1. Before touching props, physically translate 5-10 cm in X/Z and crouch/stand once. Room movement, tracked Y and overall embodied feel should match the previously good room-scale build.'
-    Write-Host '2. In open space, move both tracked hands around your torso and head. They must follow normally and must not stop on the player character body.'
-    Write-Host '3. Press each palm slowly into a wall or table, then sweep sideways. The visible palm should stop at the surface and slide along it instead of crossing or snapping through.'
-    Write-Host '4. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
-    Write-Host '5. Grab several small free props that previously appeared far from or difficult to acquire. Selection may follow the real controller up to the Rework 18 cm bound while the visible palm remains collision-constrained; once held, the object must stay aligned with the owning palm.'
-    Write-Host '6. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab.'
-    Write-Host '7. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
-    Write-Host '8. Repeat the short physical translation/crouch check after the palm interactions, confirm stick locomotion still behaves normally, then close Black Plague.'
+    Write-Host '2. Inspect both imported Rework hand meshes in open space. Scale/orientation should look natural, each mesh must stay on its tracked/resolved palm, and thumb/index/middle/ring/little should articulate without an obvious frame-rate regression.'
+    Write-Host '3. In open space, move both tracked hands around your torso and head. They must follow normally and must not stop on the player character body.'
+    Write-Host '4. Press each palm slowly into a wall or table, then sweep sideways. The visible hand/palm should stop at the surface and slide along it instead of crossing or snapping through.'
+    Write-Host '5. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
+    Write-Host '6. Grab several small free props that previously appeared far from or difficult to acquire. Selection may follow the real controller up to the Rework 18 cm bound while the visible palm remains collision-constrained; once held, the object must stay aligned with the owning palm.'
+    Write-Host '7. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab.'
+    Write-Host '8. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
+    Write-Host '9. Repeat the short physical translation/crouch check after the palm interactions, confirm stick locomotion still behaves normally and the hand meshes remain correctly aligned, then close Black Plague.'
 
     Wait-Process -Id $gameProcess.Id
 

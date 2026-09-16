@@ -375,13 +375,17 @@ y dejar en un perfil/adapter de malla los ejes, deadzone/suavizado opcionales y
 poses de agarre. Overture debería adaptarse a esa salida común cuando exista
 una segunda malla real; BP no debe copiar ahora la pose rígida de Overture.
 
-La geometría de Rework ya está disponible dentro del propio repositorio en
+La geometría de Rework disponible en
 `products/overture/data/models/hud_objects/hud_object_hand_rig.dae` y
-`hud_object_hand_left_rig.dae`, con sus recursos HUD/material. Es reutilizable
-como candidata de presentación, pero BP dibuja hoy `DrawTrackedHands` con cajas
-OpenGL inmediatas: hace falta un consumidor real de malla/rig y revisar la
-procedencia de esos assets antes de sustituir la mano procedural. Ese cambio no
-debe perder los curls/curvas/spread/oposición de pulgar actuales.
+`hud_object_hand_left_rig.dae` ya alimenta un consumidor real de malla/rig del
+renderer. `tools/generate-rework-hand-mesh.py` valida la piel rígida de 3053
+posiciones, 6034 triángulos, 17 joints, jerarquía/inverse binds y UVs, e incrusta
+también una versión reducida del material difuso existente. En ejecución no se
+parsea COLLADA ni JPEG. `DrawTrackedHands` conserva la palma resuelta como pose
+mundial y aplica los curls/curvas/spread/oposición de pulgar de
+`runtime::ArticulateVrHand` sobre los ejes de rig demostrados por Rework. La ruta
+gráfica es host-tested; escala/orientación/articulación visual y rendimiento aún
+necesitan la prueba de visor combinada.
 
 ## Rutas integradas
 

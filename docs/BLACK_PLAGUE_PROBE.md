@@ -332,6 +332,11 @@ known-good room-scale composition at all: startup logged physical displacement,
 room-scale and positional translation disabled while palm collision was enabled.
 The helper now requests all three transient validation paths together and will
 reject a session unless room-scale rendering and tracked crouch are both seen.
+The same focused run is now also the headset presentation gate for the imported
+Rework hand rigs: both hands must have plausible scale/orientation, stay on the
+resolved palms, articulate all five shared finger channels and preserve normal
+frame pacing. The mesh/rig path is host-tested only until that observation is
+captured.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes
@@ -374,8 +379,9 @@ player link (`cPlayer+0x274`), native character-body tick (`D460A -> D6E00`),
 active body/size/position fields and initial horizontal collision request
 (`D7312 -> D4830`) are now statically mapped. Read-only telemetry for body/feet,
 requested/solver/final displacement, physics timestep and unapplied HMD/body
-divergence is implemented, host-tested and live-tested in PID 30896. Positional tracking,
-palm collision, articulated mechanisms, tool/light attachment and Enhanced
+divergence is implemented, host-tested and live-tested in PID 30896. Positional
+tracking and palm collision have since advanced through the later gates recorded
+above. Articulated mechanisms, definitive tool/light attachment and Enhanced
 visuals renderer hooks remain separate work.
 
 PID 8628 completed that narrow adapter validation. It installed the native

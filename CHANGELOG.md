@@ -1,5 +1,18 @@
 # Changelog
 
+- 2026-09-16: Replaced Black Plague's provisional procedural tracked-hand boxes
+  with a renderer-owned import of the proven Rework `23c890f` right/left hand
+  DAE rigs. A deterministic generator validates the 3,053-position, 6,034-
+  triangle, 17-joint rigid skin and emits checked-in renderer data plus a
+  reduced copy of the existing diffuse material, so runtime builds do not need
+  a COLLADA/JPEG dependency. CPU skinning maps the existing richer
+  `runtime::ArticulateVrHand` output onto Rework's proven bind hierarchy/axes,
+  applies the original HUD transform, uses vertex arrays and reuses unchanged
+  posed geometry across the two eye draws. The real-driver OpenGL test now
+  exercises the mesh while preserving depth and caller GL state. This is
+  host-tested only; the next clean palm/room-scale headset gate also checks hand
+  scale, orientation, finger motion and frame pacing.
+
 - 2026-09-16: Corrected the Black Plague palm validation composition after PID
   4720 showed `physical_displacement_validation=0`, `room_scale_validation=0`
   and `positional_translation_enabled=0` while palm collision was enabled. The

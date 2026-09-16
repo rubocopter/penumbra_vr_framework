@@ -56,6 +56,7 @@ pvr_enable_warnings(pvr_rel32_call_hook)
 add_library(pvr_opengl_eye_targets STATIC
     src/graphics/opengl_eye_targets.cpp
     src/graphics/opengl_menu_frame.cpp
+    src/graphics/rework_hand_mesh.cpp
 )
 target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
 target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32 pvr_vr_math)

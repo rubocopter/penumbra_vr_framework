@@ -10,8 +10,9 @@ struct TrackedHandVisual {
     bool visible = false;
     bool ray = false;
 };
-// Lightweight procedural gloves, not the original HPL/Rework skinned assets.
-// Uses the world's depth buffer and preserves the caller's complete GL state.
+// Uses the proven Rework hand mesh/rig with Framework-owned five-finger
+// articulation. The world's depth buffer remains authoritative and the caller's
+// complete GL state is preserved.
 [[nodiscard]] bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
     const runtime::VrMatrix44& view, const runtime::VrMatrix44& projection,
     std::string& error) noexcept;

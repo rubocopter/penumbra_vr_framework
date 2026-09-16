@@ -86,8 +86,13 @@ validación debe usar `tools\Start-BlackPlaguePalmCollisionValidation.ps1` tras
 reinicio: el helper corregido activa también room-scale/desplazamiento físico y
 comprueba la composición. Antes y después del contacto de palma verifica
 desplazamiento físico X/Z corto y crouch/stand, además de ambos mandos, objetos
-representativos, pared/slide y un mecanismo nativo. PID 4720 no sirve para
-comparar room-scale porque el helper antiguo lo lanzó con esa ruta desactivada.
+representativos, pared/slide y un mecanismo nativo. Esa misma tanda valida por
+primera vez la presentación de las manos reales importadas de Rework: ambas
+deben tener escala/orientación plausibles, permanecer sobre la palma resuelta,
+articular los cinco canales de dedos y no introducir una regresión evidente de
+frame pacing. La malla/rig está host-tested, no headset-validated. PID 4720 no
+sirve para comparar room-scale porque el helper antiguo lo lanzó con esa ruta
+desactivada.
 
 ### Build preparada para la siguiente sesión
 

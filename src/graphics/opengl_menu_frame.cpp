@@ -1,5 +1,6 @@
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
+#include "rework_hand_mesh.hpp"
 #include "vr_hand_pose.hpp"
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -178,37 +179,13 @@ bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
         if (!hand.visible || !Rigid(hand.palm)) continue;
         const auto model=ColumnMajor(runtime::Multiply(view,hand.palm));
         glLoadMatrixf(model.data());
-        glColor3f(0.30F,0.27F,0.23F);
-        Box(0.041F,0.014F,0.047F);
-        glPushMatrix(); glTranslatef(0,0,0.063F);
-        glColor3f(0.15F,0.14F,0.12F); Box(0.031F,0.019F,0.022F); glPopMatrix();
         const auto articulation=runtime::ArticulateVrHand(hand.curl,index==0);
-        constexpr std::array<std::array<float,3>,5> lengths{{
-            {0.025F,0.027F,0.022F},{0.037F,0.026F,0.020F},{0.041F,0.028F,0.021F},
-            {0.038F,0.026F,0.020F},{0.030F,0.020F,0.017F}}};
-        const float side=index==0 ? 1.0F : -1.0F;
-        for (std::size_t finger=0;finger<5;++finger) {
-            glPushMatrix();
-            if (finger==0) {
-                glTranslatef(side*0.036F,-0.003F,0.004F);
-                glRotatef(articulation.thumb_yaw_degrees,0,1,0);
-            } else {
-                // Mirror digit placement too: the index must neighbour the
-                // thumb on BOTH hands, not just on the right hand.
-                glTranslatef(-side*(static_cast<float>(finger)-2.5F)*0.020F,0,-0.046F);
-                glRotatef(articulation.fingers[finger].spread_degrees,0,1,0);
-            }
-            for (int joint=0;joint<3;++joint) {
-                const auto j=static_cast<std::size_t>(joint);
-                const float segment=lengths[finger][j];
-                glRotatef(-articulation.fingers[finger].flexion_degrees[j],1,0,0);
-                glTranslatef(0,0,-segment*0.5F);
-                const float shade=0.36F-static_cast<float>(joint)*0.025F;
-                glColor3f(shade,shade*0.90F,shade*0.76F);
-                Box(0.0075F,0.009F,segment*0.46F);
-                glTranslatef(0,0,-segment*0.5F);
-            }
-            glPopMatrix();
+        if (!DrawReworkHandMesh(articulation,index==0)) {
+            // Keep a tiny emergency marker if a legacy/invalid GL context
+            // cannot consume the generated Rework mesh. Gameplay must never be
+            // interrupted because hand presentation is optional decoration.
+            glColor3f(0.30F,0.27F,0.23F);
+            Box(0.041F,0.014F,0.047F);
         }
         if (hand.ray && Rigid(hand.aim)) {
             const auto ray=ColumnMajor(runtime::Multiply(view,hand.aim));

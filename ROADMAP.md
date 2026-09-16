@@ -166,7 +166,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 ## Phase 4 — Black Plague gameplay VR
 
 - [x] Connect OpenVR action polling to the imported manifest and bindings
-- [x] Code-test native intents, tracked menus and provisional depth-tested gloves
+- [x] Code-test native intents and tracked menus
+- [x] Import and host-test the Rework right/left hand rigs in the Framework renderer, preserving the richer shared five-finger articulation and depth-tested resolved-palm placement
 - [ ] Headset-validate the supported controller profiles on Black Plague and close any per-profile feature gaps before controller parity is claimed
 - [x] Integrate/code-test free-body palm-relative grab, release and bounded throw
 - [x] Limit the generic prop-pick fallback to Rework's `0.18 m` physical reach
@@ -189,12 +190,18 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
     rigid palm-relative free-body placement; free-body `Move=2` preserves the
     picked contact point and follows the palm with the Rework-derived force path;
     jointed/mechanism bodies remain native
+  - [x] Replace the provisional procedural hand presentation with generated
+    renderer data from the proven Rework DAE rigs and diffuse material; keep
+    `runtime::ArticulateVrHand` as pose authority and host-test real GL drawing
+    plus caller-state/depth restoration
   - [ ] Headset-validate palm contact plus `Grab=6` / `Move=2` placement after a
     clean reboot and compare palm-collision on/off frame pacing; PID 23000 is
     inconclusive because the run also had severe FPS loss and a controller drop;
     PID 4720 also does not count because the old focused helper launched palms
     with room-scale/physical displacement disabled. The helper now composes the
-    palm gate with the validated room-scale/crouch stack and checks that state.
+    palm gate with the validated room-scale/crouch stack and checks that state;
+    the same run must also check real-hand scale/orientation/articulation and
+    frame pacing before the mesh path is promoted beyond host-tested.
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership

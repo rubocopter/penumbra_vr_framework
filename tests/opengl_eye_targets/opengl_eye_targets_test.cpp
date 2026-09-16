@@ -2,6 +2,7 @@
 #include "opengl_eye_scissor.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
+#include "rework_hand_mesh.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -195,6 +196,13 @@ private:
 } // namespace
 
 int main() {
+    const auto right_hand_mesh=penumbra_vr::graphics::GetReworkHandMeshStats(false);
+    const auto left_hand_mesh=penumbra_vr::graphics::GetReworkHandMeshStats(true);
+    if (right_hand_mesh.positions!=3053U || right_hand_mesh.triangles!=6034U || right_hand_mesh.joints!=17U ||
+        left_hand_mesh.positions!=3053U || left_hand_mesh.triangles!=6034U || left_hand_mesh.joints!=17U) {
+        std::cerr << "Generated Rework hand mesh contract changed\n";
+        return 41;
+    }
     std::string error;
     TestOpenGlContext context;
     if (!context.Initialize(error)) {
@@ -400,7 +408,8 @@ int main() {
             if (depth_func!=GL_GREATER || depth_write!=GL_FALSE) return 35;
             std::array<GLubyte,4> palm{};
             glReadPixels(160,120,1,1,GL_RGBA,GL_UNSIGNED_BYTE,palm.data());
-            if (palm[0]<32 || palm[0]>120 || palm[1]<30 || palm[1]>115) {
+            if (palm[3]!=255 || palm[0]<150 || palm[1]<100 || palm[2]<80 ||
+                palm[0]<=palm[1] || palm[1]<=palm[2]) {
                 std::cerr<<"Hand pixel "<<static_cast<int>(palm[0])<<','<<static_cast<int>(palm[1])<<','
                     <<static_cast<int>(palm[2])<<" GL error "<<glGetError()<<'\n'; return 36;
             }

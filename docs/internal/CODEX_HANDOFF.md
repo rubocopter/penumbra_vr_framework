@@ -365,7 +365,8 @@ Implemented/code-tested but not automatically headset-validated:
 
 - OpenVR actions and exact-build native input bridge;
 - tracked menus;
-- provisional procedural gloves;
+- Rework right/left hand meshes with Framework-owned five-finger articulation
+  (host-tested presentation; headset scale/orientation/performance still open);
 - controller picking;
 - palm-relative free-body grab/release/throw;
 - `0.18 m` direct physical reach fallback;
@@ -756,14 +757,12 @@ integration still requires game-specific evidence.
 1. run the corrected focused palm helper after a clean reboot; verify normal FPS,
    both controllers and that short physical X/Z movement plus crouch/stand still
    feel like the PID 25484 room-scale baseline before and after palm contact;
-2. verify several small/free props that previously floated, long wooden bars or
+2. verify the imported Rework hands have plausible scale/orientation, remain on
+   the collision-resolved palms and articulate thumb/index/middle/ring/little
+   correctly without a visible frame-pacing regression;
+3. verify several small/free props that previously floated, long wooden bars or
    tables, and one jointed mechanism across the separate `Grab=6` / `Move=2`
    ownership paths;
-3. replace the provisional Black Plague procedural hand presentation with a
-   real rig/mesh path. The Rework hand rigs already exist under
-   `products/overture/data/models/hud_objects`; reuse their geometry only after
-   verifying resource provenance and preserve Black Plague's richer shared
-   finger-articulation output rather than copying Overture's rig behavior;
 4. definitive per-game tool/glowstick geometry/profile and headset validation;
 5. inventory, notes, menus, HUD and subtitles;
 6. comfort/haptics and representative chapter-level validation.
