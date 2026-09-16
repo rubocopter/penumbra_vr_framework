@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <gdiplus.h>
 #include <GL/gl.h>
+#pragma comment(lib, "gdiplus.lib")
 
 #include "vr_math.hpp"
 #include "vr_rework_hand_profile.hpp"
@@ -206,6 +207,56 @@ bool GdiplusReady() noexcept {
     return ready;
 }
 
+bool DecodeHandTexture(
+    const std::wstring& path,
+    std::vector<std::uint8_t>& rgb,
+    UINT& width,
+    UINT& height) noexcept {
+    Gdiplus::Bitmap bitmap(path.c_str(), FALSE);
+    if (bitmap.GetLastStatus() != Gdiplus::Ok) return false;
+    const UINT candidate_width = bitmap.GetWidth();
+    const UINT candidate_height = bitmap.GetHeight();
+    if (candidate_width == 0 || candidate_height == 0 ||
+        candidate_width > 8192U || candidate_height > 8192U) {
+        return false;
+    }
+
+    Gdiplus::Rect rectangle(0, 0, static_cast<INT>(candidate_width),
+        static_cast<INT>(candidate_height));
+    Gdiplus::BitmapData data{};
+    if (bitmap.LockBits(&rectangle, Gdiplus::ImageLockModeRead,
+            PixelFormat24bppRGB, &data) != Gdiplus::Ok || data.Scan0 == nullptr) {
+        return false;
+    }
+
+    std::vector<std::uint8_t> decoded;
+    try {
+        decoded.resize(static_cast<std::size_t>(candidate_width) *
+            candidate_height * 3U);
+        for (UINT y = 0; y < candidate_height; ++y) {
+            const auto* row = static_cast<const std::uint8_t*>(data.Scan0) +
+                static_cast<std::ptrdiff_t>(y) * data.Stride;
+            for (UINT x = 0; x < candidate_width; ++x) {
+                const std::size_t destination =
+                    (static_cast<std::size_t>(y) * candidate_width + x) * 3U;
+                const std::size_t source = static_cast<std::size_t>(x) * 3U;
+                // GDI+ exposes PixelFormat24bppRGB in BGR byte order.
+                decoded[destination + 0U] = row[source + 2U];
+                decoded[destination + 1U] = row[source + 1U];
+                decoded[destination + 2U] = row[source + 0U];
+            }
+        }
+    } catch (...) {
+        decoded.clear();
+    }
+    bitmap.UnlockBits(&data);
+    if (decoded.empty()) return false;
+    rgb = std::move(decoded);
+    width = candidate_width;
+    height = candidate_height;
+    return true;
+}
+
 bool LoadExternalHandTexture(
     std::vector<std::uint8_t>& rgb,
     UINT& width,
@@ -224,58 +275,25 @@ bool LoadExternalHandTexture(
     const DWORD length = GetModuleFileNameW(
         static_cast<HMODULE>(memory.AllocationBase), module_path.data(),
         static_cast<DWORD>(module_path.size()));
-    if (length == 0 || length >= module_path.size()) return false;
-    std::wstring path(module_path.data(), length);
-    const auto separator = path.find_last_of(L"\\/");
+    if (length == 0 || length >= static_cast<DWORD>(module_path.size())) {
+        return false;
+    }
+    std::wstring module_directory(module_path.data(), length);
+    const auto separator = module_directory.find_last_of(L"\\/");
     if (separator == std::wstring::npos) return false;
-    path.resize(separator + 1);
-    path += L"assets\\rework\\HAND_Low_C.jpg";
+    module_directory.resize(separator + 1);
 
-    Gdiplus::Bitmap bitmap(path.c_str(), FALSE);
-    if (bitmap.GetLastStatus() != Gdiplus::Ok) return false;
-    width = bitmap.GetWidth();
-    height = bitmap.GetHeight();
-    if (width == 0 || height == 0 || width > 8192U || height > 8192U) {
-        width = 0;
-        height = 0;
-        return false;
+    // Installed/package layout first. The source-tree path keeps current
+    // build/bin/{Debug,Release} and build/bin/eye_targets tests faithful until
+    // the production package target starts shipping shared renderer assets.
+    const std::array<std::wstring, 2> candidates{
+        module_directory + L"assets\\rework\\HAND_Low_C.jpg",
+        module_directory + L"..\\..\\..\\products\\overture\\data\\models\\hud_objects\\HAND_Low_C.jpg",
+    };
+    for (const auto& candidate : candidates) {
+        if (DecodeHandTexture(candidate, rgb, width, height)) return true;
     }
-
-    Gdiplus::Rect rectangle(0, 0, static_cast<INT>(width),
-        static_cast<INT>(height));
-    Gdiplus::BitmapData data{};
-    if (bitmap.LockBits(&rectangle, Gdiplus::ImageLockModeRead,
-            PixelFormat24bppRGB, &data) != Gdiplus::Ok || data.Scan0 == nullptr) {
-        width = 0;
-        height = 0;
-        return false;
-    }
-
-    try {
-        rgb.resize(static_cast<std::size_t>(width) * height * 3U);
-        for (UINT y = 0; y < height; ++y) {
-            const auto* row = static_cast<const std::uint8_t*>(data.Scan0) +
-                static_cast<std::ptrdiff_t>(y) * data.Stride;
-            for (UINT x = 0; x < width; ++x) {
-                const std::size_t destination =
-                    (static_cast<std::size_t>(y) * width + x) * 3U;
-                const std::size_t source = static_cast<std::size_t>(x) * 3U;
-                // GDI+ exposes PixelFormat24bppRGB in BGR byte order.
-                rgb[destination + 0U] = row[source + 2U];
-                rgb[destination + 1U] = row[source + 1U];
-                rgb[destination + 2U] = row[source + 0U];
-            }
-        }
-    } catch (...) {
-        rgb.clear();
-    }
-    bitmap.UnlockBits(&data);
-    if (rgb.empty()) {
-        width = 0;
-        height = 0;
-        return false;
-    }
-    return true;
+    return false;
 }
 
 GLuint HandTexture() noexcept {
