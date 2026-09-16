@@ -104,7 +104,7 @@ struct MoveHold {
 
 [[nodiscard]] Vec InverseTransformPoint(const Matrix& matrix, const Vec& point) noexcept {
     const Vec delta{
-        point[0]-matrix.values[3], matrix.values[7] == matrix.values[7] ? point[1]-matrix.values[7] : 0.0F, point[2]-matrix.values[11]};
+        point[0]-matrix.values[3], point[1]-matrix.values[7], point[2]-matrix.values[11]};
     return {
         matrix.values[0]*delta[0] + matrix.values[4]*delta[1] + matrix.values[8]*delta[2],
         matrix.values[1]*delta[0] + matrix.values[5]*delta[1] + matrix.values[9]*delta[2],
@@ -169,10 +169,10 @@ bool InteractionHandPose(runtime::VrHand hand, Matrix& pose, Vec& velocity, Vec&
         const float scale=distance>runtime::vr_interaction_policy::kMaximumCollisionInteractionReach && distance>0 ?
             runtime::vr_interaction_policy::kMaximumCollisionInteractionReach/distance : 1.0F;
 
-        // Rework 23c890f keeps the visible/physical palm collision-resolved,
-        // but lets target acquisition follow the real controller a bounded
-        // distance beyond it. Preserve raw orientation and clamp only the
-        // translation from the resolved palm toward the raw palm.
+        // Rework 23c890f keeps the visible/physical palm collision-resolved, but
+        // lets target acquisition follow the real controller a bounded distance
+        // beyond it. Preserve raw orientation and clamp only the translation from
+        // the resolved palm toward the raw palm.
         pose.values[3]=resolved.values[3]+reach[0]*scale;
         pose.values[7]=resolved.values[7]+reach[1]*scale;
         pose.values[11]=resolved.values[11]+reach[2]*scale;
