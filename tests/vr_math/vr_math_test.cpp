@@ -1,4 +1,5 @@
 #include "vr_math.hpp"
+#include "vr_locomotion.hpp"
 
 #include <cmath>
 #include <iostream>
@@ -477,6 +478,41 @@ using penumbra_vr::runtime::VrMatrix44;
     return true;
 }
 
+[[nodiscard]] bool TestVrFootstepCadence() {
+    penumbra_vr::runtime::VrFootstepCadence cadence;
+    if (cadence.Advance({0.50F, 3.0F, 0.0F}) ||
+        cadence.Advance({0.35F, -4.0F, 0.0F})) {
+        std::cerr << "VR footstep cadence fired at or below 0.85 m\n";
+        return false;
+    }
+    if (!cadence.Advance({0.001F, 0.0F, 0.0F})) {
+        std::cerr << "VR footstep cadence did not fire beyond 0.85 m\n";
+        return false;
+    }
+    if (cadence.Advance({0.45F, 0.0F, 0.0F}) ||
+        cadence.Advance({-0.45F, 0.0F, 0.0F})) {
+        std::cerr << "VR footstep cadence counted path length instead of anchor displacement\n";
+        return false;
+    }
+    if (cadence.Advance({0.0F, 10.0F, 0.0F}) ||
+        cadence.Advance({0.0F, 0.0F, 0.85F})) {
+        std::cerr << "VR footstep cadence counted vertical motion or exact threshold\n";
+        return false;
+    }
+    if (!cadence.Advance({0.0F, 0.0F, 0.01F})) {
+        std::cerr << "VR footstep cadence did not reset after a prior step\n";
+        return false;
+    }
+    cadence.Reset();
+    const float nan = std::numeric_limits<float>::quiet_NaN();
+    if (cadence.Advance({nan, 0.0F, 0.0F}) ||
+        cadence.Advance({0.85F, 0.0F, 0.0F})) {
+        std::cerr << "VR footstep cadence did not fail closed on non-finite motion\n";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -516,7 +552,7 @@ int main() {
         !TestConservativeStereoCullFrustum() || !TestEyeViews() ||
         !TestRelativeHeadTracking() || !TestYawRecenteredHeadTracking() ||
         !TestWorldTranslationToView() || !TestTrackingYawRotation() ||
-        !TestInvalidInputs()) {
+        !TestInvalidInputs() || !TestVrFootstepCadence()) {
         return 1;
     }
     std::cout << "VR matrix tests passed\n";

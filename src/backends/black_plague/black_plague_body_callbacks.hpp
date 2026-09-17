@@ -63,4 +63,9 @@ void ObserveBlackPlagueNativeBodyTick(
     std::uint64_t tick_sequence,
     const BlackPlaguePhysicalTickObservation& physical_tick = {}) noexcept;
 
+// Called from the existing cButtonHandler::Update owner after the native update
+// returns. The body observer only measures collision-accepted VR travel and
+// queues the cadence event; native FootStep dispatch stays on this game thread.
+void ServiceBlackPlagueVrFootstep(void* player) noexcept;
+
 } // namespace penumbra_vr::backends::black_plague

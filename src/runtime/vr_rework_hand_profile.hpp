@@ -19,6 +19,14 @@ inline constexpr float kCollisionTranslationX = 0.011F;
 inline constexpr float kCollisionTranslationY = 0.002F;
 inline constexpr float kCollisionTranslationZ = -0.011F;
 
+// Rework 23c890f fits attachment handles through the cylinder formed by the
+// four long fingers, rather than through the controller/palm origin.  These
+// offsets belong to the imported hand rig; model-specific grip points and
+// radii remain backend profile data.
+inline constexpr float kGripSocketX = 0.050F;
+inline constexpr float kLeftGripSocketY = 0.019F;
+inline constexpr float kRightGripSocketY = -0.014F;
+
 [[nodiscard]] inline VrMatrix44 VisualLocalPose() noexcept {
     const float cy = std::cos(kVisualRotationY);
     const float sy = std::sin(kVisualRotationY);
@@ -48,6 +56,26 @@ inline constexpr float kCollisionTranslationZ = -0.011F;
 [[nodiscard]] inline VrMatrix44 ApplyVisualLocalPose(
     const VrMatrix44& tracked_pose) noexcept {
     return Multiply(tracked_pose, VisualLocalPose());
+}
+
+[[nodiscard]] inline VrMatrix44 AttachmentGripLocalPose(
+    bool left,
+    float open_centre_offset) noexcept {
+    VrMatrix44 socket = IdentityMatrix();
+    socket.values[3] = kGripSocketX;
+    socket.values[7] = left
+        ? kLeftGripSocketY + open_centre_offset
+        : kRightGripSocketY - open_centre_offset;
+    return Multiply(VisualLocalPose(), socket);
+}
+
+[[nodiscard]] inline VrMatrix44 ApplyAttachmentGripLocalPose(
+    const VrMatrix44& tracked_pose,
+    bool left,
+    float open_centre_offset) noexcept {
+    return Multiply(
+        tracked_pose,
+        AttachmentGripLocalPose(left, open_centre_offset));
 }
 
 } // namespace penumbra_vr::runtime::rework_hand_profile

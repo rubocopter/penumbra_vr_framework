@@ -35,6 +35,8 @@ using penumbra_vr::runtime::VrTurnMode;
     enable(VrSettingId::ui_distance);
     enable(VrSettingId::ui_scale);
     enable(VrSettingId::render_scale);
+    enable(VrSettingId::enhanced_visuals);
+    enable(VrSettingId::hrtf);
 
     return capabilities.supported == expected;
 }
@@ -55,7 +57,8 @@ using penumbra_vr::runtime::VrTurnMode;
         IsVrSettingAvailable(VrSettingId::player_height, settings, capabilities) &&
         IsVrSettingAvailable(VrSettingId::crouch_mode, settings, capabilities) &&
         IsVrSettingAvailable(VrSettingId::physical_crouch_depth, settings, capabilities) &&
-        !IsVrSettingAvailable(VrSettingId::hrtf, settings, capabilities);
+        IsVrSettingAvailable(VrSettingId::enhanced_visuals, settings, capabilities) &&
+        IsVrSettingAvailable(VrSettingId::hrtf, settings, capabilities);
 }
 
 } // namespace

@@ -76,6 +76,18 @@ constexpr std::uintptr_t kCharacterSizeYOffset = 0xC8;
 constexpr std::uintptr_t kPlayerActionStateIndexOffset = 0x2BC;
 constexpr std::uintptr_t kPlayerMoveStateIndexOffset = 0x2D0;
 constexpr std::uintptr_t kChangeMoveStateRva = 0x9C750;
+constexpr std::uintptr_t kPlayerDamageRva = 0x9BB80;
+constexpr std::array<std::uintptr_t, 10> kPlayerDamageCallsites{
+    0x26EB, 0x2F4D, 0x5058, 0x17054, 0x21CD9,
+    0x42B18, 0x47C8B, 0xA5507, 0xA555E, 0xA55B2};
+constexpr std::uintptr_t kGameEntityDamageRva = 0x29E30;
+constexpr std::uintptr_t kMeleeEnemyDamageCallsite = 0x603D5;
+constexpr std::uintptr_t kMeleeHitBodyRva = 0x5F000;
+constexpr std::array<std::uintptr_t, 2> kMeleeHitBodyCallsites{
+    0x60747, 0x608CF};
+constexpr std::uintptr_t kPhysicsBodyUserDataOffset = 0x414;
+constexpr std::uintptr_t kGameEntityTypeOffset = 0xC0;
+constexpr std::int32_t kGameEntityEnemyType = 7;
 constexpr std::int32_t kPushActionState = 1;
 constexpr std::int32_t kMoveActionState = 2;
 constexpr std::int32_t kWalkMoveState = 0;
@@ -85,9 +97,13 @@ std::uint8_t* g_image = nullptr;
 hooks::IatHook g_update_hook;
 std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
 std::array<hooks::Rel32CallHook, 2> g_move_hooks;
+std::array<hooks::Rel32CallHook, kPlayerDamageCallsites.size()> g_damage_hooks;
 struct PointerEntry { std::uintptr_t site, target, cursor; };
 constexpr PointerEntry kPointers[]{{0x4477,0x797B0,0xA0}, {0x4C70,0x945F0,0x84}, {0x4FF2,0x6C7C0,0xAC}};
 std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks;
+hooks::Rel32CallHook g_melee_enemy_damage_hook;
+std::array<hooks::Rel32CallHook, kMeleeHitBodyCallsites.size()>
+    g_melee_hit_body_hooks;
 std::atomic<bool> g_ui{true};
 std::atomic<bool> g_installed{false};
 std::atomic<unsigned> g_active_callbacks{0};
@@ -150,6 +166,69 @@ template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
     T result{};
     if (object) static_cast<void>(ReadBytes(static_cast<const std::uint8_t*>(object) + offset, &result, sizeof(result)));
     return result;
+}
+
+struct NativeLightState {
+    bool known = false;
+    bool glow = false;
+    bool flashlight = false;
+};
+
+[[nodiscard]] NativeLightState ReadNativeLightState(void* player) noexcept {
+    NativeLightState state;
+    if (player == nullptr) return state;
+    auto* const glow = Read<void*>(player, 0x29C);
+    auto* const flashlight = Read<void*>(player, 0x290);
+    if (glow == nullptr || flashlight == nullptr) return state;
+    if (!ReadBytes(glow, &state.glow, sizeof(state.glow)) ||
+        !ReadBytes(static_cast<const std::uint8_t*>(flashlight) + 4,
+                   &state.flashlight, sizeof(state.flashlight))) {
+        return {};
+    }
+    state.known = true;
+    return state;
+}
+
+[[nodiscard]] bool NativeLightStateChanged(
+    const NativeLightState& before,
+    const NativeLightState& after) noexcept {
+    return before.known && after.known &&
+           (before.glow != after.glow ||
+            before.flashlight != after.flashlight);
+}
+
+[[nodiscard]] runtime::VrHand BlackPlagueOffHand(
+    runtime::VrHand interact_source) noexcept {
+    return interact_source == runtime::VrHand::left
+        ? runtime::VrHand::right : runtime::VrHand::left;
+}
+
+[[nodiscard]] runtime::VrHand BlackPlagueDominantHand() noexcept {
+    return g_settings.handedness == runtime::VrHandedness::left
+        ? runtime::VrHand::left : runtime::VrHand::right;
+}
+
+[[nodiscard]] bool BlackPlagueMeleeBodyCanImpact(void* body) noexcept {
+    if (body == nullptr) return false;
+    auto* const entity = Read<void*>(body, kPhysicsBodyUserDataOffset);
+    if (entity == nullptr) return true;
+    std::int32_t entity_type = 0;
+    return ReadBytes(static_cast<const std::uint8_t*>(entity) +
+                         kGameEntityTypeOffset,
+                     &entity_type, sizeof(entity_type)) &&
+           entity_type != kGameEntityEnemyType;
+}
+
+[[nodiscard]] float BlackPlagueDamageHapticStrength(
+    void* player, float damage) noexcept {
+    if (player == nullptr || !std::isfinite(damage) || damage <= 0.0F)
+        return 0.0F;
+    auto* const init = Read<void*>(player, 0x70);
+    if (init == nullptr) return 0.0F;
+    const auto difficulty = Read<std::int32_t>(init, 0x80);
+    if (difficulty == 0) damage *= 0.5F;
+    else if (difficulty == 2) damage *= 2.0F;
+    return 0.35F + std::min(damage, 50.0F) / 50.0F * 0.65F;
 }
 
 [[nodiscard]] bool ConstrainedDirectLocomotion(void* player) noexcept {
@@ -504,6 +583,58 @@ void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* phy
         return;
     }
 }
+
+void __fastcall HookedPlayerDamage(
+    void* player, void*, float damage, std::int32_t damage_type) {
+    CallbackScope scope;
+    using PlayerDamage = void(__thiscall*)(void*, float, std::int32_t);
+    const float health_before = Read<float>(player, 0x310);
+    const float strength = BlackPlagueDamageHapticStrength(player, damage);
+    reinterpret_cast<PlayerDamage>(g_image + kPlayerDamageRva)(
+        player, damage, damage_type);
+    const float health_after = Read<float>(player, 0x310);
+    // Rework emits Damage only after positive damage has survived the native
+    // gameplay guards and difficulty scaling. Preserve that success boundary:
+    // the exact BP method remains authoritative, and feedback is emitted only
+    // when its own health field actually decreased. Strength uses BP's exact
+    // 0.5x/1x/2x difficulty transform before the shared Rework profile.
+    if (strength > 0.0F && std::isfinite(health_before) &&
+        std::isfinite(health_after) && health_after < health_before) {
+        NativeControllerHaptic(
+            runtime::VrHand::left, runtime::VrHapticEvent::damage, strength);
+        NativeControllerHaptic(
+            runtime::VrHand::right, runtime::VrHapticEvent::damage, strength);
+    }
+}
+
+void __fastcall HookedMeleeEnemyDamage(
+    void* entity, void*, float damage, std::int32_t attack_strength) {
+    CallbackScope scope;
+    using GameEntityDamage = void(__thiscall*)(void*, float, std::int32_t);
+    reinterpret_cast<GameEntityDamage>(g_image + kGameEntityDamageRva)(
+        entity, damage, attack_strength);
+    // Rework raises MeleeImpact only after the enemy collision path has
+    // reached Damage. This callsite is the equivalent post-contact boundary
+    // in the supported Black Plague image; keep native damage authoritative.
+    NativeControllerHaptic(
+        BlackPlagueDominantHand(), runtime::VrHapticEvent::melee_impact);
+}
+
+void __fastcall HookedMeleeHitBody(void* melee, void*, void* body) {
+    CallbackScope scope;
+    using MeleeHitBody = void(__thiscall*)(void*, void*);
+    const bool can_impact = BlackPlagueMeleeBodyCanImpact(body);
+    reinterpret_cast<MeleeHitBody>(g_image + kMeleeHitBodyRva)(melee, body);
+    // Both owned callsites enter this resolver only after Black Plague has
+    // accepted the physical contact. The native resolver explicitly ignores
+    // enemy-backed bodies (type 7), whose separate Damage path above owns the
+    // impact, so mirror that exclusion to avoid a false or duplicate pulse.
+    if (can_impact) {
+        NativeControllerHaptic(
+            BlackPlagueDominantHand(), runtime::VrHapticEvent::melee_impact);
+    }
+}
+
 void __fastcall HookedUpdate(void* handler, void*, float dt) {
     CallbackScope scope;
     const bool ui = UiContext(handler);
@@ -681,8 +812,24 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     // Release spatial ownership even when a UI context filters gameplay edges.
     ServiceSpatialInteraction(g_input_player, ui);
     if (turn != 0) AddTrackedWorldYaw(-turn);
+    // Rework emits LightToggle only after StartFlashLightButton /
+    // StartGlowStickButton actually changed the native light state, and routes
+    // it to the off hand. Black Plague already owns the complete native button
+    // update here, including the VR quick-light query adaptation above, so a
+    // pre/post state observation gives the same success boundary without
+    // stacking a second hook over either game method.
+    const auto light_before = session_connected && !ui && frame.focused
+        ? ReadNativeLightState(g_input_player) : NativeLightState{};
     reinterpret_cast<Update>(g_image + 0x3BF0)(handler, dt);
+    const auto light_after = light_before.known
+        ? ReadNativeLightState(g_input_player) : NativeLightState{};
+    if (NativeLightStateChanged(light_before, light_after)) {
+        NativeControllerHaptic(
+            BlackPlagueOffHand(frame.interact_source),
+            runtime::VrHapticEvent::light_toggle);
+    }
     ServiceSpatialInteraction(g_input_player, UiContext(handler));
+    ServiceBlackPlagueVrFootstep(g_input_player);
     g_intents = previous;
     g_input_player = previous_player;
     g_direct_locomotion = false;
@@ -765,10 +912,14 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
     };
     const bool complete = g_update_hook.installed() &&
         all_installed(g_query_hooks) && all_installed(g_move_hooks) &&
-        all_installed(g_pointer_hooks);
+        all_installed(g_pointer_hooks) && all_installed(g_damage_hooks) &&
+        g_melee_enemy_damage_hook.installed() &&
+        all_installed(g_melee_hit_body_hooks);
     const bool any = g_update_hook.installed() ||
         any_installed(g_query_hooks) || any_installed(g_move_hooks) ||
-        any_installed(g_pointer_hooks);
+        any_installed(g_pointer_hooks) || any_installed(g_damage_hooks) ||
+        g_melee_enemy_damage_hook.installed() ||
+        any_installed(g_melee_hit_body_hooks);
     if (g_installed.load(std::memory_order_acquire)) {
         if (complete) return true;
         error = "Native input bridge installation state is incomplete";
@@ -807,6 +958,32 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         std::array<std::uint8_t, 5> actual{};
         if (!ReadBytes(g_image + entry.site, actual.data(), actual.size()) || actual != CallBytes(entry.site, entry.target)) {
             error = "Native menu pointer call mismatch"; return false;
+        }
+    }
+    for (const auto site : kPlayerDamageCallsites) {
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + site, actual.data(), actual.size()) ||
+            actual != CallBytes(site, kPlayerDamageRva)) {
+            error = "Native player Damage call mismatch";
+            return false;
+        }
+    }
+    {
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + kMeleeEnemyDamageCallsite,
+                actual.data(), actual.size()) ||
+            actual != CallBytes(kMeleeEnemyDamageCallsite,
+                                kGameEntityDamageRva)) {
+            error = "Native melee enemy Damage call mismatch";
+            return false;
+        }
+    }
+    for (const auto site : kMeleeHitBodyCallsites) {
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + site, actual.data(), actual.size()) ||
+            actual != CallBytes(site, kMeleeHitBodyRva)) {
+            error = "Native melee body-impact call mismatch";
+            return false;
         }
     }
     constexpr std::array<std::uintptr_t, 2> sites{0x51CD, 0x5227}, targets{0x9CBC0, 0x9CC60};
@@ -855,6 +1032,26 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         const auto& entry = kPointers[i];
         ok = hooks::InstallRel32CallHook(g_image + entry.site, CallBytes(entry.site, entry.target),
             reinterpret_cast<void*>(&HookedPointer), g_pointer_hooks[i], error);
+    }
+    for (std::size_t i = 0; ok && i < kPlayerDamageCallsites.size(); ++i) {
+        const auto site = kPlayerDamageCallsites[i];
+        ok = hooks::InstallRel32CallHook(
+            g_image + site, CallBytes(site, kPlayerDamageRva),
+            reinterpret_cast<void*>(&HookedPlayerDamage), g_damage_hooks[i], error);
+    }
+    if (ok) {
+        ok = hooks::InstallRel32CallHook(
+            g_image + kMeleeEnemyDamageCallsite,
+            CallBytes(kMeleeEnemyDamageCallsite, kGameEntityDamageRva),
+            reinterpret_cast<void*>(&HookedMeleeEnemyDamage),
+            g_melee_enemy_damage_hook, error);
+    }
+    for (std::size_t i = 0; ok && i < kMeleeHitBodyCallsites.size(); ++i) {
+        const auto site = kMeleeHitBodyCallsites[i];
+        ok = hooks::InstallRel32CallHook(
+            g_image + site, CallBytes(site, kMeleeHitBodyRva),
+            reinterpret_cast<void*>(&HookedMeleeHitBody),
+            g_melee_hit_body_hooks[i], error);
     }
     if (ok) ok = hooks::InstallPointerHook(reinterpret_cast<void**>(g_image + 0x272A84),
             g_image + 0x3BF0, reinterpret_cast<void*>(&HookedUpdate), g_update_hook, error);
@@ -914,12 +1111,30 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
         next.clear();
         if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
     }
+    for (auto& hook : g_damage_hooks) {
+        next.clear();
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
+    }
+    next.clear();
+    if (!hooks::RemoveRel32CallHook(g_melee_enemy_damage_hook, next)) {
+        ok = false;
+        append_error(next);
+    }
+    for (auto& hook : g_melee_hit_body_hooks) {
+        next.clear();
+        if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
+    }
     const bool any_hook = g_update_hook.installed() ||
         std::any_of(g_query_hooks.begin(), g_query_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
         std::any_of(g_move_hooks.begin(), g_move_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
         std::any_of(g_pointer_hooks.begin(), g_pointer_hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); }) ||
+        std::any_of(g_damage_hooks.begin(), g_damage_hooks.end(),
+            [](const auto& hook) noexcept { return hook.installed(); }) ||
+        g_melee_enemy_damage_hook.installed() ||
+        std::any_of(g_melee_hit_body_hooks.begin(), g_melee_hit_body_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); });
     if (any_hook) {
         append_error("Native input bridge remains partially installed");
@@ -1101,6 +1316,7 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         ReleaseSRWLockExclusive(&g_crouch_lock);
         g_contract_native_query_result = false;
         g_contract_block_stand = false;
+        g_ui.store(true, std::memory_order_release);
         AcquireSRWLockExclusive(&g_session_lock);
         g_haptic_diagnostics = {};
         ReleaseSRWLockExclusive(&g_session_lock);
@@ -1112,6 +1328,44 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         cleanup();
         return false;
     };
+
+    // Model only the exact fields read by UiContext. This proves that the
+    // native inventory/notebook active bytes drive the existing tracked-menu
+    // context without attaching to the game or adding another UI owner.
+    std::array<std::uint8_t, 0x80> handler{};
+    std::array<std::uint8_t, 0x220> init{};
+    std::array<std::uint8_t, 0x300> ui_player{};
+    std::array<std::uint8_t, 0x80> player_overlay{};
+    std::array<std::uint8_t, 0x80> notebook{};
+    std::array<std::uint8_t, 0x80> inventory{};
+    ContractWrite(handler.data(), 0x3C, std::int32_t{1});
+    void* const init_pointer = init.data();
+    void* const ui_player_pointer = ui_player.data();
+    void* const overlay_pointer = player_overlay.data();
+    void* const notebook_pointer = notebook.data();
+    void* const inventory_pointer = inventory.data();
+    ContractWrite(handler.data(), 0x2C, init_pointer);
+    ContractWrite(handler.data(), 0x38, ui_player_pointer);
+    ContractWrite(ui_player.data(), 0x1DC, true);
+    ContractWrite(ui_player.data(), 0x28C, overlay_pointer);
+    ContractWrite(init.data(), 0x178, notebook_pointer);
+    ContractWrite(init.data(), 0x164, inventory_pointer);
+    if (UiContext(handler.data())) {
+        return fail("normal Black Plague gameplay was treated as a UI context");
+    }
+    ContractWrite(notebook.data(), 0x44, true);
+    if (!UiContext(handler.data())) {
+        return fail("notebook active byte did not enter the tracked UI context");
+    }
+    ContractWrite(notebook.data(), 0x44, false);
+    ContractWrite(inventory.data(), 0x5C, true);
+    if (!UiContext(handler.data())) {
+        return fail("inventory active byte did not enter the tracked UI context");
+    }
+    g_ui.store(UiContext(handler.data()), std::memory_order_release);
+    if (!g_ui.load(std::memory_order_acquire)) {
+        return fail("published Black Plague UI context lost active inventory state");
+    }
 
     runtime::VrControllerFrame haptic_frame;
     haptic_frame.focused = true;
@@ -1164,6 +1418,83 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     if (cleared_haptic_diagnostics.attempts[ui_haptic_index] != 0 ||
         cleared_haptic_diagnostics.policy_rejections[ui_haptic_index] != 0) {
         return fail("Black Plague haptic diagnostics did not reset after consumption");
+    }
+
+    std::array<std::uint8_t, 0x400> light_player{};
+    std::array<std::uint8_t, 0x20> glow{};
+    std::array<std::uint8_t, 0x20> flashlight{};
+    void* const glow_pointer = glow.data();
+    void* const flashlight_pointer = flashlight.data();
+    ContractWrite(light_player.data(), 0x29C, glow_pointer);
+    ContractWrite(light_player.data(), 0x290, flashlight_pointer);
+    ContractWrite(glow.data(), 0, false);
+    ContractWrite(flashlight.data(), 4, false);
+    const auto light_off = ReadNativeLightState(light_player.data());
+    if (!light_off.known || light_off.glow || light_off.flashlight) {
+        return fail("Black Plague light-state snapshot lost the native off state");
+    }
+    ContractWrite(glow.data(), 0, true);
+    const auto light_glow = ReadNativeLightState(light_player.data());
+    if (!NativeLightStateChanged(light_off, light_glow) ||
+        BlackPlagueOffHand(runtime::VrHand::right) != runtime::VrHand::left ||
+        BlackPlagueOffHand(runtime::VrHand::left) != runtime::VrHand::right) {
+        return fail("Black Plague light-toggle haptic success/off-hand policy drifted");
+    }
+    if (NativeLightStateChanged(light_glow, light_glow)) {
+        return fail("Black Plague light-toggle haptic accepted an unchanged state");
+    }
+    ContractWrite(glow.data(), 0, false);
+    ContractWrite(flashlight.data(), 4, true);
+    const auto light_flashlight = ReadNativeLightState(light_player.data());
+    if (!NativeLightStateChanged(light_glow, light_flashlight)) {
+        return fail("Black Plague light-state snapshot lost the glow-to-flashlight transition");
+    }
+
+    g_settings.handedness = runtime::VrHandedness::right;
+    if (BlackPlagueDominantHand() != runtime::VrHand::right) {
+        return fail("Black Plague melee haptic lost right-hand dominance");
+    }
+    g_settings.handedness = runtime::VrHandedness::left;
+    if (BlackPlagueDominantHand() != runtime::VrHand::left) {
+        return fail("Black Plague melee haptic lost left-hand dominance");
+    }
+    std::array<std::uint8_t, 0x420> melee_body{};
+    std::array<std::uint8_t, 0x100> melee_entity{};
+    if (!BlackPlagueMeleeBodyCanImpact(melee_body.data())) {
+        return fail("Black Plague melee haptic rejected an ordinary physics body");
+    }
+    void* const melee_entity_pointer = melee_entity.data();
+    ContractWrite(melee_body.data(), kPhysicsBodyUserDataOffset,
+        melee_entity_pointer);
+    ContractWrite(melee_entity.data(), kGameEntityTypeOffset,
+        std::int32_t{0});
+    if (!BlackPlagueMeleeBodyCanImpact(melee_body.data())) {
+        return fail("Black Plague melee haptic rejected a non-enemy game entity");
+    }
+    ContractWrite(melee_entity.data(), kGameEntityTypeOffset,
+        kGameEntityEnemyType);
+    if (BlackPlagueMeleeBodyCanImpact(melee_body.data())) {
+        return fail("Black Plague melee body path duplicated the enemy impact owner");
+    }
+
+    std::array<std::uint8_t, 0x400> damage_player{};
+    std::array<std::uint8_t, 0x100> damage_init{};
+    void* const damage_init_pointer = damage_init.data();
+    ContractWrite(damage_player.data(), 0x70, damage_init_pointer);
+    ContractWrite(damage_init.data(), 0x80, std::int32_t{1});
+    const float normal_damage_strength =
+        BlackPlagueDamageHapticStrength(damage_player.data(), 10.0F);
+    ContractWrite(damage_init.data(), 0x80, std::int32_t{0});
+    const float easy_damage_strength =
+        BlackPlagueDamageHapticStrength(damage_player.data(), 10.0F);
+    ContractWrite(damage_init.data(), 0x80, std::int32_t{2});
+    const float hard_damage_strength =
+        BlackPlagueDamageHapticStrength(damage_player.data(), 10.0F);
+    if (std::abs(normal_damage_strength - 0.48F) > 0.0001F ||
+        std::abs(easy_damage_strength - 0.415F) > 0.0001F ||
+        std::abs(hard_damage_strength - 0.61F) > 0.0001F ||
+        BlackPlagueDamageHapticStrength(damage_player.data(), 0.0F) != 0.0F) {
+        return fail("Black Plague damage haptic difficulty/strength mapping drifted");
     }
 
     std::array<std::uint8_t, 0x400> locomotion_player{};

@@ -1,5 +1,6 @@
 #include "eye_target_probe.hpp"
 
+#include "opengl_enhanced_eye_stage.hpp"
 #include "opengl_eye_targets.hpp"
 
 #define WIN32_LEAN_AND_MEAN
@@ -15,6 +16,8 @@ namespace {
 
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
 constexpr GLenum kGlRenderbufferBinding = 0x8CA7;
+constexpr std::uint32_t kGameplayOverlayWidth = 800;
+constexpr std::uint32_t kGameplayOverlayHeight = 600;
 
 enum class RequestState : std::uint8_t {
     idle,
@@ -39,6 +42,8 @@ struct OpenGlStateSnapshot {
 };
 
 graphics::OpenGlEyeTargets g_persistent_targets;
+graphics::OpenGlEyeTargets g_gameplay_overlay_targets;
+graphics::OpenGlEnhancedEyeStage g_enhanced_eye_stage;
 std::atomic<RequestState> g_request_state{RequestState::idle};
 RequestKind g_request_kind = RequestKind::transient_validation;
 std::uint32_t g_requested_width = 0;
@@ -50,6 +55,8 @@ std::atomic<std::uint32_t> g_persistent_width{0};
 std::atomic<std::uint32_t> g_persistent_height{0};
 std::atomic<std::uint64_t> g_persistent_frames{0};
 std::atomic<std::uint64_t> g_last_lifetime_frames{0};
+std::atomic<bool> g_enhanced_requested{false};
+std::atomic<bool> g_enhanced_available{false};
 
 SRWLOCK g_event_lock = SRWLOCK_INIT;
 EyeTargetProbeTelemetry g_event;
@@ -126,11 +133,30 @@ EyeTargetProbeTelemetry g_event;
     }
 
     const OpenGlStateSnapshot before = CaptureOpenGlState();
-    const bool created = g_persistent_targets.CreateOrResize(width, height, error);
+    bool created = g_persistent_targets.CreateOrResize(width, height, error);
+    if (created) {
+        created = g_gameplay_overlay_targets.CreateOrResize(
+            kGameplayOverlayWidth, kGameplayOverlayHeight, error);
+    }
+    if (created && g_enhanced_requested.load(std::memory_order_acquire)) {
+        std::string enhanced_error;
+        g_enhanced_available.store(
+            g_enhanced_eye_stage.CreateOrResize(width, height, enhanced_error),
+            std::memory_order_release);
+        // Match Rework's legacy-eye fallback when the optional enhanced GL
+        // feature set is unavailable. Persistent stereo itself stays valid.
+        if (!g_enhanced_available.load(std::memory_order_acquire)) {
+            std::string cleanup_error;
+            static_cast<void>(g_enhanced_eye_stage.Destroy(cleanup_error));
+        }
+    } else {
+        g_enhanced_available.store(false, std::memory_order_release);
+    }
     state_restored = SameOpenGlState(before, CaptureOpenGlState());
     if (!created || !state_restored) {
         const std::string operation_error = error;
         std::string cleanup_error;
+        static_cast<void>(g_gameplay_overlay_targets.Destroy(cleanup_error));
         static_cast<void>(g_persistent_targets.Destroy(cleanup_error));
         if (created) {
             error = "Persistent eye target creation did not restore OpenGL state";
@@ -159,6 +185,22 @@ EyeTargetProbeTelemetry g_event;
     const OpenGlStateSnapshot before = CaptureOpenGlState();
     const std::uint64_t lifetime =
         g_persistent_frames.load(std::memory_order_acquire);
+    if (g_enhanced_eye_stage.ready()) {
+        std::string enhanced_error;
+        if (!g_enhanced_eye_stage.Destroy(enhanced_error)) {
+            state_restored = SameOpenGlState(before, CaptureOpenGlState());
+            error = "Enhanced eye stage cleanup failed: " + enhanced_error;
+            return false;
+        }
+    }
+    g_enhanced_available.store(false, std::memory_order_release);
+    std::string overlay_error;
+    const bool overlay_destroyed = g_gameplay_overlay_targets.Destroy(overlay_error);
+    if (!overlay_destroyed) {
+        state_restored = SameOpenGlState(before, CaptureOpenGlState());
+        error = "Gameplay overlay target cleanup failed: " + overlay_error;
+        return false;
+    }
     const bool destroyed = g_persistent_targets.Destroy(error);
     state_restored = SameOpenGlState(before, CaptureOpenGlState());
     if (destroyed) {
@@ -261,9 +303,14 @@ void ResetEyeTargetProbe() noexcept {
     g_persistent_height.store(0, std::memory_order_release);
     g_persistent_frames.store(0, std::memory_order_release);
     g_last_lifetime_frames.store(0, std::memory_order_release);
+    g_enhanced_available.store(false, std::memory_order_release);
     AcquireSRWLockExclusive(&g_event_lock);
     g_event = {};
     ReleaseSRWLockExclusive(&g_event_lock);
+}
+
+void ConfigurePersistentEyeEnhancedVisuals(bool enabled) noexcept {
+    g_enhanced_requested.store(enabled, std::memory_order_release);
 }
 
 void ProcessEyeTargetRequestsOnRenderThread(bool count_frame) noexcept {
@@ -362,6 +409,63 @@ bool EndPersistentEyeTarget(
     return g_persistent_targets.EndEye(binding, error);
 }
 
+bool BeginPersistentEnhancedEyeScene(
+    graphics::Eye eye,
+    graphics::OpenGlEnhancedEyeBinding& binding,
+    std::string& error) noexcept {
+    error.clear();
+    binding = {};
+    if (!g_enhanced_available.load(std::memory_order_acquire)) return true;
+    return g_enhanced_eye_stage.BeginEye(eye, binding, error);
+}
+
+bool EndPersistentEnhancedEyeScene(
+    graphics::OpenGlEnhancedEyeBinding& binding,
+    std::string& error) noexcept {
+    error.clear();
+    if (!binding.active) return true;
+    return g_enhanced_eye_stage.EndEye(binding, error);
+}
+
+bool PersistentEyeEnhancedVisualsAvailable() noexcept {
+    return g_enhanced_available.load(std::memory_order_acquire);
+}
+
+bool BeginGameplayOverlayTarget(
+    graphics::OpenGlEyeBinding& binding,
+    std::string& error) noexcept {
+    if (!g_persistent_active.load(std::memory_order_acquire) ||
+        !g_gameplay_overlay_targets.ready()) {
+        error = "Gameplay overlay target is not active";
+        return false;
+    }
+    return g_gameplay_overlay_targets.BeginEye(graphics::Eye::left, binding, error);
+}
+
+bool EndGameplayOverlayTarget(
+    graphics::OpenGlEyeBinding& binding,
+    std::string& error) noexcept {
+    return g_gameplay_overlay_targets.EndEye(binding, error);
+}
+
+bool GetGameplayOverlayColorTexture(
+    std::uint32_t& color_texture,
+    std::string& error) noexcept {
+    error.clear();
+    color_texture = 0;
+    if (!g_persistent_active.load(std::memory_order_acquire) ||
+        !g_gameplay_overlay_targets.ready()) {
+        error = "Gameplay overlay target is not active";
+        return false;
+    }
+    color_texture = g_gameplay_overlay_targets.target(graphics::Eye::left).color_texture;
+    if (color_texture == 0) {
+        error = "Gameplay overlay target has no color texture";
+        return false;
+    }
+    return true;
+}
+
 bool GetPersistentEyeColorTextures(
     std::array<std::uint32_t, 2>& color_textures,
     std::string& error) noexcept {
@@ -402,6 +506,10 @@ EyeTargetProbeTelemetry ConsumeEyeTargetProbeTelemetry() noexcept {
     ReleaseSRWLockExclusive(&g_event_lock);
     result.persistent_active =
         g_persistent_active.load(std::memory_order_acquire);
+    result.enhanced_visuals_requested =
+        g_enhanced_requested.load(std::memory_order_acquire);
+    result.enhanced_visuals_available =
+        g_enhanced_available.load(std::memory_order_acquire);
     if (result.persistent_active) {
         result.width = g_persistent_width.load(std::memory_order_acquire);
         result.height = g_persistent_height.load(std::memory_order_acquire);

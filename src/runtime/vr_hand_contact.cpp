@@ -373,6 +373,11 @@ bool ResolveVrHandPose(
     VrMatrix44& resolved_pose) noexcept {
     using namespace vr_interaction_policy;
 
+    state.last_tracking_reanchor = false;
+    state.last_recovery_anchor = false;
+    state.last_pullback_recovery = false;
+    state.last_interaction_assist = false;
+
     if (!UsablePose(raw_pose, frame)) {
         if (state.valid) {
             resolved_pose = state.resolved_pose;
@@ -394,6 +399,7 @@ bool ResolveVrHandPose(
     const bool reanchor = !first_pose &&
         Distance(Translation(state.raw_pose), raw_position) >
             kTrackingReanchorDistance;
+    state.last_tracking_reanchor = reanchor;
 
     bool initial_overlap = false;
     if (first_pose) {
@@ -438,6 +444,8 @@ bool ResolveVrHandPose(
             }
         }
     }
+    state.last_recovery_anchor = using_recovery;
+    state.last_pullback_recovery = using_recovery && pullback_recovery;
 
     VrHandContactVector start_position{};
     if (using_recovery) {
@@ -455,7 +463,17 @@ bool ResolveVrHandPose(
     VrMatrix44 sweep_pose = (reanchor || first_pose || using_recovery)
         ? raw_pose : state.resolved_pose;
     SetTranslation(sweep_pose, start_position);
-    const float tolerance = ContactTolerance(frame.interaction_assist);
+    bool interaction_assist = frame.interaction_assist;
+    if (frame.interaction_target_valid) {
+        const auto to_target = Subtract(frame.interaction_target, start_position);
+        const auto controller_motion = Subtract(raw_position, start_position);
+        interaction_assist =
+            Length(to_target) <= kInteractionTargetDistance &&
+            Dot(controller_motion, controller_motion) > 0.000001F &&
+            Dot(controller_motion, to_target) > 0.0F;
+    }
+    state.last_interaction_assist = interaction_assist;
+    const float tolerance = ContactTolerance(interaction_assist);
 
     for (int iteration = 0; iteration < kOverlapResolveIterations; ++iteration) {
         SetTranslation(sweep_pose, start_position);

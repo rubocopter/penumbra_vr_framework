@@ -7,6 +7,7 @@ struct TrackedHandVisual {
     runtime::VrMatrix44 palm;
     runtime::VrMatrix44 aim;
     std::array<float,5> curl{};
+    float hold_pose_weight = 0.0F;
     bool visible = false;
     bool ray = false;
 };

@@ -7,6 +7,7 @@
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
 #include "native_input_bridge.hpp"
+#include "spatial_interaction.hpp"
 #include "vr_grab_pose.hpp"
 #include "rel32_call_hook.hpp"
 #include "stereo_render_policy.hpp"
@@ -44,6 +45,12 @@ constexpr std::uintptr_t kRenderWorldRva = 0x0012CB10;
 constexpr std::uintptr_t kRenderWorldCallSiteRva = 0x000EE010;
 constexpr std::uintptr_t kUpdateRenderListRva = 0x0012A8F0;
 constexpr std::uintptr_t kUpdateRenderListCallSiteRva = 0x000EDF84;
+constexpr std::uintptr_t kUpdaterPostSceneDrawRva = 0x000E1C40;
+constexpr std::uintptr_t kUpdaterPostSceneDrawCallSiteRva = 0x000EE01B;
+constexpr std::uintptr_t kGraphicsGetDrawerRva = 0x000DF730;
+constexpr std::uintptr_t kGraphicsGetDrawerCallSiteRva = 0x000EE03B;
+constexpr std::uintptr_t kGraphicsDrawerDrawAllRva = 0x000F3920;
+constexpr std::uintptr_t kGraphicsDrawerDrawAllCallSiteRva = 0x000EE042;
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
 constexpr GLenum kGlMaxRenderbufferSize = 0x84E8;
 constexpr std::array<std::uint8_t, 5> kExpectedRenderWorldCall{
@@ -52,6 +59,20 @@ constexpr std::array<std::uint8_t, 5> kExpectedRenderWorldCall{
 constexpr std::array<std::uint8_t, 5> kExpectedUpdateRenderListCall{
     0xE8, 0x67, 0xC9, 0x03, 0x00,
 };
+constexpr std::array<std::uint8_t, 5> kExpectedUpdaterPostSceneDrawCall{
+    0xE8, 0x20, 0x3C, 0xFF, 0xFF,
+};
+constexpr std::array<std::uint8_t, 5> kExpectedGraphicsGetDrawerCall{
+    0xE8, 0xF0, 0x16, 0xFF, 0xFF,
+};
+constexpr std::array<std::uint8_t, 5> kExpectedGraphicsDrawerDrawAllCall{
+    0xE8, 0xD9, 0x58, 0x00, 0x00,
+};
+constexpr float kGameplayOverlayLeft = -400.0F / 450.0F;
+constexpr float kGameplayOverlayRight = 400.0F / 450.0F;
+constexpr float kGameplayOverlayBottom = -350.0F / 450.0F;
+constexpr float kGameplayOverlayTop = 250.0F / 450.0F;
+constexpr float kGameplayOverlayDistance = 0.75F;
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
 constexpr float kRotationOnlyTranslationScale = 0.0F;
 constexpr float kNativeYawRebaseEpsilonRadians = 0.0001F;
@@ -72,6 +93,7 @@ using UpdateRenderList = void(__thiscall*)(
     void* world,
     void* camera,
     float frame_time);
+using GraphicsDrawerDrawAll = void(__thiscall*)(void* drawer);
 
 enum class DuplicationState : std::uint8_t {
     idle,
@@ -129,6 +151,7 @@ struct StereoProcessingResult {
 
 [[nodiscard]] bool ResolveBlackPlagueRoomScalePlacement(
     const runtime::VrMatrix44& game_head_view,
+    const runtime::VrMatrix34& tracking_anchor,
     const runtime::VrMatrix34& current_tracking_pose,
     const runtime::VrTrackingSampleIdentity& current_identity,
     const BlackPlagueRoomScaleCameraSample& room_scale,
@@ -161,15 +184,25 @@ struct StereoProcessingResult {
         return true;
     }
 
-    // Rework 23c890f presents the reconciled horizontal head anchor produced
-    // by the character-body tick. Its tracking-space transform deliberately
-    // zeros raw HMD X/Z, so an unvalidated render-rate lean is never shown and
-    // then snapped back when the next native collision solve rejects it. Black
-    // Plague previously extrapolated the HMD delta between ~60 Hz body ticks;
-    // PID 17760 correlated those prediction resets with the reported wall
-    // "mini jumps". Keep render_prediction zero and let the next reconciled
-    // body sample advance the horizontal anchor, matching Rework ownership.
+    // Black Plague's character body advances at ~60 Hz while the HMD can be
+    // sampled faster. PID 14212 showed that withholding all between-tick X/Z
+    // made rejected wall pressure feel like a force pulling the head back.
+    // Restore the previously headset-exercised continuation and remove only
+    // the component that continues into the last rejected physical direction.
+    // Tangential slide and retreat remain render-rate responsive.
+    const float world_yaw = TrackingWorldYaw(game_head_view, tracking_anchor);
+    const float cosine = std::cos(world_yaw);
+    const float sine = std::sin(world_yaw);
+    render_prediction = {
+        cosine * tracking_delta_x + sine * tracking_delta_z,
+        0.0F,
+        -sine * tracking_delta_x + cosine * tracking_delta_z,
+    };
+    render_prediction = runtime::FilterPhysicalRenderPrediction(
+        render_prediction, room_scale.physical_reconciliation);
     render_head_anchor = room_scale.predicted_head_anchor;
+    render_head_anchor[0] += render_prediction[0];
+    render_head_anchor[2] += render_prediction[2];
 
     // Rework's player-world pose is the reconciled feet anchor. Its shared
     // tracking transform supplies the physical HMD height continuously and
@@ -245,7 +278,7 @@ struct StereoProcessingResult {
     }
     if (!room_scale.enabled || !room_scale.valid) return true;
     bool placement_available = false;
-    if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, current,
+    if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, anchor, current,
             current_identity,
             room_scale, placement_available, world_translation, render_prediction,
             render_head_anchor, error)) {
@@ -265,8 +298,10 @@ struct StereoProcessingResult {
 
 hooks::Rel32CallHook g_hook;
 hooks::Rel32CallHook g_visibility_hook;
+hooks::Rel32CallHook g_draw_all_hook;
 std::atomic<void*> g_original_target{nullptr};
 std::atomic<void*> g_original_visibility_target{nullptr};
+std::atomic<void*> g_original_draw_all_target{nullptr};
 std::atomic<std::uint32_t> g_active_calls{0};
 std::atomic<DuplicationState> g_duplication_state{DuplicationState::idle};
 std::atomic<std::uint32_t> g_duplication_requested_frames{0};
@@ -290,6 +325,14 @@ runtime::VrMatrix34 g_stereo_tracking_anchor{};
 bool g_stereo_latest_pose_valid = false;
 runtime::VrMatrix34 g_stereo_latest_pose{};
 BlackPlagueRoomScaleCameraSample g_stereo_room_scale_sample{};
+struct PendingGameplayOverlaySubmission {
+    bool active = false;
+    runtime::OpenVrSession* session = nullptr;
+    runtime::VrMatrix44 head_view{};
+    std::uint64_t presentation_sequence = 0;
+    bool presentation_from_visibility = false;
+};
+PendingGameplayOverlaySubmission g_pending_gameplay_overlay_submission;
 struct PresentationSnapshot {
     bool valid = false;
     runtime::VrHmdPose pose{};
@@ -497,6 +540,197 @@ public:
         g_active_calls.fetch_sub(1, std::memory_order_acq_rel);
     }
 };
+
+class DeferredStereoFrameRelease final {
+public:
+    DeferredStereoFrameRelease() = default;
+    DeferredStereoFrameRelease(const DeferredStereoFrameRelease&) = delete;
+    DeferredStereoFrameRelease& operator=(const DeferredStereoFrameRelease&) = delete;
+    ~DeferredStereoFrameRelease() {
+        g_stereo_frame_calls.fetch_sub(1, std::memory_order_acq_rel);
+    }
+};
+
+void RecordGameplayOverlayFailure(const std::string& error) noexcept {
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    ++g_telemetry.gameplay_overlay_failures;
+    strncpy_s(
+        g_telemetry.gameplay_overlay_error.data(),
+        g_telemetry.gameplay_overlay_error.size(),
+        error.c_str(),
+        _TRUNCATE);
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
+void FailStereoMatrixValidation(const std::string& error) noexcept;
+
+[[nodiscard]] bool CompositeGameplayOverlayIntoEyes(
+    const PendingGameplayOverlaySubmission& pending,
+    std::string& error) noexcept {
+    std::uint32_t overlay_texture = 0;
+    if (!GetGameplayOverlayColorTexture(overlay_texture, error)) {
+        return false;
+    }
+
+    runtime::VrMatrix44 head_pose;
+    if (!runtime::InvertRigidTransform(
+            CollapseMatrix(pending.head_view), head_pose, error)) {
+        return false;
+    }
+
+    for (std::size_t eye_index = 0; eye_index < 2; ++eye_index) {
+        runtime::VrMatrix44 eye_view;
+        if (!runtime::ComposeEyeViewFromHeadView(
+                pending.head_view,
+                g_stereo_eyes[eye_index].eye_to_head,
+                eye_view,
+                error)) {
+            return false;
+        }
+        const runtime::VrMatrix44 eye_from_head =
+            runtime::Multiply(eye_view, head_pose);
+        graphics::OpenGlEyeBinding eye_binding;
+        if (!BeginPersistentEyeTarget(
+                eye_index == 0 ? graphics::Eye::left : graphics::Eye::right,
+                eye_binding,
+                error)) {
+            return false;
+        }
+        const bool drawn = graphics::DrawTransparentOverlay(
+            overlay_texture,
+            eye_from_head,
+            g_stereo_projections[eye_index],
+            kGameplayOverlayLeft,
+            kGameplayOverlayRight,
+            kGameplayOverlayBottom,
+            kGameplayOverlayTop,
+            kGameplayOverlayDistance,
+            error);
+        const std::string draw_error = error;
+        std::string restore_error;
+        const bool restored = EndPersistentEyeTarget(eye_binding, restore_error);
+        if (!drawn || !restored) {
+            error = drawn ? "Could not restore the eye after gameplay overlay: " + restore_error
+                          : draw_error;
+            if (!drawn && !restored && !restore_error.empty()) {
+                error += "; eye restore also failed: " + restore_error;
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+void __fastcall HookedGraphicsDrawerDrawAll(void* drawer, void*) noexcept {
+    ActiveCall active_call;
+    const auto original = reinterpret_cast<GraphicsDrawerDrawAll>(
+        g_original_draw_all_target.load(std::memory_order_acquire));
+    if (original == nullptr) {
+        if (g_pending_gameplay_overlay_submission.active) {
+            g_pending_gameplay_overlay_submission = {};
+            g_stereo_frame_calls.fetch_sub(1, std::memory_order_acq_rel);
+        }
+        return;
+    }
+    if (!g_pending_gameplay_overlay_submission.active) {
+        original(drawer);
+        return;
+    }
+
+    const PendingGameplayOverlaySubmission pending =
+        g_pending_gameplay_overlay_submission;
+    g_pending_gameplay_overlay_submission = {};
+    DeferredStereoFrameRelease deferred_frame_release;
+    const auto overlay_start = PerformanceClock::now();
+    bool captured = false;
+    bool capture_binding_failed = false;
+    std::string error;
+    graphics::OpenGlEyeBinding overlay_binding;
+    if (BeginGameplayOverlayTarget(overlay_binding, error)) {
+        glPushAttrib(
+            GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT |
+            GL_STENCIL_BUFFER_BIT | GL_SCISSOR_BIT);
+        glDisable(GL_SCISSOR_TEST);
+        glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
+        glDepthMask(GL_TRUE);
+        glClearColor(0, 0, 0, 0);
+        glClearDepth(1.0);
+        glClearStencil(0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
+        glPopAttrib();
+        original(drawer);
+        std::string restore_error;
+        if (EndGameplayOverlayTarget(overlay_binding, restore_error)) {
+            captured = true;
+        } else {
+            error = "Could not restore GL state after native gameplay overlay: " +
+                restore_error;
+            capture_binding_failed = true;
+        }
+    } else {
+        // The native drawer must still consume its queue exactly once. If the
+        // auxiliary surface is unavailable, preserve gameplay and submit the
+        // already-rendered eyes without the overlay for this frame.
+        original(drawer);
+    }
+
+    bool overlay_composited = false;
+    if (captured) {
+        overlay_composited = CompositeGameplayOverlayIntoEyes(pending, error);
+        if (!overlay_composited) {
+            capture_binding_failed = true;
+        }
+    }
+    if (!captured || !overlay_composited) {
+        RecordGameplayOverlayFailure(error.empty()
+            ? "Gameplay overlay capture was unavailable"
+            : error);
+    }
+
+    bool submitted = false;
+    std::uint64_t submit_cpu_ns = 0;
+    if (!capture_binding_failed && pending.session != nullptr &&
+        !g_stereo_cancel.load(std::memory_order_acquire)) {
+        std::array<std::uint32_t, 2> color_textures{};
+        if (GetPersistentEyeColorTextures(color_textures, error)) {
+            const auto submit_start = PerformanceClock::now();
+            submitted = pending.session->SubmitOpenGlEyeTextures(
+                color_textures, error);
+            submit_cpu_ns = ElapsedNanoseconds(submit_start);
+            if (submitted) {
+                glFlush();
+                if (pending.presentation_from_visibility) {
+                    g_last_submitted_presentation_sequence.store(
+                        pending.presentation_sequence,
+                        std::memory_order_release);
+                }
+            }
+        }
+    }
+
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    g_telemetry.gameplay_overlay_cpu_ns += ElapsedNanoseconds(overlay_start);
+    if (captured && overlay_composited) {
+        ++g_telemetry.gameplay_overlay_frames;
+        g_telemetry.gameplay_overlay_error = {};
+    }
+    if (submitted) {
+        ++g_telemetry.deferred_compositor_submits;
+        ++g_telemetry.compositor_submitted_frames;
+        g_telemetry.compositor_hmd_pose_valid = true;
+        g_telemetry.compositor_submit_cpu_ns += submit_cpu_ns;
+    }
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+
+    if (!capture_binding_failed && pending.session != nullptr &&
+        !g_stereo_cancel.load(std::memory_order_acquire) && !submitted) {
+        FailStereoMatrixValidation(
+            "Deferred gameplay-overlay compositor submit failed: " + error);
+    } else if (capture_binding_failed) {
+        FailStereoMatrixValidation(
+            "Gameplay overlay composition failed: " + error);
+    }
+}
 
 void FailDuplication(const std::string& error) noexcept {
     strncpy_s(
@@ -816,14 +1050,31 @@ void __fastcall HookedUpdateRenderList(
     if (!BeginPersistentEyeTarget(eye, binding, error)) {
         return false;
     }
+    graphics::OpenGlEnhancedEyeBinding enhanced_binding;
+    if (!BeginPersistentEnhancedEyeScene(eye, enhanced_binding, error)) {
+        const std::string operation_error = error;
+        std::string binding_error;
+        static_cast<void>(EndPersistentEyeTarget(binding, binding_error));
+        error = operation_error;
+        if (!binding_error.empty()) {
+            error += "; eye binding cleanup also failed: " + binding_error;
+        }
+        return false;
+    }
 
     CameraMatrixOverride camera_override(kCameraLayout);
     if (!camera_override.Apply(
             camera, eye_view, g_stereo_projections[eye_index], error)) {
         const std::string operation_error = error;
+        std::string enhanced_error;
+        static_cast<void>(EndPersistentEnhancedEyeScene(
+            enhanced_binding, enhanced_error));
         std::string binding_error;
         static_cast<void>(EndPersistentEyeTarget(binding, binding_error));
         error = operation_error;
+        if (!enhanced_error.empty()) {
+            error += "; enhanced eye cleanup also failed: " + enhanced_error;
+        }
         if (!binding_error.empty()) {
             error += "; eye binding cleanup also failed: " + binding_error;
         }
@@ -861,6 +1112,10 @@ void __fastcall HookedUpdateRenderList(
                 i==(frame.interact_source==runtime::VrHand::left ? 0U : 1U);
             if (frame.hands[i].skeleton_valid) hand.curl=frame.hands[i].finger_curl;
             else hand.curl.fill(frame.input.state.interact.pressed && hand.ray ? 0.8F : 0.1F);
+            float attached_grip=0.0F;
+            if (ReadAttachedToolGrip(i,attached_grip)) {
+                hand.hold_pose_weight=attached_grip;
+            }
         }
         PublishGameplayPalmTracking(
             raw_palms,raw_palm_valid,head_pose,head_valid);
@@ -878,15 +1133,22 @@ void __fastcall HookedUpdateRenderList(
         hand_draw_cpu_ns += ElapsedNanoseconds(hand_draw_start);
     }
 
+    std::string enhanced_error;
+    const bool enhanced_restored = EndPersistentEnhancedEyeScene(
+        enhanced_binding, enhanced_error);
     std::string camera_error;
     const bool camera_restored = camera_override.Restore(camera_error);
     std::string binding_error;
     const bool binding_restored = EndPersistentEyeTarget(binding, binding_error);
-    if (!camera_restored || !binding_restored) {
+    if (!enhanced_restored || !camera_restored || !binding_restored) {
+        if (!enhanced_restored) {
+            error = "Could not resolve the enhanced eye stage: " + enhanced_error;
+        }
         if (!camera_restored) {
             RecordStereoCameraRestorationFailure();
-            error = "Could not restore the HPL camera after an eye pass: " +
-                camera_error;
+            if (!error.empty()) error += "; ";
+            error += "Could not restore the HPL camera after an eye pass: " +
+                     camera_error;
         }
         if (!binding_restored) {
             if (!error.empty()) {
@@ -1151,25 +1413,45 @@ void __fastcall HookedUpdateRenderList(
     }
 
     std::uint64_t compositor_submit_cpu_ns = 0;
+    bool compositor_submit_deferred = false;
     if (session != nullptr) {
-        std::array<std::uint32_t, 2> color_textures{};
-        if (!GetPersistentEyeColorTextures(color_textures, error)) {
-            FailStereoMatrixValidation(
-                "Could not obtain the rendered eye textures: " + error);
-            return result;
+        if (persistent_stereo && g_draw_all_hook.installed()) {
+            if (g_pending_gameplay_overlay_submission.active) {
+                FailStereoMatrixValidation(
+                    "A previous gameplay-overlay submission is still pending");
+                return result;
+            }
+            g_pending_gameplay_overlay_submission.active = true;
+            g_pending_gameplay_overlay_submission.session = session;
+            g_pending_gameplay_overlay_submission.head_view = head_view;
+            g_pending_gameplay_overlay_submission.presentation_sequence =
+                presentation.pose.identity.sequence;
+            g_pending_gameplay_overlay_submission.presentation_from_visibility =
+                presentation_from_visibility;
+            // Hold tracked-stereo lifetime ownership until the native DrawAll
+            // owner has composed HPL's 2D queue and submitted this frame.
+            g_stereo_frame_calls.fetch_add(1, std::memory_order_acq_rel);
+            compositor_submit_deferred = true;
+        } else {
+            std::array<std::uint32_t, 2> color_textures{};
+            if (!GetPersistentEyeColorTextures(color_textures, error)) {
+                FailStereoMatrixValidation(
+                    "Could not obtain the rendered eye textures: " + error);
+                return result;
+            }
+            const auto compositor_submit_start = PerformanceClock::now();
+            if (!session->SubmitOpenGlEyeTextures(color_textures, error)) {
+                FailStereoMatrixValidation(
+                    "Could not submit the rendered stereo pair: " + error);
+                return result;
+            }
+            if (presentation_from_visibility) {
+                g_last_submitted_presentation_sequence.store(
+                    presentation.pose.identity.sequence, std::memory_order_release);
+            }
+            glFlush();
+            compositor_submit_cpu_ns = ElapsedNanoseconds(compositor_submit_start);
         }
-        const auto compositor_submit_start = PerformanceClock::now();
-        if (!session->SubmitOpenGlEyeTextures(color_textures, error)) {
-            FailStereoMatrixValidation(
-                "Could not submit the rendered stereo pair: " + error);
-            return result;
-        }
-        if (presentation_from_visibility) {
-            g_last_submitted_presentation_sequence.store(
-                presentation.pose.identity.sequence, std::memory_order_release);
-        }
-        glFlush();
-        compositor_submit_cpu_ns = ElapsedNanoseconds(compositor_submit_start);
     }
 
     const std::uint64_t stereo_cpu_ns = ElapsedNanoseconds(stereo_start);
@@ -1181,7 +1463,7 @@ void __fastcall HookedUpdateRenderList(
     g_telemetry.eye_world_cpu_ns += eye_world_cpu_ns;
     g_telemetry.hand_draw_cpu_ns += hand_draw_cpu_ns;
     g_telemetry.compositor_submit_cpu_ns += compositor_submit_cpu_ns;
-    if (session != nullptr) {
+    if (session != nullptr && !compositor_submit_deferred) {
         ++g_telemetry.compositor_submitted_frames;
         g_telemetry.compositor_hmd_pose_valid = true;
     }
@@ -1366,7 +1648,8 @@ void __fastcall HookedRenderWorld(
 
 bool InstallRenderWorldProbe(std::string& error) noexcept {
     error.clear();
-    if (g_hook.installed() || g_visibility_hook.installed()) {
+    if (g_hook.installed() || g_visibility_hook.installed() ||
+        g_draw_all_hook.installed()) {
         error = "The Black Plague RenderWorld probe is already installed";
         return false;
     }
@@ -1391,6 +1674,29 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         expected_visibility_target) {
         error =
             "The manifest call displacement does not target UpdateRenderList";
+        return false;
+    }
+    std::uint8_t* post_scene_draw_call_site =
+        image + kUpdaterPostSceneDrawCallSiteRva;
+    if (DecodeExpectedTarget(
+            post_scene_draw_call_site, kExpectedUpdaterPostSceneDrawCall) !=
+        image + kUpdaterPostSceneDrawRva) {
+        error = "The manifest call displacement does not target Updater::OnPostSceneDraw";
+        return false;
+    }
+    std::uint8_t* get_drawer_call_site = image + kGraphicsGetDrawerCallSiteRva;
+    if (DecodeExpectedTarget(
+            get_drawer_call_site, kExpectedGraphicsGetDrawerCall) !=
+        image + kGraphicsGetDrawerRva) {
+        error = "The manifest call displacement does not target Graphics::GetDrawer";
+        return false;
+    }
+    std::uint8_t* draw_all_call_site = image + kGraphicsDrawerDrawAllCallSiteRva;
+    void* expected_draw_all_target = image + kGraphicsDrawerDrawAllRva;
+    if (DecodeExpectedTarget(
+            draw_all_call_site, kExpectedGraphicsDrawerDrawAllCall) !=
+        expected_draw_all_target) {
+        error = "The manifest call displacement does not target GraphicsDrawer::DrawAll";
         return false;
     }
 
@@ -1418,6 +1724,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
     g_stereo_room_scale_sample = {};
+    g_pending_gameplay_overlay_submission = {};
     g_last_submitted_presentation_sequence.store(0, std::memory_order_release);
     g_stereo_requested_frames.store(0, std::memory_order_release);
     g_stereo_completed_frames.store(0, std::memory_order_release);
@@ -1430,6 +1737,8 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_original_target.store(expected_target, std::memory_order_release);
     g_original_visibility_target.store(
         expected_visibility_target, std::memory_order_release);
+    g_original_draw_all_target.store(
+        expected_draw_all_target, std::memory_order_release);
 
     if (!hooks::InstallRel32CallHook(
             call_site,
@@ -1457,6 +1766,28 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         // available so that an in-flight callback can finish safely.
         return false;
     }
+    if (!hooks::InstallRel32CallHook(
+            draw_all_call_site,
+            kExpectedGraphicsDrawerDrawAllCall,
+            reinterpret_cast<void*>(&HookedGraphicsDrawerDrawAll),
+            g_draw_all_hook,
+            error)) {
+        std::string visibility_rollback_error;
+        std::string render_rollback_error;
+        const bool visibility_rolled_back = hooks::RemoveRel32CallHook(
+            g_visibility_hook, visibility_rollback_error);
+        const bool render_rolled_back = hooks::RemoveRel32CallHook(
+            g_hook, render_rollback_error);
+        if (!visibility_rolled_back && !visibility_rollback_error.empty()) {
+            error += "; UpdateRenderList hook rollback also failed: " +
+                visibility_rollback_error;
+        }
+        if (!render_rolled_back && !render_rollback_error.empty()) {
+            error += "; RenderWorld hook rollback also failed: " +
+                render_rollback_error;
+        }
+        return false;
+    }
     if (!hooks::InstallOpenGlEyeScissor(error)) {
         std::string rollback_error;
         if (!RemoveRenderWorldProbe(rollback_error)) {
@@ -1477,16 +1808,24 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         error = "A controlled stereo-matrix request is still active";
         return false;
     }
+    std::string draw_all_error;
+    const bool draw_all_removed =
+        hooks::RemoveRel32CallHook(g_draw_all_hook, draw_all_error);
     std::string visibility_error;
     const bool visibility_removed =
         hooks::RemoveRel32CallHook(g_visibility_hook, visibility_error);
     std::string render_error;
     const bool render_removed = hooks::RemoveRel32CallHook(g_hook, render_error);
-    if (!visibility_removed || !render_removed) {
-        error = !visibility_removed
+    if (!draw_all_removed || !visibility_removed || !render_removed) {
+        error = !draw_all_removed
+            ? "Could not remove the GraphicsDrawer::DrawAll hook: " + draw_all_error
+            : !visibility_removed
             ? "Could not remove the UpdateRenderList hook: " + visibility_error
             : "Could not remove the RenderWorld hook: " + render_error;
-        if (!visibility_removed && !render_removed) {
+        if (!visibility_removed && !draw_all_removed) {
+            error += "; UpdateRenderList hook removal also failed: " + visibility_error;
+        }
+        if (!render_removed && (!draw_all_removed || !visibility_removed)) {
             error += "; RenderWorld hook removal also failed: " + render_error;
         }
         return false;
@@ -1840,6 +2179,7 @@ void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
     g_tracking_crouch_depth.store(
         settings.physical_crouch_depth, std::memory_order_release);
     g_tracking_play_mode.store(settings.play_mode, std::memory_order_release);
+    ConfigurePersistentEyeEnhancedVisuals(settings.enhanced_visuals);
     g_tracking_player_height.store(
         settings.player_height, std::memory_order_release);
     AcquireSRWLockExclusive(&g_play_mode_lock);

@@ -1,6 +1,46 @@
 # Black Plague — checklist de validación con visor
 
-Actualizado: 2026-09-16.
+Actualizado: 2026-09-18.
+
+## Candidato actual — 2026-09-18
+
+La siguiente sesión con visor debe validar el **candidato combinado de Black
+Plague**. No hace falta repetir hitos ya cerrados de body mapping, `0xD7281`,
+stick/collision, crouch/Y general o el antiguo error 108 salvo que aparezca una
+regresión concreta.
+
+El working tree actual deja en **host-tested** las correcciones y consumos que
+todavía necesitan evidencia de visor: resolver de palma + interaction assist,
+adquisición rápida `Grab=6`/`Move=2`, step físico static-only, manos Rework y
+articulación de cinco dedos, perfil Rework del glowstick, magnetic pickup,
+servo de mecanismos para `cGameLever` de un joint y `cGameSwingDoor` hinge de
+un joint, HUD/subtítulos sobre el owner nativo `DrawAll`, haptics
+LightToggle/Damage/MeleeImpact, HRTF de arranque y el stage final por ojo de
+Enhanced Visuals. Wheel, mecanismos compound, occlusion/reverb y la respuesta
+HPL de materiales/luces de Enhanced Visuals siguen fuera de ese cierre.
+
+El gate host actual es **36/36 CTest Release**, verificador exact-build de Black
+Plague y `git diff --check`. La última configuración SDK-less registrada había
+pasado **35/35** antes de añadirse la cobertura host más reciente; ese dato no
+promueve ni bloquea por sí solo la siguiente tanda con visor.
+
+La tanda principal se lanza desde la raíz del repositorio con:
+
+```powershell
+tools\Start-BlackPlaguePalmCollisionValidation.ps1
+```
+
+Si la instalación no está en la biblioteca Steam predeterminada:
+
+```powershell
+tools\Start-BlackPlaguePalmCollisionValidation.ps1 -GamePath "X:\ruta\Penumbra Black Plague\redist\penumbra.exe"
+```
+
+No abras `penumbra.exe` manualmente. El helper valida primero la imagen
+exact-build, activa mirror-on y mantiene vivos los gates transitorios de palm,
+physical displacement y room-scale hasta que el probe confirma la composición.
+Déjalo abierto durante toda la sesión y cierra Black Plague normalmente al
+terminar para que analice únicamente el log fresco de ese PID.
 
 ## Gate del candidato Release
 
@@ -69,8 +109,12 @@ Para cerrar el candidato con visor, la tanda debe cubrir, en este orden:
    reutiliza;
 10. mirror/focus y Alt+Tab como gate separado; si reaparece el crash histórico de
    SDL, conservar dump y lista de módulos sin atribuir causa por proximidad;
-11. yaw/footstep-body-bob como gate de confort separado antes de cualquier
-    promoción a `supported`.
+11. yaw como gate dirigido de tracking-world-yaw; el ownership ya está cerrado
+    a nivel host y queda comprobar dirección/confort en visor;
+12. footstep/body-bob como gate de presentación separado: comprobar que el
+    cadence host-tested produce superficies plausibles y revisar en el log
+    `vr_footstep` (`cadence/attempts/success/rejected/abi_failures`) sin retocar
+    la reconciliación por una observación de bob/animación.
 
 La palma collision-aware ya está conectada al gameplay en estado host-tested.
 PID 28412 cerró el query nativo no-write y PID 8644 cerró
@@ -142,18 +186,26 @@ directorio del juego: el helper usa
 `build\bin\Release\PenumbraVR.ProbeLauncher.exe`, valida primero el ejecutable
 exact-build soportado y lanza Black Plague por la ruta de inyección existente.
 
-El preflight offline actual de 2026-09-17 pasa:
+El preflight offline actual de 2026-09-18 pasa:
 
-- Release: 35/35 CTest, incluido `opengl_eye_targets`;
-- Release sin SDK OpenVR: 35/35 CTest en la configuración local;
+- Release: 36/36 CTest, incluido `opengl_eye_targets`;
+- la última Release sin SDK OpenVR registrada pasó 35/35 antes de la cobertura
+  host añadida posteriormente; no se usa ese resultado antiguo para promover
+  las capacidades nuevas;
 - metadata: 6 entradas de catálogo, 2 manifests exact-build, 42 actions,
   6 action sets y 8 bindings;
 - verifier Black Plague exact-build: pasa las fronteras de input, locomoción,
-  crouch, interacción/palma y cuerpo/colisión.
+  crouch, interacción/palma, cuerpo/colisión y el owner 2D nativo
+  `OnPostSceneDraw -> GetDrawer -> DrawAll`;
+- `opengl_eye_targets` valida además que la nueva superficie gameplay 800x600
+  mezcla alpha sobre un ojo ya renderizado sin limpiarlo y restaura el estado GL.
 
 Esto sólo promueve el candidato a **host-tested**. Los cambios posteriores a
-PID 25484/26940 en presentación X/Z, estado GL, step-climb físico, nudge y
-hápticos siguen necesitando la tanda combinada con visor.
+PID 25484/26940 en presentación X/Z, estado GL, step-climb físico, nudge,
+hápticos y la nueva composición HUD/subtítulos siguen necesitando la tanda
+combinada con visor. Para el overlay gameplay exige `gameplay_overlay_frames>0`,
+`deferred_submits` coherente, `gameplay_overlay_failures=0` y HUD/subtítulos
+visibles antes de considerar cablear `SubtitleScale`.
 
 La preparación offline de 2026-09-14 queda cerrada con:
 
@@ -174,13 +226,13 @@ ni `supported`.
 Para iniciar la tanda principal desde la raíz del repositorio:
 
 ```powershell
-tools\Start-BlackPlagueRoomScaleValidation.ps1
+tools\Start-BlackPlaguePalmCollisionValidation.ps1
 ```
 
 Si Black Plague no está en la ruta Steam por defecto:
 
 ```powershell
-tools\Start-BlackPlagueRoomScaleValidation.ps1 -GamePath "X:\ruta\Penumbra Black Plague\redist\penumbra.exe"
+tools\Start-BlackPlaguePalmCollisionValidation.ps1 -GamePath "X:\ruta\Penumbra Black Plague\redist\penumbra.exe"
 ```
 
 El helper debe permanecer abierto hasta cerrar el juego. Imprime los pasos de
@@ -335,7 +387,13 @@ caída visual de botón sigue siendo deliberadamente la profundidad VR configura
 la forma `0.95 m` y el comportamiento de crouch/sigilo. Compila en Release,
 pasa el verificador exact-build y 30/30 tests de host; sigue pendiente de visor.
 
-## Siguiente tanda — crouch físico por altura HMD
+## Tanda histórica — crouch físico por altura HMD
+
+Esta sección conserva el procedimiento usado para el checkpoint de crouch/Y
+anterior. Ya no es el punto de entrada de la siguiente sesión; el gate vigente
+es la tanda combinada con
+`tools\Start-BlackPlaguePalmCollisionValidation.ps1` descrita al principio de
+este documento.
 
 Desde la raíz del repositorio ejecuta:
 

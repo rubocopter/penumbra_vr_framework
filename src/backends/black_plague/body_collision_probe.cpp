@@ -34,6 +34,7 @@ struct Matrix {
 using CharacterUpdate = void(__thiscall*)(void*, float);
 using CheckShapeWorldCollision = bool(__thiscall*)(
     void*, Vec3*, void*, const Matrix*, void*, bool, bool, void*, bool, bool);
+using CharacterRayIntersect = bool(__thiscall*)(void*, void*, void*);
 
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kPlayerGroundField268Offset = 0x268;
@@ -47,13 +48,17 @@ constexpr std::uintptr_t kCharacterPositionOffset = 0x48;
 constexpr std::uintptr_t kCharacterSizeOffset = 0xC4;
 constexpr std::uintptr_t kCharacterPhysicsBodyOffset = 0x23C;
 constexpr std::uintptr_t kCharacterPhysicsWorldOffset = 0x240;
+constexpr std::uintptr_t kCharacterRayCallbackOffset = 0x21C;
+constexpr std::uintptr_t kPhysicsBodyMassOffset = 0x434;
 constexpr std::uintptr_t kPhysicsWorldCharacterUpdateCall = 0xD460A;
 constexpr std::uintptr_t kCharacterUpdate = 0xD6E00;
 constexpr std::uintptr_t kCharacterCollisionCall = 0xD7312;
 constexpr std::uintptr_t kCheckShapeWorldCollision = 0xD4830;
 constexpr std::uintptr_t kPhysicalRequestInjection = 0xD7281;
-constexpr std::uintptr_t kPhysicalStepDecision = 0xD7361;
-constexpr std::uintptr_t kPhysicalStepSkip = 0xD78F7;
+constexpr std::uintptr_t kCharacterRayIntersect = 0xD4E00;
+constexpr std::uintptr_t kCharacterRayVtable = 0x27F7B0;
+constexpr std::uintptr_t kCharacterRayIntersectSlot = kCharacterRayVtable + 4;
+constexpr std::uintptr_t kPhysicalStepDecision = 0xD7772;
 
 constexpr std::array<std::uint8_t, 5> kUpdateCall{
     0xE8, 0xF1, 0x27, 0x00, 0x00};
@@ -62,7 +67,9 @@ constexpr std::array<std::uint8_t, 5> kCollisionCall{
 constexpr std::array<std::uint8_t, 5> kPhysicalRequestWindow{
     0xD9, 0x07, 0xD9, 0x46, 0x54}; // fld [edi]; fld [esi+54h]
 constexpr std::array<std::uint8_t, 5> kPhysicalStepWindow{
-    0x89, 0x47, 0x08, 0x89, 0x0F}; // mov [edi+8],eax; mov [edi],ecx
+    0x83, 0xC5, 0x0C, 0x3B, 0xD9}; // add ebp,0Ch; cmp ebx,ecx
+constexpr std::array<std::uint8_t, 8> kCharacterRayIntersectSignature{
+    0x8B, 0x44, 0x24, 0x04, 0x8A, 0x90, 0xC7, 0x03};
 constexpr std::array<std::uint8_t, 24> kUpdateSignature{
     0x81, 0xEC, 0xD4, 0x05, 0x00, 0x00, 0x53, 0x55,
     0x56, 0x8B, 0xF1, 0x8A, 0x46, 0x30, 0x33, 0xDB,
@@ -83,9 +90,10 @@ std::atomic<bool> g_physical_request_owner_installed{false};
 std::atomic<bool> g_physical_step_owner_installed{false};
 CharacterUpdate g_original_update = nullptr;
 CheckShapeWorldCollision g_original_collision = nullptr;
+CharacterRayIntersect g_original_character_ray_intersect = nullptr;
+void** g_character_ray_intersect_slot = nullptr;
 void* g_physical_request_resume = nullptr;
 void* g_physical_step_resume = nullptr;
-void* g_physical_step_skip = nullptr;
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 BodyCollisionTelemetry g_telemetry;
 BodyJumpBurstTelemetry g_jump_burst;
@@ -118,6 +126,7 @@ struct TickContext {
     Vec3 physical_position_after{};
 };
 thread_local TickContext g_tick;
+thread_local bool g_physical_step_nearest_static = false;
 
 void PhysicalRequestGateway() noexcept;
 void PhysicalStepGateway() noexcept;
@@ -144,6 +153,17 @@ T Read(const void* object, std::uintptr_t offset) noexcept {
             sizeof(value)));
     }
     return value;
+}
+
+bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
+    if (slot == nullptr || replacement == nullptr || *slot != expected) return false;
+    DWORD old_protect = 0;
+    if (!VirtualProtect(slot, sizeof(void*), PAGE_EXECUTE_READWRITE, &old_protect))
+        return false;
+    *slot = replacement;
+    FlushInstructionCache(GetCurrentProcess(), slot, sizeof(void*));
+    DWORD ignored = 0;
+    return VirtualProtect(slot, sizeof(void*), old_protect, &ignored) != FALSE;
 }
 
 [[nodiscard]] bool Finite(const Vec3& value) noexcept {
@@ -378,42 +398,78 @@ __declspec(naked) void PhysicalRequestGateway() noexcept {
     }
 }
 
-bool __cdecl ShouldSuppressPhysicalStepClimb() noexcept {
+bool PhysicalOnlyStepTick() noexcept {
     const Vec3 native_horizontal_before_injection = Subtract(
         g_tick.physical_position_before, g_tick.position_before);
-    const bool suppress = g_tick.character_body != nullptr &&
+    return g_tick.character_body != nullptr &&
         g_tick.physical_request_injected &&
         !g_tick.locomotion_request_injected &&
         HorizontalLength(native_horizontal_before_injection) <= 1.0e-6F;
-    if (suppress) g_tick.physical_step_climb_suppressed = true;
-    return suppress;
 }
 
-// Black Plague has one native CharacterBody::Update per physics tick, unlike
-// Rework's dedicated vr_velocity update. Let the native horizontal solver run,
-// then skip only the step-climb search for a physical-HMD-only request. This
-// prevents rejected wall pressure from becoming repeated vertical step-ups
-// while retaining the native gravity/jump phase. Direct stick locomotion keeps
-// the native step path so stairs and ledges preserve their game behavior.
+bool __fastcall HookedCharacterRayIntersect(
+    void* callback, void*, void* body, void* params) noexcept {
+    const float before_min = Read<float>(callback, 4);
+    const bool before_collide = Read<std::uint8_t>(callback, 8) != 0;
+    const bool result = g_original_character_ray_intersect != nullptr &&
+        g_original_character_ray_intersect(callback, body, params);
+    if (!PhysicalOnlyStepTick() || callback == nullptr || body == nullptr ||
+        params == nullptr) return result;
+    const void* expected_callback = Read<void*>(
+        g_tick.character_body, kCharacterRayCallbackOffset);
+    if (callback != expected_callback) return result;
+
+    const float after_min = Read<float>(callback, 4);
+    const bool after_collide = Read<std::uint8_t>(callback, 8) != 0;
+    const float hit_distance = Read<float>(params, 4);
+    // D4E00 copies the winning hit distance bit-for-bit into callback+4.
+    // Require an actual native state transition so an equal-distance body that
+    // lost the strict comparison cannot overwrite the winner classification.
+    const bool accepted = after_collide && std::isfinite(hit_distance) &&
+        after_min == hit_distance &&
+        (!before_collide || before_min != after_min);
+    if (accepted) {
+        const float mass = Read<float>(body, kPhysicsBodyMassOffset);
+        g_physical_step_nearest_static = std::isfinite(mass) && mass == 0.0F;
+    }
+    return result;
+}
+
+bool __cdecl ShouldRejectPhysicalStepHit() noexcept {
+    if (!PhysicalOnlyStepTick() || g_physical_step_nearest_static) return false;
+    g_tick.physical_step_climb_suppressed = true;
+    return true;
+}
+
+// Rework 23c890f allows room-scale step climbing only when the native step ray
+// resolves to static geometry. Black Plague's original cCharacterBodyRay does
+// not retain the winning body, so the vtable observer above records only its
+// static/dynamic classification. This gateway runs immediately after the
+// native CastRay has stored its collide byte for the current step ray and
+// clears that byte only for a physical-only dynamic hit. Native step geometry,
+// shape tests, gravity and jump remain untouched; stick locomotion keeps the
+// original path for all bodies.
 __declspec(naked) void PhysicalStepGateway() noexcept {
     __asm {
         pushfd
         pushad
-        call ShouldSuppressPhysicalStepClimb
+        call ShouldRejectPhysicalStepHit
         test al, al
-        jnz suppress_step
+        jz keep_step
         popad
         popfd
-        mov dword ptr [edi + 08h], eax
-        mov dword ptr [edi], ecx
+        // D7771 incremented EBX already. The collide byte just written for
+        // this ray lives at original ESP + (EBX-1) + 38h.
+        mov byte ptr [esp + ebx + 37h], 0
+        add ebp, 0Ch
+        cmp ebx, ecx
         jmp dword ptr [g_physical_step_resume]
-    suppress_step:
+    keep_step:
         popad
         popfd
-        mov dword ptr [edi + 08h], eax
-        mov dword ptr [edi], ecx
-        mov dword ptr [edi + 04h], edx
-        jmp dword ptr [g_physical_step_skip]
+        add ebp, 0Ch
+        cmp ebx, ecx
+        jmp dword ptr [g_physical_step_resume]
     }
 }
 
@@ -477,6 +533,7 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
     std::uint64_t tick_sequence = 0;
     if (observe) {
         g_tick = {};
+        g_physical_step_nearest_static = false;
         g_tick.character_body = character_body;
         g_tick.position_before = position_before;
         tick_sequence = g_body_update_sequence.fetch_add(
@@ -643,12 +700,13 @@ template<std::size_t Size>
     const bool collision_installed = g_collision_hook.installed();
     const bool physical_request_installed = g_physical_request_hook.installed();
     const bool physical_step_installed = g_physical_step_hook.installed();
+    const bool character_ray_installed = g_character_ray_intersect_slot != nullptr;
     if (update_installed && collision_installed && physical_request_installed &&
-        physical_step_installed) {
+        physical_step_installed && character_ray_installed) {
         return true;
     }
     if (update_installed || collision_installed || physical_request_installed ||
-        physical_step_installed) {
+        physical_step_installed || character_ray_installed) {
         error = "Body/collision probe is only partially installed";
         return false;
     }
@@ -668,6 +726,7 @@ template<std::size_t Size>
         !Matches(kPhysicsWorldCharacterUpdateCall, kUpdateCall) ||
         !Matches(kCharacterCollisionCall, kCollisionCall) ||
         !Matches(kPhysicalRequestInjection, kPhysicalRequestWindow) ||
+        !Matches(kCharacterRayIntersect, kCharacterRayIntersectSignature) ||
         !Matches(kPhysicalStepDecision, kPhysicalStepWindow)) {
         error = "Body/collision boundary does not match the exact initialized build";
         g_image = nullptr;
@@ -751,14 +810,49 @@ template<std::size_t Size>
     if (g_physical_step_resume == nullptr) {
         g_physical_step_resume = g_image + kPhysicalStepDecision +
             kPhysicalStepWindow.size();
-        g_physical_step_skip = g_image + kPhysicalStepSkip;
     }
+    void* const expected_ray_intersect = g_image + kCharacterRayIntersect;
+    void* live_ray_intersect = nullptr;
+    void** const ray_slot = reinterpret_cast<void**>(
+        g_image + kCharacterRayIntersectSlot);
+    if (g_original_character_ray_intersect == nullptr) {
+        g_original_character_ray_intersect =
+            reinterpret_cast<CharacterRayIntersect>(expected_ray_intersect);
+    } else if (reinterpret_cast<void*>(g_original_character_ray_intersect) !=
+        expected_ray_intersect) {
+        error = "Character step-ray callback publication belongs to another image";
+        return false;
+    }
+    if (!ReadBytes(ray_slot, &live_ray_intersect, sizeof(live_ray_intersect)) ||
+        live_ray_intersect != expected_ray_intersect ||
+        !ReplacePointer(ray_slot, expected_ray_intersect,
+            reinterpret_cast<void*>(&HookedCharacterRayIntersect))) {
+        error = "Character step-ray callback does not match the exact initialized build";
+        std::string physical_rollback;
+        std::string collision_rollback;
+        std::string update_rollback;
+        if (hooks::RemoveRel32JumpHook(g_physical_request_hook, physical_rollback)) {
+            g_physical_request_owner_installed.store(false, std::memory_order_release);
+        }
+        static_cast<void>(hooks::RemoveRel32CallHook(
+            g_collision_hook, collision_rollback));
+        if (hooks::RemoveRel32CallHook(g_update_hook, update_rollback)) {
+            g_update_owner_installed.store(false, std::memory_order_release);
+        }
+        return false;
+    }
+    g_character_ray_intersect_slot = ray_slot;
     if (!hooks::InstallRel32JumpHook(
             g_image + kPhysicalStepDecision,
             kPhysicalStepWindow,
             reinterpret_cast<void*>(&PhysicalStepGateway),
             g_physical_step_hook,
             error)) {
+        static_cast<void>(ReplacePointer(
+            g_character_ray_intersect_slot,
+            reinterpret_cast<void*>(&HookedCharacterRayIntersect),
+            reinterpret_cast<void*>(g_original_character_ray_intersect)));
+        g_character_ray_intersect_slot = nullptr;
         std::string physical_rollback;
         std::string collision_rollback;
         std::string update_rollback;
@@ -807,6 +901,18 @@ bool RemoveBodyCollisionProbe(std::string& error) noexcept {
     bool success = hooks::RemoveRel32JumpHook(g_physical_step_hook, error);
     if (success) {
         g_physical_step_owner_installed.store(false, std::memory_order_release);
+    }
+    if (g_character_ray_intersect_slot != nullptr) {
+        if (!ReplacePointer(
+                g_character_ray_intersect_slot,
+                reinterpret_cast<void*>(&HookedCharacterRayIntersect),
+                reinterpret_cast<void*>(g_original_character_ray_intersect))) {
+            success = false;
+            if (!error.empty()) error += "; ";
+            error += "Failed to restore the character step-ray callback";
+        } else {
+            g_character_ray_intersect_slot = nullptr;
+        }
     }
     std::string physical_error;
     if (!hooks::RemoveRel32JumpHook(g_physical_request_hook, physical_error)) {

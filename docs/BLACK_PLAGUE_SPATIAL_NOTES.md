@@ -153,9 +153,12 @@ ownership del tick. Overture lo consume dentro de su comportamiento probado y
 `BlackPlagueBodyAdapter` lo produce después del único tick nativo `D460A ->
 D6E00`. La ruta normal de BP conserva sus límites 3.0/4.5 m/s y su vertical/jump
 nativo. El gate room-scale transitorio evita esos ejes solo para el analog VR y
-encola la política compartida `1.5/2.25 m/s` en `0xD7281`; no se emulan
-`vr_velocity`, `vr_stepstaticonly` ni argumentos de solver que no existen en la
-build binaria.
+encola la política compartida `1.5/2.25 m/s` en `0xD7281`; no se emulan campos
+añadidos por Rework como `vr_velocity` ni argumentos de solver que no existen en
+la build binaria. La semántica de `vr_stepstaticonly` sí se adapta ahora en la
+frontera exact-build: se observa el ray callback nativo de step y se descarta
+solo un ganador dinámico durante un tick físico puro, sin añadir campo, segundo
+raycast ni segundo update.
 
 La segunda extracción común también está hecha: `PlanBodyReconciliation`,
 `ReconcilePhysicalBodyMotion` y `CarryHeadAnchorWithLocomotion` viven en
@@ -348,6 +351,21 @@ el aim continúa usando tracking raw. La adquisición sigue ahora la separación
 Rework `23c890f`: parte de la palma resuelta pero puede seguir el controlador raw
 hasta `0,18 m` para no perder asas/props cuando la mano visible queda detenida por
 colisión. Esa conexión gameplay es host-tested.
+El picking VR recorre ahora todos los hits de cada rayo antes de rankear la
+selección ampliada; el callback proxy no corta el `CastRay` en el primer cuerpo.
+La mano que originó el press también se conserva durante la transición native
+Enter -> publicación del estado Grab/Move, aceptando el botón todavía held en el
+siguiente service point. El nudge directo ignora esa mano mientras interact está
+pulsado o la adquisición sigue pendiente.
+
+La misma selección publica un target físico ordinario al resolver de palma por
+una frontera de proveedor. Igual que Rework `23c890f`, la tolerancia de contacto
+solo pasa de `0,002` a `0,008 m` cuando el target está a <= `0,40 m` y el raw
+controller se mueve hacia él. La decisión se calcula después de elegir el start
+real del resolver, incluidos recovery/reanchor. Los contadores
+`interaction_assist`, `tracking_reanchors`, `recovery_anchors` y
+`pullback_recoveries` permiten correlacionar el "snap" antes de tocar los
+umbrales compartidos.
 PID 23000 llegó a ejercitarla con visor, pero la misma sesión tuvo FPS muy bajos
 y pérdida del controlador derecho, así que no sirve para promover contacto,
 rendimiento ni sensación de agarre a headset-validated.
@@ -372,8 +390,10 @@ bind poses de huesos, deadzone medida para su dispositivo, suavizado de 70 ms,
 poses forzadas según radio del asa y callback posterior a animación. El límite
 futuro pequeño es mantener `VrHandArticulation`/curls independientes en runtime
 y dejar en un perfil/adapter de malla los ejes, deadzone/suavizado opcionales y
-poses de agarre. Overture debería adaptarse a esa salida común cuando exista
-una segunda malla real; BP no debe copiar ahora la pose rígida de Overture.
+poses de agarre. La articulación normal de BP conserva sus cinco canales ricos;
+únicamente la presentación mientras sostiene una herramienta consume ahora la
+pose de agarre authored de Rework, porque esa pose pertenece al rig y no
+reemplaza los curls libres de BP.
 
 La geometría de Rework disponible en
 `products/overture/data/models/hud_objects/hud_object_hand_rig.dae` y
@@ -384,14 +404,16 @@ también una versión reducida del material difuso existente. En ejecución no s
 parsea COLLADA ni JPEG. `DrawTrackedHands` conserva la palma resuelta como pose
 mundial y aplica los curls/curvas/spread/oposición de pulgar de
 `runtime::ArticulateVrHand` sobre los ejes de rig demostrados por Rework. La ruta
-gráfica es host-tested; escala/orientación/articulación visual y rendimiento aún
-necesitan la prueba de visor combinada.
+gráfica y la pose forzada de herramienta son host-tested; escala/orientación,
+articulación visual de los cinco dedos y rendimiento aún necesitan la prueba de
+visor combinada.
 
 ## Rutas integradas
 
 `spatial_interaction.cpp` se compila y se instala después del puente de entrada.
-Comprueba todos los slots/entradas usados antes de instalar cinco hooks de
-vtable y una llamada rel32 de herramientas.
+Comprueba todos los slots/entradas usados antes de instalar ocho sustituciones de
+slots/punteros para picking/Grab/Move/PlayerHands y una llamada rel32 de
+herramientas.
 Un fallo deja el comportamiento nativo y se registra; no invalida el estéreo.
 
 | Límite | RVA | Evidencia y uso |
@@ -421,6 +443,68 @@ punto durante Update; el verificador fija esta ruta separadamente de Grab.
 Body: vtable 292C08, matriz local +34, padre nodo +10, padre entidad +330,
 masa Newton +434. Se rechazan padres, joints y masa no positiva/no finita.
 
+### Item e interacción articulada: mapa exact-build offline
+
+La clasificación real de inventario ya no depende de strings de icono/interacción.
+La factoría `Item` construye `cGameItem` mediante `3554E -> 35040`, y el
+constructor escribe **tipo de entidad `5` en `+0xC0`**. El valor `6` observado en
+otros consumidores pertenece a otra clase y no debe reutilizarse como clasificador
+de item. El loader convierte `ItemType` en `34AE0` y guarda el enum en
+`cGameItem +0x250`. La build reconoce `normal=0`, `notebook=1`, `note=2`,
+`battery=3`, `flashlight=4`, `food=5`, `map=6`, `glowstick=7`, `flare=8`,
+`painkillers=9`, `weaponmelee=10`, `throw=11`, `gasmask=12` y `collectable=13`.
+Los dos últimos no tienen equivalente demostrado en la política de Rework y se
+mantienen fuera hasta clasificar su semántica.
+
+`cGameItem::IsInView` está identificado en `35140`: replica la ruta conocida de
+Overture con distancia, cono frontal de 43 grados, `SkipRayCheck` en `+0x27C` y
+un callback propio en `+0x280` antes del `CastRay` virtual `+0x68`. Esta función
+documenta el LOS nativo de item, pero no sustituye la adquisición magnética de
+Rework.
+
+La enumeración amplia ya está mapeada e integrada **host-tested** dentro del
+owner existente de picking (`HookedRay`), sin instalar otro hook. `iPhysicsWorld
++0x14` contiene el sentinel de la lista de cuerpos y cada nodo publica el body en
+`+0x08`; cada candidato exige vtable exacta, `Active +0x31`, `Collide +0x418`,
+`!Character +0x3C7`, `!Player +0x3C9`, `UserData +0x414`, entidad activa en
+`+0x14`, tipo `5` y un subtype Rework-compatible en `cGameItem +0x250`. El
+`cBoundingVolume` embebido en `body +0xB4` usa los getters exactos
+`D8A10/D8A40/D8A70/D8AF0` para max/min/world-centre/radius.
+
+Si el contacto físico de palma no produce ganador, Black Plague consume
+`vr_magnetic_pickup_policy`: clasifica 0-11 como las mismas familias demostradas
+por Rework, mantiene 12/13 fuera, rankea como máximo cinco candidatos por cono y
+score y ejecuta sight sólido tanto desde aim-controller como desde HMD, primero
+contra el sample AABB y después contra el centro. El ganador se publica por el
+mismo callback nativo de selección; no entra en `interaction_assist`. El
+verificador exact-build fija toda la ABI consumida y CTest cubre el clasificador.
+La ruta sigue pendiente de evidencia de visor y por tanto no supera
+**host-tested**.
+
+También queda fijado un mecanismo nativo representativo. La factoría `Lever`
+reserva `0x324` bytes y llama `3D70C -> 3D500`; `cGameLever` instala vtable
+`0x676608`, escribe tipo de entidad `0x12` en `+0xC0` y expone `Update=3C2B0`.
+El base `iGameEntity` mantiene `mvBodies` en el vector `+0x14C` y `mvJoints` en
+el siguiente vector `+0x15C`; `Lever::Update` exige al menos un joint, toma el
+primero, consulta su valor escalar por el slot virtual `+0x38` y lo compara con
+`MinLimit/MaxLimit` en `+0x284/+0x288`, actualizando el estado `0/1/2` en
+`+0x280`. El loader convierte `MovementType` (`none/min/max/value`) y lo guarda
+en `+0x31C`; `MovementValue` convertido a radianes queda en `+0x320`.
+
+El mapa ya alcanza la frontera de consumo para una palanca de un solo joint. El
+verificador fija las vtables concretas Newton de hinge/slider, sus métodos de
+tipo, pin en `joint+0xB8`, pivot en `joint+0xC4` y los setters exactos de
+velocidad lineal/angular del body. El análisis de `Move::Enter`/`Move::Leave`
+confirma además que HPL pausa/reanuda allí los controladores del joint y conserva
+scripts, gravedad y transiciones nativas. Por ello el adapter no reemplaza ese
+ciclo: solo durante `Move::Update`, y únicamente para un `cGameLever` reconocido
+con exactamente un joint soportado, consume `vr_mechanism_policy`. Hinge usa la
+misma lightness por masa demostrada por Rework; slider usa el servo lineal
+compartido. Tipos desconocidos y mecanismos multijoint hacen fallback al path
+nativo. La prueba sintética cubre adquisición, update, restauración de límites de
+velocidad y fallback. La integración sigue **host-tested** hasta comprobar una
+palanca articulada real con visor.
+
 Tras el incidente de la barra, la adquisición cinemática vuelve a estar habilitada
 solo después de validar el filtro nativo `CollideCharacter`. Al adquirir, se guarda
 el byte +3C8, se pone a falso durante el seguimiento y se restaura su valor exacto
@@ -437,8 +521,9 @@ SetMatrix nativo. La observación de que numerosos props quedaban lejos de la
 mano mientras algunas tablas largas se comportaban mejor llevó a separar
 `Move=2`: los cuerpos libres de esa ruta conservan el punto de contacto realmente
 seleccionado y lo llevan hacia la palma mediante la fuerza física derivada de
-`cPlayerState_Move_VR` de Rework. Los cuerpos con joints, puertas, palancas y
-otros mecanismos conservan su mecánica nativa. La colisión de palmas ya está
+`cPlayerState_Move_VR` de Rework. Un `cGameLever` de un solo joint reconocido
+usa ahora el adapter de hinge/slider compartido durante Update; puertas,
+multijoint y mecanismos no reconocidos conservan su mecánica nativa. La colisión de palmas ya está
 conectada host-side al grip resuelto. La selección usa la extensión raw limitada
 de Rework y la adquisición revalida contra esa misma pose; el hold continúa en
 la palma resuelta. PID 23000 fue inconcluso para visor por FPS/controlador y PID
@@ -473,18 +558,17 @@ identifica el modelo por su entity +118 y nombre +4 mediante el operador nativo
 de MSVCP71 (IAT 272138), sin interpretar ni construir/destruir std::string viejo.
 La dirección importada se contrasta con GetProcAddress antes de instalar.
 
-La herramienta sigue la mano izquierda del perfil diestro. Rotación X de +90
-grados: el -Y nativo de la linterna queda hacia el -Z del mando. Los sockets
-provisionales usan nodos de los DAE instalados: linterna (0,-0.016669,0), glowstick
-(0,0.059722,0.00504). Requieren ajuste visual; no son calibraciones certificadas.
-SetMatrix nativo conserva la propagación hacia las luces. Modelos desconocidos,
-UI o tracking inválido mantienen su matriz nativa. No hay colisión de herramienta
-con paredes todavía. Las pruebas cubren sockets, dirección y estos fallbacks.
-
-Prueba física: el glowstick acompañó correctamente a la mano, pero quedó
-literalmente dentro de ella. No se modifica aún el socket porque la geometría de
-mano es provisional; se recalibrarán palma, herramienta y luz como una unidad
-cuando se integren las mallas definitivas.
+La herramienta sigue la mano izquierda del perfil diestro. La linterna conserva
+su socket medido de BP `(0,-0.016669,0)` y la rotación que alinea su `-Y` nativo
+con el `-Z` del mando. El glowstick ya no usa el antiguo socket provisional que
+lo dejaba dentro de la palma. Aunque los DAE completos difieren, la lista de
+posiciones de su cilindro principal de agarre es numéricamente idéntica a la de
+Rework; por tanto se reutiliza exactamente el perfil demostrado para esa
+geometría: `VrScale=1.55`, `VrGripPoint=(0,0.0078,-0.078)` y rotación X `4.71`,
+compuesto sobre la pose authored de dedos largos. SetMatrix nativo conserva la
+propagación hacia las luces. Modelos desconocidos, UI o tracking inválido
+mantienen su matriz nativa. No hay colisión de herramienta con paredes todavía.
+La nueva colocación sigue siendo host-tested hasta verla en visor.
 
 `cPlayerFlashLight::Update`, zona A8A60–A8F2D, obtiene el modelo Flashlight y usa
 su matriz de mundo para la dirección de luz hacia enemigos. La llamada A8B23
@@ -499,13 +583,18 @@ Los DAE instalados NO son idénticos a Rework:
 
 Hay diferencias en normales y posiciones/escalas de luces. Por ejemplo, el spot
 de linterna instalado está en (0,-0.103966,0), frente a (0,-0.092,0) en Rework.
-No aplicar automáticamente VrGripPoint/VrRotOffset de Rework ni copiar sus DAE
-al juego. Primero identificar el modelo por una frontera ABI verificada,
-calcular el agarre con sus nodos/escala y probar la transformación de la luz.
+La diferencia de hash impide copiar perfiles enteros por nombre o sustituir los
+DAE. La excepción demostrada es el cilindro principal del glowstick descrito
+arriba, cuya geometría coincide y permite transferir su escala/grip/rotación.
+Flashlight y cualquier otro nodo/luz permanecen BP-specific y requieren su propia
+evidencia y validación física.
 
 ## Verificación y límites
 
-La configuración raíz contiene ahora 34 tests. Debug, Release y SDK-less pasan.
+La configuración raíz contiene ahora 36 tests. El gate Release actual pasa
+36/36; Debug y SDK-less conservan sus runners correspondientes y sus resultados
+históricos no deben reinterpretarse como evidencia para cobertura añadida con
+posterioridad.
 El runner SDK-less excluye deliberadamente `opengl_eye_targets` porque esa
 prueba necesita el driver WGL real. El test
 corporal ejecuta la sonda exact-build sobre una imagen sintética y el test
@@ -529,7 +618,9 @@ shape de palma propio más el resolver Rework aislado. El binario inicializado
 fija ahora además dos filtros independientes de `D4830`: con
 `collideCharacter=false` se descartan los cuerpos de personaje y `skip_body`
 descarta exactamente el cuerpo suministrado. El harness host verifica que el
-resolver usa ese contrato. Sigue pendiente publicar por mano el cuerpo realmente
-sostenido y conectar las manos reales; herramientas definitivas y mecanismos
-articulados continúan separados, y el gate live no implica validación con visor
-ni soporte.
+resolver usa ese contrato. La integración gameplay ya publica por mano el cuerpo
+sostenido, entrega la palma resuelta a manos/objetos/herramientas y suministra al
+resolver el target físico seleccionado para la asistencia limitada de Rework.
+Esa integración, la nueva adquisición y la colocación corregida del glowstick
+siguen host-tested; mecanismos articulados continúan separados y los gates live
+anteriores no implican validación de esta candidata en visor ni soporte.

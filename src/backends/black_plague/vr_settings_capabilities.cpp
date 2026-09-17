@@ -26,6 +26,8 @@ runtime::VrSettingCapabilities BlackPlagueVrSettingCapabilities() noexcept {
     enable(runtime::VrSettingId::ui_distance);
     enable(runtime::VrSettingId::ui_scale);
     enable(runtime::VrSettingId::render_scale);
+    enable(runtime::VrSettingId::enhanced_visuals);
+    enable(runtime::VrSettingId::hrtf);
 
     return capabilities;
 }

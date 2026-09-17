@@ -314,14 +314,52 @@ owning held body per hand into `skip_body` and substitutes the resolved grip for
 visible hands, owned-body motion and tools; controller aim remains raw. Target
 acquisition separately follows Rework `23c890f`: its pose may advance from the
 collision-resolved palm toward the raw controller by at most `0.18 m`, and the
-final Grab/Move acquisition guard uses that same bounded pose.
+final Grab/Move acquisition guard uses that same bounded pose. The latest host
+candidate also fixes two acquisition boundaries exposed by the live run: each
+generated VR ray lets the native callback enumerate every hit before the
+five-ray refresh ranks a winner, and the originating VR hand is retained across
+the native Enter -> committed-state publication point while interact remains
+held. Direct nudge is skipped for that hand while selection is pressed or an
+acquisition is pending.
+
+Rework's ordinary physical-target interaction assistance is now wired through a
+narrow provider rather than by teaching the palm resolver about Black Plague
+picking. A fresh selected point within `0.40 m` is passed to the shared resolver;
+after it has chosen its real start pose, including recovery/reanchor, the resolver
+uses the `0.008 m` interaction skin only when raw controller motion points toward
+that target. Otherwise it keeps the normal `0.002 m` skin. Periodic palm telemetry
+now reports `interaction_assist`, `tracking_reanchors`, `recovery_anchors` and
+`pullback_recoveries`. The proven 12-frame recovery threshold is unchanged, so a
+future abrupt snap can be correlated before any shared-policy retune.
+
+The same native picking owner now exposes separate magnetic telemetry:
+`magnetic_queries`, `magnetic_candidates`, `magnetic_visibility_rays` and
+`magnetic_winners`. These counters cover only the Rework-derived inventory
+fallback that runs when bounded physical selection found no body. Candidate
+enumeration and item/BV layout remain Black Plague-owned; shared runtime owns
+the range/cone/ranking profile. Each ranked candidate must be visible through a
+solid ray from both controller aim and HMD before the existing native pick
+callback receives it. Magnetic winners are intentionally excluded from the
+nearby physical `interaction_assist` target. This path is host-tested only; the
+telemetry is present so the next headset validation can distinguish enumeration,
+LOS rejection and successful native publication without retuning the policy.
+
+Mechanism telemetry is separate from free-body Move telemetry:
+`mechanism_acquired`, `mechanism_updates` and `mechanism_rejected`. These count
+only the host-tested one-joint `cGameLever` adapter. Native `Move::Enter/Leave`
+remain the lifecycle owner; a recognized hinge/slider can use shared
+`vr_mechanism_policy` during Update, while unsupported or multi-joint mechanisms
+fall back to native behavior. The counters are diagnostic coverage for the next
+headset run and are not a live gate by themselves.
 
 Black Plague also has two distinct free-prop interaction routes. `Grab=6` keeps
 the existing rigid palm-relative adapter. Supported-image analysis and the
 exact-build verifier now pin action-state `Move=2` independently: for free bodies
 the adapter preserves the native picked contact point and drives that point to
-the resolved palm with the Rework-derived physical-force behavior. Bodies with
-joints stay on the native Move/mechanism path. PID 23000 exercised the gameplay
+the resolved palm with the Rework-derived physical-force behavior. A recognized
+one-joint `cGameLever` uses the dedicated shared hinge/slider servo during
+Update; unsupported jointed bodies stay on the native Move/mechanism path.
+PID 23000 exercised the gameplay
 palm path but had severe FPS loss and a right-controller dropout in the same
 session, so it is inconclusive rather than a failed headset gate. These gameplay
 changes remain host-tested until a clean rebooted A/B run checks performance,
@@ -343,14 +381,20 @@ from rig/render faults.
 The PID 26940 log also correlated repeated physical wall-contact mini-jumps with
 Black Plague's native step-climb phase: physical VR requests are horizontal, but
 blocked/partial solves repeatedly produced roughly 5 cm vertical body changes.
-The exact-build body owner now pins `0xD7361` (`89 47 08 89 0F`) and routes that
-phase through a narrow gateway. A physical-HMD-only tick with no direct
-locomotion and no pre-injection native horizontal movement skips native step
-climbing after the horizontal solve; gravity/jump and the existing single
-`D6E00` update remain native. Stick/native movement retains the normal step
-path. `physical_step_suppressed` is emitted in body telemetry. This adaptation
-is host-tested only and must be checked under gentle wall pressure plus ordinary
-stick stair/ledge traversal before promotion.
+The first Framework fix skipped step climbing for every physical-only tick. A
+later physical-low-obstacle test showed why that was too broad: exact Rework
+`23c890f` sets `vr_stepstaticonly=true`, so room-scale step climbing is still
+allowed when the winning ray body is static. The current exact-build adaptation
+observes Black Plague's existing character-ray callback at character body
+`+0x21C` (vtable `0x67F7B0`, `OnIntersect` RVA `0xD4E00`) and records whether the
+accepted nearest body has zero mass using the already-proven body field `+0x434`.
+At RVA `0xD7772`, immediately after the native ray result is stored, it clears
+only a dynamic winning hit on a physical-HMD-only tick. Static geometry keeps
+the native step path; stick/native locomotion keeps it for all bodies. Gravity,
+jump and the existing single `D6E00` update remain native. The supported-image
+verifier pins the callback/vtable and this static-only boundary. The adaptation
+is host-tested only; `physical_step_suppressed` now counts dynamic physical-only
+rejections rather than blanket physical-step suppression.
 
 PID 4720 later showed that the old focused palm helper was not exercising the
 known-good room-scale composition at all: startup logged physical displacement,
@@ -363,8 +407,8 @@ resolved palms, articulate all five shared finger channels and preserve normal
 frame pacing. It must also confirm stable diffuse texture with no black/rainbow
 corruption and no repeated vertical body bounce under physical-only wall
 pressure, followed by normal stair/ledge stepping with stick locomotion. The
-corrected mesh/rig and step-suppression paths are host-tested only until those
-observations are captured.
+corrected mesh/rig and static-only physical-step paths are host-tested only until
+those observations are captured.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes
@@ -372,7 +416,7 @@ the same setting offline, without a PID or an in-game VR settings page.
 `--start-vr` applies that value before starting presentation; a missing file
 or key safely defaults to mirror off.
 
-The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. The bounded tracked diagnostic keeps translation at zero. The continuous mode retains that transform and can consume the separate default-off room-scale validation sample, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Its Rework-derived scheduling gives the first eye the game frame time and always renders two native eye world passes. Mirror-on copies the left-eye texture to the desktop at swap; mirror-off clears the desktop backbuffer to black. Neither mode adds a third native world pass. Bounded diagnostics always keep their prior desktop pass. If stereo fails after the first timed eye, the fallback desktop pass receives zero frame time to avoid a double update. Pass ownership and counts are exposed in telemetry. Both continuous schedules have executed with the expected live pass counts and no stereo or camera-restoration errors. PID 26144 visually confirmed that mirror-off leaves the desktop black without the prior growing white-point artifact; a comparable frame-pacing measurement remains pending. Black Plague and Requiem are not Large Address Aware in their currently installed canonical state. The repository now recognizes host-verified exact LAA variants for both builds, but installed-file transformation still belongs to the future known-build-gated transactional installer before heavier Enhanced visuals buffers are enabled.
+The OpenVR commands require a build configured with `PENUMBRA_VR_OPENVR_SDK`. The controlled duplication command uses a `512x512` diagnostic target, preserves the normal desktop pass, passes zero frame time to each extra call and performs no camera mutation or compositor submission. The stereo-matrix command uses the same diagnostic size, applies the OpenVR per-eye projection and IPD only around each extra pass, verifies byte-exact camera restoration, and likewise performs no compositor submission. The static submission variant additionally acquires a compositor pose to delimit each frame, submits both OpenGL color textures and flushes GL, but deliberately ignores that pose for camera transforms. The tracked variant follows the Overture VR Rework tracking boundary: it aligns only the first valid pose's horizontal heading with the game camera and thereafter preserves the raw runtime pitch and roll. A near-vertical initial HMD orientation is rejected rather than used as a full 3D anchor. Six live cycles confirmed correct world orientation and horizontal/vertical response. The bounded tracked diagnostic keeps translation at zero. The continuous mode retains that transform and can consume the separate default-off room-scale validation sample, starts from SteamVR's recommended size at scale 1.0 and falls back proportionally if the x86 process cannot allocate the requested pair. Its Rework-derived scheduling gives the first eye the game frame time and always renders two native eye world passes. Mirror-on copies the left-eye texture to the desktop at swap; mirror-off clears the desktop backbuffer to black. Neither mode adds a third native world pass. Bounded diagnostics always keep their prior desktop pass. If stereo fails after the first timed eye, the fallback desktop pass receives zero frame time to avoid a double update. Pass ownership and counts are exposed in telemetry. Both continuous schedules have executed with the expected live pass counts and no stereo or camera-restoration errors. PID 26144 visually confirmed that mirror-off leaves the desktop black without the prior growing white-point artifact; a comparable frame-pacing measurement remains pending. Black Plague and Requiem are not Large Address Aware in their currently installed canonical state. The repository recognizes host-verified exact LAA variants for both builds; installed-file transformation remains future known-build-gated transactional-installer work. The optional Enhanced Visuals eye stage is now host-tested and allocates its additional RGBA16F/MSAA targets only when the setting is enabled, with direct-eye fallback if creation fails. LAA/deployment policy and headset memory/performance validation therefore remain release gates rather than being inferred from successful host allocation.
 
 PID 19192 refines the earlier mirror-off observation: gameplay suppresses its
 monitor world pass and appears black, while native 2D menus remain visible
@@ -412,8 +456,10 @@ active body/size/position fields and initial horizontal collision request
 requested/solver/final displacement, physics timestep and unapplied HMD/body
 divergence is implemented, host-tested and live-tested in PID 30896. Positional
 tracking and palm collision have since advanced through the later gates recorded
-above. Articulated mechanisms, definitive tool/light attachment and Enhanced
-visuals renderer hooks remain separate work.
+above. Articulated mechanisms and definitive tool/light attachment remain
+separate work. The transferable Enhanced Visuals eye-finalization stage is now
+consumed and host-tested; Rework's HPL material/light response remains separate
+work.
 
 PID 8628 completed that narrow adapter validation. It installed the native
 input bridge, body/collision probe, adapter and ownership probe together. Free
@@ -666,9 +712,33 @@ work. The backend instead attributes combined rejection to the later locomotion
 component first when both requests share a direction, then partitions any
 remaining rejection into physical reconciliation. The path is host-tested only.
 Opposing/same-direction combinations, native state rejection, equal directional
-speed, sprint, footsteps/bob/animation and repeated turns are required in the
-next headset run. Rework's tracking-world-yaw turn owner remains a separate
-milestone; Black Plague still applies VR turn through native player yaw.
+speed, sprint, native bob/animation and repeated turns still need directed
+headset evidence. The current input bridge already applies VR turn through
+tracking world yaw with `AddTrackedWorldYaw(-turn)`, matching Rework ownership;
+the stale native-player-yaw note is retired. Rework's `>0.85 m` accepted-body VR
+footstep cadence is now consumed host-side and delegates to native
+`cPlayer::FootStep(0.8)`. The body observer only queues cadence after collision
+resolution; the existing input update owner services it after native
+`cButtonHandler::Update` returns. `vr_footstep` telemetry records cadence,
+dispatch attempts/successes/rejections and ABI failures, so the remaining
+headset check is cadence/surface sound and presentation behavior rather than
+ownership discovery.
+
+Gameplay 2D presentation now has a verifier-pinned owner as well. The supported
+image calls `cUpdater::OnPostSceneDraw` at `0xEE01B`, obtains the graphics drawer
+at `0xEE03B`, then consumes the authored queue through the single `DrawAll`
+callsite at `0xEE042`. Rework `23c890f` extended `DrawAll` with VR-specific
+`dontClear/drawVr` arguments; the original BP binary did not, so calling it again
+for each eye would reset HPL's matrices and clear the queue. The host candidate
+instead defers gameplay compositor submission to `0xEE042`, captures that one
+native 800x600 draw into transparent RGBA, composites it over the already-
+rendered eye pair at the Rework-authored face-locked placement, and submits from
+the same hook. The real-driver OpenGL test proves alpha blending and caller-state
+restoration, while `gameplay_overlay_*` telemetry records attempts/failures and
+deferred submissions. Inventory/notebook still use the separate whole-desktop
+tracked-menu path. This gameplay overlay is **host-tested only**; `SubtitleScale`
+remains intentionally unwired until the first headset run confirms that native
+HUD/subtitle content is actually present in-eye.
 
 Physical crouch-by-height now drives exact native move-state `4/0` through the
 existing game-thread owner. PID 22096 adds headset evidence for the ordinary posture path;

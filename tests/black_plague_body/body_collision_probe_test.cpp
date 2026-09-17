@@ -111,8 +111,14 @@ int RunBodyCollisionProbeTest() {
         kCollisionCall.data(), kCollisionCall.size());
     std::memcpy(image + kPhysicalRequestInjection,
         kPhysicalRequestWindow.data(), kPhysicalRequestWindow.size());
+    std::memcpy(image + kCharacterRayIntersect,
+        kCharacterRayIntersectSignature.data(),
+        kCharacterRayIntersectSignature.size());
     std::memcpy(image + kPhysicalStepDecision,
         kPhysicalStepWindow.data(), kPhysicalStepWindow.size());
+    void* const ray_intersect = image + kCharacterRayIntersect;
+    std::memcpy(image + kCharacterRayIntersectSlot,
+        &ray_intersect, sizeof(ray_intersect));
     Jump(image, kCharacterUpdate, reinterpret_cast<void*>(&FakeUpdate));
     Jump(image, kCheckShapeWorldCollision,
         reinterpret_cast<void*>(&FakeCollision));
@@ -158,22 +164,26 @@ int RunBodyCollisionProbeTest() {
     if (!physical_boundary.initialized || physical_boundary.live[0] != 0xE9)
         return 38;
 
-    // A physical-HMD-only tick bypasses Black Plague's native step-climb
-    // search after horizontal collision. Stick locomotion keeps that path so
-    // ordinary stair/ledge traversal remains native.
+    // Rework's physical-room-scale step rule keeps static geometry eligible
+    // and discards dynamic winners only. Stick locomotion keeps the original
+    // native step path for both classes.
     g_tick = {};
     g_tick.character_body = g_body_storage.data();
     g_tick.physical_request_injected = true;
-    if (!ShouldSuppressPhysicalStepClimb() ||
-        !g_tick.physical_step_climb_suppressed) return 87;
+    g_physical_step_nearest_static = true;
+    if (!PhysicalOnlyStepTick() || ShouldRejectPhysicalStepHit() ||
+        g_tick.physical_step_climb_suppressed) return 87;
+    g_physical_step_nearest_static = false;
+    if (!ShouldRejectPhysicalStepHit() ||
+        !g_tick.physical_step_climb_suppressed) return 89;
     g_tick.physical_step_climb_suppressed = false;
     g_tick.locomotion_request_injected = true;
-    if (ShouldSuppressPhysicalStepClimb() ||
+    if (PhysicalOnlyStepTick() || ShouldRejectPhysicalStepHit() ||
         g_tick.physical_step_climb_suppressed) return 88;
     g_tick.locomotion_request_injected = false;
     g_tick.position_before = {};
     g_tick.physical_position_before = {0.01F, 0.0F, 0.0F};
-    if (ShouldSuppressPhysicalStepClimb() ||
+    if (PhysicalOnlyStepTick() || ShouldRejectPhysicalStepHit() ||
         g_tick.physical_step_climb_suppressed) return 90;
     g_tick = {};
 
@@ -422,6 +432,59 @@ int RunBodyCollisionProbeTest() {
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
     if (ConsumeBlackPlagueShadowTelemetry().observed_ticks != 0 ||
         g_native_update_calls != calls_before + 7) return 31;
+
+    // The body observer owns only cadence measurement. Crossing Rework's
+    // >0.85 m accepted-travel threshold queues one event; the existing input
+    // update owner consumes it later on the game thread. The synthetic image
+    // deliberately has no FootStep ABI, so a correctly routed dispatch must
+    // fail closed there instead of calling arbitrary test-image memory.
+    BlackPlaguePhysicalTickObservation footstep_tick;
+    footstep_tick.request_injected = true;
+    footstep_tick.locomotion_requested_displacement = {0.05F, 0.0F, 0.0F};
+    footstep_tick.locomotion_accepted_displacement = {0.05F, 0.0F, 0.0F};
+    for (std::uint64_t tick = 1; tick <= 17; ++tick) {
+        ObserveBlackPlagueNativeBodyTick(
+            g_test_player, replacement.data(), {}, {}, {},
+            1000 + tick, footstep_tick);
+    }
+    auto footstep = ConsumeBlackPlagueVrFootstepTelemetry();
+    if (footstep.cadence_events != 0 || footstep.pending) return 91;
+    ObserveBlackPlagueNativeBodyTick(
+        g_test_player, replacement.data(), {}, {}, {}, 1018, footstep_tick);
+    footstep = ConsumeBlackPlagueVrFootstepTelemetry();
+    if (footstep.cadence_events != 1 || !footstep.pending ||
+        footstep.last_tick_sequence != 1018) return 92;
+    ServiceBlackPlagueVrFootstep(g_test_player);
+    footstep = ConsumeBlackPlagueVrFootstepTelemetry();
+    if (footstep.dispatch_attempts != 1 || footstep.abi_failures != 1 ||
+        footstep.dispatch_successes != 0 || footstep.dispatch_rejections != 0 ||
+        footstep.pending) return 93;
+
+    for (std::uint64_t tick = 1; tick <= 18; ++tick) {
+        ObserveBlackPlagueNativeBodyTick(
+            g_test_player, replacement.data(), {}, {}, {},
+            1100 + tick, footstep_tick);
+    }
+    static_cast<void>(ConsumeBlackPlagueVrFootstepTelemetry());
+    ServiceBlackPlagueVrFootstep(reinterpret_cast<void*>(1));
+    footstep = ConsumeBlackPlagueVrFootstepTelemetry();
+    if (footstep.dispatch_attempts != 1 || footstep.dispatch_rejections != 1 ||
+        footstep.abi_failures != 0 || footstep.pending) return 94;
+
+    for (std::uint64_t tick = 1; tick <= 10; ++tick) {
+        ObserveBlackPlagueNativeBodyTick(
+            g_test_player, replacement.data(), {}, {}, {},
+            1200 + tick, footstep_tick);
+    }
+    Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
+        static_cast<void*>(g_body_storage.data()));
+    for (std::uint64_t tick = 1; tick <= 8; ++tick) {
+        ObserveBlackPlagueNativeBodyTick(
+            g_test_player, g_body_storage.data(), {}, {}, {},
+            1300 + tick, footstep_tick);
+    }
+    footstep = ConsumeBlackPlagueVrFootstepTelemetry();
+    if (footstep.cadence_events != 0 || footstep.pending) return 95;
     if (!RemoveBlackPlagueBodyAdapter(error)) return 32;
     HANDLE shadow_mutex = CreateMutexW(nullptr, FALSE,
         L"Local\\PenumbraVR.BlackPlague.ReconciliationShadow");

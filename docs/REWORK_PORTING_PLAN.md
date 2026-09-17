@@ -70,6 +70,7 @@ Current example:
 | OpenVR poses, optics and compositor lifecycle | shared runtime | high | backend chooses frame/render boundary |
 | tracking-to-world, yaw recenter and height policy | shared runtime | high | backend supplies body/camera mechanism |
 | accepted body displacement / reconciliation policy | shared runtime | high | backend publishes intent and reports accepted movement through its native body boundary |
+| accepted-body VR footstep cadence | shared runtime | high | backend supplies collision-accepted VR displacement and invokes its native surface/material footstep mechanism |
 | logical VR input state, action sets and haptics | shared runtime | high | backend maps intents to each game's actions |
 | generated bindings for PS VR2, Index, Touch, Pico, WMR and Vive | shared package | nearly direct | bindings are only the starting point; each profile must reach Overture-equivalent action/handedness/pose/menu/haptic behavior, with finger articulation where the hardware exposes it, and be validated per backend |
 | settings types, limits and defaults | shared runtime | high | backend/installer supplies storage/UI |
@@ -99,6 +100,8 @@ Shared/runtime behavior now includes:
 - room-scale rejection/reconciliation;
 - fixed `0.05 m` physical steps;
 - Rework locomotion policy of `1.5 m/s` walk and `2.25 m/s` sprint;
+- Rework's `>0.85 m` horizontal accepted-body VR footstep cadence, with native
+  sound/material selection deliberately left to each backend;
 - common interaction reach of `0.18 m`;
 - the proven palm dimensions, contact tolerances, sweep/refinement limits and
   recovery thresholds from `VRHandCollisionPolicy.h`, now owned by
@@ -143,8 +146,8 @@ The adapter dynamically re-resolves the current body, publishes the existing nat
 
 Do not force these into the first common body contract:
 
-- Black Plague game-state, footstep, bob or animation effects into shared
-  locomotion policy;
+- Black Plague game-state, bob or animation effects, and the exact-build native
+  `FootStep` ABI; only Rework's game-neutral accepted-travel cadence is shared;
 - BP native `3.0 / 4.5 m/s` limits into shared policy;
 - Black Plague jump/vertical state;
 - Black Plague crouch transition/stand-clearance mechanism;
@@ -196,13 +199,18 @@ Current order:
    inherit PID 8092's headset status.
 8. Preserve PID 8092 as headset evidence for corrected direct locomotion and the collision route, PID 22096 as positive presentation-sequence evidence, and PID 25484 as positive evidence for the current tracked-Y/crouch/short-X/Z comfort composition. Keep deliberate wall/slide and the exact PID 20520 pullback reproduction as narrower edge gates.
 9. Close only the remaining crouch edges: capture Hybrid release-hold after the physical source clears, then exercise blocked-stand/low-ceiling recovery. Do not rerun the full PID 25484 batch merely to reproduce already captured evidence.
-10. Preserve the live-tested BP palm query (PID 28412) and owned lifecycle/resolver (PID 8644). Cleanly headset-validate the host-tested gameplay integration after reboot with the corrected combined helper: room-scale/crouch must remain active while both hands exercise representative `Grab=6` and free-body `Move=2` props, wall/slide contact and one native jointed mechanism. PID 23000 is inconclusive because FPS and one controller failed; PID 4720 launched the old palm helper without room-scale and therefore cannot be used as regression evidence for that stack.
-11. Continue mechanism-state, definitive tool/light profile, tracking-world-yaw and final camera/body/footstep-bob work as separate evidence gates.
+10. Preserve the live-tested BP palm query (PID 28412) and owned lifecycle/resolver (PID 8644). The current gameplay candidate is host-tested with full-hit multi-ray ranking, an Enter→committed-state hand latch, nudge exclusion during selection/acquisition and Rework's nearby physical interaction-assist skin computed from the resolver's actual start pose. Cleanly headset-validate that stack after reboot with the corrected combined helper: room-scale/crouch must remain active while both hands exercise representative `Grab=6` and free-body `Move=2` props, wall/slide contact and one native jointed mechanism. Correlate any abrupt palm snap with the new reanchor/recovery telemetry before changing shared thresholds. PID 23000 is inconclusive because FPS and one controller failed; PID 4720 launched the old palm helper without room-scale and therefore cannot be used as regression evidence for that stack.
+11. Continue mechanism-state and definitive tool/light profile as separate
+    evidence gates. Tracking-world-yaw ownership is already code-aligned with
+    Rework and the accepted-body VR footstep cadence is host-tested; keep their
+    directed headset checks plus final camera/body-bob presentation open.
 12. Close the remaining Overture capability families recorded in
-    `TRILOGY_PARITY_PLAN.md`: magnetic items, mechanisms, remaining UI/
-    transitions, haptics, audio and compatible visual behavior must be consumed,
-    adapted or explicitly classified before Black Plague is used as the second-
-    backend framework proof.
+    `TRILOGY_PARITY_PLAN.md`: Black Plague now consumes the shared magnetic-item
+    policy through a host-tested exact-build adapter, so headset validation is
+    the remaining magnetic gate. Mechanisms, remaining UI/transitions, haptics,
+    audio and compatible visual behavior must still be consumed, adapted or
+    explicitly classified before Black Plague is used as the second-backend
+    framework proof.
 13. Make Requiem gameplay the active milestone only after that Black Plague
     framework-readiness gate closes. Repeat exact-build binary research wherever
     evidence cannot safely transfer, then consume the same shared capability
@@ -212,7 +220,7 @@ This order proves each boundary in isolation and prevents a game-adapter defect 
 
 ## Black Plague interaction priority
 
-Generic controller picking keeps the shared `0.18 m` bounded physical policy. Rework `23c890f` additionally lets acquisition follow the raw controller by at most `0.18 m` from a collision-stopped palm; Black Plague now ports that intent pose for selection and acquisition guards while visible hands and owned bodies remain on the resolved palm. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
+Generic controller picking keeps the shared `0.18 m` bounded physical policy. Rework `23c890f` additionally lets acquisition follow the raw controller by at most `0.18 m` from a collision-stopped palm; Black Plague now ports that intent pose for selection and acquisition guards while visible hands and owned bodies remain on the resolved palm. The widened five-ray refresh enumerates every native ray hit before ranking candidates, and the native Enter→state-publication gap retains the originating VR hand while the button remains held. A nearby ordinary physical target also feeds Rework's bounded interaction-assist policy: only controller motion toward a target within `0.40 m` raises the collision skin from `0.002` to `0.008 m`, using the resolver's post-recovery/reanchor start. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
 
 Rework's direct physical hand nudge is now adapted behind the Black Plague
 physics boundary as a host-tested candidate. The backend reuses one `0.12 m`
@@ -226,7 +234,7 @@ mapped.
 
 Long boards/bars following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
 
-Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different tool DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; the hand geometry is now integrated, so definitive placement requires recalibrating those BP-specific sockets against it and validating hand/tool scale plus light direction in the headset.
+Glowstick/flashlight placement remains geometry-specific, but the two BP tool cases now have different evidence. The full Rework and Black Plague DAE files differ, so flashlight geometry remains BP-specific and keeps its measured socket. The primary cylinder position stream of the Black Plague glowstick, however, is numerically identical to Rework's proven asset. That narrow geometry match justifies reusing the exact Rework glowstick model profile: `VrScale=1.55`, `VrGripPoint=(0,0.0078,-0.078)` and X rotation `4.71`, composed after the authored long-finger attachment grip. This is host-tested; final hand placement, apparent scale and light direction still require the headset gate.
 
 The actual Rework hand rig assets carried by the Framework-owned Overture
 product now feed a narrow renderer-owned import for Black Plague. A deterministic
@@ -238,8 +246,10 @@ Rework rig axes, so the imported geometry does not regress finger semantics to
 Overture's simpler pose policy. Generated draw topology deduplicates the authored
 18,102 triangle corners to 3,376 position/UV vertices plus uint16 indices, and
 the client-array path explicitly isolates/restores HPL1 VBO bindings before
-supplying CPU pointers. This path is host-tested; headset presentation and frame
-pacing remain open.
+supplying CPU pointers. Tool-held presentation now also consumes Rework's authored
+forced grip pose rather than merely maxing the normal curl channels with one
+scalar. This path is host-tested; headset presentation and frame pacing remain
+open.
 
 ## Extracted so far
 
@@ -248,10 +258,19 @@ pacing remain open.
   profiles, strength scaling and per-event cooldown semantics. Overture keeps
   pose validity and OpenVR submission in `cVRHaptics`; Black Plague reuses the
   same policy at its existing native-input submission boundary for pickup/drop,
-  tracked UI selection and successful direct hand nudges. BP rejects unfocused,
-  disconnected or invalid-pose requests and applies the shared per-event
-  cooldown. Light-toggle, melee-impact and damage still need demonstrated BP
-  event boundaries; actual controller feedback remains a headset gate.
+  tracked UI selection, successful direct hand nudges and LightToggle. Light
+  feedback observes the exact native flashlight/glowstick state across the
+  existing update owner and uses Rework's off-hand routing only after a real
+  toggle. BP also owns all ten direct `cPlayer::Damage` callsites through one
+  exact-build wrapper, preserves the native damage method, and emits shared
+  Damage feedback only when native health decreases. Those LightToggle/Damage
+  boundaries are exact-image verified and host-tested. Melee impact now consumes
+  three demonstrated post-contact BP owners: enemy `cGameEntity::Damage` at
+  `0x603D5` and `HitBody (0x5F000)` at `0x60747/0x608CF`. The generic wrappers
+  preserve the native helper's enemy-type exclusion and all routes emit the
+  shared event only after returning from the native owner. This mapping is
+  exact-image verified and host-tested; actual controller feedback remains a
+  headset gate.
 - `src/runtime/vr_panel_policy.hpp` owns the reusable stable-panel anchor
   lifetime and transient overlay ownership handoff. Black Plague consumes the
   stable-anchor plan for its tracked menu; Overture consumes the overlay handoff
@@ -269,7 +288,8 @@ pacing remain open.
   and shared articulation intent. No exact-build renderer hook is introduced.
 - `src/runtime/vr_interaction_policy.hpp` now also owns Rework's demonstrated
   palm collision dimensions, contact/sweep/refinement constants and recovery
-  predicates. Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so
+  predicates plus the bounded ordinary-target interaction-assist tolerance.
+  Overture's `VRHandCollisionPolicy.h` is a compatibility shim, so
   future Black Plague/Requiem palm adapters can reuse the same policy while
   keeping native collision queries and body exclusions game-specific.
 - `src/runtime/vr_magnetic_pickup_policy.hpp` owns Rework's item-only magnetic
@@ -277,12 +297,20 @@ pacing remain open.
   scoring math, top-five ranking limit, closest-AABB visibility sample and
   `0.03 m` sight overshoot. Overture consumes it directly while its item enum,
   portal traversal and dual hand/HMD physics raycasts remain product-owned.
+  Black Plague now consumes the same policy through its exact `PhysicsWorld`
+  body list, real `cGameItem` subtype mapping, embedded body BV and existing
+  native-pick ray owner. That second consumer is host-tested only; its exact
+  layouts remain backend-owned and headset evidence is still required.
 - `src/runtime/vr_mechanism_policy.hpp` owns Rework's demonstrated
   unconstrained, slider and hinge servo math plus the associated motion caps.
   Overture consumes it directly while native joint graph selection, HPL body
   writes and entity/mass-specific hinge lightness remain product-owned. Black
-  Plague still leaves jointed mechanisms native until one exact mechanism
-  state/update boundary is mapped.
+  Plague now consumes the same policy for verifier-pinned one-joint mechanism
+  families: `cGameLever` accepts its demonstrated hinge/slider forms and
+  `cGameSwingDoor` accepts only a hinge. Native `Move::Enter/Leave` keep HPL
+  lifecycle ownership while the recognized `Move::Update` uses the shared
+  servo. Unknown, Wheel and multi-joint mechanisms remain native. These
+  consumers are host-tested only.
 - `src/backends/black_plague/hand_contact_probe.*` owns a default-off diagnostic
   for the now-pinned BP `CheckShapeWorldCollision` ABI. It fans out after the
   existing native body update, reuses the current body shape, records callback
@@ -295,22 +323,41 @@ pacing remain open.
   host resolver harness locks the Rework-compatible argument contract. The
   host-tested gameplay integration now publishes the held body per hand and
   consumes the resolved palm for visible hands, interaction and tools while aim
-  remains raw. The interaction adapter also distinguishes native `Grab=6` from
+  remains raw. Its optional target-provider boundary lets the interaction owner
+  supply the latest nearby physical selection without coupling the resolver to
+  exact-build picking; the shared resolver computes the Rework assist decision
+  after selecting its actual recovery/reanchor start and exposes assist/reanchor/
+  recovery telemetry. The interaction adapter also distinguishes native `Grab=6` from
   `Move=2`: eligible free Move bodies preserve their picked contact and use the
-  Rework-derived force path; jointed/mechanism bodies stay native. PID 23000 is
+  Rework-derived force path; recognized one-joint `cGameLever` and hinge-only
+  `cGameSwingDoor` bodies use the dedicated shared-servo adapter while
+  unsupported jointed mechanisms stay native. PID 23000 is
   inconclusive because FPS and the right controller failed in the same headset
   session, so clean headset contact/performance validation remains pending.
 - `runtime::VrAcceptedBodyMotion` now supplies the first body observation shared by Overture and Black Plague.
 - `PlanBodyReconciliation`, `ReconcilePhysicalBodyMotion` and `CarryHeadAnchorWithLocomotion` now provide the shared stateless reconciliation phases used by Overture and the Black Plague shadow consumer.
 - `src/runtime/render_target_policy.*` preserves Rework render-scale defaults/fallback.
-- `src/graphics/visual_calibration.*` is the CPU reference for the accepted v4 tone/ambient/dark-diffuse/sharpening/glowstick-halo behavior; GPU renderer-stage integration remains pending.
+- `src/graphics/visual_calibration.*` remains the CPU reference for the accepted
+  v4 tone/ambient/dark-diffuse/sharpening/glowstick-halo behavior. The
+  transferable per-eye stage is now consumed by Black Plague through
+  `OpenGlEnhancedEyeStage`: RGBA16F intermediate, 2x MSAA resolve and the exact
+  v4 final sharpen/tone treatment are host-tested on a real WGL driver with
+  graceful fallback. Rework's VR-specific HPL ambient/light material programs
+  remain a separate target-owned renderer/material adaptation; do not treat the
+  eye post stage as full Enhanced Visuals parity.
 - `src/audio/spatial_audio.*` owns HRTF config text, distance/occlusion low-pass
   behavior and the complete accepted mine-gallery EFX preset, including echo,
-  modulation and room-rolloff fields; safe binary audio hook work remains open.
+  modulation and room-rolloff fields. Black Plague now consumes the HRTF portion
+  at the launcher-owned pre-audio boundary by writing the exact Rework-format
+  `alsoft.ini` before a fresh game launch; this is host-tested only. Static
+  exact-image work confirms BP already owns a native OpenAL/EFX environment
+  stack, but its initialization does not implement Rework's added preset/bus
+  trim and the distance-HF path has no demonstrated BP equivalent, so safe
+  runtime occlusion/reverb adaptation remains open.
 - `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; the build catalogue/manifests recognize host-verified exact Black Plague/Requiem LAA variants while transactional deployment remains installer work.
 - `src/adapters/hpl1/camera_matrix_override.*` owns the reusable byte-exact camera transaction; exact layouts remain backend-owned.
 - `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit, but the mirror is not supported/validated.
-- `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior. It also owns the shared attachment-socket composition (`model_to_hand_rotation` plus measured model grip point); Black Plague now consumes it for flashlight/glowstick placement while retaining its resource-specific socket data. The composition and existing BP matrices are host-tested; definitive tool placement is still a headset/geometry gate.
+- `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior and owns the shared attachment-socket composition. Black Plague keeps a resource-specific flashlight socket; its glowstick instead consumes the exact Rework model scale/grip/rotation profile because the relevant primary cylinder geometry was verified identical. The composition is host-tested; definitive tool placement is still a headset/geometry gate.
 - `src/runtime/vr_input_state.*` owns logical actions, dead-zone scaling, context/handedness edge latching, pose-loss releases and action-idle grace.
 - `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state; `vr_settings_editor.*` owns the demonstrated 18-row edit/format/dependency policy, and `vr_settings_store.*` persists the complete shared schema.
 - Black Plague exposes an explicit backend capability map for the currently wired editor settings. A dedicated in-game settings page remains game-specific work until a safe native-menu insertion boundary is demonstrated.
@@ -324,9 +371,18 @@ host-tested through an isolated regression target and the full Overture Release
 gate. Further extraction currently needs either a second backend consumer or a
 target-specific ownership boundary:
 
-- Rework's VR dimmer has a separable scalar ramp, but its ownership and render
-  placement are currently only demonstrated by Overture inventory/message/panel
-  flows. Keep it product-owned until another backend needs the same policy.
+- Rework's VR dimmer has a separable scalar ramp (`0 <-> 0.75` at `1.75/s`),
+  but its demonstrated render ownership is specifically after the world and
+  before inventory/subtitle drawing. Black Plague's host-tested inventory and
+  notebook path is structurally different: it captures the complete native
+  desktop frame and projects that UI as a stable panel over its own dark VR
+  background. Applying the Rework dimmer to that captured surface would darken
+  the panel itself, while drawing it behind the panel would duplicate a
+  background already owned by the tracked-menu presentation. Treat the
+  inventory/notebook dimmer as not directly applicable to that presentation
+  path. Keep the scalar policy product-owned until a second demonstrated
+  consumer exists; gameplay message/transient-overlay dimming remains open
+  until BP exposes the corresponding native active-state boundary.
 - staged loading/fade is coupled to Overture's synchronous map load and
   compositor presentation lifecycle; a second backend presentation boundary is
   required before extracting it.
@@ -338,11 +394,19 @@ target-specific ownership boundary:
 - inventory/notes/HUD/subtitle integration still depends on each game's menu,
   draw-order and native state boundaries. The reusable panel/pointer/settings
   policy already extracted should be consumed once those boundaries are mapped.
-  Magnetic item targeting is already separated, but Black Plague still needs a
-  safe item classifier plus native visibility/query boundary before consuming it.
-- doors, levers, sliders and other jointed mechanisms now have shared Rework
-  servo math, but Black Plague still requires a mapped native joint/mechanism
-  state and update boundary before that policy can drive gameplay there.
+  Magnetic item targeting is already separated and Black Plague now consumes it
+  through an exact-build item classifier and dual native visibility boundary;
+  representative headset evidence remains open.
+- shared Rework mechanism servo math now has verifier-pinned, host-tested Black
+  Plague consumers for one-joint `cGameLever` and one-joint hinge
+  `cGameSwingDoor`. Exact Rework `23c890f` shows SwingDoor explicitly entering
+  `Move`, pausing controllers/gravity and treating its joints as hinges; the BP
+  image independently pins type `8`, the same lifecycle flags and its base
+  joint collection. Wheel remains intentionally excluded because BP type
+  `0x13` owns dedicated joint/state fields and a substantial native update; the
+  exact-image verifier pins vtable `0x6793E8`, `Update=5ABB0`, dedicated joint
+  `+0x23C` and state `+0x244/+0x250` as an exclusion boundary.
+  Compound joints and further mechanism families still require target evidence.
 
 This is a deliberate host-only extraction frontier, not completion of the
 corresponding trilogy capability. Resume extraction/adaptation when Black Plague
@@ -392,5 +456,6 @@ within the proven `0.05 m` boundary and the accepted result is partitioned for
 physical reconciliation and locomotion carry. PID 8092 supplies headset evidence
 for that direct-locomotion route, while PID 20520 keeps short-range physical X/Z
 comfort open. Physical crouch/continuous tracked Y are now implemented and
-host-tested together; Rework tracking-world-yaw turn ownership remains a
-separate gate.
+host-tested together. Rework tracking-world-yaw turn ownership is already
+consumed by the current input bridge at code level, while directed headset
+validation remains a separate gate.

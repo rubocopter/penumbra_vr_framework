@@ -128,15 +128,27 @@ that the session felt good. The automatic focused gate remains incomplete only
 where the log failed to capture the Hybrid release-hold interval after the
 combined physical+latch state; blocked-stand/low-ceiling and deliberate
 wall/slide edges remain separate validation work. Tracking-world-yaw turn
-ownership remains separate.
-The current 2026-09-17 host candidate goes one step further for the reported
-wall-contact pullback/mini-jump symptom: horizontal rendering no longer advances
-with any raw HMD X/Z between native body ticks and instead presents only the
-reconciled head anchor, matching Rework's ownership more closely. This replaces
-the current-code use of the headset-tested rejected-direction prediction filter,
-so the new placement needs fresh headset evidence. The same candidate also adds
-the Rework-derived direct hand nudge path and the secondary-color GL-state fix;
-both are host-tested only.
+ownership is already implemented in the current input bridge and matches Rework
+at code level; its directed headset validation remains separate.
+PID 14212 showed that removing all between-tick X/Z continuation made wall
+pressure feel like a force pulling the player back. The current tree therefore
+restores the PID 25484 headset-exercised rejected-direction prediction filter.
+The later 2026-09-17 host candidate keeps that comfort path and instead fixes the
+remaining interaction/step boundaries: full-hit multi-ray acquisition, the
+native Enter→commit hand latch, nudge exclusion while acquiring, Rework's bounded
+ordinary-target interaction assist, and `vr_stepstaticonly` semantics adapted to
+the exact Black Plague step ray. Static low geometry may step during physical
+room-scale motion while dynamic physical-only winners are rejected; stick/native
+step remains unchanged. These newest changes need focused headset evidence.
+The consolidated 2026-09-18 candidate also includes host-tested magnetic item
+pickup, one-joint `cGameLever` hinge/slider and hinge-only one-joint
+`cGameSwingDoor` mechanism consumers, the native gameplay 2D overlay shell,
+LightToggle/Damage/confirmed-contact MeleeImpact haptics, launcher-owned HRTF
+startup and the transferable Enhanced Visuals eye-finalization stage. The next
+primary milestone is one clean combined headset run through
+`Start-BlackPlaguePalmCollisionValidation.ps1`; only after that evidence should
+the remaining focused posture/presentation/output rows be closed in the order
+defined by `docs/TRILOGY_PARITY_PLAN.md`.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.
@@ -160,11 +172,14 @@ consumes that behavior or has a documented incompatible equivalent.
 - [x] Extract Rework palm collision dimensions, sweep/refinement and recovery policy into the shared interaction runtime
 - [x] Extract stable VR panel anchoring and transient overlay ownership handoff policy with Overture/Black Plague consumers
 - [x] Extract and host-test Rework tracked-menu pointer ownership, aim/grip fallback, off-hand takeover, edge clamping and `0.40` cursor smoothing; Black Plague consumes the shared policy while native menu projection/application remains backend-owned
-- [x] Extract and host-test shared attachment-socket composition while retaining measured model grip points/orientation as per-game profile data; Black Plague consumes it for the current flashlight/glowstick sockets
+- [x] Extract and host-test shared attachment-socket composition while retaining evidence-backed model profiles outside shared policy; Black Plague keeps a measured flashlight socket and reuses the exact Rework glowstick scale/grip/rotation only after verifying its primary cylinder geometry is identical
 - [ ] Extract remaining demonstrated reusable systems from Overture VR Rework
   - [x] Extract and host-test Rework's item-only magnetic targeting policy (range/bias profiles, cone/scoring, ranked visibility sampling) while keeping entity classification and physics queries game-owned
   - [x] Extract and host-test Rework's free/slider/hinge servo math and velocity caps while keeping joint selection and per-game mechanism profiles/adapters game-owned
-  - [ ] Map Black Plague item classification/visibility and one representative native jointed mechanism before consuming those shared policies there
+  - [x] Map and verifier-pin Black Plague `cGameItem` identity/subtype/native LOS plus one representative `cGameLever` constructor/type/joint/state/update boundary
+  - [x] Map and host-test Rework-equivalent Black Plague magnetic candidate enumeration, exact body/entity filters, BV geometry and dual controller/HMD LOS through the existing pick owner
+  - [x] Complete and verifier-pin the representative Lever joint type/pin/pivot/velocity-application ownership; consume the shared mechanism policy only for recognized one-joint hinge/slider updates while native Enter/Leave retains lifecycle ownership
+  - [x] Map and verifier-pin Black Plague `cGameSwingDoor` type/lifecycle/joint boundary from exact Rework and BP evidence; consume only its one-joint hinge form and reject slider/compound forms fail-closed
   - [ ] Keep dimmer, staged loading/fade and game UI lifecycle product-owned until a second backend exposes a compatible ownership boundary
 - [x] Keep Overture's existing build and tests green during extraction
 - [x] Port Rework's tracking space, room-scale rejection and locomotion policy
@@ -205,6 +220,11 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
     while `skip_body` rejects exactly one body, matching Rework's query contract
   - [x] Publish the owning held body per hand and wire resolved palms into
     tracked gameplay hands/interaction while keeping aim on raw tracking
+  - [x] Host-test the Rework-derived acquisition follow-up: enumerate every hit
+    before ranking the widened five-ray selection, retain the originating hand
+    across native Enter→state publication, suppress nudge while selection is
+    pressed/pending, and feed nearby ordinary physical targets into the shared
+    bounded interaction-assist skin after resolver recovery/reanchor choice
   - [x] Host-test distinct Black Plague interaction ownership: `Grab=6` keeps
     rigid palm-relative free-body placement; free-body `Move=2` preserves the
     picked contact point and follows the palm with the Rework-derived force path;
@@ -223,11 +243,14 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
     with room-scale/physical displacement disabled. The helper now composes the
     palm gate with the validated room-scale/crouch stack and checks that state;
     PID 26940 reached the combined path but exposed black/rainbow hand rendering
-    and repeated vertical mini-jumps under physical wall pressure. The next run
-    must verify the host-tested GL-state fix, five independent finger channels,
-    stable physical wall contact with `physical_step_suppressed`, normal stick
-    stairs/ledges, representative free props/mechanisms and frame pacing before
-    either corrected path is promoted beyond host-tested.
+    and repeated vertical mini-jumps under physical wall pressure. The newest
+    host candidate additionally fixes the difficult Grab transition, adds
+    interaction-assist/recovery telemetry, applies Rework's authored tool grip
+    pose and corrects the glowstick profile. The next run must verify smooth
+    wall/table slide, several quick grabs, visible five-finger articulation,
+    corrected glowstick size/socket, physical traversal of one low static
+    obstacle, bounce-free wall pressure, normal stick stairs/ledges and
+    representative free props/mechanisms before promotion beyond host-tested.
 - [x] Statically map and host-test telemetry for the exact-build player/character-body/native-shape/movement/collision path
 - [x] Live-validate the mapped body, active shape, physics timestep and requested/accepted displacement telemetry
 - [x] Live-characterize sprint, crouch shape ownership and native jump/vertical ownership
@@ -238,17 +261,27 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Live-validate that physical request through stationary/free/block/slide cases before enabling room-scale
 - [x] Implement a transient, fail-closed room-scale consumer through that reconciled request
 - [x] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset (PID 8092 technical gate)
-- [ ] Headset-validate the PID 26940 physical-only step-climb suppression against gentle wall pressure while confirming direct/native locomotion retains normal stair/ledge stepping
+- [ ] Headset-validate the current Rework-equivalent static-only physical-step adaptation: low static geometry must remain physically traversable, dynamic/invalid physical-only step candidates must not create vertical bounce, and direct/native locomotion must retain normal stair/ledge stepping
 - [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
-- [ ] Complete the active player-camera/head-bob/footstep-bob ownership map needed for comfort work
+- [x] Map and host-test Rework's accepted-body VR footstep cadence (`>0.85 m`, native `FootStep(0.8)`), including Black Plague's verifier-pinned MSVC 2003 string ABI, collision-accepted motion consumer, deferred game-thread dispatch after native input update and dispatch telemetry
+- [ ] Headset-validate Black Plague VR footstep cadence/surface selection and finish the remaining player-camera/head-bob/body-animation comfort observation
 - [x] Implement Rework-derived physical crouch policy and explicit desired/native stance synchronization through Black Plague's existing input owner
 - [x] Headset-validate continuous tracked-Y correlation and focused short-range X/Z comfort (PID 25484)
 - [ ] Capture the remaining Hybrid release-hold interval and blocked-stand/low-ceiling crouch recovery
 - [ ] Exercise deliberate wall/slide edge cases for the current rejected-direction prediction filter
 - [ ] Validate long-body interaction and mechanism-specific states
-- [ ] Consume the shared Rework magnetic-item policy through a mapped Black Plague item classifier/visibility boundary
-- [ ] Consume/adapt the shared slider/hinge mechanism policy through mapped representative Black Plague native joint/state/update boundaries
-- [ ] Inventory, notes, menus, HUD and subtitles
+- [x] Consume and host-test the shared Rework magnetic-item policy through Black Plague-owned broad world enumeration, item classification, BV geometry and controller/HMD solid LOS; headset validation remains open
+- [x] Consume and host-test the shared slider/hinge mechanism policy for verifier-pinned one-joint `cGameLever` plus hinge-only `cGameSwingDoor`; Wheel/unknown/multi-joint mechanisms remain native and headset validation is still open
+- [x] Host-map and consume Black Plague inventory/notebook opening through the
+  existing VR action owner and tracked-menu framebuffer path; exact-build active
+  bytes plus post-native-update UI-context publication are verifier/harness gated
+- [x] Host-map and host-test the gameplay 2D presentation shell through BP's
+  exact `OnPostSceneDraw -> GetDrawer -> DrawAll` owner; defer compositor submit,
+  capture the native 800x600 queue once and alpha-composite it into both eye
+  targets without adding a second HUD/subtitle producer
+- [ ] Headset-validate inventory/notebook usability plus the gameplay HUD/
+  subtitle surface; only after subtitles are observed in-eye, wire and validate
+  `SubtitleScale` and finish note-specific UX not covered by the native notebook
 - [ ] Add the optional Framework-native radial/quick-access UX only after the current headset/body/interaction validation gates are closed
   - [ ] Keep radial lifecycle, stick dead-zone/sector selection, handedness, cancellation and selection haptics in shared runtime code
   - [ ] Keep available actions/items and activation behind narrow per-game adapters; do not encode HPL layouts, RVAs or product inventory semantics in the shared radial policy
@@ -260,9 +293,10 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Integrate a dedicated Black Plague VR settings page after a safe native-menu insertion boundary is demonstrated
 - [x] Consume shared haptic policy for Black Plague pickup/drop, tracked UI select and successful direct-hand contact; host-test focus/pose/cooldown rejection plus per-event OpenVR submission telemetry
 - [x] Extend the combined palm/room-scale headset helper to aggregate `Grab=6`/`Move=2`, tool, crouch, nudge and haptic evidence without treating optional scene coverage as a false failure
-- [ ] Complete Black Plague haptic parity: map safe light-toggle/melee/damage boundaries and headset-validate the exercised controller submissions
-- [ ] Map a safe Black Plague audio boundary and consume/adapt the shared HRTF, occlusion and environmental-audio behavior
-- [ ] Map compatible Black Plague renderer stages for the demonstrated Rework enhanced-visual behavior, or document evidence-backed target incompatibilities
+- [ ] Complete Black Plague haptic parity: LightToggle, Damage and confirmed-contact MeleeImpact boundaries are consumed, exact-image verified and host-tested; headset-validate exercised controller submissions, including real melee contact versus an empty swing
+- [x] Consume Rework HRTF startup semantics for Black Plague through the launcher-owned pre-audio `alsoft.ini` boundary; capability/test coverage is host-tested and headset/audio-device validation remains a promotion gate
+- [ ] Map safe Black Plague runtime boundaries for Rework's added distance/occlusion low-pass and mine-gallery environmental reverb behavior; native BP EFX exists but is not equivalent to the Rework additions
+- [ ] Complete compatible Black Plague renderer consumption for Rework Enhanced Visuals: the transferable per-eye RGBA16F + 2x MSAA + v4 final-treatment stage is consumed and host-tested with graceful GL fallback; the Rework-specific HPL ambient/light material response and headset validation remain open
 - [ ] Implement/validate comfortable loading/map transitions and VR UI dimmer/overlay behavior at Black Plague-owned lifecycle boundaries
 - [ ] Representative chapter-level validation
 

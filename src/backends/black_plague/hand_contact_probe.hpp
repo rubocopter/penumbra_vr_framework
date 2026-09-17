@@ -78,6 +78,10 @@ struct GameplayPalmResolverTelemetry {
     std::uint64_t queries = 0;
     std::uint64_t contacts = 0;
     std::uint64_t constrained_samples = 0;
+    std::uint64_t tracking_reanchors = 0;
+    std::uint64_t recovery_anchors = 0;
+    std::uint64_t pullback_recoveries = 0;
+    std::uint64_t interaction_assist_samples = 0;
     std::uint64_t held_body_skips = 0;
     std::uint64_t stale_tracking_samples = 0;
     std::uint64_t query_failures = 0;
@@ -85,6 +89,10 @@ struct GameplayPalmResolverTelemetry {
     std::uint64_t shape_destroys = 0;
     std::uint64_t world_replacements = 0;
 };
+
+using GameplayInteractionTargetProvider = bool(*)(
+    std::size_t hand_index,
+    std::array<float, 3>& world_point) noexcept;
 
 // Requests one exact-build CheckShapeWorldCollision call on the existing
 // character-body update owner. The query reuses the current native body shape,
@@ -128,6 +136,12 @@ void PublishGameplayPalmTracking(
 void PublishGameplayPalmHeldBody(
     std::size_t hand_index,
     void* body) noexcept;
+
+// Optional backend-owned source for Rework's nearby physical interaction
+// target. The palm resolver remains independently linkable/testable when no
+// spatial-interaction owner is installed.
+void SetGameplayInteractionTargetProvider(
+    GameplayInteractionTargetProvider provider) noexcept;
 
 void ServiceGameplayPalmResolver(
     std::uint8_t* image,

@@ -1,14 +1,18 @@
+#include "opengl_enhanced_eye_stage.hpp"
 #include "opengl_eye_targets.hpp"
 #include "opengl_eye_scissor.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
 #include "rework_hand_mesh.hpp"
+#include "visual_calibration.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <GL/gl.h>
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -488,10 +492,10 @@ int main() {
                     <<static_cast<int>(palm[2])<<" GL error "<<glGetError()<<'\n'; return 36;
             }
             // The imported Rework mesh must still expose Black Plague's richer
-            // per-finger articulation. Render the exact same hand twice with
-            // only the index curl changed and require a visible framebuffer
-            // difference, so a future skinning/cache regression cannot turn
-            // the textured hand into a static prop while pose math still tests.
+            // five-finger articulation. Render the same hand with each finger
+            // curled independently so a skinning/cache/mapping regression
+            // cannot leave one or more visible chains static while pose math
+            // still passes.
             glDisable(GL_SCISSOR_TEST); glDepthMask(GL_TRUE); glClearDepth(1);
             glDepthFunc(GL_LESS); glClearColor(0,0,0,1);
             glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
@@ -500,22 +504,26 @@ int main() {
                     hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 44;
             std::vector<GLubyte> open_hand(320U*240U*4U);
             glReadPixels(0,0,320,240,GL_RGBA,GL_UNSIGNED_BYTE,open_hand.data());
-            glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
-            hands[1].curl[1]=1.0F;
-            if (!penumbra_vr::graphics::DrawTrackedHands(
-                    hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 45;
-            std::vector<GLubyte> curled_hand(open_hand.size());
-            glReadPixels(0,0,320,240,GL_RGBA,GL_UNSIGNED_BYTE,curled_hand.data());
-            std::size_t changed_pixels=0;
-            for (std::size_t pixel=0;pixel<320U*240U;++pixel) {
-                const std::size_t at=pixel*4U;
-                if (open_hand[at]!=curled_hand[at] ||
-                    open_hand[at+1]!=curled_hand[at+1] ||
-                    open_hand[at+2]!=curled_hand[at+2]) ++changed_pixels;
-            }
-            if (changed_pixels<20U) {
-                std::cerr<<"Hand articulation changed only "<<changed_pixels<<" pixels\n";
-                return 46;
+            for (std::size_t finger=0;finger<hands[1].curl.size();++finger) {
+                glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+                hands[1].curl.fill(0.0F);
+                hands[1].curl[finger]=1.0F;
+                if (!penumbra_vr::graphics::DrawTrackedHands(
+                        hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 45;
+                std::vector<GLubyte> curled_hand(open_hand.size());
+                glReadPixels(0,0,320,240,GL_RGBA,GL_UNSIGNED_BYTE,curled_hand.data());
+                std::size_t changed_pixels=0;
+                for (std::size_t pixel=0;pixel<320U*240U;++pixel) {
+                    const std::size_t at=pixel*4U;
+                    if (open_hand[at]!=curled_hand[at] ||
+                        open_hand[at+1]!=curled_hand[at+1] ||
+                        open_hand[at+2]!=curled_hand[at+2]) ++changed_pixels;
+                }
+                if (changed_pixels<20U) {
+                    std::cerr<<"Finger "<<finger<<" articulation changed only "
+                        <<changed_pixels<<" pixels\n";
+                    return 46;
+                }
             }
             hands[1].curl.fill(0.0F);
             glDisable(GL_SCISSOR_TEST); glDepthMask(GL_TRUE); glClearDepth(0);
@@ -528,6 +536,69 @@ int main() {
         }
         glGetFloatv(GL_TEXTURE_MATRIX, matrix_after.data());
         if (matrix_before != matrix_after || !ScissorEquals({0, 4, 8, 4}, true)) return 33;
+    }
+    {
+        // The gameplay HUD path must alpha-composite a native HPL 2D surface
+        // over an existing eye without clearing it and must restore hostile GL
+        // state. Transparent texels leave the eye untouched; half-alpha texels
+        // blend with it.
+        penumbra_vr::graphics::OpenGlEyeTargets overlay_targets;
+        penumbra_vr::graphics::OpenGlEyeBinding overlay_binding;
+        if (!overlay_targets.CreateOrResize(64, 64, error) ||
+            !overlay_targets.BeginEye(
+                penumbra_vr::graphics::Eye::left, overlay_binding, error)) return 47;
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(0, 0, 1, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        GLuint overlay_texture=0;
+        glGenTextures(1,&overlay_texture);
+        glBindTexture(GL_TEXTURE_2D,overlay_texture);
+        const std::array<GLubyte,8> overlay_pixels{
+            255,0,0,0, 0,255,0,128};
+        glTexImage2D(GL_TEXTURE_2D,0,GL_RGBA8,2,1,0,GL_RGBA,GL_UNSIGNED_BYTE,overlay_pixels.data());
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+        penumbra_vr::runtime::VrEyeConfiguration overlay_eye;
+        overlay_eye.left_tangent=-1; overlay_eye.right_tangent=1;
+        overlay_eye.top_tangent=-1; overlay_eye.bottom_tangent=1;
+        penumbra_vr::runtime::VrMatrix44 overlay_projection;
+        if (!penumbra_vr::runtime::BuildHplInfiniteProjection(
+                overlay_eye,0.05F,overlay_projection,error)) return 48;
+        glEnable(GL_SCISSOR_TEST); glScissor(3,4,51,52);
+        glDepthFunc(GL_GREATER); glDepthMask(GL_FALSE);
+        while (glGetError()!=GL_NO_ERROR) {}
+        if (!penumbra_vr::graphics::DrawTransparentOverlay(
+                overlay_texture,
+                penumbra_vr::runtime::IdentityMatrix(),
+                overlay_projection,
+                -0.5F,0.5F,-0.5F,0.5F,1.0F,error) ||
+            !ScissorEquals({3,4,51,52},true)) {
+            std::cerr << "Transparent overlay draw/state restoration failed: " << error << '\n';
+            return 49;
+        }
+        GLint overlay_depth_func=0; GLboolean overlay_depth_write=GL_TRUE;
+        glGetIntegerv(GL_DEPTH_FUNC,&overlay_depth_func);
+        glGetBooleanv(GL_DEPTH_WRITEMASK,&overlay_depth_write);
+        if (overlay_depth_func!=GL_GREATER || overlay_depth_write!=GL_FALSE) return 50;
+        glDisable(GL_SCISSOR_TEST);
+        std::array<GLubyte,4> transparent_pixel{}, blended_pixel{};
+        glReadPixels(24,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,transparent_pixel.data());
+        glReadPixels(40,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,blended_pixel.data());
+        if (transparent_pixel!=std::array<GLubyte,4>{0,0,255,255} ||
+            blended_pixel[0]>4 || blended_pixel[1]<120 || blended_pixel[1]>136 ||
+            blended_pixel[2]<119 || blended_pixel[2]>135) {
+            std::cerr << "Transparent overlay alpha composition changed: "
+                << static_cast<int>(transparent_pixel[0]) << ','
+                << static_cast<int>(transparent_pixel[1]) << ','
+                << static_cast<int>(transparent_pixel[2]) << " / "
+                << static_cast<int>(blended_pixel[0]) << ','
+                << static_cast<int>(blended_pixel[1]) << ','
+                << static_cast<int>(blended_pixel[2]) << '\n';
+            return 51;
+        }
+        glDeleteTextures(1,&overlay_texture);
+        if (!overlay_targets.EndEye(overlay_binding,error) ||
+            !overlay_targets.Destroy(error)) return 52;
     }
     {
         GLuint eye_texture=0; glGenTextures(1,&eye_texture); glBindTexture(GL_TEXTURE_2D,eye_texture);
@@ -555,6 +626,47 @@ int main() {
             bar!=std::array<GLubyte,4>{0,0,0,255}) return 40;
         glDeleteTextures(1,&eye_texture);
         glDisable(0x84F5); glDeleteTextures(1,&rectangle);
+    }
+    {
+        // Exercise Rework 23c890f's transferable eye stage on the real WGL
+        // driver: RGBA16F + 2x MSAA resolve + the exact v4 final curve.
+        penumbra_vr::graphics::OpenGlEyeTargets output;
+        penumbra_vr::graphics::OpenGlEnhancedEyeStage enhanced;
+        penumbra_vr::graphics::OpenGlEyeBinding output_binding;
+        penumbra_vr::graphics::OpenGlEnhancedEyeBinding enhanced_binding;
+        if (!output.CreateOrResize(64,64,error) ||
+            !enhanced.CreateOrResize(64,64,error) ||
+            !output.BeginEye(penumbra_vr::graphics::Eye::left,output_binding,error) ||
+            !enhanced.BeginEye(penumbra_vr::graphics::Eye::left,enhanced_binding,error)) {
+            std::cerr << "Enhanced eye stage setup failed: " << error << '\n';
+            return 53;
+        }
+        constexpr penumbra_vr::graphics::LinearRgb input{0.08F,0.12F,0.18F};
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(input[0],input[1],input[2],1.0F);
+        glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+        if (!enhanced.EndEye(enhanced_binding,error) ||
+            CurrentFramebuffer()!=output.target(penumbra_vr::graphics::Eye::left).framebuffer ||
+            !ViewportEquals({0,0,64,64})) {
+            std::cerr << "Enhanced eye resolve/final pass failed: " << error << '\n';
+            return 54;
+        }
+        std::array<GLubyte,4> actual{};
+        glReadPixels(32,32,1,1,GL_RGBA,GL_UNSIGNED_BYTE,actual.data());
+        const auto expected=penumbra_vr::graphics::ApplyEnhancedFinalTone(input);
+        const auto expected_byte=[](float value) {
+            return static_cast<int>(std::lround(std::clamp(value,0.0F,1.0F)*255.0F));
+        };
+        for (std::size_t channel=0;channel<3;++channel) {
+            if (std::abs(static_cast<int>(actual[channel])-expected_byte(expected[channel]))>3) {
+                std::cerr << "Enhanced eye final curve mismatch at channel " << channel
+                          << ": got " << static_cast<int>(actual[channel])
+                          << " expected " << expected_byte(expected[channel]) << '\n';
+                return 55;
+            }
+        }
+        if (actual[3]!=255 || !output.EndEye(output_binding,error) ||
+            !enhanced.Destroy(error) || !output.Destroy(error)) return 56;
     }
     std::cout << "OpenGL eye target allocation, resize and state restoration passed\n";
     return 0;

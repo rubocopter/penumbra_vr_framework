@@ -1,6 +1,6 @@
 # Arranque VR y estado de los mandos
 
-Actualizado: 2026-09-12. Backend **Black Plague FD316F…** únicamente.
+Actualizado: 2026-09-18. Backend **Black Plague FD316F…** únicamente.
 
 La prueba de visor del 2026-09-06 confirmó el arranque mediante BAT, recentrado,
 menús, inventario/libreta, dedos, movimiento, giro, correr/agacharse y luces
@@ -24,19 +24,21 @@ mejora visual validada hasta una nueva prueba.
 - **Validado después:** con mirror desactivado, PID 19192 mostró los menús 2D
   nativos en el monitor y dejó negro el gameplay al suprimir su pase de mundo,
   sin el artefacto del punto blanco creciente.
-- **Pendiente de nueva prueba:** mirror activado desde el ojo izquierdo, propiedad diestra
-  y L2/R2, movimiento relativo al HMD, adquisición de agarre tras confirmar el
-  estado nativo, ciclo L1 Rework y anclaje de herramientas.
-- **Ejercitado parcialmente en visor:** room-scale X/Z activo detrás del helper
-  transitorio `Start-BlackPlagueRoomScaleValidation.ps1`. PID 13672 eliminó el
-  temblor continuo y PID 11804 confirmó dirección HMD correcta. La nueva
-  locomoción métrica que corrige la velocidad por eje está host-tested y requiere
-  otra tanda.
-- **Deliberadamente no terminado en gameplay:** la frontera de colisión de
-  palmas ya tiene query y resolver/lifecycle live-tested (PID 28412/PID 8644),
-  pero aún falta conexión a las manos y evidencia de exclusión character/
-  held-body; puertas/palancas/joints, modelos
-  HPL de Rework y Enhanced visuals GPU también siguen abiertos.
+- **Pendiente de nueva prueba:** el candidato combinado actual integra la palma
+  collision-aware con manos/objetos/herramientas, acquisition Grab/Move,
+  static-only physical step, magnetic pickup, glowstick Rework, mecanismos
+  one-joint Lever/SwingDoor, HUD/subtítulos y nuevos haptics. Todo ello conserva
+  el estado de evidencia documentado y debe pasar la tanda combinada antes de
+  promoción.
+- **Ejercitado parcialmente en visor:** room-scale X/Z, crouch/Y, locomoción
+  directa y filtro de rechazo ya tienen evidencia positiva en las sesiones
+  documentadas. El helper principal actual es
+  `Start-BlackPlaguePalmCollisionValidation.ps1`, que compone esas rutas para
+  detectar regresiones sin reabrir sus hitos cerrados.
+- **Abierto por diseño/evidencia:** Wheel y mecanismos compound siguen nativos;
+  occlusion/reverb y la respuesta HPL de materiales/luces de Rework siguen sin
+  un boundary seguro consumido. El postprocesado Enhanced Visuals por ojo y HRTF
+  de arranque están consumidos/host-tested, pero aún no validados en visor/audio.
 
 La tanda posterior añadió `native_update_timing`, contadores de herramientas y
 agarres rechazados por seguridad, además de ampliar el buffer de log. No se
@@ -61,6 +63,23 @@ también pueden editarse sin arrancar el juego con
 `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`. El clear del monitor
 con mirror desactivado tiene confirmación visual; el mirror activado sigue
 pendiente de certificación física.
+
+`HRTF` ya forma parte de esos controles consumidos. En un arranque nuevo el
+launcher escribe `alsoft.ini` junto al ejecutable con el mismo formato de Rework
+`23c890f` antes de pedir a Steam que inicie Black Plague, porque OpenAL Soft debe
+leer ese valor al abrir el dispositivo. Si Black Plague ya está ejecutándose y
+el archivo no coincide con el ajuste guardado, el launcher rechaza el arranque
+VR y pide reiniciar el juego; no intenta aplicar HRTF después de abrir el
+dispositivo. Esta ruta está host-tested y aún no constituye validación de audio
+en visor.
+
+`Enhanced Visuals` también es ya un control funcional de Black Plague a nivel
+host: cuando está activo, el owner existente de los eye targets intenta usar el
+stage compartido derivado de Rework (RGBA16F, 2x MSAA, resolve y tratamiento
+final v4) y conserva el target directo como fallback si el driver no ofrece las
+capacidades necesarias. La prueba WGL compara la salida con la referencia CPU.
+Esto no incluye todavía los programas HPL de ambiente/luz de Rework ni sustituye
+la validación visual y de rendimiento en visor.
 
 ## Arrancar sin adjuntar el mod a mano
 
@@ -96,8 +115,9 @@ menús 2D pero deja negro el gameplay, de acuerdo con el ownership de pases. El
   room-scale X/Z activo sigue default-off. PID 13672 confirmó estabilidad visual
   y PID 11804 confirmó heading HMD, pero este último expuso velocidad desigual
   según el eje corporal nativo. La locomoción directa `1.5/2.25 m/s` está ahora
-  host-tested y pendiente de prueba live/con visor mediante
-  `tools/Start-BlackPlagueRoomScaleValidation.ps1`. El helper fuerza mirror
+  host-tested y pendiente de los checks dirigidos que aún correspondan dentro
+  de la tanda combinada actual. Usa
+  `tools/Start-BlackPlaguePalmCollisionValidation.ps1`; el helper fuerza mirror
 activado para la tanda. En presentación siguen pendientes mirror-on y Alt+Tab/foco,
 porque menú e inventario pueden quedar negros en el visor al perder foco la
 ventana.
@@ -205,7 +225,10 @@ hitos de gameplay estén terminados**.
   el action set offhand para evitar propiedad mezclada. En el perfil PSVR2 diestro
   R2 es interactuar; el perfil zurdo usa L2 y cambia también puntero y mano de
   herramientas.
-- Tracking corporal posicional y Enhanced visuals GPU no están conectados.
+- El tracking corporal posicional sigue pendiente de su cierre completo en
+  visor. Enhanced Visuals ya tiene conectado y host-tested el stage final por
+  ojo; su respuesta HPL de materiales/luces y la validación de visor siguen
+  pendientes.
 - Falta validar transiciones mientras se mantiene un botón, la pérdida de
   tracking/foco en una partida real y la convivencia de mandos y teclado al
   mantener ambos la misma acción. Las pruebas puras no sustituyen esa prueba.

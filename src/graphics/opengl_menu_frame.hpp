@@ -8,6 +8,20 @@ namespace penumbra_vr::graphics {
 [[nodiscard]] bool ClearMonitorBackbuffer(std::string& error) noexcept;
 // Final desktop presentation of an already rendered eye; preserves GL state.
 [[nodiscard]] bool DrawMonitorMirror(unsigned int texture, std::string& error) noexcept;
+// Composites an RGBA HPL 2D surface over an already-rendered eye without
+// clearing color/depth. model_view is the eye-from-head transform; geometry is
+// expressed in head-local metres so callers can reproduce Rework's authored UI
+// plane while keeping exact-build HPL drawing outside shared graphics code.
+[[nodiscard]] bool DrawTransparentOverlay(
+    unsigned int texture,
+    const runtime::VrMatrix44& model_view,
+    const runtime::VrMatrix44& projection,
+    float left,
+    float right,
+    float bottom,
+    float top,
+    float distance,
+    std::string& error) noexcept;
 // A transient desktop capture, owned by the render thread and shared by both
 // eye passes. Destruction must happen before leaving the current GL context.
 class OpenGlMenuFrame final {

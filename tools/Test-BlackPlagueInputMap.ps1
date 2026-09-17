@@ -4,9 +4,10 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $inputRoot = Split-Path -Parent $PSScriptRoot
 $inputSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/native_input_bridge.cpp') -Raw
+$bodyAdapterSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/black_plague_body_adapter.cpp') -Raw
 $contactSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/hand_contact_probe.cpp') -Raw
 $inputImage = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $ImagePath).Path)
-if ($inputImage.Length -lt 0x272A88) { throw 'Capture is too short for the mapped virtual image.' }
+if ($inputImage.Length -lt 0x27F7BC) { throw 'Capture is too short for the mapped virtual image.' }
 function Assert-Call([int]$Site, [int]$Target) {
     if ($inputImage[$Site] -ne 0xE8 -or
         ($Site + 5 + [BitConverter]::ToInt32($inputImage, $Site + 1)) -ne $Target) {
@@ -27,11 +28,126 @@ foreach ($inputMatch in $inputQueries) {
     }
     Assert-Call $inputRva $inputTarget
 }
+
+# Gameplay 2D presentation follows the exact native Scene owner. Black Plague
+# calls Updater::OnPostSceneDraw, obtains GraphicsDrawer and consumes its queue
+# through the no-argument DrawAll. Framework owns only the DrawAll callsite so
+# it can redirect that already-authored 800x600 surface into the VR eyes.
+Assert-Call 0xEE01B 0xE1C40
+Assert-Call 0xEE03B 0xDF730
+Assert-Call 0xEE042 0xF3920
+Assert-Bytes 0xE1C50 @(0x8B,0x4E,0x08,0x8B,0x01,0xFF,0x50,0x04)
+Assert-Bytes 0xDF730 @(0x8B,0x41,0x08,0xC3)
+Assert-Bytes 0xF3920 @(0x81,0xEC,0x6C,0x01,0,0,0x53,0x55,0x56,0x57,0x8B,0xF9)
+Assert-Bytes 0xF3FCF @(0x8B,0x46,0x04,0x89,0x40,0x04)
+Write-Output 'Verified native gameplay 2D owner: OnPostSceneDraw -> GetDrawer -> DrawAll, including updater slot and queue-clearing drawer ABI.'
+
+# Inventory and notebook already consume the tracked-menu presentation path.
+# Pin the exact native action branches and active-state bytes that UiContext
+# observes, so this host-side evidence cannot silently drift with another build.
+Assert-Bytes 0x509B @(0x84,0xC0,0x74,0x08,0x8B,0x4E,0x38)
+Assert-Call 0x50A2 0x9D020 # cPlayer::StartInventory
+Assert-Bytes 0x50C3 @(0x84,0xC0,0x74,0x10,0x8B,0x46,0x2C,0x8B,0x88,0x78,0x01,0,0,0x6A,0x01)
+Assert-Call 0x50D2 0x96540 # cNotebook::SetActive(true)
+Assert-Bytes 0x9D03D @(0x8B,0x46,0x70,0x8B,0x88,0x64,0x01,0,0,0x6A,0x01)
+Assert-Call 0x9D048 0x6C6B0 # cInventory::SetActive(true)
+Assert-Bytes 0x6C6B0 @(0x8A,0x44,0x24,0x04,0x38,0x41,0x5C,0x74,0x7B,0x84,0xC0,0x88,0x41,0x5C)
+Assert-Bytes 0x9654E @(0x8A,0x44,0x24,0x10)
+Assert-Bytes 0x96561 @(0x88,0x46,0x44)
+if (-not $inputSource.Contains('Read<bool>(Read<void*>(init, 0x178), 0x44)') -or
+    -not $inputSource.Contains('Read<bool>(Read<void*>(init, 0x164), 0x5C)')) {
+    throw 'Black Plague UiContext no longer observes the mapped notebook/inventory active bytes.'
+}
+$postUpdateUiPattern = 'reinterpret_cast<Update>\(g_image \+ 0x3BF0\)\(handler, dt\);(?s:.*?)g_ui\.store\(UiContext\(handler\), std::memory_order_release\);'
+if (-not [regex]::IsMatch($inputSource, $postUpdateUiPattern)) {
+    throw 'Black Plague UI context is no longer republished after native ButtonHandler::Update.'
+}
 Assert-Call 0x51CD 0x9CBC0
 Assert-Call 0x513D 0x9BCD0
 Assert-Call 0x5165 0x9BD80
+# The native flashlight/glowstick methods own the success state used by the
+# Framework light-toggle haptic. Pin both cPlayer member pointers and the exact
+# active bytes instead of treating the query edge itself as proof of a toggle.
+Assert-Bytes 0x9BD31 @(0x8B,0x8E,0x90,0x02,0,0,0x8A,0x41,0x04) # flashlight +0x04
+Assert-Bytes 0x9BD52 @(0x8B,0x8E,0x9C,0x02,0,0,0x6A,0)          # glowstick disable
+Assert-Bytes 0x9BE55 @(0x8B,0x8E,0x9C,0x02,0,0,0x80,0x39,0)    # glowstick +0x00
+Assert-Bytes 0x9BE72 @(0x8B,0x8E,0x90,0x02,0,0,0x6A,0)          # flashlight disable
+$lightHapticPattern = 'ReadNativeLightState\(g_input_player\)(?s:.*?)reinterpret_cast<Update>\(g_image \+ 0x3BF0\)\(handler, dt\);(?s:.*?)ReadNativeLightState\(g_input_player\)(?s:.*?)BlackPlagueOffHand\(frame\.interact_source\)(?s:.*?)VrHapticEvent::light_toggle'
+if (-not [regex]::IsMatch($inputSource, $lightHapticPattern)) {
+    throw 'Black Plague LightToggle haptic no longer observes native state across ButtonHandler::Update.'
+}
+
+# Damage feedback owns every direct cPlayer::Damage callsite in this supported
+# image. The original method remains authoritative: it rejects non-positive /
+# disabled damage, applies the exact difficulty transform, drives the native
+# damage effect and finally calls AddHealth. Framework feedback runs only after
+# that original call and requires the native health field to have decreased.
+$damageSites = @(0x26EB,0x2F4D,0x5058,0x17054,0x21CD9,0x42B18,0x47C8B,0xA5507,0xA555E,0xA55B2)
+foreach ($damageSite in $damageSites) { Assert-Call $damageSite 0x9BB80 }
+Assert-Bytes 0x9BB80 @(0x51,0xD9,0x44,0x24,0x08,0x56)
+Assert-Bytes 0x9BB99 @(0x8B,0x46,0x70,0x8B,0x88,0x54,0x01,0,0)
+Assert-Bytes 0x9BBAD @(0x8B,0x80,0x80,0,0,0)
+Assert-Bytes 0x9BBB7 @(0xD9,0x44,0x24,0x0C,0xD8,0x0D,0xD8,0x2D,0x67,0)
+Assert-Call 0x9BC70 0x9A7B0
+Assert-Bytes 0x9BC75 @(0x5E,0x59,0xC2,0x08,0)
+Assert-Bytes 0x47CF0 @(0xA1,0xF0,0xCA,0x6D,0,0x8B,0x88,0x5C,0x01,0,0,0xD9,0x81,0x10,0x03,0,0,0xC3)
+if ([BitConverter]::ToSingle($inputImage,0x272DD8) -ne 0.5) {
+    throw 'Black Plague easy-difficulty damage scale no longer matches 0.5x.'
+}
+$damageHapticPattern = 'HookedPlayerDamage(?s:.*?)kPlayerDamageRva(?s:.*?)health_after(?s:.*?)VrHapticEvent::damage'
+if (-not [regex]::IsMatch($inputSource, $damageHapticPattern)) {
+    throw 'Black Plague Damage haptic no longer preserves the native post-damage success boundary.'
+}
+
+# MeleeImpact follows Rework's confirmed-impact rule. The supported Black
+# Plague image has one enemy Damage call and two generic HitBody calls inside
+# cHudModel_WeaponMelee::Attack. Both generic calls occur only after the native
+# collision tests have accepted contact. HitBody itself skips enemy-backed
+# bodies (entity type 7), so the enemy Damage call remains the sole owner for
+# that route and the two generic calls cover ordinary physics/entity contacts.
+Assert-Call 0x603D5 0x29E30
+Assert-Call 0x60747 0x5F000
+Assert-Call 0x608CF 0x5F000
+Assert-Bytes 0x29E30 @(0xD9,0x41,0x74,0xD8,0x1D,0xC0,0x29,0x67,0)
+Assert-Bytes 0x5F009 @(0x8B,0xAB,0x14,0x04,0,0,0x85,0xED)
+Assert-Bytes 0x5F016 @(0x83,0xBD,0xC0,0,0,0,0x07)
+Assert-Call 0x5F2DB 0x29E30
+$meleeHapticPattern = 'HookedMeleeEnemyDamage(?s:.*?)kGameEntityDamageRva(?s:.*?)VrHapticEvent::melee_impact(?s:.*?)HookedMeleeHitBody(?s:.*?)BlackPlagueMeleeBodyCanImpact(?s:.*?)kMeleeHitBodyRva(?s:.*?)VrHapticEvent::melee_impact'
+if (-not [regex]::IsMatch($inputSource, $meleeHapticPattern)) {
+    throw 'Black Plague MeleeImpact haptic no longer follows the mapped post-contact native owners.'
+}
 Assert-Call 0xA4313 0xCA120
 Assert-Call 0x5227 0x9CC60
+
+# VR locomotion reuses Rework's 0.85 m body-travel cadence but delegates the
+# actual sound/material selection to cPlayer::FootStep. Pin the exact legacy
+# MSVC 2003 string ABI using a native empty-string callsite: construct through
+# MSVCP71 IAT 0x2721E0, pass const string& plus bool=false, call FootStep, then
+# destroy through IAT 0x2721D8. The backend reproduces this lifecycle with an
+# opaque 28-byte legacy string and never constructs it with the modern CRT.
+$footStepConstants = @{
+    kFootStep = 0x9C7B0
+    kLegacyStringDestructorIat = 0x2721D8
+    kLegacyStringFromCStrIat = 0x2721E0
+    kLegacyEmptyString = 0x2729D8
+}
+foreach ($footStepConstant in $footStepConstants.GetEnumerator()) {
+    $pattern = '\b{0}\s*=\s*0x([0-9A-Fa-f]+)\s*;' -f
+        [regex]::Escape($footStepConstant.Key)
+    $sourceConstant = [regex]::Match($bodyAdapterSource, $pattern)
+    if (-not $sourceConstant.Success -or
+        [Convert]::ToInt32($sourceConstant.Groups[1].Value, 16) -ne
+            $footStepConstant.Value) {
+        throw ('FootStep source constant mismatch: {0}' -f $footStepConstant.Key)
+    }
+}
+Assert-Bytes 0x9C7B0 @(0x6A,0xFF,0x68,0xA2,0x65,0x63,0x00)
+Assert-Bytes 0x9CA79 @(0xC2,0x0C,0x00)
+Assert-Bytes 0xA5AB9 @(0x68,0xD8,0x29,0x67,0x00)
+Assert-Bytes 0xA5AC2 @(0xFF,0x15,0xE0,0x21,0x67,0x00)
+Assert-Bytes 0xA5ACE @(0x6A,0x00,0x8D,0x54,0x24,0x08,0x52,0x50)
+Assert-Call 0xA5ADE 0x9C7B0
+Assert-Bytes 0xA5AEF @(0xFF,0x15,0xD8,0x21,0x67,0x00)
 
 # Direct metric locomotion reuses the exact native movement-permission prefix
 # without entering iCharacterBody::Move. Keep the two state-gate vtable slots,
@@ -70,7 +186,7 @@ Assert-Call 0x4477 0x797B0
 Assert-Call 0x4C70 0x945F0
 Assert-Call 0x4FF2 0x6C7C0
 if ([BitConverter]::ToUInt32($inputImage, 0x272A84) -ne 0x403BF0) { throw 'Update vtable mismatch.' }
-Write-Output 'Verified 76 query calls, 2 movement calls, 3 menu cursor calls and Update vtable. No process was modified.'
+Write-Output 'Verified 76 query calls, inventory/notebook UI activation, post-update UI publication, 2 movement calls, 3 menu cursor calls and Update vtable. No process was modified.'
 
 # Movement-ownership observation uses distinct action dispatch calls. In
 # particular, held jump has a one-byte bool argument prepared by "push 1" at
@@ -142,6 +258,117 @@ Assert-Bytes 0x19D2D0 @(0x8A,0x90,0xC8,0x03,0,0) # Newton contact: body 2 vs cha
 Assert-Bytes 0x19D2E4 @(0x8A,0x91,0xC8,0x03,0,0) # Newton contact: body 1 vs character 2
 Write-Output 'Verified 18 spatial/HUD/physics method slots, Grab/Move state ownership, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
 
+# Pin the exact-build inventory-item identity before Black Plague consumes the
+# shared magnetic-pickup policy. The Item loader constructs cGameItem through
+# 0x35040; that constructor owns entity type 5. The loader parses ItemType with
+# the native 0x34AE0 converter and stores the resulting enum at +0x250. Native
+# cGameItem::IsInView remains useful evidence for the item LOS contract, but its
+# camera cone is not a substitute for Rework's hand/HMD magnetic sight rays.
+Assert-Call 0x3554E 0x35040
+Assert-Bytes 0x350F1 @(0xC7,0x86,0xC0,0,0,0,0x05,0,0,0)
+Assert-Bytes 0x35140 @(0x83,0xEC,0x18,0x53,0x56,0x8B,0xF1)
+Assert-Bytes 0x35229 @(0x8A,0x86,0x7C,0x02,0,0,0x84,0xC0)
+Assert-Bytes 0x35264 @(0x89,0x4B,0x08,0xC6,0x43,0x04,0)
+Assert-Bytes 0x35293 @(0xFF,0x55,0x68)
+Assert-Call 0x35863 0x34AE0
+Assert-Bytes 0x35876 @(0x89,0x85,0x50,0x02,0,0)
+
+# The Rework magnetic fallback now consumes Black Plague's native body list
+# directly inside the existing player-pick owner. Pin every exact-build field
+# used by that traversal/classifier instead of treating the HPL layout as a
+# generic engine ABI.
+Assert-Bytes 0xD3FB3 @(0x8B,0x43,0x14,0x56,0x8B,0x30) # world +14 body-list sentinel / first node
+Assert-Bytes 0xD3FC3 @(0x8B,0x7E,0x08) # list node +08 body payload
+Assert-Bytes 0xD4910 @(0x38,0x5E,0x31) # body Active
+Assert-Bytes 0xD48FB @(0x38,0x9E,0xC7,0x03,0,0) # body Character
+Assert-Bytes 0x19D29E @(0x8A,0x91,0xC9,0x03,0,0) # body Player
+Assert-Bytes 0xD495A @(0x8A,0x86,0x18,0x04,0,0) # body Collide
+Assert-Bytes 0xAD875 @(0x8B,0xB8,0x14,0x04,0,0) # body UserData
+Assert-Bytes 0xD4968 @(0x8D,0x86,0xB4,0,0,0) # embedded body cBoundingVolume
+Assert-Bytes 0x2D957 @(0xC6,0x46,0x14,0x01) # cGameEntity Active default
+Assert-Bytes 0xD8A10 @(0x56,0x8B,0xF1,0xE8,0x98,0xF8,0xFF,0xFF) # BV GetMax
+Assert-Bytes 0xD8A40 @(0x56,0x8B,0xF1,0xE8,0x68,0xF8,0xFF,0xFF) # BV GetMin
+Assert-Bytes 0xD8A70 @(0x83,0xEC,0x0C,0x56,0x8B,0xF1,0xE8,0x35,0xF8,0xFF,0xFF) # BV GetWorldCenter
+Assert-Bytes 0xD8AF0 @(0x56,0x8B,0xF1,0xE8,0xB8,0xF7,0xFF,0xFF) # BV GetRadius
+Write-Output 'Verified exact Black Plague magnetic-pickup body enumeration, body/entity filters and bounding-volume ABI.'
+
+# Pin one representative native articulated mechanism. The Lever loader
+# allocates the 0x324-byte cGameLever and calls 0x3D500. The instance installs
+# vtable 0x676608, owns exact-build entity type 0x12, and its Update method
+# (vtable entry -> 0x3C2B0) reads the first joint from the base +0x15C vector and
+# compares the joint scalar against the native min/max limits. MovementType and
+# MovementValue remain native fields at +0x31C/+0x320. These checks establish an
+# adapter boundary. The VR Move owner now consumes only the narrow one-joint
+# cGameLever hinge/slider case while retaining native Enter/Leave lifecycle.
+Assert-Call 0x3D70C 0x3D500
+Assert-Bytes 0x3D53F @(0xC7,0x06,0x08,0x66,0x67,0)
+Assert-Bytes 0x3D593 @(0xC7,0x86,0xC0,0,0,0,0x12,0,0,0)
+if ([BitConverter]::ToUInt32($inputImage, 0x276620) -ne 0x43C2B0) {
+    throw 'cGameLever Update vtable entry mismatch.'
+}
+Assert-Bytes 0x3C2D3 @(0x8B,0x8E,0x5C,0x01,0,0,0x85,0xC9)
+Assert-Bytes 0x3C304 @(0x8B,0x08,0x8B,0x01,0x55,0x57,0x89,0x5C,0x24,0x24,0xFF,0x50,0x38)
+Assert-Bytes 0x3C335 @(0xD8,0x9E,0x88,0x02,0,0)
+Assert-Bytes 0x3C352 @(0xD8,0x9E,0x84,0x02,0,0)
+Assert-Bytes 0x3D947 @(0x89,0x83,0x1C,0x03,0,0)
+Assert-Bytes 0x3D964 @(0xD9,0x9B,0x20,0x03,0,0)
+Assert-Bytes 0xCD240 @(0x8B,0x81,0x54,0x03,0,0,0x8B,0x4C,0x24,0x04,0x8D,0x04,0x88,0x8B,0)
+if ([BitConverter]::ToUInt32($inputImage, 0x292EDC) -ne 0x556750) {
+    throw 'Hinge GetType vtable entry mismatch.'
+}
+if ([BitConverter]::ToUInt32($inputImage, 0x292FCC) -ne 0x5499B0) {
+    throw 'Slider GetType vtable entry mismatch.'
+}
+Assert-Bytes 0x156750 @(0xB8,0x01,0,0,0,0xC3)
+Assert-Bytes 0x1499B0 @(0xB8,0x02,0,0,0,0xC3)
+Assert-Bytes 0x19F1B7 @(0x89,0x86,0xB8,0,0,0)
+Assert-Bytes 0x19F1CB @(0x89,0x86,0xC4,0,0,0)
+Assert-Bytes 0x19F6DC @(0x89,0x86,0xB8,0,0,0)
+Assert-Bytes 0x19F6F0 @(0x89,0x86,0xC4,0,0,0)
+
+# Rework 23c890f routes SwingDoor through Move and treats every door joint as
+# a hinge while the entity owns controller/gravity lifecycle and hinge limits.
+# Black Plague retains the same exact-build family boundary: AfterLoad creates
+# the 0x2EC-byte cGameSwingDoor, the constructor installs vtable 0x6791F0,
+# entity type 8 and PauseControllers/PauseGravity=true. The Framework only
+# consumes the one-joint hinge form; compound doors remain native.
+Assert-Bytes 0x5960C @(0x68,0xEC,0x02,0,0)
+Assert-Call 0x5963C 0x591E0
+Assert-Bytes 0x59213 @(0xC7,0x06,0xF0,0x91,0x67,0)
+Assert-Bytes 0x5929A @(0xB0,0x01)
+Assert-Bytes 0x592A8 @(0xC7,0x86,0xC0,0,0,0,0x08,0,0,0)
+Assert-Bytes 0x592B5 @(0x88,0x86,0xC4,0,0,0)
+Assert-Bytes 0x592BB @(0x88,0x86,0xC5,0,0,0)
+if ([BitConverter]::ToUInt32($inputImage, 0x279208) -ne 0x457F90) {
+    throw 'cGameSwingDoor Update vtable entry mismatch.'
+}
+Assert-Bytes 0x58C55 @(0x8B,0x8D,0x5C,0x01,0,0,0x33,0xFF,0x3B,0xCF)
+Assert-Bytes 0x58C61 @(0x8B,0x85,0x60,0x01,0,0)
+
+# Keep Black Plague's cGameWheel outside the generic one-joint consumer until
+# its native state machine is adapted deliberately. BP has a dedicated entity
+# family (type 0x13) whose Update owns a separate joint pointer and accumulated
+# state beyond the base joint vector. These pins make accidental type-only
+# generalization fail the supported-image gate.
+Assert-Bytes 0x5A38F @(0xC7,0x06,0xE8,0x93,0x67,0)
+Assert-Bytes 0x5A3C1 @(0xC7,0x86,0xC0,0,0,0,0x13,0,0,0)
+if ([BitConverter]::ToUInt32($inputImage, 0x279400) -ne 0x45ABB0) {
+    throw 'cGameWheel Update vtable entry mismatch.'
+}
+Assert-Bytes 0x5ABD3 @(0x8B,0x8E,0x5C,0x01,0,0)
+Assert-Bytes 0x5ABE8 @(0x8B,0x86,0x60,0x01,0,0)
+Assert-Bytes 0x5AC2A @(0x8B,0x8E,0x3C,0x02,0,0)
+Assert-Bytes 0x5AC3D @(0xD9,0x9E,0x50,0x02,0,0)
+Assert-Bytes 0x5AC50 @(0xD8,0x86,0x44,0x02,0,0)
+# Native Move Enter/Leave already own controller pause/resume for entity +C4,
+# so the VR servo must not duplicate or hook that mechanism lifecycle.
+Assert-Bytes 0xAAE00 @(0x8B,0x99,0x14,0x04,0,0,0x8A,0x83,0xC4,0,0,0)
+Assert-Call 0xAAE26 0xCD240
+Assert-Call 0xAAE2D 0xCB860
+Assert-Call 0xAAEF8 0xCD240
+Assert-Call 0xAAEFF 0xCB860
+Write-Output 'Verified native cGameItem identity/subtype/visibility plus one-joint cGameLever and cGameSwingDoor mechanism boundaries. No process was modified.'
+
 # Pin the exact legacy shape-query ABI before any Black Plague palm shape is
 # created. The diagnostic reuses the current character-body shape and checks
 # that this query changes no selected native world/body/shape bytes.
@@ -206,11 +433,23 @@ Write-Output 'Verified the exact CheckShapeWorldCollision ABI and character/skip
 Assert-Call 0xD460A 0xD6E00
 Assert-Call 0xD7312 0xD4830
 Assert-Bytes 0xD7281 @(0xD9,0x07,0xD9,0x46,0x54)
-Assert-Bytes 0xD7361 @(0x89,0x47,0x08,0x89,0x0F)
+Assert-Bytes 0xD4E00 @(0x8B,0x44,0x24,0x04,0x8A,0x90,0xC7,0x03)
+# cCharacterBodyRay is allocated as 12 bytes and receives vtable 0x67F7B0.
+# Its OnIntersect slot is the second entry (0x4D4E00). The physical-room-scale
+# adapter observes that existing callback to classify the winning body by mass;
+# no second ray/solver is introduced.
+Assert-Bytes 0xD66A5 @(0x6A,0x0C)
+Assert-Bytes 0xD6703 @(0xC7,0x00,0xB0,0xF7,0x67,0x00)
+Assert-Bytes 0x27F7B0 @(0x70,0xF0,0x4A,0x00,0x00,0x4E,0x4D,0x00,0xC0,0x57,0x4D,0x00)
+# After each native step CastRay, D776D stores the callback's collide byte and
+# D7771 advances the ray index. D7772 is therefore the narrow five-byte owner
+# that can discard only a dynamic winner before the native second pass.
+Assert-Bytes 0xD776D @(0x88,0x54,0x1C,0x38,0x43)
+Assert-Bytes 0xD7772 @(0x83,0xC5,0x0C,0x3B,0xD9)
 Assert-Bytes 0xD45B0 @(0x53,0x56,0x8B,0xF1,0x8B,0x46,0x58,0x57,0x33,0xFF,0x3B,0xC7)
 Assert-Bytes 0xD4F50 @(0xD9,0x44,0x24,0x08,0x56,0x8B,0xF1,0x57,0x8B,0x7C,0x24,0x0C)
 Assert-Bytes 0xD63B5 @(0x83,0xEC,0x44,0x53,0x55,0x56,0x8B,0xE9,0x57,0x89,0x6C,0x24,0x10)
 Assert-Bytes 0xD6E15 @(0x81,0xEC,0xD4,0x05,0,0,0x53,0x55,0x56,0x8B,0xF1,0x8A,0x46,0x30)
 Assert-Bytes 0xD4845 @(0x81,0xEC,0xD0,0x02,0,0,0x53,0x55,0x33,0xDB,0x56,0x57,0x8B,0xF9)
 Assert-Bytes 0xD50E0 @(0x83,0xEC,0x0C,0x56,0x8B,0xF1,0x8B,0x8E,0x3C,0x02,0,0)
-Write-Output 'Verified player character-body Move, construction, feet, physics-world Update, pre-collision physical X/Z injection window and initial collision-resolution boundaries. No process was modified.'
+Write-Output 'Verified player character-body Move, construction, feet, physics-world Update, pre-collision physical X/Z injection, character step-ray callback/vtable and static-only physical step boundary. No process was modified.'

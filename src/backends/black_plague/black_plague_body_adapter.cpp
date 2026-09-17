@@ -1,5 +1,6 @@
 #include "black_plague_body_adapter.hpp"
 #include "body_adapter_boundary.hpp"
+#include "legacy_input_abi.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -13,10 +14,19 @@ namespace penumbra_vr::backends::black_plague {
 namespace {
 
 using Move = void(__thiscall*)(void*, float, float);
+using LegacyString = adapters::hpl1::LegacyInputString;
+using LegacyStringFromCStr = void(__thiscall*)(LegacyString*, const char*);
+using LegacyStringDestructor = void(__thiscall*)(LegacyString*);
+using FootStep = void(__thiscall*)(void*, float, const LegacyString*, bool);
 
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kMoveForward = 0x9CBC0;
 constexpr std::uintptr_t kMoveSideways = 0x9CC60;
+constexpr std::uintptr_t kFootStep = 0x9C7B0;
+constexpr std::uintptr_t kLegacyStringDestructorIat = 0x2721D8;
+constexpr std::uintptr_t kLegacyStringFromCStrIat = 0x2721E0;
+constexpr std::uintptr_t kLegacyEmptyString = 0x2729D8;
+constexpr float kVrFootStepMultiplier = 0.8F;
 constexpr wchar_t kShadowRequestMutexName[] =
     L"Local\\PenumbraVR.BlackPlague.ReconciliationShadow";
 constexpr wchar_t kPhysicalValidationRequestMutexName[] =
@@ -30,6 +40,19 @@ std::atomic<std::uint8_t*> g_image{nullptr};
 std::atomic<bool> g_installed{false};
 SRWLOCK g_lock = SRWLOCK_INIT;
 BlackPlagueBodyMotion g_motion;
+runtime::VrFootstepCadence g_vr_footstep_cadence;
+void* g_vr_footstep_player = nullptr;
+void* g_vr_footstep_body = nullptr;
+std::uint64_t g_vr_footstep_generation = 0;
+struct PendingVrFootstep {
+    bool pending = false;
+    void* player = nullptr;
+    void* body = nullptr;
+    std::uint64_t generation = 0;
+    std::uint64_t tick_sequence = 0;
+};
+PendingVrFootstep g_pending_vr_footstep;
+BlackPlagueVrFootstepTelemetry g_vr_footstep_telemetry;
 bool g_shadow_enabled = false;
 BlackPlagueShadowRequestSource g_shadow_source =
     BlackPlagueShadowRequestSource::disabled;
@@ -133,6 +156,15 @@ void InvalidateDirectLocomotionIntentLocked() noexcept {
     g_direct_locomotion_intent = {};
 }
 
+void ResetVrFootstepIdentityLocked() noexcept {
+    g_vr_footstep_cadence.Reset();
+    g_vr_footstep_player = nullptr;
+    g_vr_footstep_body = nullptr;
+    ++g_vr_footstep_generation;
+    g_pending_vr_footstep = {};
+    g_vr_footstep_telemetry.pending = false;
+}
+
 [[nodiscard]] bool SameVector(const std::array<float, 3>& left,
     const std::array<float, 3>& right) noexcept {
     constexpr float epsilon = 0.00001F;
@@ -144,6 +176,50 @@ void InvalidateDirectLocomotionIntentLocked() noexcept {
 [[nodiscard]] bool HasHorizontalRequest(
     const std::array<float, 3>& request) noexcept {
     return std::hypot(request[0], request[2]) > 0.0F;
+}
+
+[[nodiscard]] bool FootStepAbiMatches(std::uint8_t* image) noexcept {
+    if (image == nullptr) return false;
+    constexpr std::array<std::uint8_t, 7> kFootStepPrologue{
+        0x6A, 0xFF, 0x68, 0xA2, 0x65, 0x63, 0x00};
+    constexpr std::array<std::uint8_t, 3> kFootStepReturn{
+        0xC2, 0x0C, 0x00};
+    std::array<std::uint8_t, kFootStepPrologue.size()> prologue{};
+    std::array<std::uint8_t, kFootStepReturn.size()> return_bytes{};
+    return ReadBytes(image + kFootStep, prologue.data(), prologue.size()) &&
+        ReadBytes(image + 0x9CA79, return_bytes.data(), return_bytes.size()) &&
+        prologue == kFootStepPrologue && return_bytes == kFootStepReturn;
+}
+
+[[nodiscard]] bool PlayVrFootStep(void* player) noexcept {
+    auto* const image = g_image.load(std::memory_order_acquire);
+    if (player == nullptr || !FootStepAbiMatches(image)) return false;
+    const auto construct = Read<LegacyStringFromCStr>(
+        image, kLegacyStringFromCStrIat);
+    const auto destroy = Read<LegacyStringDestructor>(
+        image, kLegacyStringDestructorIat);
+    if (construct == nullptr || destroy == nullptr) return false;
+
+    LegacyString type{};
+    construct(&type, reinterpret_cast<const char*>(image + kLegacyEmptyString));
+    reinterpret_cast<FootStep>(image + kFootStep)(
+        player, kVrFootStepMultiplier, &type, false);
+    destroy(&type);
+    return true;
+}
+
+[[nodiscard]] std::array<float, 3> AcceptedVrDisplacement(
+    const BlackPlaguePhysicalTickObservation& tick) noexcept {
+    std::array<float, 3> accepted{};
+    if (HasHorizontalRequest(tick.physical_requested_displacement)) {
+        accepted[0] += tick.physical_accepted_displacement[0];
+        accepted[2] += tick.physical_accepted_displacement[2];
+    }
+    if (HasHorizontalRequest(tick.locomotion_requested_displacement)) {
+        accepted[0] += tick.locomotion_accepted_displacement[0];
+        accepted[2] += tick.locomotion_accepted_displacement[2];
+    }
+    return accepted;
 }
 
 [[nodiscard]] bool MatchesCurrentBody(void* player) noexcept {
@@ -265,6 +341,8 @@ void InvalidatePendingPhysicalValidationLocked() noexcept {
     }
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
+    ResetVrFootstepIdentityLocked();
+    g_vr_footstep_telemetry = {};
     g_physical_validation_source = PhysicalValidationRequested();
     g_physical_validation_enabled = g_physical_validation_source !=
         BlackPlaguePhysicalValidationRequestSource::disabled;
@@ -328,6 +406,8 @@ bool RemoveBlackPlagueBodyAdapter(std::string& error) noexcept {
     g_image.store(nullptr, std::memory_order_release);
     AcquireSRWLockExclusive(&g_lock);
     g_motion = {};
+    ResetVrFootstepIdentityLocked();
+    g_vr_footstep_telemetry = {};
     g_shadow_enabled = false;
     g_shadow_source = BlackPlagueShadowRequestSource::disabled;
     g_shadow = {};
@@ -535,6 +615,26 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
         return;
     }
     AcquireSRWLockExclusive(&g_lock);
+    if (g_vr_footstep_player != player ||
+        g_vr_footstep_body != character_body) {
+        g_vr_footstep_cadence.Reset();
+        g_vr_footstep_player = player;
+        g_vr_footstep_body = character_body;
+        ++g_vr_footstep_generation;
+        g_pending_vr_footstep = {};
+        g_vr_footstep_telemetry.pending = false;
+    }
+    if (physical_tick.request_injected) {
+        if (g_vr_footstep_cadence.Advance(
+                AcceptedVrDisplacement(physical_tick))) {
+            ++g_vr_footstep_telemetry.cadence_events;
+            g_pending_vr_footstep = {
+                true, player, character_body, g_vr_footstep_generation,
+                tick_sequence};
+            g_vr_footstep_telemetry.pending = true;
+            g_vr_footstep_telemetry.last_tick_sequence = tick_sequence;
+        }
+    }
     g_motion.valid = true;
     ++g_motion.native_tick_sequence;
     g_motion.feet_after = feet_after;
@@ -628,10 +728,56 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
     ReleaseSRWLockExclusive(&g_lock);
 }
 
+void ServiceBlackPlagueVrFootstep(void* player) noexcept {
+    PendingVrFootstep pending;
+    bool identity_matches = false;
+    AcquireSRWLockExclusive(&g_lock);
+    if (g_pending_vr_footstep.pending) {
+        pending = g_pending_vr_footstep;
+        g_pending_vr_footstep = {};
+        g_vr_footstep_telemetry.pending = false;
+        ++g_vr_footstep_telemetry.dispatch_attempts;
+        identity_matches = g_installed.load(std::memory_order_acquire) &&
+            player != nullptr && pending.player == player &&
+            g_vr_footstep_player == pending.player &&
+            g_vr_footstep_body == pending.body &&
+            g_vr_footstep_generation == pending.generation;
+    }
+    ReleaseSRWLockExclusive(&g_lock);
+    if (!pending.pending) return;
+
+    if (!identity_matches || !MatchesCurrentBody(player) ||
+        Read<void*>(player, kPlayerCharacterBodyOffset) != pending.body) {
+        AcquireSRWLockExclusive(&g_lock);
+        ++g_vr_footstep_telemetry.dispatch_rejections;
+        ReleaseSRWLockExclusive(&g_lock);
+        return;
+    }
+
+    const bool played = PlayVrFootStep(player);
+    AcquireSRWLockExclusive(&g_lock);
+    if (played) ++g_vr_footstep_telemetry.dispatch_successes;
+    else ++g_vr_footstep_telemetry.abi_failures;
+    ReleaseSRWLockExclusive(&g_lock);
+}
+
 BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept {
     AcquireSRWLockExclusive(&g_lock);
     const BlackPlagueBodyMotion result = g_motion;
     g_motion = {};
+    ReleaseSRWLockExclusive(&g_lock);
+    return result;
+}
+
+BlackPlagueVrFootstepTelemetry
+ConsumeBlackPlagueVrFootstepTelemetry() noexcept {
+    AcquireSRWLockExclusive(&g_lock);
+    const auto result = g_vr_footstep_telemetry;
+    const bool pending = g_vr_footstep_telemetry.pending;
+    const auto last_tick_sequence = g_vr_footstep_telemetry.last_tick_sequence;
+    g_vr_footstep_telemetry = {};
+    g_vr_footstep_telemetry.pending = pending;
+    g_vr_footstep_telemetry.last_tick_sequence = last_tick_sequence;
     ReleaseSRWLockExclusive(&g_lock);
     return result;
 }

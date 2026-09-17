@@ -104,6 +104,8 @@ OwnedPalmShape g_gameplay_palm_shape;
 std::atomic<bool> g_gameplay_shape_active{false};
 std::array<runtime::VrHandResolveState, 2> g_gameplay_resolver_state{};
 std::array<std::atomic<void*>, 2> g_gameplay_held_body{};
+std::atomic<GameplayInteractionTargetProvider>
+    g_gameplay_interaction_target_provider{nullptr};
 SRWLOCK g_gameplay_tracking_lock = SRWLOCK_INIT;
 std::array<runtime::VrMatrix44, 2> g_gameplay_raw_poses{};
 std::array<bool, 2> g_gameplay_raw_valid{};
@@ -470,7 +472,8 @@ void ResetGameplayPalmStates() noexcept {
 [[nodiscard]] runtime::VrHandResolverFrame GameplayResolverFrame(
     const runtime::VrMatrix44& head,
     bool head_valid,
-    bool left_hand) noexcept {
+    bool left_hand,
+    std::size_t hand_index) noexcept {
     runtime::VrHandResolverFrame frame;
     frame.left_hand = left_hand;
     frame.head_basis_valid = head_valid;
@@ -480,6 +483,13 @@ void ResetGameplayPalmStates() noexcept {
     frame.up = {head.values[1], head.values[5], head.values[9]};
     // Framework world poses use OpenVR's -Z forward convention.
     frame.forward = {-head.values[2], -head.values[6], -head.values[10]};
+    std::array<float,3> target{};
+    const auto provider =
+        g_gameplay_interaction_target_provider.load(std::memory_order_acquire);
+    if (provider && provider(hand_index,target)) {
+        frame.interaction_target = {target[0],target[1],target[2]};
+        frame.interaction_target_valid = true;
+    }
     return frame;
 }
 
@@ -894,6 +904,11 @@ void PublishGameplayPalmHeldBody(
     g_gameplay_held_body[hand_index].store(body, std::memory_order_release);
 }
 
+void SetGameplayInteractionTargetProvider(
+    GameplayInteractionTargetProvider provider) noexcept {
+    g_gameplay_interaction_target_provider.store(provider, std::memory_order_release);
+}
+
 void ServiceGameplayPalmResolver(
     std::uint8_t* image,
     void* character_body) noexcept {
@@ -999,6 +1014,10 @@ void ServiceGameplayPalmResolver(
     std::uint64_t queries = 0;
     std::uint64_t contacts = 0;
     std::uint64_t constrained = 0;
+    std::uint64_t tracking_reanchors = 0;
+    std::uint64_t recovery_anchors = 0;
+    std::uint64_t pullback_recoveries = 0;
+    std::uint64_t interaction_assist_samples = 0;
     std::uint64_t held_skips = 0;
     std::uint64_t failures = 0;
 
@@ -1010,12 +1029,14 @@ void ServiceGameplayPalmResolver(
         NativePalmQueryContext query_context{
             image, world, g_gameplay_palm_shape.shape, skip_body,
             &query_telemetry, false};
-        auto frame = GameplayResolverFrame(
-            head_pose, head_valid, hand == 0);
+        auto frame = GameplayResolverFrame(head_pose, head_valid, hand == 0, hand);
         runtime::VrMatrix44 resolved{};
         const bool ok = runtime::ResolveVrHandPose(
             g_gameplay_resolver_state[hand], raw_poses[hand], frame,
             &query_context, QueryOwnedPalmShape, resolved);
+        if (g_gameplay_resolver_state[hand].last_interaction_assist) {
+            ++interaction_assist_samples;
+        }
         queries += query_telemetry.query_count;
         contacts += query_telemetry.contact_count;
         if (skip_body != nullptr) ++held_skips;
@@ -1033,6 +1054,15 @@ void ServiceGameplayPalmResolver(
             std::hypot(std::hypot(dx, dy), dz) > 0.001F) {
             ++constrained;
         }
+        if (g_gameplay_resolver_state[hand].last_tracking_reanchor) {
+            ++tracking_reanchors;
+        }
+        if (g_gameplay_resolver_state[hand].last_recovery_anchor) {
+            ++recovery_anchors;
+        }
+        if (g_gameplay_resolver_state[hand].last_pullback_recovery) {
+            ++pullback_recoveries;
+        }
     }
 
     AcquireSRWLockExclusive(&g_gameplay_pose_lock);
@@ -1047,6 +1077,10 @@ void ServiceGameplayPalmResolver(
     g_gameplay_telemetry.queries += queries;
     g_gameplay_telemetry.contacts += contacts;
     g_gameplay_telemetry.constrained_samples += constrained;
+    g_gameplay_telemetry.tracking_reanchors += tracking_reanchors;
+    g_gameplay_telemetry.recovery_anchors += recovery_anchors;
+    g_gameplay_telemetry.pullback_recoveries += pullback_recoveries;
+    g_gameplay_telemetry.interaction_assist_samples += interaction_assist_samples;
     g_gameplay_telemetry.held_body_skips += held_skips;
     g_gameplay_telemetry.query_failures += failures;
     g_gameplay_telemetry.shape_creates += lifecycle.create_count;

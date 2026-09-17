@@ -235,8 +235,13 @@ bool DecodeHandTexture(
         decoded.resize(static_cast<std::size_t>(candidate_width) *
             candidate_height * 3U);
         for (UINT y = 0; y < candidate_height; ++y) {
+            // COLLADA UVs and the checked-in fallback both expect OpenGL's
+            // first uploaded row to be the image bottom. GDI+ exposes the
+            // decoded JPEG top-down for this asset, so mirror the row order
+            // exactly as the deterministic generator does.
+            const UINT source_y = candidate_height - 1U - y;
             const auto* row = static_cast<const std::uint8_t*>(data.Scan0) +
-                static_cast<std::ptrdiff_t>(y) * data.Stride;
+                static_cast<std::ptrdiff_t>(source_y) * data.Stride;
             for (UINT x = 0; x < candidate_width; ++x) {
                 const std::size_t destination =
                     (static_cast<std::size_t>(y) * candidate_width + x) * 3U;

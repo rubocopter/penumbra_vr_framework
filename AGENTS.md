@@ -149,8 +149,11 @@ state `4`), but no later periodic sample with the physical source released while
 the latch remained set, so that one Hybrid release-hold subgate remains open.
 Blocked-stand/low-ceiling behavior also remains a separate headset edge case.
 Do not rerun the whole focused gate merely to re-prove the already captured
-crouch/Y/stick evidence. Keep tracking-world-yaw turn ownership and final
-footstep/body-bob behavior as separate validation gates.
+crouch/Y/stick evidence. Tracking-world-yaw turn ownership is already aligned
+with Rework at code level and the accepted-body VR footstep cadence is now
+host-tested with deferred dispatch from the existing game-thread input owner
+after native update return; keep its surface-sound telemetry/headset check and
+final body-bob presentation as separate validation gates.
 
 PID 22096 then supplied positive headset evidence for the presentation owner in
 `7f84235`: the closed run contains 15,990 frames, 15,887 gameplay frames and no
@@ -182,7 +185,10 @@ bodies preserve their picked contact and follow the palm through the
 Rework-derived force path. Exact Rework `23c890f` comparison after the reported
 pickup difficulty restored its separate acquisition rule: selection may follow
 the raw controller by at most `0.18 m` from a collision-stopped palm, while the
-actual hold remains resolved. Jointed/mechanism bodies remain native. PID 23000
+actual hold remains resolved. Recognized one-joint `cGameLever` hinge/slider
+and one-joint `cGameSwingDoor` hinge bodies consume the shared mechanism servo
+while native `Move::Enter/Leave` retain lifecycle ownership; Wheel, unknown and
+multi-joint mechanisms remain native. PID 23000
 reached this gameplay path in the headset, but severe FPS loss and a
 right-controller dropout made the run inconclusive. PID 4720 also cannot judge
 room-scale regressions because the old focused palm helper started with physical
@@ -204,6 +210,57 @@ vertical bounce, ordinary stick stair/ledge traversal, representative contact
 plus `Grab=6`/`Move=2`, short physical X/Z + crouch checks before/after contact,
 and at least one native jointed mechanism. Do not promote gameplay palms or the
 new collision adaptation beyond host-tested until that clean evidence exists.
+
+Offline presentation work has also advanced while the headset gate remains
+blocked. The supported image now pins gameplay 2D ownership through
+`OnPostSceneDraw (0xE1C40) -> GetDrawer (0xDF730) -> DrawAll (0xF3920)`, with
+the sole `DrawAll` callsite at `0xEE042`. Because the original Black Plague
+`DrawAll` has no Rework VR arguments and always resets ortho/clears its queue,
+the host-tested adaptation defers gameplay compositor submit to that callsite,
+captures the native 800x600 draw once into transparent RGBA and alpha-composites
+it into both eye targets before submission. Do not add a second HUD/subtitle
+producer or call native `DrawAll` independently per eye. The new overlay path is
+host-tested only; require nonzero overlay/deferred-submit telemetry, zero overlay
+failures and visible native HUD/subtitles in headset before promotion or before
+wiring `SubtitleScale` at the mapped product-owned message boundary.
+
+Offline haptic parity has also advanced without adding a second native input
+owner. `LightToggle` now observes the exact flashlight/glowstick active state
+around the existing `cButtonHandler::Update` owner and emits the shared Rework
+event to the off hand only after native state changes. `Damage` is owned through
+one exact-build wrapper over all ten direct `cPlayer::Damage (0x9BB80)`
+callsites; the original method remains authoritative and both-hand feedback is
+emitted only when `cPlayer+0x310` health actually decreases. Both paths are
+exact-image verified and host-tested only. `MeleeImpact` now follows Rework's
+confirmed-contact semantics through three exact-build owners inside Black
+Plague's native melee attack: enemy `cGameEntity::Damage` at `0x603D5` and the
+two post-collision `HitBody (0x5F000)` calls at `0x60747/0x608CF`. The native
+resolver remains authoritative and its enemy-body exclusion is mirrored so the
+enemy path cannot double-pulse. This boundary is exact-image verified and
+host-tested only; require headset evidence that real hits pulse the dominant
+controller and empty swings do not before promotion.
+
+Black Plague HRTF startup is now consumed at the launcher boundary and is
+**host-tested only**. Rework `23c890f` writes `alsoft.ini` next to the executable
+before OpenAL opens its device; Framework writes the same shared
+`auto/true/false` configuration before a fresh Steam launch. If the game is
+already running, a mismatched saved mode is rejected rather than pretending a
+post-device-open change took effect. Exact-image research confirms Black Plague
+already contains its own OpenAL/EFX environment path, but that native setup uses
+an environment bus gain of `1.0` and does not demonstrate Rework's added
+mine-gallery preset/`0.32` trim or distance-HF low-pass behavior. Keep
+occlusion/reverb open until a narrow target-owned runtime boundary is proved;
+do not stack speculative OpenAL hooks over the native audio owners.
+
+Black Plague also now consumes the transferable Rework Enhanced Visuals eye
+stage and this is **host-tested only**. Exact Rework `23c890f` source separates
+the per-eye RGBA16F + 2x MSAA/resolve + v4 final treatment from its HPL-specific
+ambient/light material programs. `OpenGlEnhancedEyeStage` implements only that
+transferable eye stage and the BP persistent-eye owner selects it through the
+existing `EnhancedVisuals` setting, with the old direct eye target as a graceful
+fallback. The real-driver WGL regression and 36/36 Release CTest pass. Keep the
+remaining HPL material/light response and headset image/performance validation
+open; do not call the whole Enhanced Visuals family complete from this stage.
 
 ## Black Plague constraints
 

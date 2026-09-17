@@ -29,6 +29,19 @@ struct BlackPlagueBodyMotion {
 
 [[nodiscard]] BlackPlagueBodyMotion ConsumeBlackPlagueBodyMotion() noexcept;
 
+struct BlackPlagueVrFootstepTelemetry {
+    std::uint64_t cadence_events = 0;
+    std::uint64_t dispatch_attempts = 0;
+    std::uint64_t dispatch_successes = 0;
+    std::uint64_t dispatch_rejections = 0;
+    std::uint64_t abi_failures = 0;
+    bool pending = false;
+    std::uint64_t last_tick_sequence = 0;
+};
+
+[[nodiscard]] BlackPlagueVrFootstepTelemetry
+ConsumeBlackPlagueVrFootstepTelemetry() noexcept;
+
 // Optional reconciliation path enabled by an explicit environment or transient
 // validation request. The renderer publishes raw tracking and the existing
 // native body callback consumes it. Shadow-only mode remains observation-only;

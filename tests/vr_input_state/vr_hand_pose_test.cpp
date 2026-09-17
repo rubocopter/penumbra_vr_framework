@@ -72,5 +72,12 @@ int main() {
         closed.fingers[2].flexion_degrees!=std::array<float,3>{52,66,38} ||
         closed.fingers[3].flexion_degrees!=std::array<float,3>{52,66,38} ||
         closed.fingers[4].flexion_degrees!=std::array<float,3>{52,66,38}) return 14;
+    curls.fill(0.0F);
+    const auto held=ArticulateVrHand(curls,false,1.0F);
+    if (held.fingers[0].flexion_degrees!=std::array<float,3>{28,34,20} ||
+        held.fingers[1].flexion_degrees!=std::array<float,3>{52,66,38} ||
+        held.fingers[2].flexion_degrees!=std::array<float,3>{55,70,40} ||
+        held.fingers[3].flexion_degrees!=std::array<float,3>{55,70,40} ||
+        held.fingers[4].flexion_degrees!=std::array<float,3>{55,70,40}) return 15;
     std::cout<<"Hand conditioning and articulation: Rework mapping, smoothing and rigid-skin pose limits passed\n";
 }

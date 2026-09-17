@@ -40,7 +40,7 @@ physics ticks. It is not evidence that the whole simulation runs at 2x.
 | Locomotion | Rework constants and pure direction, displacement and rejection policy | `OvertureBackend` sequences HPL body moves | PID 11804 headset-exercised correct HMD direction; transient direct `1.5/2.25 m/s` displacement through the single `0xD7281` owner is host-tested only; native/default movement remains unchanged |
 | Collision | requested/accepted displacement reconciliation | `OvertureBodyAdapter::MoveBodyBy` owns `iCharacterBody::Update` and static-only mode | cylinder/body/update/solver ownership and injected request reconciliation are live-tested |
 | Jump | edge/held semantics | adapter calls native `Jump` and `SetJumpButtonDown` | native Jump-state vertical ownership and the unique body tick are live-characterized |
-| Turn | shared neutral-arm and dead-zone policy | changes tracking-space world yaw | currently changes native player yaw |
+| Turn | shared neutral-arm and dead-zone policy | changes tracking-space world yaw | consumes tracking-space world yaw through `AddTrackedWorldYaw`; directed headset validation remains open |
 | Interaction | shared palm-relative grab/release math already present | HPL entity classification, palm overlap and joints stay backend-side | exact-build direct free-body path; no jointed-body adapter yet |
 | Tools | shared behavior is possible after geometry-specific grip data is separated | Rework HUD grip profiles and hand bones | installed Black Plague DAE sockets need headset tuning |
 
@@ -271,7 +271,9 @@ the accepted result. Runtime still owns direction and speed policy; the
 movement-permission field, RVA, queue and partition remain exact-build backend
 details. The direct path is host-tested only, and the next headset run must check
 equal directional speed, normal/sprint behavior, simultaneous physical motion,
-state rejection and footsteps/bob/animation. Overture's proven two-update and
+state rejection and remaining bob/animation presentation. The Rework-derived
+`>0.85 m` accepted-body footstep cadence is now shared and consumed by BP at
+host level through native `FootStep(0.8)`. Overture's proven two-update and
 camera paths were not changed.
 
 Finger articulation points in the other direction. BP's existing shared

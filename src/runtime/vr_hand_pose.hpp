@@ -35,5 +35,6 @@ struct VrHandArticulation {
     float thumb_yaw_degrees=0;
 };
 [[nodiscard]] VrHandArticulation ArticulateVrHand(
-    const std::array<float,5>& curls, bool left) noexcept;
+    const std::array<float,5>& curls, bool left,
+    float hold_pose_weight = 0.0F) noexcept;
 }

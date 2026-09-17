@@ -1,4 +1,5 @@
 #include "penumbra_vr/build_catalog.hpp"
+#include "openal_soft_config.hpp"
 #include "pe_memory_inspector.hpp"
 #include "vr_settings_capabilities.hpp"
 #include "penumbra_vr/black_plague_probe_capabilities.hpp"
@@ -1097,6 +1098,12 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
         return 6;
     }
     if (pid == 0) {
+        if (!penumbra_vr::launcher::WriteOpenAlSoftHrtfConfig(
+                game, profile.hrtf_mode, error)) {
+            std::wcerr << L"Could not prepare HRTF before audio startup. "
+                       << error << L'\n';
+            return 6;
+        }
         // The protected Steam build must be started by Steam, not CreateProcess.
         std::wcout << L"Starting Black Plague through Steam; waiting for the game...\n" << std::flush;
         const auto opened = reinterpret_cast<INT_PTR>(ShellExecuteW(
@@ -1114,6 +1121,20 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
         if (pid == 0 || !error.empty()) {
             std::wcerr << L"Could not find the requested game process. " << error
                        << L" Check Steam or its game launcher dialog.\n";
+            return 6;
+        }
+    } else {
+        bool hrtf_matches = false;
+        if (!penumbra_vr::launcher::OpenAlSoftHrtfConfigMatches(
+                game, profile.hrtf_mode, hrtf_matches, error)) {
+            std::wcerr << error << L'\n';
+            return 6;
+        }
+        if (!hrtf_matches) {
+            std::wcerr
+                << L"The saved HRTF mode differs from the OpenAL Soft configuration "
+                   L"used at audio startup. Close Black Plague and launch VR again so "
+                   L"the setting can be applied before alcOpenDevice.\n";
             return 6;
         }
     }

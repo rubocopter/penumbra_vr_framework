@@ -99,9 +99,13 @@ The currently wired Black Plague editor capabilities are `Handedness`,
 `PlayMode`/`PlayerHeight` feed the shared seated/standing presentation policy;
 height/crouch controls feed the tracked-Y and native posture paths. Their
 editor exposure is host-tested and does not by itself establish headset comfort.
-`MonitorMirror` is a separate launcher/runtime toggle. `EnhancedVisuals`,
-`HRTF` and `SubtitleScale` remain persisted but must not be presented as
-functional Black Plague controls until their backend application exists.
+`MonitorMirror` is a separate launcher/runtime toggle. `EnhancedVisuals` and
+`HRTF` now have Black Plague backend application and are host-tested only:
+Enhanced Visuals selects the Rework-derived per-eye RGBA16F/MSAA/final-treatment
+stage with direct-eye fallback, while HRTF is applied before native audio-device
+creation. `SubtitleScale` remains persisted but must not be presented as a
+functional Black Plague control until its product-owned message boundary is
+validated in-eye and wired.
 
 Edit the currently supported Black Plague controls offline with:
 

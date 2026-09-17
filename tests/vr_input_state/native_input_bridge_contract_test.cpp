@@ -10,6 +10,6 @@ int main() {
         std::cerr << "native input bridge contract failed: " << error << '\n';
         return 1;
     }
-    std::cout << "native input bridge crouch ownership harness passed\n";
+    std::cout << "native input bridge UI/crouch ownership harness passed\n";
     return 0;
 }

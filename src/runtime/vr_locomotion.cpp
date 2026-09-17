@@ -26,6 +26,31 @@ namespace {
 
 } // namespace
 
+void VrFootstepCadence::Reset() noexcept {
+    horizontal_offset_ = {};
+}
+
+bool VrFootstepCadence::Advance(
+    const std::array<float, 3>& accepted_displacement) noexcept {
+    if (!FiniteVector(accepted_displacement)) {
+        Reset();
+        return false;
+    }
+    horizontal_offset_[0] += accepted_displacement[0];
+    horizontal_offset_[1] += accepted_displacement[2];
+    if (!std::isfinite(horizontal_offset_[0]) ||
+        !std::isfinite(horizontal_offset_[1])) {
+        Reset();
+        return false;
+    }
+    if (std::hypot(horizontal_offset_[0], horizontal_offset_[1]) <=
+        vr_locomotion_policy::kVrStepDistanceMeters) {
+        return false;
+    }
+    Reset();
+    return true;
+}
+
 VrBodyReconciliationPlan PlanBodyReconciliation(
     const std::array<float, 3>& head_anchor,
     const std::array<float, 3>& body_position,

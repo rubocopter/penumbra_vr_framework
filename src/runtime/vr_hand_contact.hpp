@@ -66,6 +66,8 @@ struct VrHandResolverFrame {
     bool head_basis_valid = false;
     bool left_hand = false;
     bool interaction_assist = false;
+    VrHandContactVector interaction_target{};
+    bool interaction_target_valid = false;
 };
 
 struct VrHandResolveState {
@@ -73,6 +75,13 @@ struct VrHandResolveState {
     VrMatrix44 resolved_pose{};
     bool valid = false;
     int constrained_frames = 0;
+    // Diagnostic result of the latest resolver sample. These flags do not
+    // participate in collision policy; backends can use them to distinguish a
+    // normal slide from Rework's deliberate recovery/reanchor paths.
+    bool last_tracking_reanchor = false;
+    bool last_recovery_anchor = false;
+    bool last_pullback_recovery = false;
+    bool last_interaction_assist = false;
 };
 
 using VrHandCollisionQuery = bool(*)(

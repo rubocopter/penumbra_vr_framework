@@ -38,6 +38,11 @@ struct RenderWorldFrameTelemetry {
     std::uint64_t eye_world_cpu_ns = 0;
     std::uint64_t hand_draw_cpu_ns = 0;
     std::uint64_t compositor_submit_cpu_ns = 0;
+    std::uint32_t gameplay_overlay_frames = 0;
+    std::uint32_t gameplay_overlay_failures = 0;
+    std::uint32_t deferred_compositor_submits = 0;
+    std::uint64_t gameplay_overlay_cpu_ns = 0;
+    std::array<char, 192> gameplay_overlay_error{};
     std::uint32_t eye_scissor_remapped = 0;
     std::uint32_t eye_scissor_bypassed = 0;
     std::uint32_t controller_samples = 0;

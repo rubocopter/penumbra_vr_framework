@@ -69,6 +69,7 @@ struct QueryScene {
     float rotation_limit = 100.0F;
     bool malformed = false;
     int calls = 0;
+    float last_tolerance = 0.0F;
 };
 
 [[nodiscard]] bool TestQuery(void* context, const VrMatrix44& pose,
@@ -76,6 +77,7 @@ struct QueryScene {
     VrHandCollisionDecision& decision) noexcept {
     auto& scene = *static_cast<QueryScene*>(context);
     ++scene.calls;
+    scene.last_tolerance = tolerance;
     if (scene.malformed) {
         decision.blocking = true;
         decision.normal = {std::numeric_limits<float>::quiet_NaN(), 0.0F, 0.0F};
@@ -171,6 +173,31 @@ struct QueryScene {
     return state.constrained_frames == 0 && Near(resolved.values[3], 0.2F, 0.002F);
 }
 
+[[nodiscard]] bool TestResolverInteractionAssistUsesChosenStart() {
+    using namespace penumbra_vr::runtime::vr_interaction_policy;
+    VrHandResolveState state;
+    penumbra_vr::runtime::ResetVrHandResolveState(state);
+    state.raw_pose = Pose(0.70F, 1.46F, 0.03F);
+    state.resolved_pose = Pose(0.49F, 1.46F, 0.03F);
+    state.valid = true;
+    state.constrained_frames = kConstrainedRecoveryFrames;
+
+    VrHandResolverFrame frame;
+    frame.head_basis_valid = true;
+    frame.head = {0.0F, 1.70F, 0.0F};
+    frame.interaction_target = {0.30F, 1.46F, 0.03F};
+    frame.interaction_target_valid = true;
+
+    QueryScene scene;
+    VrMatrix44 resolved{};
+    if (!penumbra_vr::runtime::ResolveVrHandPose(
+            state, Pose(0.20F, 1.46F, 0.03F), frame, &scene, TestQuery, resolved)) {
+        return false;
+    }
+    return state.last_recovery_anchor && state.last_interaction_assist &&
+        Near(scene.last_tolerance, kInteractionContactTolerance);
+}
+
 [[nodiscard]] bool TestResolverRotationAndMalformedFailSafe() {
     VrHandResolveState state;
     penumbra_vr::runtime::ResetVrHandResolveState(state);
@@ -221,6 +248,10 @@ int main() {
     if (!TestResolverRotationAndMalformedFailSafe()) {
         std::cerr << "VR hand resolver rotation/fail-safe failed\n";
         return 6;
+    }
+    if (!TestResolverInteractionAssistUsesChosenStart()) {
+        std::cerr << "VR hand interaction assistance/recovery start failed\n";
+        return 7;
     }
     std::cout << "VR hand contact policy passed\n";
     return 0;

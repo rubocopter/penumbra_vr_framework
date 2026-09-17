@@ -190,6 +190,56 @@ bool DrawMonitorMirror(unsigned int texture, std::string& error) noexcept {
     glEnd();
     return true;
 }
+
+bool DrawTransparentOverlay(
+    unsigned int texture,
+    const runtime::VrMatrix44& model_view,
+    const runtime::VrMatrix44& projection,
+    float left,
+    float right,
+    float bottom,
+    float top,
+    float distance,
+    std::string& error) noexcept {
+    error.clear();
+    if (!wglGetCurrentContext() || !texture || !glIsTexture(texture) ||
+        !Rigid(model_view) ||
+        !std::all_of(projection.values.begin(), projection.values.end(),
+            [](float value) { return std::isfinite(value); }) ||
+        !std::isfinite(left) || !std::isfinite(right) ||
+        !std::isfinite(bottom) || !std::isfinite(top) ||
+        !std::isfinite(distance) || left >= right || bottom >= top ||
+        distance <= 0.0F) {
+        error = "Overlay draw requires a current context, texture and finite geometry";
+        return false;
+    }
+
+    State state;
+    if (!state.valid) {
+        error = "Overlay draw requires GL multitexture/program APIs";
+        return false;
+    }
+    const auto gl_model_view = ColumnMajor(model_view);
+    const auto gl_projection = ColumnMajor(projection);
+    glMatrixMode(GL_PROJECTION);
+    glLoadMatrixf(gl_projection.data());
+    glMatrixMode(GL_MODELVIEW);
+    glLoadMatrixf(gl_model_view.data());
+    glDisable(GL_DEPTH_TEST);
+    glDepthMask(GL_FALSE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glColor4f(1, 1, 1, 1);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0); glVertex3f(left,  bottom, -distance);
+    glTexCoord2f(1, 0); glVertex3f(right, bottom, -distance);
+    glTexCoord2f(1, 1); glVertex3f(right, top,    -distance);
+    glTexCoord2f(0, 1); glVertex3f(left,  top,    -distance);
+    glEnd();
+    return glGetError() == GL_NO_ERROR;
+}
 bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
     const runtime::VrMatrix44& view, const runtime::VrMatrix44& projection, std::string& error) noexcept {
     error.clear();
@@ -209,7 +259,8 @@ bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
         if (!hand.visible || !Rigid(hand.palm)) continue;
         const auto model=ColumnMajor(runtime::Multiply(view,hand.palm));
         glLoadMatrixf(model.data());
-        const auto articulation=runtime::ArticulateVrHand(hand.curl,index==0);
+        const auto articulation=runtime::ArticulateVrHand(
+            hand.curl,index==0,hand.hold_pose_weight);
         if (!DrawReworkHandMesh(articulation,index==0)) {
             // Keep a tiny emergency marker if a legacy/invalid GL context
             // cannot consume the generated Rework mesh. Gameplay must never be

@@ -54,6 +54,7 @@ target_include_directories(pvr_rel32_call_hook PUBLIC src/hooks)
 pvr_enable_warnings(pvr_rel32_call_hook)
 
 add_library(pvr_opengl_eye_targets STATIC
+    src/graphics/opengl_enhanced_eye_stage.cpp
     src/graphics/opengl_eye_targets.cpp
     src/graphics/opengl_menu_frame.cpp
     src/graphics/rework_hand_mesh.cpp
@@ -111,6 +112,13 @@ add_library(pvr_vr_settings_store STATIC
 target_include_directories(pvr_vr_settings_store PUBLIC src/launcher)
 target_link_libraries(pvr_vr_settings_store PUBLIC pvr_vr_settings)
 pvr_enable_warnings(pvr_vr_settings_store)
+
+add_library(pvr_openal_soft_config STATIC
+    src/launcher/openal_soft_config.cpp
+)
+target_include_directories(pvr_openal_soft_config PUBLIC src/launcher)
+target_link_libraries(pvr_openal_soft_config PUBLIC pvr_spatial_audio pvr_vr_settings)
+pvr_enable_warnings(pvr_openal_soft_config)
 
 add_library(pvr_black_plague_settings STATIC
     src/backends/black_plague/vr_settings_capabilities.cpp
@@ -204,7 +212,7 @@ add_library(pvr_black_plague_body_adapter STATIC
     src/backends/black_plague/black_plague_body_adapter.cpp
 )
 target_include_directories(pvr_black_plague_body_adapter PUBLIC
-    src/backends/black_plague src/runtime)
+    src/backends/black_plague src/runtime src/adapters/hpl1)
 target_link_libraries(pvr_black_plague_body_adapter PUBLIC pvr_vr_math)
 pvr_enable_warnings(pvr_black_plague_body_adapter)
 
@@ -285,7 +293,7 @@ add_executable(pvr_probe_launcher
 )
 target_link_libraries(
     pvr_probe_launcher PRIVATE pvr_build_catalog pvr_vr_settings_store
-        pvr_black_plague_settings shell32)
+        pvr_black_plague_settings pvr_openal_soft_config shell32)
 set_target_properties(pvr_probe_launcher PROPERTIES
     OUTPUT_NAME "PenumbraVR.ProbeLauncher"
 )
@@ -425,7 +433,7 @@ if(BUILD_TESTING)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/eye_targets"
     )
     target_link_libraries(
-        pvr_opengl_eye_targets_test PRIVATE pvr_opengl_eye_targets pvr_opengl_eye_scissor)
+        pvr_opengl_eye_targets_test PRIVATE pvr_opengl_eye_targets pvr_opengl_eye_scissor pvr_visual_calibration)
     pvr_enable_warnings(pvr_opengl_eye_targets_test)
 
     add_test(NAME opengl_eye_targets COMMAND pvr_opengl_eye_targets_test)
@@ -552,6 +560,15 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_vr_settings_store_test)
 
     add_test(NAME vr_settings_store COMMAND pvr_vr_settings_store_test)
+
+    add_executable(pvr_openal_soft_config_test
+        tests/openal_soft_config/openal_soft_config_test.cpp
+    )
+    target_link_libraries(
+        pvr_openal_soft_config_test PRIVATE pvr_openal_soft_config)
+    pvr_enable_warnings(pvr_openal_soft_config_test)
+
+    add_test(NAME openal_soft_config COMMAND pvr_openal_soft_config_test)
 
     add_executable(pvr_render_target_policy_test
         tests/render_target_policy/render_target_policy_test.cpp

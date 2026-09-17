@@ -8,11 +8,15 @@ namespace {
 runtime::VrControllerFrame test_frame;
 int test_joints=0, test_leaves=0, test_native_updates=0;
 int test_move_leaves=0, test_native_move_updates=0;
+void* test_joint=nullptr;
 Vec test_move_force{},test_move_force_position{};
 bool test_ui=false;
 std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
 runtime::VrMatrix44 test_resolved_palm{};
+bool test_head_pose_valid=true;
+runtime::VrMatrix44 test_head_pose=runtime::IdentityMatrix();
+GameplayInteractionTargetProvider test_interaction_target_provider=nullptr;
 bool MatrixNearlyEqual(const Matrix& left,const Matrix& right,float epsilon=0.00001F) {
     for (std::size_t i=0;i<left.values.size();++i) {
         if (std::abs(left.values[i]-right.values[i])>=epsilon) return false;
@@ -46,6 +50,9 @@ void __fastcall NativeStop(void* state, void*) {
     Put(Read<void*>(state,0x10),0x2BC,0);
 }
 int __fastcall JointCount(void*,void*) { return test_joints; }
+void* __fastcall BodyJoint(void*,void*,int index) { return index==0 ? test_joint : nullptr; }
+int __fastcall HingeType(void*,void*) { return kHingeJointType; }
+int __fastcall SliderType(void*,void*) { return kSliderJointType; }
 void __fastcall NativeMoveEnter(void*,void*,void*) {}
 void __fastcall NativeMoveLeave(void*,void*,void*) { ++test_move_leaves; }
 void __fastcall NativeMoveUpdate(void*,void*,float) { ++test_native_move_updates; }
@@ -78,8 +85,17 @@ bool ControllerWorldPose(const runtime::VrHmdPose& hand, Matrix& pose, Vec& velo
     if (!hand.device_connected || !hand.pose_valid) return false;
     pose=runtime::ExpandMatrix(hand.device_to_absolute); velocity=hand.velocity; angular=hand.angular_velocity; return true;
 }
+bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept {
+    if (!test_head_pose_valid) return false;
+    pose=test_head_pose;
+    return true;
+}
 void PublishGameplayPalmHeldBody(std::size_t hand_index,void* body) noexcept {
     if (hand_index<test_palm_held.size()) test_palm_held[hand_index]=body;
+}
+void SetGameplayInteractionTargetProvider(
+    GameplayInteractionTargetProvider provider) noexcept {
+    test_interaction_target_provider=provider;
 }
 bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
     if (!test_resolved_palm_valid) return false;
@@ -111,11 +127,41 @@ int RunSpatialTest() {
     }
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     if (!g_image) return 1;
+    {
+        using MagneticClass = runtime::vr_magnetic_pickup_policy::VrMagneticPickupClass;
+        if (MagneticClassForItemSubtype(3)!=MagneticClass::consumable ||
+            MagneticClassForItemSubtype(0)!=MagneticClass::ordinary ||
+            MagneticClassForItemSubtype(4)!=MagneticClass::equipment ||
+            MagneticClassForItemSubtype(12)!=MagneticClass::unsupported ||
+            MagneticClassForItemSubtype(13)!=MagneticClass::unsupported)
+            return 45;
+        std::array<std::uint8_t,0x500> magnetic_body{};
+        std::array<std::uint8_t,0x300> magnetic_entity{};
+        Put(magnetic_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(magnetic_body.data(),kBodyActiveOffset,true);
+        Put(magnetic_body.data(),kBodyCollideOffset,true);
+        Put(magnetic_body.data(),kBodyUserDataOffset,static_cast<void*>(magnetic_entity.data()));
+        Put(magnetic_entity.data(),kEntityActiveOffset,true);
+        Put(magnetic_entity.data(),kEntityTypeOffset,kItemEntityType);
+        Put(magnetic_entity.data(),kItemSubtypeOffset,3);
+        runtime::vr_magnetic_pickup_policy::VrMagneticPickupProfile profile{};
+        if (!MagneticItemProfile(magnetic_body.data(),profile) || !profile.eligible ||
+            profile.range!=runtime::vr_magnetic_pickup_policy::kMaximumRange)
+            return 46;
+        Put(magnetic_entity.data(),kItemSubtypeOffset,12);
+        if (MagneticItemProfile(magnetic_body.data(),profile)) return 47;
+        Put(magnetic_entity.data(),kItemSubtypeOffset,3);
+        Put(magnetic_body.data(),kBodyCharacterOffset,true);
+        if (MagneticItemProfile(magnetic_body.data(),profile)) return 48;
+    }
     Jump(0xAC900,reinterpret_cast<void*>(&NativeEnter)); Jump(0xAA4C0,reinterpret_cast<void*>(&NativeLeave));
     Jump(0xABA90,reinterpret_cast<void*>(&NativeUpdate)); Jump(0xA9FD0,reinterpret_cast<void*>(&NativeStop));
     Jump(0xAAC80,reinterpret_cast<void*>(&NativeMoveEnter)); Jump(0xAAED0,reinterpret_cast<void*>(&NativeMoveLeave));
     Jump(0xAA690,reinterpret_cast<void*>(&NativeMoveUpdate)); Jump(0xAA030,reinterpret_cast<void*>(&NativeMoveStop));
     Jump(0xCCF00,reinterpret_cast<void*>(&JointCount)); Jump(0xCA120,reinterpret_cast<void*>(&BodyMatrix));
+    Jump(kGetBodyJoint,reinterpret_cast<void*>(&BodyJoint));
+    Jump(kHingeGetType,reinterpret_cast<void*>(&HingeType));
+    Jump(kSliderGetType,reinterpret_cast<void*>(&SliderType));
     Jump(0x19C360,reinterpret_cast<void*>(&MaxLinear)); Jump(0x19C380,reinterpret_cast<void*>(&MaxAngular));
     Jump(0x19C2A0,reinterpret_cast<void*>(&Linear)); Jump(0x19C2C0,reinterpret_cast<void*>(&Angular));
     Jump(0x19C590,reinterpret_cast<void*>(&Gravity));
@@ -190,6 +236,25 @@ int RunSpatialTest() {
     // Exercise acquisition after the exact-build installation gate has proved
     // the native collision field and all of its required consumers.
     g_player_collision_filter_ready.store(true);
+    // ChangeState publishes the committed state after Enter returns. The
+    // OpenVR edge may therefore be gone by the next service point; the pending
+    // transition must retain its originating hand while the button remains
+    // held instead of requiring just_pressed twice.
+    g_enabled.store(true); Put(player.data(),0x2BC,0);
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    test_frame.interact_source=runtime::VrHand::right;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedEnter(state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,6);
+    test_frame.input.state.interact.just_pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_held.load() || g_hold.hand!=runtime::VrHand::right) return 40;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load()) return 41;
+    test_leaves=0;
+
     begin();
     if (!g_held.load() || Read<float>(body.data(),0x42C)!=20 || Read<bool>(body.data(),0x3C8) ||
         test_palm_held[1]!=body.data()) return 2;
@@ -274,7 +339,7 @@ int RunSpatialTest() {
 
     // Black Plague's action-state 2 is a separate Move interaction. Rework
     // drives free Move bodies from the selected surface point to the tracked
-    // palm with force, while mechanisms retain their native joint path.
+    // palm with force.
     std::array<std::uint8_t,0x200> move_state{};
     states[2]=move_state.data();
     Put(move_state.data(),0x10,player.data()); Put(move_state.data(),0x54,body.data());
@@ -302,23 +367,81 @@ int RunSpatialTest() {
         Read<float>(body.data(),0x42C)!=3 || Read<float>(body.data(),0x430)!=4 ||
         test_palm_held[1]!=nullptr) return 34;
 
-    // Jointed Move bodies stay on the native mechanism implementation.
+    // A representative cGameLever with one recognized hinge consumes the
+    // shared Rework servo while native Move Enter/Leave retain lifecycle
+    // ownership (controllers, gravity and scripts).
+    std::array<std::uint8_t,0x300> mechanism_entity{},joint{};
+    Put(mechanism_entity.data(),kEntityActiveOffset,true);
+    Put(mechanism_entity.data(),kEntityTypeOffset,kLeverEntityType);
+    Put(body.data(),kBodyUserDataOffset,static_cast<void*>(mechanism_entity.data()));
+    Put(joint.data(),0,g_image+kPhysicsJointHingeNewtonVtable);
+    Put(g_image+kPhysicsJointHingeNewtonVtable,kJointTypeVtableSlot,g_image+kHingeGetType);
+    Put(joint.data(),kJointPinDirectionOffset,Vec{0,1,0});
+    Put(joint.data(),kJointPivotPointOffset,Vec{});
+    test_joint=joint.data();
     test_joints=1;
     hand.device_to_absolute.values[3]=0;
+    hand.device_to_absolute.values[11]=0;
+    Put(move_state.data(),0x38,Vec{0.1F,0,0});
+    Put(body.data(),0x450,Vec{}); Put(body.data(),0x460,Vec{});
     test_frame.input.state.interact.pressed=true;
     test_frame.input.state.interact.just_pressed=true;
     g_vr_selection_ready=true; g_vr_selection_player=player.data();
     HookedMoveEnter(move_state.data(),nullptr,nullptr);
     Put(player.data(),0x2BC,2);
     ServiceSpatialInteraction(player.data(),false);
-    if (g_move_held.load()) return 35;
+    if (!g_move_held.load() || g_move_hold.mode!=MoveHold::Mode::hinge ||
+        std::abs(g_move_hold.hinge_lightness-1.35F)>0.00001F ||
+        Read<float>(body.data(),0x42C)!=runtime::vr_mechanism_policy::kJointedMaximumLinearSpeed ||
+        std::abs(Read<float>(body.data(),0x430)-10.8F)>0.0001F) return 35;
+    hand.device_to_absolute.values[11]=0.05F;
     HookedMoveUpdate(move_state.data(),nullptr,0.016F);
-    if (test_native_move_updates!=1) return 36;
-    test_joints=0; Put(player.data(),0x2BC,0);
+    const auto mechanism_angular=Read<Vec>(body.data(),0x460);
+    if (test_native_move_updates!=0 || std::abs(mechanism_angular[1]+6.75F)>0.001F ||
+        std::abs(mechanism_angular[0])>0.001F || std::abs(mechanism_angular[2])>0.001F)
+        return 36;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3 ||
+        Read<float>(body.data(),0x430)!=4) return 49;
+
+    // Rework routes SwingDoor through the same Move hinge servo while the
+    // entity owns controller/gravity lifecycle and hinge limits. Black Plague
+    // consumes only the exact one-joint hinge form; a slider-shaped door must
+    // fail closed rather than being generalized from Lever behavior.
+    Put(mechanism_entity.data(),kEntityTypeOffset,kSwingDoorEntityType);
+    hand.device_to_absolute.values[11]=0;
+    Put(body.data(),0x450,Vec{}); Put(body.data(),0x460,Vec{});
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load() || g_move_hold.mode!=MoveHold::Mode::hinge ||
+        Read<float>(body.data(),0x42C)!=runtime::vr_mechanism_policy::kJointedMaximumLinearSpeed)
+        return 50;
+    hand.device_to_absolute.values[11]=0.05F;
+    HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+    const auto door_angular=Read<Vec>(body.data(),0x460);
+    if (test_native_move_updates!=0 || std::abs(door_angular[1]+6.75F)>0.001F ||
+        std::abs(door_angular[0])>0.001F || std::abs(door_angular[2])>0.001F)
+        return 51;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3 ||
+        Read<float>(body.data(),0x430)!=4) return 52;
+
+    Put(joint.data(),0,g_image+kPhysicsJointSliderNewtonVtable);
+    Put(g_image+kPhysicsJointSliderNewtonVtable,kJointTypeVtableSlot,g_image+kSliderGetType);
+    MoveHold rejected_door{};
+    if (BindRecognizedMechanism(body.data(),rejected_door)) return 53;
+    test_joint=nullptr; test_joints=0; Put(player.data(),0x2BC,0);
 
     const auto diagnostics=ConsumeSpatialDiagnostics();
     if (diagnostics.grabs_acquired<5 || diagnostics.grabs_released<5 ||
-        diagnostics.moves_acquired<1 || diagnostics.moves_released<1 ||
+        diagnostics.moves_acquired<2 || diagnostics.moves_released<2 ||
+        diagnostics.mechanism_acquired<2 || diagnostics.mechanism_updates<2 ||
         diagnostics.guarded_releases<3 || diagnostics.collision_restore_failures) return 22;
     // Failed teardown keeps the release path resident; the native tick drains it.
     begin(); std::string error;
@@ -349,15 +472,21 @@ int RunSpatialTest() {
     auto attached=Read<Matrix>(body.data(),0x34);
     Matrix left_palm=runtime::IdentityMatrix();
     left_palm.values[3]=2; left_palm.values[7]=3; left_palm.values[11]=4;
-    left_palm=runtime::rework_hand_profile::ApplyVisualLocalPose(left_palm);
+    left_palm=runtime::rework_hand_profile::ApplyAttachmentGripLocalPose(
+        left_palm,true,
+        runtime::vr_interaction_policy::GripOpenCentreOffset(kFlashlightGripRadius));
     const Matrix expected_flashlight=
         runtime::ComposeAttachmentSocketPose(left_palm,kFlashlightSocket);
     if (!MatrixNearlyEqual(attached,expected_flashlight)) return 16;
     Put(model.data(),4,static_cast<const char*>("Glowstick"));
     HookedToolMatrix(body.data(),nullptr,&native);
     attached=Read<Matrix>(body.data(),0x34);
-    const Matrix expected_glow=
-        runtime::ComposeAttachmentSocketPose(left_palm,kGlowstickSocket);
+    left_palm=runtime::IdentityMatrix();
+    left_palm.values[3]=2; left_palm.values[7]=3; left_palm.values[11]=4;
+    left_palm=runtime::rework_hand_profile::ApplyAttachmentGripLocalPose(
+        left_palm,true,
+        runtime::vr_interaction_policy::GripOpenCentreOffset(kGlowstickGripRadius));
+    const Matrix expected_glow=ReworkGlowstickPose(left_palm);
     if (!MatrixNearlyEqual(attached,expected_glow)) return 17;
     test_frame.interact_source=runtime::VrHand::left;
     hand.device_to_absolute={{1,0,0,7,0,1,0,8,0,0,1,9}};
@@ -365,9 +494,10 @@ int RunSpatialTest() {
     attached=Read<Matrix>(body.data(),0x34);
     Matrix right_palm=runtime::IdentityMatrix();
     right_palm.values[3]=7; right_palm.values[7]=8; right_palm.values[11]=9;
-    right_palm=runtime::rework_hand_profile::ApplyVisualLocalPose(right_palm);
-    const Matrix expected_right_glow=
-        runtime::ComposeAttachmentSocketPose(right_palm,kGlowstickSocket);
+    right_palm=runtime::rework_hand_profile::ApplyAttachmentGripLocalPose(
+        right_palm,false,
+        runtime::vr_interaction_policy::GripOpenCentreOffset(kGlowstickGripRadius));
+    const Matrix expected_right_glow=ReworkGlowstickPose(right_palm);
     if (!MatrixNearlyEqual(attached,expected_right_glow)) return 23;
     test_frame.interact_source=runtime::VrHand::right;
     left.pose_valid=false;

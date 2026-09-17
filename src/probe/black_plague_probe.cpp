@@ -305,7 +305,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     }
     if (frame_number%300==0) {
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
-        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu nudge_queries=%llu nudge_contacts=%llu nudges_applied=%llu contact_reach_m=0.180",
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu nudge_queries=%llu nudge_contacts=%llu nudges_applied=%llu interact_presses=%llu selection_refreshes=%llu selection_ray_batches=%llu selection_rays=%llu selection_candidates=%llu selection_discards=%llu selection_winner_mm=%llu selection_central_rays=%llu selection_auxiliary_rays=%llu grab_enters=%llu move_enters=%llu grab_pending=%llu move_pending=%llu magnetic_queries=%llu magnetic_candidates=%llu magnetic_visibility_rays=%llu magnetic_winners=%llu mechanism_acquired=%llu mechanism_updates=%llu mechanism_rejected=%llu contact_reach_m=0.180",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
             static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs),
             static_cast<unsigned long long>(spatial.grabs_acquired),static_cast<unsigned long long>(spatial.grabs_released),
@@ -314,7 +314,27 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long long>(spatial.contact_rays),
             static_cast<unsigned long long>(spatial.nudge_queries),
             static_cast<unsigned long long>(spatial.nudge_contacts),
-            static_cast<unsigned long long>(spatial.nudges_applied));
+            static_cast<unsigned long long>(spatial.nudges_applied),
+            static_cast<unsigned long long>(spatial.interact_presses),
+            static_cast<unsigned long long>(spatial.selection_refreshes),
+            static_cast<unsigned long long>(spatial.selection_ray_batches),
+            static_cast<unsigned long long>(spatial.selection_rays),
+            static_cast<unsigned long long>(spatial.selection_candidates),
+            static_cast<unsigned long long>(spatial.selection_discards),
+            static_cast<unsigned long long>(spatial.selection_winner_distance_millimetres),
+            static_cast<unsigned long long>(spatial.selection_central_ray),
+            static_cast<unsigned long long>(spatial.selection_auxiliary_ray),
+            static_cast<unsigned long long>(spatial.grab_enters),
+            static_cast<unsigned long long>(spatial.move_enters),
+            static_cast<unsigned long long>(spatial.grab_pending),
+            static_cast<unsigned long long>(spatial.move_pending),
+            static_cast<unsigned long long>(spatial.magnetic_queries),
+            static_cast<unsigned long long>(spatial.magnetic_candidates),
+            static_cast<unsigned long long>(spatial.magnetic_visibility_rays),
+            static_cast<unsigned long long>(spatial.magnetic_winners),
+            static_cast<unsigned long long>(spatial.mechanism_acquired),
+            static_cast<unsigned long long>(spatial.mechanism_updates),
+            static_cast<unsigned long long>(spatial.mechanism_rejected));
         const auto haptics=penumbra_vr::backends::black_plague::
             ConsumeNativeHapticDiagnostics();
         const auto haptic_attempts=[&](penumbra_vr::runtime::VrHapticEvent event) {
@@ -357,13 +377,17 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         else if (palms.source == penumbra_vr::backends::black_plague::
                 GameplayPalmResolverRequestSource::mutex) palm_source="mutex";
         penumbra_vr::probe::WriteLog(
-            "palm_collision enabled=%u source=%s samples=%llu published=%llu queries=%llu contacts=%llu constrained=%llu held_body_skips=%llu stale_tracking=%llu failures=%llu creates=%llu destroys=%llu world_replacements=%llu",
+            "palm_collision enabled=%u source=%s samples=%llu published=%llu queries=%llu contacts=%llu constrained=%llu tracking_reanchors=%llu recovery_anchors=%llu pullback_recoveries=%llu interaction_assist=%llu held_body_skips=%llu stale_tracking=%llu failures=%llu creates=%llu destroys=%llu world_replacements=%llu",
             palms.enabled ? 1U : 0U,palm_source,
             static_cast<unsigned long long>(palms.samples),
             static_cast<unsigned long long>(palms.published_poses),
             static_cast<unsigned long long>(palms.queries),
             static_cast<unsigned long long>(palms.contacts),
             static_cast<unsigned long long>(palms.constrained_samples),
+            static_cast<unsigned long long>(palms.tracking_reanchors),
+            static_cast<unsigned long long>(palms.recovery_anchors),
+            static_cast<unsigned long long>(palms.pullback_recoveries),
+            static_cast<unsigned long long>(palms.interaction_assist_samples),
             static_cast<unsigned long long>(palms.held_body_skips),
             static_cast<unsigned long long>(palms.stale_tracking_samples),
             static_cast<unsigned long long>(palms.query_failures),
@@ -433,6 +457,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             ConsumePhysicalBodyDisplacementTelemetry();
         const auto physical_validation = penumbra_vr::backends::black_plague::
             ConsumeBlackPlaguePhysicalValidationTelemetry();
+        const auto vr_footstep = penumbra_vr::backends::black_plague::
+            ConsumeBlackPlagueVrFootstepTelemetry();
         if (shadow.observed_ticks != 0) {
             const auto& s = shadow.latest;
             penumbra_vr::probe::WriteLog(
@@ -531,6 +557,22 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 room_scale_status.enabled ? 1U : 0U,
                 room_scale_camera.valid ? 1U : 0U);
         }
+        if (vr_footstep.cadence_events != 0 ||
+            vr_footstep.dispatch_attempts != 0 ||
+            vr_footstep.dispatch_successes != 0 ||
+            vr_footstep.dispatch_rejections != 0 ||
+            vr_footstep.abi_failures != 0 || vr_footstep.pending) {
+            penumbra_vr::probe::WriteLog(
+                "vr_footstep cadence=%llu attempts=%llu success=%llu rejected=%llu "
+                "abi_failures=%llu pending=%u tick=%llu",
+                static_cast<unsigned long long>(vr_footstep.cadence_events),
+                static_cast<unsigned long long>(vr_footstep.dispatch_attempts),
+                static_cast<unsigned long long>(vr_footstep.dispatch_successes),
+                static_cast<unsigned long long>(vr_footstep.dispatch_rejections),
+                static_cast<unsigned long long>(vr_footstep.abi_failures),
+                vr_footstep.pending ? 1U : 0U,
+                static_cast<unsigned long long>(vr_footstep.last_tick_sequence));
+        }
     }
     if (frame_number <= 10 || frame_number % 300 == 0 ||
         (room_scale_status.enabled && frame_number % 30 == 0) ||
@@ -542,6 +584,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         render_world.presentation_pose_acquisitions != 0 ||
         render_world.presentation_pose_reuses != 0 ||
         render_world.presentation_pose_stale_rejects != 0 ||
+        render_world.gameplay_overlay_failures != 0 ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
         float movement_yaw = 0.0F;
@@ -552,8 +595,11 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
+            "enhanced_visuals_requested=%u enhanced_visuals_available=%u "
             "stereo_frames=%lu menu_frames=%lu stereo_eye_passes=%lu stereo_lifetime_frames=%llu "
             "stereo_cpu_ms=%.3f eye_world_cpu_ms=%.3f hand_draw_cpu_ms=%.3f compositor_submit_cpu_ms=%.3f "
+            "gameplay_overlay_frames=%lu gameplay_overlay_failures=%lu deferred_submits=%lu "
+            "gameplay_overlay_cpu_ms=%.3f gameplay_overlay_error=%s "
             "stereo_camera_restored=%u "
             "submitted_frames=%lu submitted_pose_valid=%u "
             "tracked_head_frames=%lu tracking_anchor_captured=%u "
@@ -602,6 +648,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.eye_targets.width),
             static_cast<unsigned long>(render_world.eye_targets.height),
             render_world.eye_targets.persistent_frames,
+            render_world.eye_targets.enhanced_visuals_requested ? 1U : 0U,
+            render_world.eye_targets.enhanced_visuals_available ? 1U : 0U,
             static_cast<unsigned long>(render_world.stereo_frames),
             static_cast<unsigned long>(render_world.menu_frames),
             static_cast<unsigned long>(render_world.stereo_eye_passes),
@@ -610,6 +658,11 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<double>(render_world.eye_world_cpu_ns) / 1000000.0,
             static_cast<double>(render_world.hand_draw_cpu_ns) / 1000000.0,
             static_cast<double>(render_world.compositor_submit_cpu_ns) / 1000000.0,
+            static_cast<unsigned long>(render_world.gameplay_overlay_frames),
+            static_cast<unsigned long>(render_world.gameplay_overlay_failures),
+            static_cast<unsigned long>(render_world.deferred_compositor_submits),
+            static_cast<double>(render_world.gameplay_overlay_cpu_ns) / 1000000.0,
+            render_world.gameplay_overlay_error.data(),
             render_world.stereo_camera_restored ? 1U : 0U,
             static_cast<unsigned long>(render_world.compositor_submitted_frames),
             render_world.compositor_hmd_pose_valid ? 1U : 0U,

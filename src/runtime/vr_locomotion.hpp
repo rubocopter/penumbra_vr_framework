@@ -31,6 +31,23 @@ struct VrAcceptedBodyMotion {
     std::array<float, 3> accepted_displacement{};
 };
 
+// Rework 23c890f emits a VR footstep after the horizontal character body has
+// moved more than 0.85 m from the previous VR footstep anchor. Adapters feed
+// only collision-accepted VR displacement into this game-neutral accumulator;
+// native surface/material selection remains owned by the game backend.
+class VrFootstepCadence {
+public:
+    void Reset() noexcept;
+    [[nodiscard]] bool Advance(
+        const std::array<float, 3>& accepted_displacement) noexcept;
+
+private:
+    // Accepted body deltas arrive as floats. Keep the accumulated anchor in
+    // double precision so repeated small steps cannot cross the strict 0.85 m
+    // threshold solely through float summation error.
+    std::array<double, 2> horizontal_offset_{};
+};
+
 // Stateless phases of Rework Player.cpp's reconciliation sequence. The host
 // retains tracking history and owns when/how a physical request is executed.
 struct VrBodyReconciliationPlan {

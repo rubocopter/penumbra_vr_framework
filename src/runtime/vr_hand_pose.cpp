@@ -65,13 +65,21 @@ void SmoothVrHandCurls(std::array<float,5>& current,
 }
 
 VrHandArticulation ArticulateVrHand(
-    const std::array<float,5>& curls, bool /*left*/) noexcept {
+    const std::array<float,5>& curls, bool /*left*/, float hold_pose_weight) noexcept {
     VrHandArticulation result;
+    const float hold = UnitInput(hold_pose_weight);
     for (std::size_t finger=0;finger<curls.size();++finger) {
-        const float curl=std::isfinite(curls[finger]) ?
-            std::clamp(curls[finger],0.0F,1.0F) : 0.0F;
+        const float curl=std::max(UnitInput(curls[finger]), hold);
         auto& pose=result.fingers[finger];
-        if (finger==0) {
+        if (hold > 0.0F && finger==0) {
+            // Rework 23c890f switches attached tools to its dedicated hold
+            // rotations instead of merely driving the normal hand pose harder.
+            pose.flexion_degrees={28.0F*curl,34.0F*curl,20.0F*curl};
+        } else if (hold > 0.0F && finger==1) {
+            pose.flexion_degrees={52.0F*curl,66.0F*curl,38.0F*curl};
+        } else if (hold > 0.0F) {
+            pose.flexion_degrees={55.0F*curl,70.0F*curl,40.0F*curl};
+        } else if (finger==0) {
             // Rework 23c890f authored the imported rigid-skin thumb around its
             // diagonal bone axis at 22/28/16 degrees. Preserve Framework's
             // independent thumb curl while keeping that proven geometry.
