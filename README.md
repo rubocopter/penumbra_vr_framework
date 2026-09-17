@@ -111,7 +111,3 @@ Build success is not a headset-validation claim. Follow the project validation d
 Penumbra VR Framework is an unofficial community project. It is separate from [veryjos/penumbra_vr](https://github.com/veryjos/penumbra_vr), the original Overture-only mod, and from the Overture Rework derived from it.
 
 The Framework is licensed under **GNU GPL v3 or later**. See [COPYING](COPYING) and [THIRD_PARTY.md](THIRD_PARTY.md) for licensing, attribution and component provenance.
-
-## Support
-
-If you want to support continued development, see [Ko-fi](https://ko-fi.com/onitaku).
