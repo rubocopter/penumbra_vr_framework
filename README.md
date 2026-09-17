@@ -1,5 +1,13 @@
 # Penumbra VR Framework
 
+<p align="center">
+  <a href="COPYING"><img alt="License: GPL v3+" src="https://img.shields.io/badge/license-GPL%20v3%2B-blue?style=flat-square"></a>
+  <img alt="Status: pre-alpha" src="https://img.shields.io/badge/status-pre--alpha-orange?style=flat-square">
+</p>
+<p align="center">
+  <a href="https://ko-fi.com/onitaku"><img alt="Support me on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
+</p>
+
 **One VR framework for the Penumbra trilogy.**
 
 Penumbra VR Framework is an open-source PCVR project for **Penumbra: Overture, Black Plague and Requiem**. The project keeps game-neutral VR behavior in a shared runtime while each game retains the narrow source or exact-build integration it actually requires.
