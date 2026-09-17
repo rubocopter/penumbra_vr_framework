@@ -129,6 +129,14 @@ where the log failed to capture the Hybrid release-hold interval after the
 combined physical+latch state; blocked-stand/low-ceiling and deliberate
 wall/slide edges remain separate validation work. Tracking-world-yaw turn
 ownership remains separate.
+The current 2026-09-17 host candidate goes one step further for the reported
+wall-contact pullback/mini-jump symptom: horizontal rendering no longer advances
+with any raw HMD X/Z between native body ticks and instead presents only the
+reconciled head anchor, matching Rework's ownership more closely. This replaces
+the current-code use of the headset-tested rejected-direction prediction filter,
+so the new placement needs fresh headset evidence. The same candidate also adds
+the Rework-derived direct hand nudge path and the secondary-color GL-state fix;
+both are host-tested only.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.

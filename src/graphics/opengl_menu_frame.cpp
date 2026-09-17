@@ -17,6 +17,7 @@ using ActiveTexture = void(APIENTRY*)(GLenum);
 using UseProgram = void(APIENTRY*)(GLuint);
 constexpr GLenum kTexture0 = 0x84C0;
 constexpr GLenum kFramebufferBinding = 0x8CA6;
+constexpr GLenum kColorSum = 0x8458;
 
 template<class T> T Proc(const char* name) noexcept {
     const auto p = wglGetProcAddress(name);
@@ -89,6 +90,7 @@ struct State {
         glDisable(GL_SCISSOR_TEST); glDisable(GL_DEPTH_TEST); glDisable(GL_STENCIL_TEST);
         glDisable(GL_BLEND); glDisable(GL_ALPHA_TEST); glDisable(GL_LIGHTING);
         glDisable(GL_FOG); glDisable(GL_CULL_FACE); glDisable(GL_COLOR_LOGIC_OP);
+        glDisable(kColorSum);
         for (int plane = 0; plane < 6; ++plane) glDisable(GL_CLIP_PLANE0 + plane);
         glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
         glDepthMask(GL_TRUE);

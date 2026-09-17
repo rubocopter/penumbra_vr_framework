@@ -13,6 +13,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <intrin.h>
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cmath>
@@ -25,6 +26,42 @@ using Matrix = runtime::VrMatrix44;
 using Update = void(__thiscall*)(void*,float);
 using Transition = void(__thiscall*)(void*,void*);
 using Ray = void(__thiscall*)(void*,void*,const Vec*,const Vec*,bool,bool,bool,bool);
+using CheckShapeWorldCollision = bool(__thiscall*)(
+    void*, Vec*, void*, const Matrix*, void*, bool, bool, void*, bool, bool);
+using CreateSphereShape = void*(__thiscall*)(void*, const Vec*, Matrix*);
+using DestroyShape = void(__thiscall*)(void*, void*);
+
+struct NudgeCollidePoint {
+    Vec point{};
+    Vec normal{};
+    float depth = 0.0F;
+};
+struct LegacyNudgeCollideData {
+    std::uint32_t allocator_or_proxy = 0;
+    const NudgeCollidePoint* first = nullptr;
+    const NudgeCollidePoint* last = nullptr;
+    const NudgeCollidePoint* capacity_end = nullptr;
+    std::int32_t point_count = 0;
+};
+static_assert(sizeof(NudgeCollidePoint) == 0x1C);
+static_assert(sizeof(void*) == 4,
+    "The Black Plague exact-build adapter requires an x86 target");
+static_assert(sizeof(LegacyNudgeCollideData) == 0x14);
+
+constexpr std::uintptr_t kPhysicsWorldVtable = 0x291B80;
+constexpr std::uintptr_t kPhysicsBodyVtable = 0x292C08;
+constexpr std::uintptr_t kCollideShapeNewtonVtable = 0x292D40;
+constexpr std::uintptr_t kCharacterPhysicsBodyOffset = 0x23C;
+constexpr std::uintptr_t kCharacterPhysicsWorldOffset = 0x240;
+constexpr std::uintptr_t kCreateSphereShape = 0x18ACB0;
+constexpr std::uintptr_t kCreateSphereShapeVtableSlot = 0x34;
+constexpr std::uintptr_t kDestroyShape = 0xD4210;
+constexpr std::uintptr_t kCheckShapeWorldCollision = 0xD4830;
+constexpr std::uintptr_t kGetLinearVelocity = 0x19C6D0;
+constexpr std::uintptr_t kGetAngularVelocity = 0x19C720;
+constexpr std::uintptr_t kAddImpulseAtPosition = 0x19C3D0;
+constexpr float kNudgeRadius = 0.12F;
+constexpr float kNudgeMinimumHandSpeed = 0.03F;
 constexpr std::array<float,9> kToolModelToHandRotation{
     1,0,0,
     0,0,-1,
@@ -41,6 +78,7 @@ std::atomic<std::uint64_t> g_tools_attached{0},g_tools_native{0},g_invalid_tool_
 std::atomic<std::uint64_t> g_grabs_acquired{0},g_grabs_released{0},g_guarded_releases{0},g_collision_restore_failures{0};
 std::atomic<std::uint64_t> g_moves_acquired{0},g_moves_released{0};
 std::atomic<std::uint64_t> g_contact_rays{0};
+std::atomic<std::uint64_t> g_nudge_queries{0},g_nudge_contacts{0},g_nudges_applied{0};
 std::atomic<bool> g_enabled{false};
 std::atomic<unsigned> g_callbacks{0};
 struct CallbackScope {
@@ -84,6 +122,69 @@ struct MoveHold {
     float max_linear = 0, max_angular = 0;
 } g_move_hold;
 
+struct OwnedNudgeShape {
+    std::uint8_t* image = nullptr;
+    void* world = nullptr;
+    void* shape = nullptr;
+} g_nudge_shape;
+
+struct NudgeHit {
+    void* body = nullptr;
+    Vec contact_sum{};
+    std::uint32_t contact_count = 0;
+};
+
+bool Copy(const void* source, void* dest, std::size_t size) noexcept;
+
+class NudgeContactCallback final {
+public:
+    virtual void OnCollision(void* body, void* collide_data) {
+        LegacyNudgeCollideData data{};
+        if (!body || !Copy(collide_data,&data,sizeof(data)) ||
+            data.point_count < 0 || data.point_count > 32 ||
+            (data.point_count != 0 && (!data.first || !data.last))) {
+            valid = false;
+            return;
+        }
+        if (!data.point_count) return;
+        const auto first = reinterpret_cast<std::uintptr_t>(data.first);
+        const auto last = reinterpret_cast<std::uintptr_t>(data.last);
+        const auto required = static_cast<std::uintptr_t>(data.point_count) *
+            sizeof(NudgeCollidePoint);
+        if (last < first || last-first < required) {
+            valid = false;
+            return;
+        }
+        NudgeHit* hit = nullptr;
+        for (std::size_t i=0;i<hit_count;++i) {
+            if (hits[i].body==body) { hit=&hits[i]; break; }
+        }
+        if (!hit) {
+            if (hit_count>=hits.size()) return;
+            hit=&hits[hit_count++];
+            hit->body=body;
+        }
+        for (std::int32_t i=0;i<data.point_count;++i) {
+            NudgeCollidePoint point{};
+            if (!Copy(reinterpret_cast<const std::uint8_t*>(data.first)+
+                    static_cast<std::size_t>(i)*sizeof(point),&point,sizeof(point)) ||
+                !std::isfinite(point.point[0]) || !std::isfinite(point.point[1]) ||
+                !std::isfinite(point.point[2]) || !std::isfinite(point.depth) ||
+                point.depth<0) {
+                valid=false;
+                return;
+            }
+            for (std::size_t axis=0;axis<3;++axis)
+                hit->contact_sum[axis]+=point.point[axis];
+            ++hit->contact_count;
+        }
+    }
+
+    bool valid=true;
+    std::array<NudgeHit,32> hits{};
+    std::size_t hit_count=0;
+};
+
 [[nodiscard]] std::uint64_t ObservePlayerGeneration(void* player) noexcept {
     void* const previous = g_player_identity.exchange(player, std::memory_order_acq_rel);
     if (previous != player) {
@@ -126,7 +227,116 @@ template<class T> T Read(const void* object, std::uintptr_t offset) {
     if (object) static_cast<void>(Copy(static_cast<const std::uint8_t*>(object)+offset,&result,sizeof(result)));
     return result;
 }
-bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + 0x292C08; }
+bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + kPhysicsBodyVtable; }
+[[nodiscard]] bool FiniteVec(const Vec& value) noexcept {
+    return std::isfinite(value[0]) && std::isfinite(value[1]) && std::isfinite(value[2]);
+}
+[[nodiscard]] float Dot(const Vec& left,const Vec& right) noexcept {
+    return left[0]*right[0]+left[1]*right[1]+left[2]*right[2];
+}
+[[nodiscard]] Vec Cross(const Vec& left,const Vec& right) noexcept {
+    return {left[1]*right[2]-left[2]*right[1],
+        left[2]*right[0]-left[0]*right[2],
+        left[0]*right[1]-left[1]*right[0]};
+}
+[[nodiscard]] bool ValidNudgeWorld(void* world) noexcept {
+    if (!g_image || !world || Read<void*>(world,0)!=g_image+kPhysicsWorldVtable) return false;
+    auto* const vtable=Read<void**>(world,0);
+    return vtable && Read<void*>(vtable,kCreateSphereShapeVtableSlot)==g_image+kCreateSphereShape;
+}
+void DestroyNudgeShape() noexcept {
+    const auto owned=g_nudge_shape;
+    g_nudge_shape={};
+    if (!owned.shape || !owned.image || !owned.world || !ValidNudgeWorld(owned.world)) return;
+    __try {
+        reinterpret_cast<DestroyShape>(owned.image+kDestroyShape)(owned.world,owned.shape);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {}
+}
+[[nodiscard]] bool EnsureNudgeShape(void* world) noexcept {
+    if (!ValidNudgeWorld(world)) return false;
+    if (g_nudge_shape.shape && g_nudge_shape.image==g_image && g_nudge_shape.world==world) return true;
+    if (g_nudge_shape.shape) DestroyNudgeShape();
+    const Vec radius{kNudgeRadius,kNudgeRadius,kNudgeRadius};
+    void* shape=nullptr;
+    __try {
+        shape=reinterpret_cast<CreateSphereShape>(g_image+kCreateSphereShape)(world,&radius,nullptr);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { shape=nullptr; }
+    if (!shape || Read<void*>(shape,0)!=g_image+kCollideShapeNewtonVtable ||
+        Read<int>(shape,0x10)!=2 || Read<int>(shape,0x54)!=0 ||
+        Read<void*>(shape,0x58)!=world) {
+        if (shape) {
+            g_nudge_shape={g_image,world,shape};
+            DestroyNudgeShape();
+        }
+        return false;
+    }
+    g_nudge_shape={g_image,world,shape};
+    return true;
+}
+[[nodiscard]] bool BodyVelocity(void* body,std::uintptr_t target,Vec& value) noexcept {
+    value={};
+    __try {
+        value=reinterpret_cast<Vec(__thiscall*)(void*)>(g_image+target)(body);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return FiniteVec(value);
+}
+[[nodiscard]] bool SafeNudgeQuery(void* world,Vec* corrected,void* shape,
+    const Matrix* transform,void* skip_body,NudgeContactCallback* callback,
+    bool& collided) noexcept {
+    collided=false;
+    __try {
+        collided=reinterpret_cast<CheckShapeWorldCollision>(
+            g_image+kCheckShapeWorldCollision)(world,corrected,shape,transform,
+                skip_body,true,false,callback,false,false);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return true;
+}
+[[nodiscard]] bool SafeAddImpulseAtPosition(void* body,const Vec* impulse,
+    const Vec* position) noexcept {
+    __try {
+        reinterpret_cast<void(__thiscall*)(void*,const Vec*,const Vec*)>(
+            g_image+kAddImpulseAtPosition)(body,impulse,position);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return true;
+}
+[[nodiscard]] bool ComputeNudgeImpulse(const Vec& hand_center,const Vec& hand_velocity,
+    const Vec& contact,const Matrix& body_matrix,const Vec& linear_velocity,
+    const Vec& angular_velocity,float mass,int joint_count,Vec& impulse) noexcept {
+    impulse={};
+    if (!FiniteVec(hand_center) || !FiniteVec(hand_velocity) || !FiniteVec(contact) ||
+        !FiniteVec(linear_velocity) || !FiniteVec(angular_velocity) ||
+        !std::isfinite(mass) || mass<=0) return false;
+    const float speed=std::hypot(std::hypot(hand_velocity[0],hand_velocity[1]),
+        hand_velocity[2]);
+    if (!std::isfinite(speed) || speed<kNudgeMinimumHandSpeed) return false;
+    const Vec to_object{contact[0]-hand_center[0],contact[1]-hand_center[1],
+        contact[2]-hand_center[2]};
+    if (Dot(hand_velocity,to_object)<=0) return false;
+    const Vec push_direction{hand_velocity[0]/speed,hand_velocity[1]/speed,
+        hand_velocity[2]/speed};
+    float fraction=0.34F,max_speed=0.65F,max_delta=0.22F;
+    if (joint_count>0) {
+        fraction=0.80F; max_speed=1.35F; max_delta=0.36F;
+    } else if (mass>=12.0F) {
+        fraction=0.22F; max_speed=0.38F; max_delta=0.10F;
+    }
+    const float desired_speed=std::clamp(speed*fraction,0.0F,max_speed);
+    const Vec body_position{body_matrix.values[3],body_matrix.values[7],
+        body_matrix.values[11]};
+    if (!FiniteVec(body_position)) return false;
+    const Vec radius{contact[0]-body_position[0],contact[1]-body_position[1],
+        contact[2]-body_position[2]};
+    const Vec spin=Cross(angular_velocity,radius);
+    const Vec contact_velocity{linear_velocity[0]+spin[0],linear_velocity[1]+spin[1],
+        linear_velocity[2]+spin[2]};
+    const float current_speed=Dot(contact_velocity,push_direction);
+    if (!std::isfinite(current_speed)) return false;
+    const float delta=std::clamp(desired_speed-current_speed,0.0F,max_delta);
+    if (delta<=0.005F) return false;
+    impulse={push_direction[0]*delta*mass,push_direction[1]*delta*mass,
+        push_direction[2]*delta*mass};
+    return FiniteVec(impulse);
+}
 void SetFloat(void* body, std::uintptr_t target, float value) {
     reinterpret_cast<void(__thiscall*)(void*,float)>(g_image+target)(body,value);
 }
@@ -538,7 +748,8 @@ SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
         g_blocked_grabs.exchange(0),g_grabs_acquired.exchange(0),g_grabs_released.exchange(0),
         g_moves_acquired.exchange(0),g_moves_released.exchange(0),
         g_guarded_releases.exchange(0),g_collision_restore_failures.exchange(0),
-        g_contact_rays.exchange(0)};
+        g_contact_rays.exchange(0),g_nudge_queries.exchange(0),g_nudge_contacts.exchange(0),
+        g_nudges_applied.exchange(0)};
 }
 bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();
@@ -580,9 +791,15 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         error="HUD matrix call mismatch"; return false;
     }
     // Also validate each body-method slot used by direct native calls.
-    for (const auto& pair : {std::array<std::uintptr_t,2>{0x34,0x19C2A0}, {0x3C,0x19C2C0},
-        {0x54,0x19C360},{0x5C,0x19C380},{0x7C,0x19C9E0},{0xBC,0x19C590}})
-        if (Read<void*>(g_image+0x292C08,pair[0])!=g_image+pair[1]) { error="Physics body method mismatch"; return false; }
+    for (const auto& pair : {std::array<std::uintptr_t,2>{0x34,0x19C2A0}, {0x38,kGetLinearVelocity},
+        {0x3C,0x19C2C0},{0x40,kGetAngularVelocity},{0x54,0x19C360},{0x5C,0x19C380},
+        {0x7C,0x19C9E0},{0x88,kAddImpulseAtPosition},{0xBC,0x19C590}})
+        if (Read<void*>(g_image+kPhysicsBodyVtable,pair[0])!=g_image+pair[1]) { error="Physics body method mismatch"; return false; }
+    if (Read<void*>(g_image+kPhysicsWorldVtable,kCreateSphereShapeVtableSlot)!=
+            g_image+kCreateSphereShape) {
+        error="Physics world sphere-shape method mismatch";
+        return false;
+    }
     for (std::size_t i=0;i<slots.size();++i)
         if (Read<void*>(g_image,slots[i])!=g_image+targets[i]) { error="Spatial vtable mismatch"; return false; }
     constexpr std::array<std::uint8_t,8> matrix_entry{0x56,0x8B,0x74,0x24,0x08,0x57,0x8B,0xC1};
@@ -676,8 +893,67 @@ bool RemoveSpatialInteraction(std::string& error) noexcept {
     if (g_callbacks.load(std::memory_order_acquire)) {
         success=false;
         AppendRemovalError(error,"Spatial callbacks are still active");
+    } else {
+        DestroyNudgeShape();
     }
     return success;
+}
+
+void ServiceSpatialHandNudge(void* character_body) noexcept {
+    CallbackScope scope;
+    if (!g_enabled.load(std::memory_order_acquire) || !g_image || !character_body ||
+        NativeInputUiActive()) return;
+    const auto frame=ReadNativeControllerFrame();
+    if (!frame.focused) return;
+    void* const world=Read<void*>(character_body,kCharacterPhysicsWorldOffset);
+    void* const player_body=Read<void*>(character_body,kCharacterPhysicsBodyOffset);
+    if (!world || !player_body || !BodyMatches(player_body) || !EnsureNudgeShape(world)) return;
+
+    for (std::size_t hand_index=0;hand_index<2;++hand_index) {
+        const auto hand=hand_index==0 ? runtime::VrHand::left : runtime::VrHand::right;
+        if ((g_held.load(std::memory_order_acquire) && g_hold.hand==hand) ||
+            (g_move_held.load(std::memory_order_acquire) && g_move_hold.hand==hand)) continue;
+
+        Matrix raw{}; Vec velocity{},angular{};
+        if (!RawHandPose(hand,false,raw,velocity,angular) || !FiniteVec(velocity)) continue;
+        const float speed=std::hypot(std::hypot(velocity[0],velocity[1]),velocity[2]);
+        if (!std::isfinite(speed) || speed<kNudgeMinimumHandSpeed) continue;
+        const auto visible=runtime::rework_hand_profile::ApplyVisualLocalPose(raw);
+        const Vec center{visible.values[3],visible.values[7],visible.values[11]};
+        Matrix nudge=runtime::IdentityMatrix();
+        nudge.values[3]=center[0]; nudge.values[7]=center[1]; nudge.values[11]=center[2];
+        Vec corrected=center;
+        NudgeContactCallback callback;
+        bool collided=false;
+        if (!SafeNudgeQuery(world,&corrected,g_nudge_shape.shape,&nudge,
+                player_body,&callback,collided)) continue;
+        ++g_nudge_queries;
+        if (!collided || !callback.valid) continue;
+
+        for (std::size_t hit_index=0;hit_index<callback.hit_count;++hit_index) {
+            const auto& hit=callback.hits[hit_index];
+            if (!hit.body || !hit.contact_count || !BodyMatches(hit.body) ||
+                (g_held.load(std::memory_order_acquire) && g_hold.body==hit.body) ||
+                (g_move_held.load(std::memory_order_acquire) && g_move_hold.body==hit.body)) continue;
+            g_nudge_contacts.fetch_add(hit.contact_count,std::memory_order_relaxed);
+            const float mass=Read<float>(hit.body,0x434);
+            if (!std::isfinite(mass) || mass<=0) continue;
+            Vec contact{};
+            for (std::size_t axis=0;axis<3;++axis)
+                contact[axis]=hit.contact_sum[axis]/static_cast<float>(hit.contact_count);
+            if (!FiniteVec(contact)) continue;
+            const int joint_count=reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(hit.body);
+            Vec linear{},body_angular{};
+            if (!BodyVelocity(hit.body,kGetLinearVelocity,linear) ||
+                !BodyVelocity(hit.body,kGetAngularVelocity,body_angular)) continue;
+            const Matrix body_matrix=Read<Matrix>(hit.body,0x34);
+            Vec impulse{};
+            if (!ComputeNudgeImpulse(center,velocity,contact,body_matrix,linear,
+                    body_angular,mass,joint_count,impulse)) continue;
+            if (SafeAddImpulseAtPosition(hit.body,&impulse,&contact))
+                ++g_nudges_applied;
+        }
+    }
 }
 void RefreshVrSelectionBeforeInteract(void* player) noexcept {
     CallbackScope scope;

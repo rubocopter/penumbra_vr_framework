@@ -201,6 +201,16 @@ This order proves each boundary in isolation and prevents a game-adapter defect 
 
 Generic controller picking keeps the shared `0.18 m` bounded physical policy. Rework `23c890f` additionally lets acquisition follow the raw controller by at most `0.18 m` from a collision-stopped palm; Black Plague now ports that intent pose for selection and acquisition guards while visible hands and owned bodies remain on the resolved palm. Free-body grabbing uses shared palm-relative pose/release behavior, but jointed mechanisms remain backend-owned.
 
+Rework's direct physical hand nudge is now adapted behind the Black Plague
+physics boundary as a host-tested candidate. The backend reuses one `0.12 m`
+sphere per physics world, queries from the raw moving hand, ignores held/player
+bodies and applies the same contact-velocity-aware, bounded mass-scaled impulse
+shape where the target exposes equivalent evidence. Black Plague does not yet
+have pinned entity-kind, lock/breakable, body-radius or joint-axis/type access at
+this boundary, so those Rework refinements are not copied from Overture memory
+layouts or guessed. Mechanism state remains native until those interfaces are
+mapped.
+
 Long boards/bars following the palm rigidly are a limitation of the free-body pose model, not evidence that arbitrary springs should be added. Doors/levers/sliders need their native mechanism state mapped.
 
 Glowstick/flashlight placement is geometry-specific. Rework and Black Plague use different tool DAE resources, so Rework grip constants cannot be copied blindly. The shared attachment-socket composition is now Framework-owned while measured model grip points and model-to-hand orientation remain per-game profile data. Black Plague consumes that shared composition with its current measured flashlight/glowstick sockets; the hand geometry is now integrated, so definitive placement requires recalibrating those BP-specific sockets against it and validating hand/tool scale plus light direction in the headset.

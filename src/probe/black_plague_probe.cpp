@@ -305,13 +305,16 @@ void OnFrame(std::uint64_t frame_number) noexcept {
     }
     if (frame_number%300==0) {
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
-        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu contact_reach_m=0.180",
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu nudge_queries=%llu nudge_contacts=%llu nudges_applied=%llu contact_reach_m=0.180",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
             static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs),
             static_cast<unsigned long long>(spatial.grabs_acquired),static_cast<unsigned long long>(spatial.grabs_released),
             static_cast<unsigned long long>(spatial.moves_acquired),static_cast<unsigned long long>(spatial.moves_released),
             static_cast<unsigned long long>(spatial.guarded_releases),static_cast<unsigned long long>(spatial.collision_restore_failures),
-            static_cast<unsigned long long>(spatial.contact_rays));
+            static_cast<unsigned long long>(spatial.contact_rays),
+            static_cast<unsigned long long>(spatial.nudge_queries),
+            static_cast<unsigned long long>(spatial.nudge_contacts),
+            static_cast<unsigned long long>(spatial.nudges_applied));
         const auto palms=penumbra_vr::backends::black_plague::
             ConsumeGameplayPalmResolverTelemetry();
         const char* palm_source="disabled";

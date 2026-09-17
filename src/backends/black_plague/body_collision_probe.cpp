@@ -5,6 +5,7 @@
 #include "hand_contact_probe.hpp"
 #include "native_input_bridge.hpp"
 #include "rel32_call_hook.hpp"
+#include "spatial_interaction.hpp"
 #include "vr_locomotion.hpp"
 
 #define NOMINMAX
@@ -490,6 +491,7 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
         ServiceNoWriteHandContactQuery(g_image, character_body);
         ServicePalmResolverValidation(g_image, character_body);
         ServiceGameplayPalmResolver(g_image, character_body);
+        ServiceSpatialHandNudge(character_body);
         const Vec3 position_after = Read<Vec3>(
             character_body, kCharacterPositionOffset);
         if (Finite(position_after)) {

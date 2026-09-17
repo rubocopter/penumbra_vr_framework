@@ -13,6 +13,18 @@ bool test_ui=false;
 std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
 runtime::VrMatrix44 test_resolved_palm{};
+bool MatrixNearlyEqual(const Matrix& left,const Matrix& right,float epsilon=0.00001F) {
+    for (std::size_t i=0;i<left.values.size();++i) {
+        if (std::abs(left.values[i]-right.values[i])>=epsilon) return false;
+    }
+    return true;
+}
+bool VecNearlyEqual(const Vec& left,const Vec& right,float epsilon=0.00001F) {
+    for (std::size_t i=0;i<left.size();++i) {
+        if (std::abs(left[i]-right[i])>=epsilon) return false;
+    }
+    return true;
+}
 bool __cdecl NativeEqual(const void* value,const char* expected) {
     return std::strcmp(Read<const char*>(value,0),expected)==0;
 }
@@ -75,6 +87,26 @@ bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
     return true;
 }
 int RunSpatialTest() {
+    {
+        const Vec hand_center{0,0,0};
+        const Vec contact{0.1F,0,0};
+        const Vec stationary{};
+        const Matrix body_matrix=runtime::IdentityMatrix();
+        Vec impulse{};
+        if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
+                stationary,stationary,2.0F,0,impulse) ||
+            !VecNearlyEqual(impulse,{0.44F,0,0})) return 40;
+        if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
+                stationary,stationary,20.0F,0,impulse) ||
+            !VecNearlyEqual(impulse,{2.0F,0,0})) return 41;
+        if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
+                stationary,stationary,2.0F,1,impulse) ||
+            !VecNearlyEqual(impulse,{0.72F,0,0})) return 42;
+        if (ComputeNudgeImpulse(hand_center,{-1,0,0},contact,body_matrix,
+                stationary,stationary,2.0F,0,impulse)) return 43;
+        if (ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
+                {0.34F,0,0},stationary,2.0F,0,impulse)) return 44;
+    }
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     if (!g_image) return 1;
     Jump(0xAC900,reinterpret_cast<void*>(&NativeEnter)); Jump(0xAA4C0,reinterpret_cast<void*>(&NativeLeave));
@@ -102,8 +134,10 @@ int RunSpatialTest() {
     test_resolved_palm.values[3]=5; test_resolved_palm.values[7]=6;
     test_resolved_palm.values[11]=7; test_resolved_palm_valid=true;
     Matrix resolved_check; Vec resolved_velocity{},resolved_angular{};
+    const Matrix expected_visible_palm=
+        runtime::rework_hand_profile::ApplyVisualLocalPose(test_resolved_palm);
     if (!HandPose(runtime::VrHand::right,false,resolved_check,resolved_velocity,resolved_angular) ||
-        resolved_check.values[3]!=5 || resolved_check.values[7]!=6 || resolved_check.values[11]!=7)
+        resolved_check.values!=expected_visible_palm.values)
         return 30;
     if (!HandPose(runtime::VrHand::right,true,resolved_check,resolved_velocity,resolved_angular) ||
         resolved_check.values[3]!=0 || resolved_check.values[7]!=0 || resolved_check.values[11]!=0)
@@ -114,11 +148,21 @@ int RunSpatialTest() {
     test_resolved_palm=runtime::IdentityMatrix();
     test_resolved_palm.values[3]=-0.19F;
     Matrix interaction_check; Vec interaction_velocity{},interaction_angular{};
-    if (!InteractionHandPose(runtime::VrHand::right,interaction_check,
-            interaction_velocity,interaction_angular) ||
-        std::abs(interaction_check.values[3]+0.01F)>0.00001F ||
-        interaction_check.values[7]!=0 || interaction_check.values[11]!=0)
+    Matrix expected_interaction=runtime::IdentityMatrix();
+    expected_interaction.values[3]=-0.01F;
+    expected_interaction=
+        runtime::rework_hand_profile::ApplyVisualLocalPose(expected_interaction);
+    const bool interaction_pose_ok=InteractionHandPose(runtime::VrHand::right,
+        interaction_check,interaction_velocity,interaction_angular);
+    const bool interaction_matrix_ok=interaction_pose_ok &&
+        MatrixNearlyEqual(interaction_check,expected_interaction);
+    if (!interaction_matrix_ok) {
+        std::cerr<<"interaction pose actual xyz="<<interaction_check.values[3]<<','
+            <<interaction_check.values[7]<<','<<interaction_check.values[11]
+            <<" expected="<<expected_interaction.values[3]<<','
+            <<expected_interaction.values[7]<<','<<expected_interaction.values[11]<<'\n';
         return 37;
+    }
     test_resolved_palm_valid=false;
     auto begin=[&] {
         g_enabled.store(true); Put(player.data(),0x2BC,0);
@@ -301,19 +345,28 @@ int RunSpatialTest() {
     Matrix native=runtime::IdentityMatrix();
     HookedToolMatrix(body.data(),nullptr,&native);
     auto attached=Read<Matrix>(body.data(),0x34);
-    if (attached.values[3]!=2 || attached.values[7]!=3 ||
-        std::abs(attached.values[11]-4.016669F)>0.00001F || attached.values[9]!=1) return 16;
+    Matrix left_palm=runtime::IdentityMatrix();
+    left_palm.values[3]=2; left_palm.values[7]=3; left_palm.values[11]=4;
+    left_palm=runtime::rework_hand_profile::ApplyVisualLocalPose(left_palm);
+    const Matrix expected_flashlight=
+        runtime::ComposeAttachmentSocketPose(left_palm,kFlashlightSocket);
+    if (!MatrixNearlyEqual(attached,expected_flashlight)) return 16;
     Put(model.data(),4,static_cast<const char*>("Glowstick"));
     HookedToolMatrix(body.data(),nullptr,&native);
     attached=Read<Matrix>(body.data(),0x34);
-    if (std::abs(attached.values[7]-3.00504F)>0.00001F ||
-        std::abs(attached.values[11]-3.940278F)>0.00001F) return 17;
+    const Matrix expected_glow=
+        runtime::ComposeAttachmentSocketPose(left_palm,kGlowstickSocket);
+    if (!MatrixNearlyEqual(attached,expected_glow)) return 17;
     test_frame.interact_source=runtime::VrHand::left;
     hand.device_to_absolute={{1,0,0,7,0,1,0,8,0,0,1,9}};
     HookedToolMatrix(body.data(),nullptr,&native);
     attached=Read<Matrix>(body.data(),0x34);
-    if (attached.values[3]!=7 || std::abs(attached.values[7]-8.00504F)>0.00001F ||
-        std::abs(attached.values[11]-8.940278F)>0.00001F) return 23;
+    Matrix right_palm=runtime::IdentityMatrix();
+    right_palm.values[3]=7; right_palm.values[7]=8; right_palm.values[11]=9;
+    right_palm=runtime::rework_hand_profile::ApplyVisualLocalPose(right_palm);
+    const Matrix expected_right_glow=
+        runtime::ComposeAttachmentSocketPose(right_palm,kGlowstickSocket);
+    if (!MatrixNearlyEqual(attached,expected_right_glow)) return 23;
     test_frame.interact_source=runtime::VrHand::right;
     left.pose_valid=false;
     HookedToolMatrix(body.data(),nullptr,&native);

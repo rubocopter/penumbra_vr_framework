@@ -129,7 +129,6 @@ struct StereoProcessingResult {
 
 [[nodiscard]] bool ResolveBlackPlagueRoomScalePlacement(
     const runtime::VrMatrix44& game_head_view,
-    const runtime::VrMatrix34& tracking_anchor,
     const runtime::VrMatrix34& current_tracking_pose,
     const runtime::VrTrackingSampleIdentity& current_identity,
     const BlackPlagueRoomScaleCameraSample& room_scale,
@@ -162,19 +161,15 @@ struct StereoProcessingResult {
         return true;
     }
 
-    const float world_yaw = TrackingWorldYaw(game_head_view, tracking_anchor);
-    const float cosine = std::cos(world_yaw);
-    const float sine = std::sin(world_yaw);
-    render_prediction = {
-        cosine * tracking_delta_x + sine * tracking_delta_z,
-        0.0F,
-        -sine * tracking_delta_x + cosine * tracking_delta_z,
-    };
-    render_prediction = runtime::FilterPhysicalRenderPrediction(
-        render_prediction, room_scale.physical_reconciliation);
+    // Rework 23c890f presents the reconciled horizontal head anchor produced
+    // by the character-body tick. Its tracking-space transform deliberately
+    // zeros raw HMD X/Z, so an unvalidated render-rate lean is never shown and
+    // then snapped back when the next native collision solve rejects it. Black
+    // Plague previously extrapolated the HMD delta between ~60 Hz body ticks;
+    // PID 17760 correlated those prediction resets with the reported wall
+    // "mini jumps". Keep render_prediction zero and let the next reconciled
+    // body sample advance the horizontal anchor, matching Rework ownership.
     render_head_anchor = room_scale.predicted_head_anchor;
-    render_head_anchor[0] += render_prediction[0];
-    render_head_anchor[2] += render_prediction[2];
 
     // Rework's player-world pose is the reconciled feet anchor. Its shared
     // tracking transform supplies the physical HMD height continuously and
@@ -250,7 +245,7 @@ struct StereoProcessingResult {
     }
     if (!room_scale.enabled || !room_scale.valid) return true;
     bool placement_available = false;
-    if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, anchor, current,
+    if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, current,
             current_identity,
             room_scale, placement_available, world_translation, render_prediction,
             render_head_anchor, error)) {

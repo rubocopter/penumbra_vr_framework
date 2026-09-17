@@ -10,6 +10,32 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
 
 ## Repository checkpoint
 
+- Follow-up hand/interaction candidate (2026-09-17): the first PID 26940 GL
+  hardening was incomplete. The real-driver WGL regression now reproduces a
+  second fixed-function contamination path by entering the hand draw with a
+  VBO-backed `GL_SECONDARY_COLOR_ARRAY` plus `GL_COLOR_SUM`; before the fix the
+  sampled skin pixel became `220,255,154`. The shared presentation state now
+  disables color summation while drawing VR overlays and `rework_hand_mesh.cpp`
+  disables the inherited secondary-color client array, with the caller's state
+  restored afterwards. The hostile-state regression now passes. The same
+  working tree ports Rework `23c890f`'s direct physical hand nudge through the
+  existing Black Plague game-thread body owner: one reusable `0.12 m` sphere,
+  raw-hand velocity threshold `0.03 m/s`, exact-build shape query, held/player
+  exclusions and bounded mass-scaled `AddImpulseAtPosition` with telemetry.
+  Black Plague does not yet expose Rework's safe entity classifier, lock/
+  breakable metadata, body radius or joint-axis/type API at this boundary, so
+  the adaptation keeps only the evidence-backed mass/joint caps and leaves
+  native mechanism ownership intact. Render placement also now follows Rework
+  more strictly by presenting the last reconciled horizontal head anchor and
+  removing all between-body-tick raw X/Z prediction. This supersedes the
+  previously headset-exercised rejected-direction prediction filter; do not
+  transfer PID 25484's headset status to this new placement candidate. Release
+  builds, **35/35** CTest, generated-hand determinism, `git diff --check` and the
+  supported-image exact-build verifier pass. All three changes remain
+  **host-tested only** until one combined headset run checks hand texture and
+  articulation, physical nudge/palm contact, Grab/Move alignment, deliberate
+  wall/slide pressure, crouch/room-scale and normal stick stair stepping.
+
 - Startup regression checkpoint (2026-09-16): PID 28872 failed during
   `PenumbraVR_Initialize` immediately after the input/presentation profile log,
   before the first OpenGL hook-install result. Windows Error Reporting recorded

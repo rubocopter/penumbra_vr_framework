@@ -52,6 +52,7 @@ constexpr GLenum kArrayBuffer = 0x8892;
 constexpr GLenum kElementArrayBuffer = 0x8893;
 constexpr GLenum kArrayBufferBinding = 0x8894;
 constexpr GLenum kElementArrayBufferBinding = 0x8895;
+constexpr GLenum kSecondaryColorArray = 0x845E;
 using ClientActiveTexture = void(APIENTRY*)(GLenum);
 using BindBuffer = void(APIENTRY*)(GLenum, GLuint);
 
@@ -445,11 +446,12 @@ bool DrawReworkHandMesh(
     }
     if (client_api.active_texture) client_api.active_texture(kTexture0);
     // HPL commonly leaves VBO-backed client arrays enabled. In particular an
-    // inherited color array overrides glColor4f and makes our hand indices
-    // fetch unrelated per-vertex colors from the game's VBO, producing the
-    // black/rainbow triangular corruption seen in-headset. Our hand renderer
-    // owns only vertex + unit-0 UV arrays for this draw.
+    // inherited primary or secondary color arrays can override/add to glColor4f
+    // and make our hand indices fetch unrelated per-vertex colors from the
+    // game's VBO, producing the black/rainbow triangular corruption seen in
+    // headset. Our hand renderer owns only vertex + unit-0 UV arrays here.
     glDisableClientState(GL_COLOR_ARRAY);
+    glDisableClientState(kSecondaryColorArray);
     glDisableClientState(GL_NORMAL_ARRAY);
     glDisableClientState(GL_INDEX_ARRAY);
     glDisableClientState(GL_EDGE_FLAG_ARRAY);

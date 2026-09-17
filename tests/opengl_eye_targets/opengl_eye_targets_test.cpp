@@ -21,6 +21,8 @@ constexpr GLenum kGlArrayBuffer = 0x8892;
 constexpr GLenum kGlElementArrayBuffer = 0x8893;
 constexpr GLenum kGlArrayBufferBinding = 0x8894;
 constexpr GLenum kGlElementArrayBufferBinding = 0x8895;
+constexpr GLenum kGlSecondaryColorArray = 0x845E;
+constexpr GLenum kGlColorSum = 0x8458;
 
 template<class T>
 T GlProc(const char* core, const char* extension = nullptr) noexcept {
@@ -421,11 +423,15 @@ int main() {
             using BindBuffer = void(APIENTRY*)(GLenum, GLuint);
             using BufferData = void(APIENTRY*)(GLenum, std::ptrdiff_t, const void*, GLenum);
             using DeleteBuffers = void(APIENTRY*)(GLsizei, const GLuint*);
+            using SecondaryColorPointer = void(APIENTRY*)(GLint, GLenum, GLsizei, const void*);
             const auto gen_buffers=GlProc<GenBuffers>("glGenBuffers","glGenBuffersARB");
             const auto bind_buffer=GlProc<BindBuffer>("glBindBuffer","glBindBufferARB");
             const auto buffer_data=GlProc<BufferData>("glBufferData","glBufferDataARB");
             const auto delete_buffers=GlProc<DeleteBuffers>("glDeleteBuffers","glDeleteBuffersARB");
+            const auto secondary_color_pointer=GlProc<SecondaryColorPointer>(
+                "glSecondaryColorPointer","glSecondaryColorPointerEXT");
             const bool sentinel_vbos=gen_buffers && bind_buffer && buffer_data && delete_buffers;
+            const bool sentinel_secondary=sentinel_vbos && secondary_color_pointer;
             std::array<GLuint,2> sentinel_buffers{};
             if (sentinel_vbos) {
                 gen_buffers(static_cast<GLsizei>(sentinel_buffers.size()),sentinel_buffers.data());
@@ -440,6 +446,11 @@ int main() {
                 buffer_data(kGlArrayBuffer,static_cast<std::ptrdiff_t>(sentinel_data.size()),sentinel_data.data(),0x88E4);
                 glColorPointer(4,GL_UNSIGNED_BYTE,0,nullptr);
                 glEnableClientState(GL_COLOR_ARRAY);
+                if (sentinel_secondary) {
+                    secondary_color_pointer(3,GL_UNSIGNED_BYTE,4,nullptr);
+                    glEnableClientState(kGlSecondaryColorArray);
+                    glEnable(kGlColorSum);
+                }
                 bind_buffer(kGlElementArrayBuffer,sentinel_buffers[1]);
                 const std::array<std::uint8_t,16> element_data{};
                 buffer_data(kGlElementArrayBuffer,static_cast<std::ptrdiff_t>(element_data.size()),element_data.data(),0x88E4);
@@ -454,7 +465,14 @@ int main() {
                 if (array_binding!=static_cast<GLint>(sentinel_buffers[0]) ||
                     element_binding!=static_cast<GLint>(sentinel_buffers[1])) return 42;
                 if (glIsEnabled(GL_COLOR_ARRAY)!=GL_TRUE) return 43;
+                if (sentinel_secondary &&
+                    (glIsEnabled(kGlSecondaryColorArray)!=GL_TRUE ||
+                     glIsEnabled(kGlColorSum)!=GL_TRUE)) return 46;
                 glDisableClientState(GL_COLOR_ARRAY);
+                if (sentinel_secondary) {
+                    glDisableClientState(kGlSecondaryColorArray);
+                    glDisable(kGlColorSum);
+                }
                 bind_buffer(kGlArrayBuffer,0);
                 bind_buffer(kGlElementArrayBuffer,0);
                 delete_buffers(static_cast<GLsizei>(sentinel_buffers.size()),sentinel_buffers.data());

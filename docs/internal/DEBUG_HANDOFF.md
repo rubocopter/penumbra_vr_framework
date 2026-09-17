@@ -2,7 +2,36 @@
 
 This file prevents repeated symptom-level fixes from replacing evidence-backed investigation. Read it before revisiting any of these issues.
 
-## Current headset/offline checkpoint (2026-09-16)
+## Current headset/offline checkpoint (2026-09-17)
+
+The current working tree contains a host-reproduced follow-up to the PID 26940
+hand corruption. Disabling only `GL_COLOR_ARRAY` was insufficient: the real WGL
+driver reproduces the same class of corruption when a host VBO-backed
+`GL_SECONDARY_COLOR_ARRAY` is enabled together with `GL_COLOR_SUM`. Before the
+fix the reference hand pixel changed from the expected skin ordering to
+`220,255,154` with no GL error. VR overlay setup now disables `GL_COLOR_SUM` and
+the hand mesh draw disables the secondary-color client array; push/pop state
+still restores both host states after the draw. Keep the existing VBO, primary
+color-array and pixel-unpack hardening as well.
+
+The same candidate removes Black Plague's remaining render-rate horizontal HMD
+prediction and presents only the reconciled head anchor produced by the native
+body tick. This is closer to Rework `23c890f`, whose tracking transform does not
+present raw unvalidated X/Z. It is a new **host-tested** comfort candidate and
+therefore supersedes, for current-code status only, the earlier
+rejected-direction prediction filter that PID 25484 exercised in the headset.
+PID 25484 remains valid evidence for crouch/Y/direct locomotion and for that
+historical filter, but not for the new zero-horizontal-prediction placement.
+
+Direct physical hand-to-object nudge is also host-tested in this candidate. It
+ports Rework's `0.12 m` sphere, `0.03 m/s` raw-hand threshold, contact-velocity
+compensation and bounded mass-scaled impulse through Black Plague's existing
+game-thread owner and exact `CheckShapeWorldCollision`/body methods. The target
+does not yet have evidence-backed access to Rework's object/item/swing-door
+classifier, padlock/breakable flags, body radius or slider/hinge axis, so those
+parts are intentionally not guessed. Telemetry exposes `nudge_queries`,
+`nudge_contacts` and `nudges_applied`. Treat contact feel, drawers/doors and
+performance as headset gates.
 
 PID 26940 is the newest regression evidence; PID 25484 remains the newest
 positive room-scale/crouch baseline. The PID 26940 headset frame showed the

@@ -8,6 +8,7 @@ struct SpatialDiagnostics {
     std::uint64_t moves_acquired=0, moves_released=0;
     std::uint64_t guarded_releases=0, collision_restore_failures=0;
     std::uint64_t contact_rays=0;
+    std::uint64_t nudge_queries=0, nudge_contacts=0, nudges_applied=0;
 };
 [[nodiscard]] SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept;
 [[nodiscard]] bool InstallSpatialInteraction(std::string& error) noexcept;
@@ -15,4 +16,6 @@ struct SpatialDiagnostics {
 // Called only by ButtonHandler on the native game thread, never by IPC.
 void RefreshVrSelectionBeforeInteract(void* player) noexcept;
 void ServiceSpatialInteraction(void* player, bool ui) noexcept;
+// Runs from the native character-body update owner on the game thread.
+void ServiceSpatialHandNudge(void* character_body) noexcept;
 }

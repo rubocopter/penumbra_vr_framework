@@ -92,6 +92,8 @@ std::uint64_t NativePlayerGeneration() noexcept {
     return 1;
 }
 
+void ServiceSpatialHandNudge(void*) noexcept {}
+
 int RunBodyCollisionProbeTest() {
     auto* image = static_cast<std::uint8_t*>(VirtualAlloc(
         nullptr, 0x300000, MEM_COMMIT | MEM_RESERVE,

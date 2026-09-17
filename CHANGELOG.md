@@ -1,5 +1,20 @@
 # Changelog
 
+- 2026-09-17: Reproduced and hardened the remaining Black Plague Rework-hand
+  color corruption. The existing hostile-state WGL test now enables a
+  VBO-backed `GL_SECONDARY_COLOR_ARRAY` plus `GL_COLOR_SUM`; before the fix the
+  hand pixel changed to `220,255,154` despite the primary color-array guard.
+  VR overlay setup now disables color summation and the hand renderer disables
+  inherited secondary-color client data while restoring the host state after
+  drawing. The same host-tested batch ports Rework's direct physical hand nudge
+  through the existing Black Plague body-update owner (`0.12 m` sphere,
+  `0.03 m/s` threshold, bounded contact-velocity-aware mass impulse and nudge
+  telemetry) and removes Black Plague's between-tick raw X/Z render prediction
+  so horizontal presentation follows the reconciled anchor like Rework. Release
+  build, 35/35 CTest, generated-hand determinism, `git diff --check` and the
+  supported-image verifier pass. These changes still require one combined
+  headset validation before promotion.
+
 - 2026-09-16: Hardened Black Plague VR startup after PID 28872 crashed during
   probe initialization before any hook-install result was logged. Windows Error
   Reporting recorded `0xc0000005` faults in the game's SDL 1.2 DLL and a BEX in
