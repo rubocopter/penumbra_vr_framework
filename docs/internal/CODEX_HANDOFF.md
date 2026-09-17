@@ -1,12 +1,14 @@
 # Codex handoff — Penumbra VR Framework
 
-This is the operational checkpoint for future coding sessions. Read `AGENTS.md` first. Read `DEBUG_HANDOFF.md` before changing any known regression boundary, and use `docs/REWORK_PORTING_PLAN.md` for the extraction contract.
+This is the operational checkpoint for future coding sessions. Read `AGENTS.md` first. Read `DEBUG_HANDOFF.md` before changing any known regression boundary, use `docs/REWORK_PORTING_PLAN.md` for the extraction contract, and use `docs/TRILOGY_PARITY_PLAN.md` as the authoritative cross-game capability ledger and framework-readiness gate.
 
 ## Source-of-truth rule
 
 `rubocopter/penumbra_vr_rework` revision `23c890f` is the proven behavioral reference for Overture VR. Do not invent a replacement for demonstrated Rework behavior before locating the original implementation and tests, separating game-neutral policy from game/HPL mechanism, and documenting why direct adaptation would be unsafe or impossible.
 
 The framework is not a one-way Overture port. If another backend demonstrates a stronger game-neutral implementation, preserve the better behavior and move it toward shared runtime policy while keeping per-game layouts, rigs and native state behind adapters/profiles. Black Plague finger articulation is currently the clearest example.
+
+Do not equate extraction with a completed port. A Rework capability remains open for Black Plague until the backend consumes the shared behavior, implements a documented target-specific equivalent, or records an evidence-backed not-applicable classification. Requiem gameplay is sequenced after the Black Plague framework-readiness gate in `docs/TRILOGY_PARITY_PLAN.md`; non-invasive exact-build reconnaissance may proceed earlier without displacing the active Black Plague parity work.
 
 ## Repository checkpoint
 
@@ -18,7 +20,7 @@ The framework is not a one-way Overture port. If another backend demonstrates a 
   disables color summation while drawing VR overlays and `rework_hand_mesh.cpp`
   disables the inherited secondary-color client array, with the caller's state
   restored afterwards. The hostile-state regression now passes. The same
-  working tree ports Rework `23c890f`'s direct physical hand nudge through the
+  candidate ports Rework `23c890f`'s direct physical hand nudge through the
   existing Black Plague game-thread body owner: one reusable `0.12 m` sphere,
   raw-hand velocity threshold `0.03 m/s`, exact-build shape query, held/player
   exclusions and bounded mass-scaled `AddImpulseAtPosition` with telemetry.
@@ -824,10 +826,28 @@ gameplay path remains host-tested pending a clean headset run.
 Rework's semantic haptic profiles are also Framework-owned in
 `vr_haptics.hpp`, including strength clamping/scaling and per-event cooldowns.
 Overture consumes them through its existing `cVRHaptics` API. Black Plague's
-existing pickup/drop feedback now uses the same proven profiles while its
-backend continues to own session availability and actual OpenVR submission.
-This is host-testable policy reuse only; it does not complete Black Plague's
-comfort/haptics milestone or constitute headset validation.
+pickup/drop feedback uses the same proven profiles; tracked UI selection now
+uses `UISelect` on the resolved pointer hand, and successful direct hand nudges
+use `Interaction` with bounded contact strength. The backend keeps actual
+OpenVR submission target-specific and rejects unfocused, disconnected or
+invalid-pose requests while applying the shared per-event cooldown. Rework's
+`LightToggle` feedback is intentionally not wired yet: the reference sends it
+to the off hand after the actual flashlight/glowstick state changes, while the
+current Black Plague query bridge does not yet expose an evidence-backed
+post-toggle success boundary. Melee/damage remain similarly unmapped. This is
+host-tested policy reuse only; it does not complete the comfort/haptics
+milestone or constitute headset validation.
+
+Black Plague now also records per-event haptic attempts, successful OpenVR
+submissions, policy rejections, backend submission failures and left/right
+submission counts. `Start-BlackPlaguePalmCollisionValidation.ps1` consumes this
+telemetry together with spatial diagnostics. The same headset run can therefore
+collect evidence for tracked UI select, pickup/drop, direct hand nudge,
+`Grab=6`, opportunistic `Move=2`, flashlight/glowstick attachment and the full
+tracked-crouch entry/exit cycle while preserving the required room-scale/palm
+composition. `Grab=6`, crouch and palm/room-scale telemetry are hard gates;
+Move/tool/low-ceiling and individual haptic events are explicit optional
+coverage so an unavailable scene object cannot produce a false regression.
 
 Stable panel anchoring and transient overlay ownership handoff are now also
 Framework-owned in `vr_panel_policy.hpp`. Black Plague's tracked menu consumes
@@ -889,9 +909,19 @@ remaining headset/blocked-stand evidence; inventory, notes, HUD and subtitles
 need native menu/draw-state boundaries. Do not manufacture another generic
 abstraction until one of those boundaries is demonstrated.
 
+A Framework-native radial/quick-access menu is now explicitly planned, but it
+is sequenced after the current headset/body/palm validation and the immediate
+interaction/presentation boundaries above. Do not start it while those gates
+remain the active milestone. When reached, implement one optional shared VR UX
+policy for hold/open/close, analog sector selection, handedness, cancellation
+and selection haptics; keep product-specific actions/items and activation behind
+narrow Overture/Black Plague/Requiem adapters, and preserve the original menu/
+inventory route as a fallback. The authoritative ordering is recorded in
+`docs/TRILOGY_PARITY_PLAN.md` and `ROADMAP.md`.
+
 ## Requiem
 
-Requiem remains a future exact-build binary backend. Do not assume Black Plague RVAs, layouts, calling conventions or lifecycle boundaries transfer without evidence.
+Requiem remains a future exact-build binary backend. Gameplay implementation becomes the active milestone after Black Plague closes the framework-readiness gate in `docs/TRILOGY_PARITY_PLAN.md`. Exact-build reconnaissance may proceed earlier, but do not assume Black Plague RVAs, layouts, calling conventions or lifecycle boundaries transfer without evidence. Requiem is the third-backend reuse proof: consume the validated shared capability families through narrow target adapters/profiles and repeat target-specific live/headset validation.
 
 ## VR settings/menu extraction
 
@@ -903,11 +933,14 @@ snap/smooth dependent visibility and crouch-depth label behavior.
 
 Black Plague now has an explicit backend capability map. It marks only the
 currently applied editor settings as available: handedness, turn mode and its
-snap/smooth/dead-zone controls, move speed/dead-zone, UI distance/scale and
-render scale. Monitor mirror remains a separate setting.
-Play mode, player height, height offset, crouch settings, Enhanced visuals,
-HRTF and subtitle scale are persisted but are not Black Plague functional
-controls yet.
+snap/smooth/dead-zone controls, move speed/dead-zone, `PlayMode`,
+`PlayerHeight`, `HeightOffset`, `CrouchMode`, `PhysicalCrouchDepth`, UI
+distance/scale and render scale. `PlayMode`/`PlayerHeight` are backed by the
+tracked presentation path through shared `VrPlayModePolicy`; exposing them in
+the offline editor is therefore host-tested runtime plumbing, not a claim that
+seated-mode comfort has been headset-validated. Monitor mirror remains a
+separate setting. Enhanced visuals, HRTF and subtitle scale remain persisted
+but are not Black Plague functional controls yet.
 
 `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague` now provides an
 offline configuration surface for those backend-consumed controls plus monitor
@@ -953,15 +986,15 @@ Keep states distinct:
 
 Compilation and CTest do not imply live or headset validation.
 
-Current root validation count is 34 CTest tests in the full configured suite.
-The hosted SDK-less CI executes 33 of them with the real-driver
-`opengl_eye_targets` test excluded.
+Current root validation count is 35 CTest tests in the full configured suite.
+The hosted SDK-less CI still excludes the real-driver `opengl_eye_targets` test;
+the local SDK-less configuration below is broader than that hosted gate.
 Overture retains its 289 historical `VRTrackingTest` checks plus
 shader/visual/texture/LAA gates, now also exercised by the dedicated
 `Overture Release regression` CI job. The latest complete local offline result
-on 2026-09-16 passed all **34/34** Release root CTest tests, including the
-real-driver `opengl_eye_targets` test, and the separate SDK-less Release build
-passed its CI-equivalent **33/33** suite. Metadata validation passed with 6
+on 2026-09-17 passed all **35/35** Release root CTest tests, including the
+real-driver `opengl_eye_targets` test, and the SDK-less Release configuration
+also passed **35/35** in this local environment. Metadata validation passed with 6
 catalogue entries, 2 exact-build manifests, 42 actions, 6 action sets and 8
 controller bindings; the initialized Black Plague exact-image verifier also
 passed the Grab/Move and palm-query boundaries. `Build-OvertureProduct.ps1

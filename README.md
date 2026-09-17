@@ -12,7 +12,7 @@ Penumbra VR Framework is an open-source PCVR project for **Penumbra: Overture, B
 | --- | --- | --- |
 | **Penumbra: Overture** | Framework-hosted; initial functional headset pass completed | Source-level HPL1 product owned by this repository |
 | **Penumbra: Black Plague** | Active development and validation | Exact-build x86 binary backend/probe |
-| **Penumbra: Requiem** | Planned | Future exact-build binary backend |
+| **Penumbra: Requiem** | Gameplay deferred; exact-build identity/reconnaissance exists | Future exact-build binary backend |
 
 ### Overture
 
@@ -20,11 +20,11 @@ The Framework builds and packages its own `Penumbra_vr.exe`. The earlier [Penumb
 
 ### Black Plague
 
-Black Plague already has native stereo, rotational and positional HMD tracking, OpenVR controller input, tracked menus, host-tested Rework hand meshes with the richer shared five-finger articulation, native body/collision integration, direct VR locomotion and Rework-derived physical crouch through the exact supported build.
+Black Plague already has native stereo, rotational and positional HMD tracking, OpenVR controller input, tracked menus, native body/collision integration, direct VR locomotion, tracked physical crouch and the Rework-derived palm/grab interaction stack on the exact research build. PID 25484 (2026-09-16) remains positive headset evidence for crouch/Y, direct locomotion and the then-current short-range room-scale comfort filter.
 
-The current body path uses a **single same-tick tracking/body transaction**. PID 25484 (2026-09-16) added positive headset evidence for the current crouch/Y and short-range room-scale path: 12,858 presentation frames with zero stereo failures, three physical crouch entry/exit cycles, final native standing state, `0.961 m` tracked-Y range and 650 accepted direct-locomotion samples. The user reported that the session felt good.
+The **current** headset candidate is newer than PID 25484 and therefore remains host-tested. After PID 26940 exposed black/rainbow imported hands and physical-only wall-contact mini-jumps, the renderer now isolates the additional fixed-function GL state, the backend suppresses only native step climbing on physical-HMD-only ticks, and horizontal presentation now uses the latest reconciled body anchor without raw between-tick X/Z prediction. The same candidate adds Rework-derived direct hand nudge plus shared haptic policy for pickup/drop, tracked UI select and successful hand contact, with per-event telemetry. Release and SDK-less Release both pass 35/35 CTest, metadata validation passes, and the initialized Black Plague exact-image verifier passes.
 
-The remaining gates are narrower: capture the Hybrid release-hold interval that PID 25484 missed, exercise blocked-stand/low-ceiling behavior, complete deliberate wall/slide edge checks, validate constrained `0.5 m/s` Push/Move locomotion, cleanly validate the already-integrated palm/interaction path, then continue with tracking-world-yaw/bob and mirror/focus work. PID 28412 live-tested the no-write native palm query, and PID 8644 live-tested the corrected backend-owned palm-shape lifecycle plus the isolated Rework-derived resolver. Exact-image evidence pins Black Plague's independent character and `skip_body` filters. The gameplay path publishes the held body per hand and keeps visible/held palms collision-resolved while acquisition follows Rework `23c890f`: target intent may follow the real controller by at most `0.18 m` from the stopped palm. Aim remains raw. `Grab=6` keeps the rigid palm-relative free-body path; free bodies entering `Move=2` preserve the picked contact point and follow the resolved palm through Rework-derived physical force, while jointed/mechanism bodies remain native. The Rework right/left DAE rigs and diffuse material are now consumed by the Framework renderer with CPU skinning and the existing `runtime::ArticulateVrHand` output; this presentation path is host-tested only until the same clean headset run checks scale, orientation, finger motion and frame pacing. PID 23000 was inconclusive because of severe frame-rate loss plus a right-controller dropout. PID 4720 later exposed a validation-helper composition error rather than evidence of a body regression: palm collision was enabled while physical displacement, room-scale and positional translation were all disabled. The palm helper now activates the known-good room-scale/crouch stack as part of the same run and refuses promotion unless that composition appears in telemetry.
+The next evidence gate is one clean combined headset run covering stable textured/finger-articulated hands, palm contact and direct nudge, `Grab=6` plus opportunistic free `Move=2`, gentle physical wall pressure without vertical bounce, normal stick stair/ledge stepping, short room-scale/crouch checks and exercised haptic submissions. Separate open parity work then remains for Hybrid release-hold/blocked stand, constrained Push/Move locomotion, magnetic item acquisition, native jointed mechanisms, final tool/light geometry, remaining UI/transitions, audio/visual parity and representative chapter validation.
 
 ### Requiem
 
@@ -35,6 +35,7 @@ Requiem will reuse validated game-neutral policy while repeating exact-build res
 ### Start here
 
 - [Roadmap](ROADMAP.md) — current feature and validation state plus remaining milestones.
+- [Trilogy parity plan](docs/TRILOGY_PARITY_PLAN.md) — authoritative Overture → Black Plague → Requiem capability ledger and framework-readiness gate.
 - [Architecture](ARCHITECTURE.md) — ownership boundaries and integration model.
 - [Design decisions and invariants](docs/DESIGN_DECISIONS.md) — boundaries that should not be reopened without contradictory evidence.
 - [Headset validation checklist](docs/VR_HEADSET_TEST_CHECKLIST.md) — current Black Plague live/headset gates.
@@ -46,15 +47,14 @@ Requiem will reuse validated game-neutral policy while repeating exact-build res
 - [Rework porting plan](docs/REWORK_PORTING_PLAN.md)
 - [Black Plague probe notes](docs/BLACK_PLAGUE_PROBE.md)
 - [Black Plague spatial notes](docs/BLACK_PLAGUE_SPATIAL_NOTES.md)
-- [Historical Astra High audit](docs/audits/ASTRA_HIGH_AUDIT.md)
 
 ## Next steps
 
-1. Close the remaining focused Black Plague posture edges: Hybrid release-hold capture and blocked-stand/low-ceiling recovery.
-2. Headset-validate the host-tested gameplay palm path and the distinct `Grab=6` / free-body `Move=2` routes after a clean reboot, including representative small props, long wooden boards/bars, both hands, wall/slide contact and one native jointed mechanism; compare palm-collision on/off performance.
-3. Validate the remaining constrained locomotion, deliberate wall/slide, recenter/tracking-loss and yaw/bob comfort gates without reopening the body owner that already has headset evidence.
-4. Continue interaction work through native mechanism state, tool/light geometry, UI/HUD coverage and representative chapter testing.
-5. Start Requiem exact-build research only after the Black Plague backend has a stable playable-alpha boundary.
+1. Close the current combined Black Plague body/palm headset candidate and the remaining focused posture/comfort edges without reopening already proven owners.
+2. Close interaction parity: magnetic inventory-item acquisition, representative native jointed mechanisms, long-body behavior and definitive tool/light geometry.
+3. Close presentation/output parity: inventory/notes/HUD/subtitles, transition comfort, applicable haptics, spatial audio and compatible enhanced-visual behavior.
+4. Run representative chapter-level Black Plague validation and close the framework-readiness gate in the [trilogy parity plan](docs/TRILOGY_PARITY_PLAN.md).
+5. Make Requiem the third-backend reuse proof: repeat exact-build boundary research, consume the same shared capability families, and validate them independently.
 
 ## Design principles
 

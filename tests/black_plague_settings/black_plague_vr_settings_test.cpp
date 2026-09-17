@@ -27,6 +27,8 @@ using penumbra_vr::runtime::VrTurnMode;
     enable(VrSettingId::turn_dead_zone);
     enable(VrSettingId::move_speed);
     enable(VrSettingId::move_dead_zone);
+    enable(VrSettingId::play_mode);
+    enable(VrSettingId::player_height);
     enable(VrSettingId::height_offset);
     enable(VrSettingId::crouch_mode);
     enable(VrSettingId::physical_crouch_depth);
@@ -49,7 +51,8 @@ using penumbra_vr::runtime::VrTurnMode;
     settings.turn_mode = VrTurnMode::smooth;
     return !IsVrSettingAvailable(VrSettingId::snap_turn_angle, settings, capabilities) &&
         IsVrSettingAvailable(VrSettingId::smooth_turn_speed, settings, capabilities) &&
-        !IsVrSettingAvailable(VrSettingId::play_mode, settings, capabilities) &&
+        IsVrSettingAvailable(VrSettingId::play_mode, settings, capabilities) &&
+        IsVrSettingAvailable(VrSettingId::player_height, settings, capabilities) &&
         IsVrSettingAvailable(VrSettingId::crouch_mode, settings, capabilities) &&
         IsVrSettingAvailable(VrSettingId::physical_crouch_depth, settings, capabilities) &&
         !IsVrSettingAvailable(VrSettingId::hrtf, settings, capabilities);

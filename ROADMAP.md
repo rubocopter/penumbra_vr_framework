@@ -145,6 +145,11 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 
 ## Phase 3 — Shared runtime extraction
 
+Cross-game completion is governed by `docs/TRILOGY_PARITY_PLAN.md`. A checked
+extraction item means reusable policy/data exists and has the stated tests; it
+does **not** mean Black Plague parity unless the Black Plague backend actually
+consumes that behavior or has a documented incompatible equivalent.
+
 - [x] Extract render-scale fallback, visual-calibration and spatial-audio reference behavior
 - [x] Import the shared OpenVR action manifest and controller bindings as data
 - [x] Extract and unit-test device-independent VR input state, dead-zone and edge routing
@@ -175,7 +180,7 @@ Exit criterion: stable in-headset stereo rendering and head tracking in represen
 - [x] Add host-independent tests for transforms, actions and settings
 - [x] Preserve copyright, license and provenance for extracted components
 
-Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Overture source linkage and the Framework-owned build host are complete; Black Plague now exercises the shared reconciliation policy through a live-tested default-off shadow path over its live-tested binary body adapter.
+Exit criterion: the shared runtime contains the proven, game-neutral behavior required by the current integrations while each game-specific body/render/input boundary remains explicit. Every extracted Rework capability is also classified in the trilogy parity ledger as consumed, target-specific, not applicable or still open; extraction alone is never used to claim target parity.
 
 ## Phase 4 — Black Plague gameplay VR
 
@@ -241,25 +246,40 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [ ] Capture the remaining Hybrid release-hold interval and blocked-stand/low-ceiling crouch recovery
 - [ ] Exercise deliberate wall/slide edge cases for the current rejected-direction prediction filter
 - [ ] Validate long-body interaction and mechanism-specific states
+- [ ] Consume the shared Rework magnetic-item policy through a mapped Black Plague item classifier/visibility boundary
+- [ ] Consume/adapt the shared slider/hinge mechanism policy through mapped representative Black Plague native joint/state/update boundaries
 - [ ] Inventory, notes, menus, HUD and subtitles
+- [ ] Add the optional Framework-native radial/quick-access UX only after the current headset/body/interaction validation gates are closed
+  - [ ] Keep radial lifecycle, stick dead-zone/sector selection, handedness, cancellation and selection haptics in shared runtime code
+  - [ ] Keep available actions/items and activation behind narrow per-game adapters; do not encode HPL layouts, RVAs or product inventory semantics in the shared radial policy
+  - [ ] Preserve the original inventory/menu path as a fallback rather than replacing it
+  - [ ] Consume the same shared radial behavior in Overture and Black Plague, then carry it into Requiem instead of creating per-game implementations
 - [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy
 - [x] Define the Black Plague settings capability map from backend-wired behavior
 - [x] Provide an offline Black Plague VR settings editor through `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`
 - [ ] Integrate a dedicated Black Plague VR settings page after a safe native-menu insertion boundary is demonstrated
-- [ ] Comfort settings and haptics
+- [x] Consume shared haptic policy for Black Plague pickup/drop, tracked UI select and successful direct-hand contact; host-test focus/pose/cooldown rejection plus per-event OpenVR submission telemetry
+- [x] Extend the combined palm/room-scale headset helper to aggregate `Grab=6`/`Move=2`, tool, crouch, nudge and haptic evidence without treating optional scene coverage as a false failure
+- [ ] Complete Black Plague haptic parity: map safe light-toggle/melee/damage boundaries and headset-validate the exercised controller submissions
+- [ ] Map a safe Black Plague audio boundary and consume/adapt the shared HRTF, occlusion and environmental-audio behavior
+- [ ] Map compatible Black Plague renderer stages for the demonstrated Rework enhanced-visual behavior, or document evidence-backed target incompatibilities
+- [ ] Implement/validate comfortable loading/map transitions and VR UI dimmer/overlay behavior at Black Plague-owned lifecycle boundaries
 - [ ] Representative chapter-level validation
 
-Exit criterion: a documented playable alpha for an exact Black Plague build with physical interaction, body/room-scale movement and representative headset validation.
+Exit criterion: a documented playable alpha for an exact Black Plague build with physical interaction, body/room-scale movement and representative headset validation **and** the Black Plague framework-readiness gate in `docs/TRILOGY_PARITY_PLAN.md` closed. Shared-but-unconsumed Rework policy is an open parity item, not completed porting.
 
 ## Phase 5 — Requiem backend
 
+- [ ] Begin gameplay implementation only after the Black Plague framework-readiness gate is closed; non-invasive exact-build reconnaissance may happen earlier without displacing the active parity milestone
 - [ ] Repeat exact-build research rather than assuming Black Plague RVAs
 - [ ] Reuse validated HPL-level hooks where binary evidence permits
-- [ ] Adapt Requiem-specific gameplay and UI behavior
+- [ ] Consume every applicable shared capability family from the trilogy parity ledger through narrow Requiem adapters/profiles
+- [ ] Adapt Requiem-specific gameplay, interaction, presentation and audio behavior only at demonstrated target boundaries
+- [ ] Consume the shared VR-native radial/quick-access policy through Requiem-specific action/inventory adapters after the common implementation is validated on the earlier backends
 - [ ] Reuse the shared controller-profile parity matrix and validate Requiem-specific native intent routing without regressing any supported controller profile
 - [ ] Complete stereo, input and representative-level validation
 
-Exit criterion: a documented playable alpha for an exact Requiem build.
+Exit criterion: a documented playable alpha for an exact Requiem build with its own completed parity ledger/evidence, while Overture and Black Plague regression gates remain green.
 
 ## Phase 6 — Unified installer and release
 

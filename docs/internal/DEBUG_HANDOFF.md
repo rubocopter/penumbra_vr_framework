@@ -1,10 +1,10 @@
 # Debug handoff — known VR problem boundaries
 
-This file prevents repeated symptom-level fixes from replacing evidence-backed investigation. Read it before revisiting any of these issues.
+This file prevents repeated symptom-level fixes from replacing evidence-backed investigation. Read it before revisiting any of these issues. It does not own cross-game completion or sequencing; use `docs/TRILOGY_PARITY_PLAN.md` for the Overture → Black Plague → Requiem capability ledger and framework-readiness gate.
 
 ## Current headset/offline checkpoint (2026-09-17)
 
-The current working tree contains a host-reproduced follow-up to the PID 26940
+The current host-tested candidate contains a reproduced follow-up to the PID 26940
 hand corruption. Disabling only `GL_COLOR_ARRAY` was insufficient: the real WGL
 driver reproduces the same class of corruption when a host VBO-backed
 `GL_SECONDARY_COLOR_ARRAY` is enabled together with `GL_COLOR_SUM`. Before the

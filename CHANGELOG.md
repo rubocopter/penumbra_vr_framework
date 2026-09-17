@@ -1,5 +1,36 @@
 # Changelog
 
+- 2026-09-17: Reworked project documentation around an explicit trilogy parity
+  gate. Added `docs/TRILOGY_PARITY_PLAN.md` as the authoritative capability
+  ledger separating Rework reference behavior, shared extraction, target
+  consumption and validation evidence. Black Plague is now the required
+  second-backend proof before Requiem gameplay becomes the active milestone;
+  Requiem remains free to perform non-invasive exact-build reconnaissance and
+  must repeat target-specific binary research rather than inherit BP RVAs or
+  layouts. `AGENTS.md`, `README.md`, `ROADMAP.md`, the Rework porting plan and
+  both handoff documents now follow that sequencing. The stale Black Plague VR
+  settings handoff was also corrected: `PlayMode`, `PlayerHeight`,
+  `HeightOffset`, `CrouchMode` and `PhysicalCrouchDepth` are now exposed because
+  each is already consumed by the tracked presentation/crouch path; Enhanced
+  Visuals, HRTF and subtitle scale remain unwired. Black Plague haptic reuse was
+  also extended without new hooks: tracked UI selection now emits the shared
+  `UISelect` profile on the actual pointer hand, and successful direct hand
+  nudges emit the shared `Interaction` profile with bounded contact strength.
+  The backend enforces focus, connected/valid grip pose and the shared per-event
+  cooldown before OpenVR submission. These additions are host-tested only;
+  light-toggle, melee-impact and damage feedback still require safe Black Plague
+  event boundaries and headset validation remains open.
+  The focused Black Plague palm validator is now a combined evidence run rather
+  than a palm-only checklist: it aggregates `Grab=6`/`Move=2`, tool attachment,
+  direct hand-nudge, tracked-crouch and per-event OpenVR haptic submission
+  telemetry while retaining the known-good room-scale composition. Core
+  palm/room-scale/Grab/crouch evidence remains mandatory; unavailable
+  Move/tool/low-ceiling/haptic coverage is reported explicitly instead of being
+  silently mistaken for a tested feature. The resulting working state passes
+  Release **35/35** CTest, SDK-less Release **35/35** CTest, metadata validation
+  and the initialized Black Plague exact-image verifier; no new headset status
+  is implied by those host-side gates.
+
 - 2026-09-17: Reproduced and hardened the remaining Black Plague Rework-hand
   color corruption. The existing hostile-state WGL test now enables a
   VBO-backed `GL_SECONDARY_COLOR_ARRAY` plus `GL_COLOR_SUM`; before the fix the

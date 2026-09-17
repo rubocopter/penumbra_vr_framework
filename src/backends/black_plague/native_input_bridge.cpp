@@ -100,6 +100,11 @@ SRWLOCK g_session_lock = SRWLOCK_INIT;
 runtime::OpenVrSession* g_session = nullptr;
 runtime::VrControllerFrame g_frame;
 std::array<std::array<float, 5>, 2> g_hand_curls{};
+std::array<std::array<std::uint32_t, 2>, runtime::kVrHapticEventCount>
+    g_haptic_last_submission{};
+std::array<std::array<bool, 2>, runtime::kVrHapticEventCount>
+    g_haptic_has_submitted{};
+NativeHapticDiagnostics g_haptic_diagnostics{};
 runtime::VrInputState g_disconnect_release;
 std::atomic<std::uint64_t> g_release_pending{0};
 std::uint64_t g_release_generation = 0;
@@ -609,6 +614,10 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     const auto pointer = runtime::SelectUiPointerPose(frame, frame.interact_source);
     g_pointer_valid = ui && frame.focused &&
         pointer.valid && TrackedMenuPointer(pointer.pose, g_pointer_uv);
+    if (g_pointer_valid && frame.input.state.ui_select.just_pressed) {
+        NativeControllerHaptic(
+            pointer.hand, runtime::VrHapticEvent::ui_select);
+    }
     if (frame.input.state.recenter.just_pressed) RequestTrackedRecenter();
     if (ui && !g_pointer_valid) {
         frame.input.state.ui_select.pressed = false;
@@ -932,6 +941,8 @@ void ConnectNativeInput(runtime::OpenVrSession* session) noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
     if (g_session != session) {
         g_session_generation.fetch_add(1, std::memory_order_acq_rel);
+        g_haptic_last_submission = {};
+        g_haptic_has_submitted = {};
     }
     if (!session && g_session) {
         g_disconnect_release = runtime::MakeReleasedVrInputState(g_frame.input.state);
@@ -968,22 +979,48 @@ void* NativePlayerPointer() noexcept {
 std::uint64_t NativePlayerGeneration() noexcept {
     return g_player_generation.load(std::memory_order_acquire);
 }
-void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept {
+void NativeControllerHaptic(runtime::VrHand hand, runtime::VrHapticEvent event,
+    float strength) noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
-    if (g_session) {
+    if (runtime::IsKnownHapticEvent(event)) {
+        const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
+        const auto event_index = runtime::HapticEventIndex(event);
+        ++g_haptic_diagnostics.attempts[event_index];
+        const auto now = static_cast<std::uint32_t>(GetTickCount64());
         std::string error;
-        const auto event = pickup
-            ? runtime::VrHapticEvent::object_pickup
-            : runtime::VrHapticEvent::object_drop;
         const auto profile = runtime::HapticProfile(event);
-        static_cast<void>(g_session->TriggerHaptic(
-            hand,
-            profile.duration_seconds,
-            profile.frequency_hz,
-            runtime::ScaleHapticAmplitude(event, 1.0F),
-            error));
+        const float amplitude = runtime::ScaleHapticAmplitude(event, strength);
+        const bool ready = g_session && BlackPlagueHapticReady(
+                g_frame, hand, event,
+                g_haptic_has_submitted[event_index][hand_index],
+                g_haptic_last_submission[event_index][hand_index], now,
+                strength);
+        if (!ready) {
+            ++g_haptic_diagnostics.policy_rejections[event_index];
+        } else if (g_session->TriggerHaptic(
+                hand,
+                profile.duration_seconds,
+                profile.frequency_hz,
+                amplitude,
+                error)) {
+            g_haptic_has_submitted[event_index][hand_index] = true;
+            g_haptic_last_submission[event_index][hand_index] = now;
+            ++g_haptic_diagnostics.submissions[event_index];
+            if (hand == runtime::VrHand::left) ++g_haptic_diagnostics.left_submissions;
+            else ++g_haptic_diagnostics.right_submissions;
+        } else {
+            ++g_haptic_diagnostics.submit_failures[event_index];
+        }
     }
     ReleaseSRWLockExclusive(&g_session_lock);
+}
+
+NativeHapticDiagnostics ConsumeNativeHapticDiagnostics() noexcept {
+    AcquireSRWLockExclusive(&g_session_lock);
+    const auto diagnostics = g_haptic_diagnostics;
+    g_haptic_diagnostics = {};
+    ReleaseSRWLockExclusive(&g_session_lock);
+    return diagnostics;
 }
 
 #if defined(PVR_NATIVE_INPUT_BRIDGE_TEST_ACCESS)
@@ -1064,6 +1101,9 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         ReleaseSRWLockExclusive(&g_crouch_lock);
         g_contract_native_query_result = false;
         g_contract_block_stand = false;
+        AcquireSRWLockExclusive(&g_session_lock);
+        g_haptic_diagnostics = {};
+        ReleaseSRWLockExclusive(&g_session_lock);
         g_image = nullptr;
         VirtualFree(image, 0, MEM_RELEASE);
     };
@@ -1072,6 +1112,59 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         cleanup();
         return false;
     };
+
+    runtime::VrControllerFrame haptic_frame;
+    haptic_frame.focused = true;
+    haptic_frame.hands[0].grip.device_connected = true;
+    haptic_frame.hands[0].grip.pose_valid = true;
+    if (!BlackPlagueHapticReady(
+            haptic_frame, runtime::VrHand::left,
+            runtime::VrHapticEvent::ui_select,
+            false, 0, 100, 1.0F) ||
+        BlackPlagueHapticReady(
+            haptic_frame, runtime::VrHand::left,
+            runtime::VrHapticEvent::ui_select,
+            true, 100, 159, 1.0F) ||
+        !BlackPlagueHapticReady(
+            haptic_frame, runtime::VrHand::left,
+            runtime::VrHapticEvent::ui_select,
+            true, 100, 160, 1.0F)) {
+        return fail("Black Plague haptic cooldown policy drifted");
+    }
+    haptic_frame.hands[0].grip.pose_valid = false;
+    if (BlackPlagueHapticReady(
+            haptic_frame, runtime::VrHand::left,
+            runtime::VrHapticEvent::interaction,
+            false, 0, 100, 1.0F)) {
+        return fail("Black Plague haptic policy accepted an invalid pose");
+    }
+    haptic_frame.hands[0].grip.pose_valid = true;
+    haptic_frame.focused = false;
+    if (BlackPlagueHapticReady(
+            haptic_frame, runtime::VrHand::left,
+            runtime::VrHapticEvent::interaction,
+            false, 0, 100, 1.0F)) {
+        return fail("Black Plague haptic policy ignored input focus");
+    }
+    g_frame = haptic_frame;
+    NativeControllerHaptic(
+        runtime::VrHand::left, runtime::VrHapticEvent::ui_select);
+    const auto haptic_diagnostics = ConsumeNativeHapticDiagnostics();
+    const auto ui_haptic_index =
+        runtime::HapticEventIndex(runtime::VrHapticEvent::ui_select);
+    if (haptic_diagnostics.attempts[ui_haptic_index] != 1 ||
+        haptic_diagnostics.policy_rejections[ui_haptic_index] != 1 ||
+        haptic_diagnostics.submissions[ui_haptic_index] != 0 ||
+        haptic_diagnostics.submit_failures[ui_haptic_index] != 0 ||
+        haptic_diagnostics.left_submissions != 0 ||
+        haptic_diagnostics.right_submissions != 0) {
+        return fail("Black Plague haptic diagnostics did not record a rejected request");
+    }
+    const auto cleared_haptic_diagnostics = ConsumeNativeHapticDiagnostics();
+    if (cleared_haptic_diagnostics.attempts[ui_haptic_index] != 0 ||
+        cleared_haptic_diagnostics.policy_rejections[ui_haptic_index] != 0) {
+        return fail("Black Plague haptic diagnostics did not reset after consumption");
+    }
 
     std::array<std::uint8_t, 0x400> locomotion_player{};
     ContractWrite(locomotion_player.data(), kPlayerActionStateIndexOffset,

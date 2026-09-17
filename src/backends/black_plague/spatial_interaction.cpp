@@ -301,8 +301,10 @@ void DestroyNudgeShape() noexcept {
 }
 [[nodiscard]] bool ComputeNudgeImpulse(const Vec& hand_center,const Vec& hand_velocity,
     const Vec& contact,const Matrix& body_matrix,const Vec& linear_velocity,
-    const Vec& angular_velocity,float mass,int joint_count,Vec& impulse) noexcept {
+    const Vec& angular_velocity,float mass,int joint_count,Vec& impulse,
+    float* applied_delta=nullptr) noexcept {
     impulse={};
+    if (applied_delta) *applied_delta=0.0F;
     if (!FiniteVec(hand_center) || !FiniteVec(hand_velocity) || !FiniteVec(contact) ||
         !FiniteVec(linear_velocity) || !FiniteVec(angular_velocity) ||
         !std::isfinite(mass) || mass<=0) return false;
@@ -335,6 +337,7 @@ void DestroyNudgeShape() noexcept {
     if (delta<=0.005F) return false;
     impulse={push_direction[0]*delta*mass,push_direction[1]*delta*mass,
         push_direction[2]*delta*mass};
+    if (applied_delta) *applied_delta=delta;
     return FiniteVec(impulse);
 }
 void SetFloat(void* body, std::uintptr_t target, float value) {
@@ -537,7 +540,7 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation) {
     SetFloat(body,0x19C360,10); SetFloat(body,0x19C380,15);
     g_move_held.store(true,std::memory_order_release);
     ++g_moves_acquired;
-    NativeControllerHaptic(hold.hand,true);
+    NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_pickup);
 }
 
 void RestoreMoveBody(const MoveHold& hold) noexcept {
@@ -561,7 +564,7 @@ void __fastcall HookedMoveLeave(void* state, void*, void* next) {
     reinterpret_cast<Transition>(g_image+0xAAED0)(state,next);
     if (owned) {
         RestoreMoveBody(hold);
-        NativeControllerHaptic(hold.hand,false);
+        NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_drop);
         ++g_moves_released;
     }
 }
@@ -655,7 +658,7 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation) {
     SetFloat(body,0x19C360,20); SetFloat(body,0x19C380,30);
     g_held.store(true,std::memory_order_release);
     ++g_grabs_acquired;
-    NativeControllerHaptic(hold.hand,true);
+    NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_pickup);
 }
 
 void RestoreHeldBody(const Hold& hold, const Vec& velocity,
@@ -689,7 +692,7 @@ void __fastcall HookedLeave(void* state, void*, void* next) {
     reinterpret_cast<Transition>(g_image+0xAA4C0)(state,next);
     if (owned) {
         RestoreHeldBody(hold,velocity,angular);
-        NativeControllerHaptic(hold.hand,false);
+        NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_drop);
         ++g_grabs_released;
     }
 }
@@ -948,10 +951,16 @@ void ServiceSpatialHandNudge(void* character_body) noexcept {
                 !BodyVelocity(hit.body,kGetAngularVelocity,body_angular)) continue;
             const Matrix body_matrix=Read<Matrix>(hit.body,0x34);
             Vec impulse{};
+            float nudge_strength=0.0F;
             if (!ComputeNudgeImpulse(center,velocity,contact,body_matrix,linear,
-                    body_angular,mass,joint_count,impulse)) continue;
-            if (SafeAddImpulseAtPosition(hit.body,&impulse,&contact))
+                    body_angular,mass,joint_count,impulse,&nudge_strength)) continue;
+            if (SafeAddImpulseAtPosition(hit.body,&impulse,&contact)) {
                 ++g_nudges_applied;
+                NativeControllerHaptic(
+                    hand,
+                    runtime::VrHapticEvent::interaction,
+                    std::clamp(nudge_strength,0.05F,0.5F));
+            }
         }
     }
 }
@@ -999,7 +1008,7 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
             PublishGameplayPalmHeldBody(
                 hand == runtime::VrHand::left ? 0U : 1U, nullptr);
             ++g_guarded_releases;
-            NativeControllerHaptic(hand,false);
+            NativeControllerHaptic(hand,runtime::VrHapticEvent::object_drop);
             return;
         }
         auto* const states=Read<void*>(player,0x2C4);
@@ -1014,7 +1023,7 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
                 hold.hand == runtime::VrHand::left ? 0U : 1U, nullptr);
             ++g_guarded_releases;
             if (state_owned) RestoreMoveBody(hold);
-            NativeControllerHaptic(hold.hand,false);
+            NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_drop);
             ++g_moves_released;
             return;
         }
@@ -1040,7 +1049,7 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
         PublishGameplayPalmHeldBody(
             hand == runtime::VrHand::left ? 0U : 1U, nullptr);
         ++g_guarded_releases;
-        NativeControllerHaptic(hand,false);
+        NativeControllerHaptic(hand,runtime::VrHapticEvent::object_drop);
         return;
     }
     auto* const states=Read<void*>(player,0x2C4);
@@ -1062,7 +1071,7 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
             hold.hand == runtime::VrHand::left ? 0U : 1U, nullptr);
         ++g_guarded_releases;
         if (state_owned) RestoreHeldBody(hold,{},{});
-        NativeControllerHaptic(hold.hand,false);
+        NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_drop);
         ++g_grabs_released;
         return;
     }

@@ -1,6 +1,6 @@
 # Penumbra VR Framework — Agent instructions
 
-Read this file before changing code. Then read `docs/internal/CODEX_HANDOFF.md` for the current checkpoint, `docs/internal/DEBUG_HANDOFF.md` for known regression boundaries, and `docs/REWORK_PORTING_PLAN.md` for the extraction contract.
+Read this file before changing code. Then read `docs/internal/CODEX_HANDOFF.md` for the current checkpoint, `docs/internal/DEBUG_HANDOFF.md` for known regression boundaries, `docs/REWORK_PORTING_PLAN.md` for the extraction contract, and `docs/TRILOGY_PARITY_PLAN.md` for the cross-game capability gate.
 
 ## Core rule
 
@@ -232,7 +232,9 @@ the reported Alt+Tab/focus-loss menu-black boundary remain unresolved.
 
 Prefer the smallest change that advances the current validation gate. Do not create a large generic abstraction until a real second backend needs it.
 
-Do not spend the current milestone on the production installer, mirror polishing, speculative Requiem implementation, broad speed/jump/crouch retuning, or stylistic rewrites of proven Rework logic.
+Extraction is not parity by itself. A Rework capability counts as ported to a target only when that backend consumes the shared behavior (or a documented incompatible native equivalent) and the corresponding target evidence is recorded. Keep `docs/TRILOGY_PARITY_PLAN.md` current when a capability moves between reference/shared/consumed/validated states.
+
+Do not spend the current milestone on the production installer, speculative Requiem gameplay implementation, broad speed/jump/crouch retuning, or stylistic rewrites of proven Rework logic. Requiem gameplay becomes the active milestone after the Black Plague framework-readiness gate in `docs/TRILOGY_PARITY_PLAN.md` is satisfied; exact-build reconnaissance may still proceed when it does not displace the active Black Plague parity work.
 
 ## Documentation
 
@@ -244,6 +246,7 @@ After meaningful changes, update only the relevant documentation, but keep these
 - `docs/internal/CODEX_HANDOFF.md`
 - `docs/internal/DEBUG_HANDOFF.md`
 - `docs/REWORK_PORTING_PLAN.md`
+- `docs/TRILOGY_PARITY_PLAN.md`
 - `docs/OVERTURE_BACKEND_MIGRATION.md`
 - `docs/VR_STARTUP_AND_CONTROLLERS.md`
 - `docs/VR_HEADSET_TEST_CHECKLIST.md`

@@ -1,5 +1,10 @@
 # Penumbra VR Rework porting plan
 
+Cross-game capability completion is tracked in `TRILOGY_PARITY_PLAN.md`. This
+document governs how demonstrated Rework behavior is extracted and adapted; the
+parity ledger governs whether a target game actually consumes that behavior.
+`Extracted` and `ported to Black Plague` are deliberately different states.
+
 This plan treats `rubocopter/penumbra_vr_rework` revision `23c890f` as the proven Overture reference. When Rework already solves a VR behavior, its implementation and observed behavior are the primary source of truth for the Overture path. The Framework should extract game-neutral policy and adapt only the game-specific mechanism.
 
 ## 2026-09-16 implementation checkpoint
@@ -193,7 +198,15 @@ Current order:
 9. Close only the remaining crouch edges: capture Hybrid release-hold after the physical source clears, then exercise blocked-stand/low-ceiling recovery. Do not rerun the full PID 25484 batch merely to reproduce already captured evidence.
 10. Preserve the live-tested BP palm query (PID 28412) and owned lifecycle/resolver (PID 8644). Cleanly headset-validate the host-tested gameplay integration after reboot with the corrected combined helper: room-scale/crouch must remain active while both hands exercise representative `Grab=6` and free-body `Move=2` props, wall/slide contact and one native jointed mechanism. PID 23000 is inconclusive because FPS and one controller failed; PID 4720 launched the old palm helper without room-scale and therefore cannot be used as regression evidence for that stack.
 11. Continue mechanism-state, definitive tool/light profile, tracking-world-yaw and final camera/body/footstep-bob work as separate evidence gates.
-12. Repeat exact-build binary research for Requiem wherever evidence cannot safely transfer.
+12. Close the remaining Overture capability families recorded in
+    `TRILOGY_PARITY_PLAN.md`: magnetic items, mechanisms, remaining UI/
+    transitions, haptics, audio and compatible visual behavior must be consumed,
+    adapted or explicitly classified before Black Plague is used as the second-
+    backend framework proof.
+13. Make Requiem gameplay the active milestone only after that Black Plague
+    framework-readiness gate closes. Repeat exact-build binary research wherever
+    evidence cannot safely transfer, then consume the same shared capability
+    families through narrow Requiem adapters/profiles.
 
 This order proves each boundary in isolation and prevents a game-adapter defect from being mistaken for a shared-runtime defect.
 
@@ -234,7 +247,11 @@ pacing remain open.
 - `src/runtime/vr_haptics.hpp` owns Rework's gameplay-level haptic event
   profiles, strength scaling and per-event cooldown semantics. Overture keeps
   pose validity and OpenVR submission in `cVRHaptics`; Black Plague reuses the
-  same pickup/drop profiles at its existing native-input submission boundary.
+  same policy at its existing native-input submission boundary for pickup/drop,
+  tracked UI selection and successful direct hand nudges. BP rejects unfocused,
+  disconnected or invalid-pose requests and applies the shared per-event
+  cooldown. Light-toggle, melee-impact and damage still need demonstrated BP
+  event boundaries; actual controller feedback remains a headset gate.
 - `src/runtime/vr_panel_policy.hpp` owns the reusable stable-panel anchor
   lifetime and transient overlay ownership handoff. Black Plague consumes the
   stable-anchor plan for its tracked menu; Overture consumes the overlay handoff
@@ -327,10 +344,12 @@ target-specific ownership boundary:
   servo math, but Black Plague still requires a mapped native joint/mechanism
   state and update boundary before that policy can drive gameplay there.
 
-This is a deliberate host-only stopping point, not completion of the unchecked
-"remaining demonstrated reusable systems" milestone. Resume extraction when
-new Black Plague/Requiem evidence produces a real second consumer or when a
-pending live/headset gate validates the required boundary.
+This is a deliberate host-only extraction frontier, not completion of the
+corresponding trilogy capability. Resume extraction/adaptation when Black Plague
+evidence exposes the necessary boundary. A policy that exists only in shared
+runtime and Overture remains explicitly open in `TRILOGY_PARITY_PLAN.md` until a
+second backend consumes it or an evidence-backed non-applicable/incompatible
+classification is recorded.
 
 Controller support is a behavioral parity requirement, not an asset-presence check. The shared package currently carries eight default OpenVR profiles: PS VR2 Sense, Vive, Valve Index/Knuckles, Oculus/Meta Touch, Pico 4, Pico Neo 3, Windows Mixed Reality motion controllers and the holographic-controller variant. A profile is only considered at parity after its logical actions, left/right-handed routing, grip/aim poses, menu and picking controls, haptics and any hardware-supported finger articulation behave equivalently to the proven Overture baseline in the target backend. Black Plague must close that matrix before controller parity is claimed; Requiem should inherit the same matrix and repeat only backend-specific validation.
 

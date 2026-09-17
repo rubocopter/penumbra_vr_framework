@@ -315,6 +315,40 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long long>(spatial.nudge_queries),
             static_cast<unsigned long long>(spatial.nudge_contacts),
             static_cast<unsigned long long>(spatial.nudges_applied));
+        const auto haptics=penumbra_vr::backends::black_plague::
+            ConsumeNativeHapticDiagnostics();
+        const auto haptic_attempts=[&](penumbra_vr::runtime::VrHapticEvent event) {
+            return haptics.attempts[penumbra_vr::runtime::HapticEventIndex(event)];
+        };
+        const auto haptic_submissions=[&](penumbra_vr::runtime::VrHapticEvent event) {
+            return haptics.submissions[penumbra_vr::runtime::HapticEventIndex(event)];
+        };
+        std::uint64_t haptic_policy_rejections=0;
+        std::uint64_t haptic_submit_failures=0;
+        for (std::size_t index=0; index<penumbra_vr::runtime::kVrHapticEventCount; ++index) {
+            haptic_policy_rejections+=haptics.policy_rejections[index];
+            haptic_submit_failures+=haptics.submit_failures[index];
+        }
+        penumbra_vr::probe::WriteLog(
+            "haptics ui_select=%llu/%llu pickup=%llu/%llu drop=%llu/%llu interaction=%llu/%llu light=%llu/%llu melee=%llu/%llu damage=%llu/%llu left=%llu right=%llu policy_rejected=%llu submit_failed=%llu",
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::ui_select)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::ui_select)),
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::object_pickup)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::object_pickup)),
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::object_drop)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::object_drop)),
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::interaction)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::interaction)),
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::light_toggle)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::light_toggle)),
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::melee_impact)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::melee_impact)),
+            static_cast<unsigned long long>(haptic_submissions(penumbra_vr::runtime::VrHapticEvent::damage)),
+            static_cast<unsigned long long>(haptic_attempts(penumbra_vr::runtime::VrHapticEvent::damage)),
+            static_cast<unsigned long long>(haptics.left_submissions),
+            static_cast<unsigned long long>(haptics.right_submissions),
+            static_cast<unsigned long long>(haptic_policy_rejections),
+            static_cast<unsigned long long>(haptic_submit_failures));
         const auto palms=penumbra_vr::backends::black_plague::
             ConsumeGameplayPalmResolverTelemetry();
         const char* palm_source="disabled";

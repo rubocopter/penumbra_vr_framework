@@ -18,6 +18,8 @@ runtime::VrSettingCapabilities BlackPlagueVrSettingCapabilities() noexcept {
     enable(runtime::VrSettingId::turn_dead_zone);
     enable(runtime::VrSettingId::move_speed);
     enable(runtime::VrSettingId::move_dead_zone);
+    enable(runtime::VrSettingId::play_mode);
+    enable(runtime::VrSettingId::player_height);
     enable(runtime::VrSettingId::height_offset);
     enable(runtime::VrSettingId::crouch_mode);
     enable(runtime::VrSettingId::physical_crouch_depth);

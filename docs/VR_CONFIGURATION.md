@@ -93,12 +93,15 @@ recommended per-eye dimensions before the existing allocation fallback. The
 same menu geometry is used for drawing and controller-ray hit testing.
 
 The currently wired Black Plague editor capabilities are `Handedness`,
-`TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`, `TurnDeadZone`, `MoveSpeed`,
-`MoveDeadZone`, `UiDistance`, `UiScale` and `RenderScale`. `MonitorMirror` is a
-separate launcher/runtime toggle. `PlayMode`, `PlayerHeight`, `HeightOffset`,
-`CrouchMode`, `PhysicalCrouchDepth`, `EnhancedVisuals`, `HRTF` and
-`SubtitleScale` are persisted but must not be presented as functional Black
-Plague controls until their backend application exists.
+`PlayMode`, `PlayerHeight`, `TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`,
+`TurnDeadZone`, `MoveSpeed`, `MoveDeadZone`, `HeightOffset`, `CrouchMode`,
+`PhysicalCrouchDepth`, `UiDistance`, `UiScale` and `RenderScale`.
+`PlayMode`/`PlayerHeight` feed the shared seated/standing presentation policy;
+height/crouch controls feed the tracked-Y and native posture paths. Their
+editor exposure is host-tested and does not by itself establish headset comfort.
+`MonitorMirror` is a separate launcher/runtime toggle. `EnhancedVisuals`,
+`HRTF` and `SubtitleScale` remain persisted but must not be presented as
+functional Black Plague controls until their backend application exists.
 
 Edit the currently supported Black Plague controls offline with:
 

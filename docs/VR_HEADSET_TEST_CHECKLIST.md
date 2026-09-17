@@ -84,7 +84,10 @@ tienen ownership distinto. PID
 mando derecho invalidan la tanda como evidencia de promoción. La siguiente
 validación debe usar `tools\Start-BlackPlaguePalmCollisionValidation.ps1` tras
 reinicio: el helper corregido activa también room-scale/desplazamiento físico y
-comprueba la composición. Antes y después del contacto de palma verifica
+comprueba la composición. El helper actual agrupa además telemetría de
+`Grab=6`/`Move=2`, nudge directo, herramientas, ciclo de crouch y envíos
+hápticos aceptados por OpenVR para aprovechar una sola sesión. Antes y después
+del contacto de palma verifica
 desplazamiento físico X/Z corto y crouch/stand, además de ambos mandos, objetos
 representativos, pared/slide y un mecanismo nativo. Esa misma tanda valida por
 primera vez la presentación de las manos reales importadas de Rework: ambas
@@ -138,6 +141,19 @@ El candidato de prueba con visor se genera directamente en
 directorio del juego: el helper usa
 `build\bin\Release\PenumbraVR.ProbeLauncher.exe`, valida primero el ejecutable
 exact-build soportado y lanza Black Plague por la ruta de inyección existente.
+
+El preflight offline actual de 2026-09-17 pasa:
+
+- Release: 35/35 CTest, incluido `opengl_eye_targets`;
+- Release sin SDK OpenVR: 35/35 CTest en la configuración local;
+- metadata: 6 entradas de catálogo, 2 manifests exact-build, 42 actions,
+  6 action sets y 8 bindings;
+- verifier Black Plague exact-build: pasa las fronteras de input, locomoción,
+  crouch, interacción/palma y cuerpo/colisión.
+
+Esto sólo promueve el candidato a **host-tested**. Los cambios posteriores a
+PID 25484/26940 en presentación X/Z, estado GL, step-climb físico, nudge y
+hápticos siguen necesitando la tanda combinada con visor.
 
 La preparación offline de 2026-09-14 queda cerrada con:
 

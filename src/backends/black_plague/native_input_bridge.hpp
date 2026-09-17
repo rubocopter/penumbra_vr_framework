@@ -2,6 +2,7 @@
 #include "body_adapter_boundary.hpp"
 #include "openvr_session.hpp"
 #include "vr_crouch_policy.hpp"
+#include "vr_haptics.hpp"
 #include "vr_update_timing.hpp"
 #include "vr_settings.hpp"
 #include <array>
@@ -23,6 +24,15 @@ struct BlackPlagueNativeCrouchStatus {
     std::uint64_t native_crouch_exits = 0;
     std::uint64_t stand_retries = 0;
     std::uint64_t desired_shape_mismatch_frames = 0;
+};
+
+struct NativeHapticDiagnostics {
+    std::array<std::uint64_t, runtime::kVrHapticEventCount> attempts{};
+    std::array<std::uint64_t, runtime::kVrHapticEventCount> submissions{};
+    std::array<std::uint64_t, runtime::kVrHapticEventCount> policy_rejections{};
+    std::array<std::uint64_t, runtime::kVrHapticEventCount> submit_failures{};
+    std::uint64_t left_submissions = 0;
+    std::uint64_t right_submissions = 0;
 };
 
 struct BlackPlagueCrouchOwnershipWindow {
@@ -65,6 +75,23 @@ BlackPlagueNativeCrouchEdgeToken(
         pending.player_generation == current_player_generation;
 }
 
+[[nodiscard]] inline bool BlackPlagueHapticReady(
+    const runtime::VrControllerFrame& frame,
+    runtime::VrHand hand,
+    runtime::VrHapticEvent event,
+    bool has_submitted,
+    std::uint32_t last_submission_ms,
+    std::uint32_t now_ms,
+    float strength) noexcept {
+    if (!runtime::IsKnownHapticEvent(event)) return false;
+    const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
+    const auto& pose = frame.hands[hand_index].grip;
+    return frame.focused && pose.device_connected && pose.pose_valid &&
+        runtime::ScaleHapticAmplitude(event, strength) > 0.0F &&
+        runtime::HapticCooldownReady(
+            event, has_submitted, last_submission_ms, now_ms);
+}
+
 [[nodiscard]] bool InstallNativeInputBridge(std::string& error) noexcept;
 void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept;
 [[nodiscard]] bool RemoveNativeInputBridge(std::string& error) noexcept;
@@ -78,7 +105,11 @@ ReadNativePhysicalCrouchStatus() noexcept;
 // a non-game thread.
 [[nodiscard]] void* NativePlayerPointer() noexcept;
 [[nodiscard]] std::uint64_t NativePlayerGeneration() noexcept;
-void NativeControllerHaptic(runtime::VrHand hand, bool pickup) noexcept;
+void NativeControllerHaptic(
+    runtime::VrHand hand,
+    runtime::VrHapticEvent event,
+    float strength = 1.0F) noexcept;
+[[nodiscard]] NativeHapticDiagnostics ConsumeNativeHapticDiagnostics() noexcept;
 [[nodiscard]] runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept;
 // The input bridge is the sole owner of MoveForward/MoveSideways callsites.
 // Consumers use this status to bind fan-out behavior without re-patching them.

@@ -72,7 +72,7 @@ void Jump(std::uintptr_t rva,void* target) {
 }
 }
 runtime::VrControllerFrame ReadNativeControllerFrame() noexcept { return test_frame; }
-void NativeControllerHaptic(runtime::VrHand,bool) noexcept {}
+void NativeControllerHaptic(runtime::VrHand,runtime::VrHapticEvent,float) noexcept {}
 bool NativeInputUiActive() noexcept { return test_ui; }
 bool ControllerWorldPose(const runtime::VrHmdPose& hand, Matrix& pose, Vec& velocity, Vec& angular) noexcept {
     if (!hand.device_connected || !hand.pose_valid) return false;
@@ -93,9 +93,11 @@ int RunSpatialTest() {
         const Vec stationary{};
         const Matrix body_matrix=runtime::IdentityMatrix();
         Vec impulse{};
+        float applied_delta=0.0F;
         if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
-                stationary,stationary,2.0F,0,impulse) ||
-            !VecNearlyEqual(impulse,{0.44F,0,0})) return 40;
+                stationary,stationary,2.0F,0,impulse,&applied_delta) ||
+            !VecNearlyEqual(impulse,{0.44F,0,0}) ||
+            std::abs(applied_delta-0.22F)>=0.00001F) return 40;
         if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
                 stationary,stationary,20.0F,0,impulse) ||
             !VecNearlyEqual(impulse,{2.0F,0,0})) return 41;
