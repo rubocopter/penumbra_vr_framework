@@ -28,6 +28,7 @@ Examples at the current checkpoint:
 - the Black Plague body/collision, narrow body-adapter, default-off reconciliation shadow and collision-aware physical X/Z request boundaries are `live-tested` on the allowlisted hash;
 - Black Plague native stereo/yaw tracking have prior headset validation;
 - Black Plague active positional HMD/body reconciliation has headset evidence for the technical render/stick/collision route (PIDs 13672 and 8092), and PID 22096 supplies positive headset evidence for the current presentation-sequence owner. PID 25484 adds focused headset evidence for continuous tracked Y, the current physical/button crouch path, direct locomotion and the rejected-direction short-X/Z comfort filter. The Hybrid release-hold interval, blocked stand under a low ceiling and deliberate wall/slide edges remain open; the gameplay palm path is host-tested and still needs a clean headset A/B after the inconclusive PID 23000 run;
+- Black Plague HRTF startup and the mine-gallery OpenAL/EFX reverb/bus-trim adapter are `host-tested` on the allowlisted build; the reverb callsites/vtable/setters are exact-image verified, while live headset/audio-device validation and the separate distance/occlusion low-pass adaptation remain open;
 - Requiem remains research/planned work.
 
 ## Support rules

@@ -1,6 +1,6 @@
 # Penumbra VR Framework — design decisions and invariants
 
-This document records decisions that should not be casually reopened during iterative debugging. It derives from the Astra High audit, the Rework comparison and the post-audit implementation work.
+This document records decisions that should not be casually reopened during iterative debugging. It derives from verified Rework comparison and subsequent implementation/validation evidence.
 
 These are not immutable forever. They may change when new evidence disproves them, but not merely because another implementation is aesthetically cleaner.
 
@@ -22,7 +22,7 @@ Port the demonstrated behavior and extract neutral policy where appropriate. Do 
 
 ## 3. World scale is not the default explanation
 
-The Astra audit found no evidence for one global world-scale error explaining the Black Plague symptoms.
+Repository and Rework comparison found no evidence for one global world-scale error explaining the Black Plague symptoms.
 
 The Rework vertical calibration factor is not a global world-scale knob. Do not retune world scale, `(HMD.y - 0.2) * 1.065`, hand distance or tool offsets to mask timing, collision, pose-epoch or contact defects.
 
@@ -156,3 +156,15 @@ If an SDL crash reappears, capture dump/stack/registers/modules. Do not blame th
 Shared runtime should own neutral units, transforms, policy and algorithms only after their semantics are demonstrated. Backends/adapters own native execution, ABI, state classification and engine phase placement.
 
 Do not generalize Requiem or future games prematurely. NO abstraction is preferable to a false cross-game contract.
+
+## 18. Rework is the baseline; Framework is the forward integration line
+
+The proven Overture Rework revision is a behavioral floor for already-solved VR behavior, not a permanent upper bound on Overture inside the Framework.
+
+When Black Plague, Requiem or later Framework work demonstrates a better behavior that is genuinely game-neutral, the preferred direction is:
+
+`proven behavior -> Framework validation -> shared runtime -> all compatible consumers`
+
+Promotion still requires evidence and a real second consumer; one backend's engine-specific implementation is not sufficient proof of a shared abstraction. Once promoted, the Framework-owned Overture product should consume the improved shared policy so advances made elsewhere also improve Overture. Keep game-specific mechanics, exact-build data, model/profile values and incompatible native ownership in their existing backend/profile boundaries.
+
+The separate Rework repository remains the historical/proven comparison reference. The maintained product evolution happens in Penumbra VR Framework.

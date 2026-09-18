@@ -208,7 +208,7 @@ Current order:
     `TRILOGY_PARITY_PLAN.md`: Black Plague now consumes the shared magnetic-item
     policy through a host-tested exact-build adapter, so headset validation is
     the remaining magnetic gate. Mechanisms, remaining UI/transitions, haptics,
-    audio and compatible visual behavior must still be consumed, adapted or
+    the remaining audio occlusion policy and compatible visual behavior must still be consumed, adapted or
     explicitly classified before Black Plague is used as the second-backend
     framework proof.
 13. Make Requiem gameplay the active milestone only after that Black Plague
@@ -349,11 +349,14 @@ open.
   behavior and the complete accepted mine-gallery EFX preset, including echo,
   modulation and room-rolloff fields. Black Plague now consumes the HRTF portion
   at the launcher-owned pre-audio boundary by writing the exact Rework-format
-  `alsoft.ini` before a fresh game launch; this is host-tested only. Static
-  exact-image work confirms BP already owns a native OpenAL/EFX environment
-  stack, but its initialization does not implement Rework's added preset/bus
-  trim and the distance-HF path has no demonstrated BP equivalent, so safe
-  runtime occlusion/reverb adaptation remains open.
+  `alsoft.ini` before a fresh game launch; this is host-tested only. Black
+  Plague also consumes the shared mine-gallery preset and bus trim through its
+  exact-build OpenAL/EFX effect-attach and environment-gain callsites. Those
+  callsites, the low-level sound vtable slots and all 20 EFX setters are
+  exact-image verified; the adapter is host-tested and preserves an already
+  authored non-default environment during late bootstrap. Live/headset/audio-
+  device validation remains open. The distance-HF path still has no demonstrated
+  BP equivalent, so runtime distance/occlusion adaptation remains open.
 - `src/deployment/pe_large_address.*` performs the pure PE32 LAA transformation; the build catalogue/manifests recognize host-verified exact Black Plague/Requiem LAA variants while transactional deployment remains installer work.
 - `src/adapters/hpl1/camera_matrix_override.*` owns the reusable byte-exact camera transaction; exact layouts remain backend-owned.
 - `src/runtime/stereo_render_policy.*` makes the optional monitor mirror explicit, but the mirror is not supported/validated.

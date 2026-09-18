@@ -1,5 +1,41 @@
 # Changelog
 
+- 2026-09-18: Completed the first Black Plague runtime consumer for Rework's
+  mine-gallery environmental audio. The exact-build adapter hooks the native
+  OpenAL/EFX effect-attach and environment-gain boundaries, applies the shared
+  20-field reverb preset plus bus trim, and can bootstrap a game that was already
+  running while preserving an authored non-default environment. The two
+  callsites, low-level sound vtable slots and 20 EFX setters are exact-image
+  verified; Release build, lifecycle coverage and focused audio tests pass. This
+  remains host-tested until headset/audio-device validation. Rework's separate
+  distance/occlusion low-pass policy is still open for Black Plague.
+
+- 2026-09-18: Clarified the long-term convergence rule for the trilogy. Rework
+  remains the proven Overture baseline, while Penumbra VR Framework is the active
+  evolution line: better game-neutral behavior demonstrated by another backend
+  is promoted to shared runtime only after real cross-consumer evidence, and the
+  Framework-owned Overture product then consumes that shared improvement too.
+  Game-specific mechanics, exact-build details and profile data remain in their
+  owning backend/profile rather than being generalized for symmetry.
+
+- 2026-09-18: Audited the documentation boundary. The README remains the public
+  landing page, durable architecture/state documents now point only to versioned
+  sources of truth, and transient Codex handoffs, debugging/research chronology
+  and the historical Astra audit were moved out of Git into the ignored local
+  `work/` documentation area. `AGENTS.md` was reduced to stable engineering
+  rules. The audit also corrected stale Black Plague status text for the
+  `1.5/2.25 m/s` locomotion policy and PID 25484 rejected-direction comfort
+  evidence. No runtime behavior changed.
+
+- 2026-09-18: Added host-testable Black Plague presentation timing diagnostics
+  around the existing single-consumption compositor contract. Telemetry now
+  reports presentation-pose acquisition interval/jitter plus pose age at world
+  render and at successful direct or deferred compositor submit, with explicit
+  validity flags. The tracker is backend-local and observational; it does not
+  alter pacing, prediction, pose ownership or the existing 250 ms stale-snapshot
+  cutoff. Release builds and the focused presentation/stereo policy tests pass;
+  headset validation is intentionally unchanged.
+
 - 2026-09-17: Consumed the transferable Rework `23c890f` Enhanced Visuals eye
   stage in Black Plague without importing Overture/HPL material assumptions.
   The shared OpenGL stage now renders each enabled eye through an RGBA16F

@@ -33,12 +33,12 @@ Validation states are architectural metadata and must be kept distinct:
 
 A build or synthetic test does not imply in-game behavior. A live binary boundary does not imply headset comfort. A successful headset run for one contract does not promote unrelated contracts.
 
-The historical Astra audit and the current architectural constraints are documented in:
+The current architectural constraints and capability state are documented in:
 
-- [`docs/audits/ASTRA_HIGH_AUDIT.md`](docs/audits/ASTRA_HIGH_AUDIT.md)
 - [`docs/DESIGN_DECISIONS.md`](docs/DESIGN_DECISIONS.md)
 - [`ROADMAP.md`](ROADMAP.md)
-- [`docs/internal/CODEX_HANDOFF.md`](docs/internal/CODEX_HANDOFF.md)
+- [`docs/TRILOGY_PARITY_PLAN.md`](docs/TRILOGY_PARITY_PLAN.md)
+- [`docs/SUPPORTED_BUILDS.md`](docs/SUPPORTED_BUILDS.md)
 
 ## Shared runtime boundary
 
@@ -68,6 +68,8 @@ The runtime does **not** own:
 - per-model tool sockets or bone axes.
 
 Promote behavior to the runtime only when the semantics are demonstrated. Duplicated but validated game/source code is preferable to a false abstraction.
+
+The shared runtime is also the convergence point for improvements discovered after the original Overture Rework. Rework remains the minimum proven behavioral reference, while the Framework is the active evolution line. A stronger behavior demonstrated in Black Plague, Requiem or later Framework work should move into shared runtime once a real second consumer proves that its semantics are game-neutral; the Framework-owned Overture product should then consume that shared behavior and gain the improvement as well. This keeps advances cumulative across the trilogy without turning one game's engine-specific implementation into a universal contract.
 
 ## Adapter/backend boundary
 
@@ -110,7 +112,7 @@ source renderer, player and physics
 
 The autonomous product lives under `products/overture`. The Framework owns the coherent source host and packaging path; the separate Rework repository is used for behavioral comparison, not compilation.
 
-The Overture product is also a regression consumer for shared extraction. Existing proven `Game.cpp` sequencing and `PlayerState_Interact_VR.cpp` behavior should not be rewritten without a demonstrated contract gap.
+The Overture product is also a regression consumer for shared extraction and for later shared improvements. Existing proven `Game.cpp` sequencing and `PlayerState_Interact_VR.cpp` behavior should not be rewritten without a demonstrated contract gap, but Overture is not intentionally frozen at the historical Rework implementation: once a better reusable policy is proven and promoted to shared runtime, Overture should consume it through its source adapter and retain its regression gates.
 
 ## Black Plague architecture
 
@@ -154,7 +156,7 @@ Important Black Plague owners include:
 
 ## Black Plague body/tracking transaction
 
-The Astra audit identified a temporal defect in the former post-tick plan-for-next-tick path. The current host-tested contract is a same-tick transaction around the existing native body owner:
+Repository/Rework comparison identified a temporal defect in the former post-tick plan-for-next-tick path. The current host-tested contract is a same-tick transaction around the existing native body owner:
 
 ```text
 before D6E00
@@ -227,15 +229,18 @@ The current presentation contract is **single-consumption**:
 - sequence `0`, already-submitted sequences and older sequences are rejected before another eye submit;
 - a skipped world submit is preferable to submitting an eye pair twice for one compositor sequence.
 
+Black Plague also records host-visible diagnostics for the acquisition interval,
+interval jitter, pose age at world render and pose age at compositor submit of
+that owned presentation sample. These measurements are observational only: they
+do not change pose ownership, pacing, prediction or the stale-snapshot cutoff.
+
 PID 22096 subsequently sustained the current presentation path through menu/gameplay with no stereo/compositor failures. That closes the specific error-108 regression but does not by itself validate tracking-world-yaw ownership, mirror/focus or final body/footstep bob.
 
 ## Positional comfort handoff
 
 Short physical X/Z pullback remained after the earlier body-boundary work. Later telemetry narrowed one remaining path to render-rate prediction continuing briefly into a horizontal direction rejected by the previous native solve.
 
-The current host-tested render handoff carries the last physical reconciliation and removes only the prediction component that continues into the rejected direction. Tangential slide and movement away from the obstacle remain available.
-
-This filter is not considered headset-validated until a fresh short-motion/wall/slide run closes the comfort gate.
+The current render handoff carries the last physical reconciliation and removes only the prediction component that continues into the rejected direction. Tangential slide and movement away from the obstacle remain available. PID 25484 supplied positive headset comfort evidence for this filter; deliberate wall/slide edge cases remain a separate validation gate.
 
 ## Interaction architecture
 
@@ -329,14 +334,6 @@ The current research launcher/probe path is not yet the final production install
 
 ## Current implementation boundary
 
-Do not interpret this architecture document as a request to redesign already-tested contracts. The active order is maintained in [`ROADMAP.md`](ROADMAP.md) and the current engineering checkpoint in [`docs/internal/CODEX_HANDOFF.md`](docs/internal/CODEX_HANDOFF.md).
+Do not interpret this architecture document as a request to redesign already-tested contracts. [`ROADMAP.md`](ROADMAP.md) owns the active work order, [`docs/TRILOGY_PARITY_PLAN.md`](docs/TRILOGY_PARITY_PLAN.md) owns cross-game capability state and the Requiem readiness gate, and [`docs/SUPPORTED_BUILDS.md`](docs/SUPPORTED_BUILDS.md) owns exact-build/evidence status.
 
-At the current checkpoint, the principal remaining evidence/implementation boundaries are:
-
-1. close the remaining focused Black Plague posture edges after PID 25484: Hybrid release-hold capture and blocked-stand/low-ceiling recovery;
-2. run the real-process no-write Black Plague palm query, then add owned palm shapes and the proven Rework resolver if that gate passes;
-3. finish deliberate wall/slide, constrained locomotion, recenter/tracking-loss and yaw/bob comfort gates;
-4. interaction lifecycle/tool geometry validation;
-5. mirror/focus as a separate presentation gate;
-6. mechanisms, broader UI/gameplay coverage and production deployment;
-7. Requiem exact-build backend research.
+Black Plague remains the active second-backend proof. Current work is focused on closing the remaining headset validation edges around combined palm/body interaction, posture and locomotion comfort, UI/presentation, feedback/output and representative gameplay. Requiem gameplay follows the framework-readiness gate rather than a duplicated implementation path.

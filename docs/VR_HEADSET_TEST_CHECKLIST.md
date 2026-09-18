@@ -15,14 +15,15 @@ adquisición rápida `Grab=6`/`Move=2`, step físico static-only, manos Rework y
 articulación de cinco dedos, perfil Rework del glowstick, magnetic pickup,
 servo de mecanismos para `cGameLever` de un joint y `cGameSwingDoor` hinge de
 un joint, HUD/subtítulos sobre el owner nativo `DrawAll`, haptics
-LightToggle/Damage/MeleeImpact, HRTF de arranque y el stage final por ojo de
-Enhanced Visuals. Wheel, mecanismos compound, occlusion/reverb y la respuesta
-HPL de materiales/luces de Enhanced Visuals siguen fuera de ese cierre.
+LightToggle/Damage/MeleeImpact, HRTF de arranque, reverb mine-gallery/bus trim y
+el stage final por ojo de Enhanced Visuals. Wheel, mecanismos compound,
+distance/occlusion y la respuesta HPL de materiales/luces de Enhanced Visuals
+siguen fuera de ese cierre.
 
-El gate host actual es **36/36 CTest Release**, verificador exact-build de Black
-Plague y `git diff --check`. La última configuración SDK-less registrada había
-pasado **35/35** antes de añadirse la cobertura host más reciente; ese dato no
-promueve ni bloquea por sí solo la siguiente tanda con visor.
+El gate host actual es **38/38 CTest Release**, verificador exact-build de Black
+Plague y `git diff --check`. La configuración SDK-less actual también pasa
+**38/38**; ese dato no promueve ni bloquea por sí solo la siguiente tanda con
+visor.
 
 La tanda principal se lanza desde la raíz del repositorio con:
 
@@ -188,15 +189,14 @@ exact-build soportado y lanza Black Plague por la ruta de inyección existente.
 
 El preflight offline actual de 2026-09-18 pasa:
 
-- Release: 36/36 CTest, incluido `opengl_eye_targets`;
-- la última Release sin SDK OpenVR registrada pasó 35/35 antes de la cobertura
-  host añadida posteriormente; no se usa ese resultado antiguo para promover
-  las capacidades nuevas;
+- Release: 38/38 CTest, incluido `opengl_eye_targets`;
+- Release sin SDK OpenVR: 38/38 CTest;
 - metadata: 6 entradas de catálogo, 2 manifests exact-build, 42 actions,
   6 action sets y 8 bindings;
 - verifier Black Plague exact-build: pasa las fronteras de input, locomoción,
-  crouch, interacción/palma, cuerpo/colisión y el owner 2D nativo
-  `OnPostSceneDraw -> GetDrawer -> DrawAll`;
+  crouch, interacción/palma, cuerpo/colisión, el owner 2D nativo
+  `OnPostSceneDraw -> GetDrawer -> DrawAll` y las fronteras OpenAL/EFX usadas
+  por el reverb mine-gallery/bus trim;
 - `opengl_eye_targets` valida además que la nueva superficie gameplay 800x600
   mezcla alpha sobre un ojo ya renderizado sin limpiarlo y restaura el estado GL.
 

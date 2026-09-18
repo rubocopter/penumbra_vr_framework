@@ -36,9 +36,10 @@ mejora visual validada hasta una nueva prueba.
   `Start-BlackPlaguePalmCollisionValidation.ps1`, que compone esas rutas para
   detectar regresiones sin reabrir sus hitos cerrados.
 - **Abierto por diseño/evidencia:** Wheel y mecanismos compound siguen nativos;
-  occlusion/reverb y la respuesta HPL de materiales/luces de Rework siguen sin
-  un boundary seguro consumido. El postprocesado Enhanced Visuals por ojo y HRTF
-  de arranque están consumidos/host-tested, pero aún no validados en visor/audio.
+  la occlusión/distancia y la respuesta HPL de materiales/luces de Rework siguen
+  sin un boundary seguro consumido. El reverb mine-gallery/bus trim, el
+  postprocesado Enhanced Visuals por ojo y HRTF de arranque están
+  consumidos/host-tested, pero aún no validados en visor/audio.
 
 La tanda posterior añadió `native_update_timing`, contadores de herramientas y
 agarres rechazados por seguridad, además de ampliar el buffer de log. No se

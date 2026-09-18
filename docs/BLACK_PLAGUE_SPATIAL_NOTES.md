@@ -591,12 +591,11 @@ evidencia y validación física.
 
 ## Verificación y límites
 
-La configuración raíz contiene ahora 36 tests. El gate Release actual pasa
-36/36; Debug y SDK-less conservan sus runners correspondientes y sus resultados
-históricos no deben reinterpretarse como evidencia para cobertura añadida con
-posterioridad.
-El runner SDK-less excluye deliberadamente `opengl_eye_targets` porque esa
-prueba necesita el driver WGL real. El test
+La configuración raíz contiene ahora 38 tests. Los gates Release y SDK-less
+actuales pasan 38/38; esos resultados host no promueven por sí solos ninguna
+capacidad a evidencia live/headset.
+El test `opengl_eye_targets` se ejecuta también en la configuración SDK-less
+actual usando el driver WGL real. El test
 corporal ejecuta la sonda exact-build sobre una imagen sintética y el test
 espacial ejecuta el código del adaptador en una imagen sintética con trampolines
 a dobles nativos; no prueba Newton ni el juego real. La prueba matemática de

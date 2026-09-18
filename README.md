@@ -33,9 +33,9 @@ For a finished, playable Overture package today, use [Penumbra: Overture VR Rewo
 
 ## Project documentation
 
-[Roadmap](ROADMAP.md) · [Architecture](ARCHITECTURE.md) · [Trilogy parity](docs/TRILOGY_PARITY_PLAN.md) · [Headset validation](docs/VR_HEADSET_TEST_CHECKLIST.md) · [Supported builds](docs/SUPPORTED_BUILDS.md)
+[Roadmap](ROADMAP.md) · [Architecture](ARCHITECTURE.md) · [Trilogy parity](docs/TRILOGY_PARITY_PLAN.md) · [Supported builds](docs/SUPPORTED_BUILDS.md) · [VR configuration](docs/VR_CONFIGURATION.md) · [Headset validation](docs/VR_HEADSET_TEST_CHECKLIST.md)
 
-More detailed Black Plague research lives in [probe notes](docs/BLACK_PLAGUE_PROBE.md) and [spatial notes](docs/BLACK_PLAGUE_SPATIAL_NOTES.md). Internal engineering checkpoints stay under `docs/internal/`.
+The public documentation describes current contracts and verified capability state. Reverse-engineering chronology, experiment logs and agent continuity notes are kept outside the versioned documentation.
 
 <details>
 <summary><strong>For developers</strong></summary>

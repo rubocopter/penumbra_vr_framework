@@ -144,7 +144,8 @@ The consolidated 2026-09-18 candidate also includes host-tested magnetic item
 pickup, one-joint `cGameLever` hinge/slider and hinge-only one-joint
 `cGameSwingDoor` mechanism consumers, the native gameplay 2D overlay shell,
 LightToggle/Damage/confirmed-contact MeleeImpact haptics, launcher-owned HRTF
-startup and the transferable Enhanced Visuals eye-finalization stage. The next
+startup, the exact-build OpenAL/EFX mine-gallery reverb/bus-trim consumer and the
+transferable Enhanced Visuals eye-finalization stage. The next
 primary milestone is one clean combined headset run through
 `Start-BlackPlaguePalmCollisionValidation.ps1`; only after that evidence should
 the remaining focused posture/presentation/output rows be closed in the order
@@ -262,7 +263,7 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Implement a transient, fail-closed room-scale consumer through that reconciled request
 - [x] Revalidate corrected render-rate positional movement, stationary comfort, blocking/sliding and head/body reconciliation in the headset (PID 8092 technical gate)
 - [ ] Headset-validate the current Rework-equivalent static-only physical-step adaptation: low static geometry must remain physically traversable, dynamic/invalid physical-only step candidates must not create vertical bounce, and direct/native locomotion must retain normal stair/ledge stepping
-- [ ] Decide and validate Black Plague VR walk/sprint tuning after reconciliation is stable
+- [x] Consume the shared Rework walk/sprint policy (`1.5/2.25 m/s`) through Black Plague's collision-owned direct locomotion path; the normal route has headset evidence, while constrained target states retain focused validation gates
 - [x] Map and host-test Rework's accepted-body VR footstep cadence (`>0.85 m`, native `FootStep(0.8)`), including Black Plague's verifier-pinned MSVC 2003 string ABI, collision-accepted motion consumer, deferred game-thread dispatch after native input update and dispatch telemetry
 - [ ] Headset-validate Black Plague VR footstep cadence/surface selection and finish the remaining player-camera/head-bob/body-animation comfort observation
 - [x] Implement Rework-derived physical crouch policy and explicit desired/native stance synchronization through Black Plague's existing input owner
@@ -295,7 +296,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Extend the combined palm/room-scale headset helper to aggregate `Grab=6`/`Move=2`, tool, crouch, nudge and haptic evidence without treating optional scene coverage as a false failure
 - [ ] Complete Black Plague haptic parity: LightToggle, Damage and confirmed-contact MeleeImpact boundaries are consumed, exact-image verified and host-tested; headset-validate exercised controller submissions, including real melee contact versus an empty swing
 - [x] Consume Rework HRTF startup semantics for Black Plague through the launcher-owned pre-audio `alsoft.ini` boundary; capability/test coverage is host-tested and headset/audio-device validation remains a promotion gate
-- [ ] Map safe Black Plague runtime boundaries for Rework's added distance/occlusion low-pass and mine-gallery environmental reverb behavior; native BP EFX exists but is not equivalent to the Rework additions
+- [x] Consume Rework's mine-gallery environmental reverb preset and bus trim through verifier-pinned Black Plague OpenAL/EFX initialization boundaries; exact-image verification and host tests pass, while live/headset/audio-device validation remains open
+- [ ] Map a safe Black Plague runtime boundary for Rework's added distance/occlusion low-pass behavior; the mapped BP audio path still has no demonstrated equivalent for the Rework distance-HF calculation
 - [ ] Complete compatible Black Plague renderer consumption for Rework Enhanced Visuals: the transferable per-eye RGBA16F + 2x MSAA + v4 final-treatment stage is consumed and host-tested with graceful GL fallback; the Rework-specific HPL ambient/light material response and headset validation remain open
 - [ ] Implement/validate comfortable loading/map transitions and VR UI dimmer/overlay behavior at Black Plague-owned lifecycle boundaries
 - [ ] Representative chapter-level validation
