@@ -12,6 +12,7 @@
 #include "black_plague_body_adapter.hpp"
 #include "movement_ownership_probe.hpp"
 #include "spatial_interaction.hpp"
+#include "audio_environment_probe.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_math.hpp"
 #include "vr_settings_store.hpp"
@@ -123,6 +124,8 @@ void AppendLifecycleError(
     };
 
     using C = penumbra_vr::BlackPlagueProbeCapability;
+    if (!remove(C::audio_environment, "audio environment",
+            penumbra_vr::backends::black_plague::RemoveAudioEnvironmentProbe)) return false;
     if (!remove(C::spatial_interaction, "spatial interaction",
             penumbra_vr::backends::black_plague::RemoveSpatialInteraction)) return false;
     if (!remove(C::movement_ownership, "movement ownership",
@@ -304,6 +307,24 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         return;
     }
     if (frame_number%300==0) {
+        if (HasCapability(penumbra_vr::BlackPlagueProbeCapability::audio_environment)) {
+            const auto audio = penumbra_vr::backends::black_plague::
+                ReadAudioEnvironmentTelemetry();
+            penumbra_vr::probe::WriteLog(
+                "audio_environment valid=%u late_object=%u native_default=%u bus_trim=%u "
+                "init_attach=%llu preset=%llu initial_trim=%llu late_bootstrap=%llu "
+                "preserved_environment=%llu",
+                audio.valid ? 1U : 0U,
+                audio.late_object_found ? 1U : 0U,
+                audio.late_native_default ? 1U : 0U,
+                audio.bus_trim_applied ? 1U : 0U,
+                static_cast<unsigned long long>(audio.init_attach_calls),
+                static_cast<unsigned long long>(audio.preset_applications),
+                static_cast<unsigned long long>(audio.initial_bus_trim_substitutions),
+                static_cast<unsigned long long>(audio.late_bootstrap_applications),
+                static_cast<unsigned long long>(
+                    audio.late_existing_environment_preserved));
+        }
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
         penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu nudge_queries=%llu nudge_contacts=%llu nudges_applied=%llu interact_presses=%llu selection_refreshes=%llu selection_ray_batches=%llu selection_rays=%llu selection_candidates=%llu selection_discards=%llu selection_winner_mm=%llu selection_central_rays=%llu selection_auxiliary_rays=%llu grab_enters=%llu move_enters=%llu grab_pending=%llu move_pending=%llu magnetic_queries=%llu magnetic_candidates=%llu magnetic_visibility_rays=%llu magnetic_winners=%llu mechanism_acquired=%llu mechanism_updates=%llu mechanism_rejected=%llu contact_reach_m=0.180",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
@@ -617,6 +638,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "hmd_visibility_updates=%lu hmd_visibility_failures=%lu "
             "presentation_pose_acquisitions=%lu presentation_pose_reuses=%lu "
             "presentation_pose_stale_rejects=%lu "
+            "presentation_pose_interval_valid=%u presentation_pose_interval_ms=%llu "
+            "presentation_pose_jitter_valid=%u presentation_pose_jitter_ms=%llu "
+            "presentation_render_age_valid=%u presentation_render_age_ms=%llu "
+            "presentation_submit_age_valid=%u presentation_submit_age_ms=%llu "
             "hmd_visibility_camera_restored=%u hmd_visibility_error=%s "
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
@@ -706,6 +731,18 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.presentation_pose_acquisitions),
             static_cast<unsigned long>(render_world.presentation_pose_reuses),
             static_cast<unsigned long>(render_world.presentation_pose_stale_rejects),
+            render_world.presentation_pose_interval_valid ? 1U : 0U,
+            static_cast<unsigned long long>(
+                render_world.presentation_pose_interval_ms),
+            render_world.presentation_pose_jitter_valid ? 1U : 0U,
+            static_cast<unsigned long long>(
+                render_world.presentation_pose_jitter_ms),
+            render_world.presentation_render_age_valid ? 1U : 0U,
+            static_cast<unsigned long long>(
+                render_world.presentation_render_age_ms),
+            render_world.presentation_submit_age_valid ? 1U : 0U,
+            static_cast<unsigned long long>(
+                render_world.presentation_submit_age_ms),
             render_world.hmd_visibility_camera_restored ? 1U : 0U,
             render_world.hmd_visibility_error.data(),
             static_cast<unsigned long>(render_world.eye_scissor_remapped),
@@ -1410,6 +1447,30 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
             spatial_ready ? 1U : 0U, hook_error.c_str());
         if (install_result == ComponentInstallResult::failed_partial) {
             return FailInitializationWithRollback("Spatial interaction");
+        }
+
+        install_result = InstallTrackedComponent(
+            C::audio_environment,
+            penumbra_vr::backends::black_plague::InstallAudioEnvironmentProbe,
+            penumbra_vr::backends::black_plague::RemoveAudioEnvironmentProbe,
+            hook_error);
+        const bool audio_environment_ready =
+            install_result == ComponentInstallResult::installed;
+        const auto audio_environment = penumbra_vr::backends::black_plague::
+            ReadAudioEnvironmentTelemetry();
+        penumbra_vr::probe::WriteLog(
+            "Audio environment installed=%u error=%s late_object=%u native_default=%u "
+            "bus_trim=%u preset=%llu preserved_environment=%llu",
+            audio_environment_ready ? 1U : 0U,
+            hook_error.c_str(),
+            audio_environment.late_object_found ? 1U : 0U,
+            audio_environment.late_native_default ? 1U : 0U,
+            audio_environment.bus_trim_applied ? 1U : 0U,
+            static_cast<unsigned long long>(audio_environment.preset_applications),
+            static_cast<unsigned long long>(
+                audio_environment.late_existing_environment_preserved));
+        if (install_result == ComponentInstallResult::failed_partial) {
+            return FailInitializationWithRollback("Audio environment");
         }
     }
     penumbra_vr::probe::WriteLog(

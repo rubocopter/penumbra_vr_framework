@@ -475,6 +475,7 @@ void ReportProbeCapabilities(std::uint32_t capabilities) {
                << L", adapter=" << state(Capability::body_adapter)
                << L", ownership=" << state(Capability::movement_ownership)
                << L", interaction=" << state(Capability::spatial_interaction)
+               << L", audio=" << state(Capability::audio_environment)
                << L".\n";
 }
 

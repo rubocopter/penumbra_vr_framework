@@ -7,6 +7,7 @@
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
 #include "native_input_bridge.hpp"
+#include "presentation_timing.hpp"
 #include "spatial_interaction.hpp"
 #include "vr_grab_pose.hpp"
 #include "rel32_call_hook.hpp"
@@ -330,6 +331,7 @@ struct PendingGameplayOverlaySubmission {
     runtime::OpenVrSession* session = nullptr;
     runtime::VrMatrix44 head_view{};
     std::uint64_t presentation_sequence = 0;
+    std::uint64_t presentation_timestamp_ms = 0;
     bool presentation_from_visibility = false;
 };
 PendingGameplayOverlaySubmission g_pending_gameplay_overlay_submission;
@@ -447,6 +449,7 @@ void InvalidateWorldTracking() {
 }
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
+PresentationTimingTracker g_presentation_timing;
 std::atomic<bool> g_capabilities_initialized{false};
 FramebufferApi g_framebuffer_api = FramebufferApi::unavailable;
 std::array<char, 64> g_open_gl_version{};
@@ -715,6 +718,8 @@ void __fastcall HookedGraphicsDrawerDrawAll(void* drawer, void*) noexcept {
         g_telemetry.gameplay_overlay_error = {};
     }
     if (submitted) {
+        g_presentation_timing.RecordSubmitAge(
+            pending.presentation_timestamp_ms, GetTickCount64());
         ++g_telemetry.deferred_compositor_submits;
         ++g_telemetry.compositor_submitted_frames;
         g_telemetry.compositor_hmd_pose_valid = true;
@@ -851,6 +856,10 @@ void RecordHmdVisibilityFailure(
     snapshot.pose.identity.sequence =
         g_presentation_sequence.fetch_add(1, std::memory_order_acq_rel) + 1;
     snapshot.pose.identity.timestamp_ms = GetTickCount64();
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    g_presentation_timing.RecordAcquisition(
+        snapshot.pose.identity.timestamp_ms);
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
     snapshot.pose.identity.pose_epoch =
         g_presentation_pose_epoch.load(std::memory_order_acquire);
     snapshot.pose.identity.yaw_epoch =
@@ -1220,6 +1229,10 @@ void __fastcall HookedUpdateRenderList(
         presentation = g_presentation_snapshot;
         ReleaseSRWLockShared(&g_presentation_lock);
         const auto now = GetTickCount64();
+        AcquireSRWLockExclusive(&g_telemetry_lock);
+        g_presentation_timing.RecordRenderAge(
+            presentation.pose.identity.timestamp_ms, now);
+        ReleaseSRWLockExclusive(&g_telemetry_lock);
         if (!presentation.valid || presentation.pose.identity.timestamp_ms == 0 ||
             now < presentation.pose.identity.timestamp_ms ||
             now - presentation.pose.identity.timestamp_ms > 250) {
@@ -1426,6 +1439,8 @@ void __fastcall HookedUpdateRenderList(
             g_pending_gameplay_overlay_submission.head_view = head_view;
             g_pending_gameplay_overlay_submission.presentation_sequence =
                 presentation.pose.identity.sequence;
+            g_pending_gameplay_overlay_submission.presentation_timestamp_ms =
+                presentation.pose.identity.timestamp_ms;
             g_pending_gameplay_overlay_submission.presentation_from_visibility =
                 presentation_from_visibility;
             // Hold tracked-stereo lifetime ownership until the native DrawAll
@@ -1464,6 +1479,8 @@ void __fastcall HookedUpdateRenderList(
     g_telemetry.hand_draw_cpu_ns += hand_draw_cpu_ns;
     g_telemetry.compositor_submit_cpu_ns += compositor_submit_cpu_ns;
     if (session != nullptr && !compositor_submit_deferred) {
+        g_presentation_timing.RecordSubmitAge(
+            presentation.pose.identity.timestamp_ms, GetTickCount64());
         ++g_telemetry.compositor_submitted_frames;
         g_telemetry.compositor_hmd_pose_valid = true;
     }
@@ -1702,6 +1719,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
 
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
+    g_presentation_timing.Reset();
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     g_capabilities_initialized.store(false, std::memory_order_release);
     g_framebuffer_api = FramebufferApi::unavailable;
@@ -2123,6 +2141,9 @@ bool StartTrackedStereoPresentation(
     g_stereo_latest_pose = {};
     g_stereo_room_scale_sample = {};
     g_last_submitted_presentation_sequence.store(0, std::memory_order_release);
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+    g_presentation_timing.ResetHistory();
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
     g_stereo_persistent.store(true, std::memory_order_release);
     g_menu_anchor_valid = false;
     g_stereo_state.store(StereoMatrixState::pending, std::memory_order_release);
@@ -2349,6 +2370,16 @@ bool TrackedStereoMonitorMirrorEnabled() noexcept {
 RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {
     AcquireSRWLockExclusive(&g_telemetry_lock);
     RenderWorldFrameTelemetry result = g_telemetry;
+    const PresentationTimingWindow timing =
+        g_presentation_timing.ConsumeWindow();
+    result.presentation_pose_interval_valid = timing.acquisition_interval_valid;
+    result.presentation_pose_interval_ms = timing.acquisition_interval_ms;
+    result.presentation_pose_jitter_valid = timing.acquisition_jitter_valid;
+    result.presentation_pose_jitter_ms = timing.acquisition_jitter_ms;
+    result.presentation_render_age_valid = timing.render_age_valid;
+    result.presentation_render_age_ms = timing.render_age_ms;
+    result.presentation_submit_age_valid = timing.submit_age_valid;
+    result.presentation_submit_age_ms = timing.submit_age_ms;
     g_telemetry = {};
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     result.eye_targets = ConsumeEyeTargetProbeTelemetry();

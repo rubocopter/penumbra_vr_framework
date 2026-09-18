@@ -217,6 +217,7 @@ target_link_libraries(pvr_black_plague_body_adapter PUBLIC pvr_vr_math)
 pvr_enable_warnings(pvr_black_plague_body_adapter)
 
 add_library(pvr_black_plague_backend_probe STATIC
+    src/backends/black_plague/audio_environment_probe.cpp
     src/backends/black_plague/body_collision_probe.cpp
     src/backends/black_plague/hand_contact_probe.cpp
     src/backends/black_plague/movement_ownership_probe.cpp
@@ -240,6 +241,7 @@ target_link_libraries(
         pvr_vr_math
         pvr_black_plague_body_adapter
         pvr_black_plague_settings
+        pvr_spatial_audio
         pvr_stereo_render_policy)
 target_link_libraries(pvr_black_plague_backend_probe PUBLIC pvr_vr_native_intents pvr_iat_hook)
 target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
@@ -365,6 +367,14 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook pvr_rel32_call_hook)
     pvr_enable_warnings(pvr_spatial_interaction_test)
     add_test(NAME spatial_interaction COMMAND pvr_spatial_interaction_test)
+
+    add_executable(pvr_black_plague_audio_environment_test
+        tests/black_plague_audio/audio_environment_policy_test.cpp)
+    target_include_directories(pvr_black_plague_audio_environment_test PRIVATE
+        src/backends/black_plague)
+    pvr_enable_warnings(pvr_black_plague_audio_environment_test)
+    add_test(NAME black_plague_audio_environment
+        COMMAND pvr_black_plague_audio_environment_test)
     add_executable(pvr_vr_grab_pose_test tests/vr_math/vr_grab_pose_test.cpp)
     target_link_libraries(pvr_vr_grab_pose_test PRIVATE pvr_vr_math)
     pvr_enable_warnings(pvr_vr_grab_pose_test)
@@ -489,6 +499,18 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_stereo_render_policy_test)
 
     add_test(NAME stereo_render_policy COMMAND pvr_stereo_render_policy_test)
+
+    add_executable(pvr_black_plague_presentation_timing_test
+        tests/black_plague_presentation_timing/presentation_timing_test.cpp
+    )
+    target_include_directories(
+        pvr_black_plague_presentation_timing_test PRIVATE
+        src/backends/black_plague)
+    pvr_enable_warnings(pvr_black_plague_presentation_timing_test)
+
+    add_test(
+        NAME black_plague_presentation_timing
+        COMMAND pvr_black_plague_presentation_timing_test)
 
     add_executable(pvr_vr_panel_policy_test
         tests/vr_panel_policy/vr_panel_policy_test.cpp

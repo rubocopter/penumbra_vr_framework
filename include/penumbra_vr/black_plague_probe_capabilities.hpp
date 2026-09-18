@@ -13,6 +13,7 @@ enum class BlackPlagueProbeCapability : std::uint32_t {
     body_adapter = 1U << 5,
     movement_ownership = 1U << 6,
     spatial_interaction = 1U << 7,
+    audio_environment = 1U << 8,
 };
 
 [[nodiscard]] constexpr std::uint32_t BlackPlagueProbeCapabilityMask(
