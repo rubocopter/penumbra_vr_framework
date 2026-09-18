@@ -1,5 +1,19 @@
 # Changelog
 
+- 2026-09-18: Hardened the Black Plague launcher readiness gate after PID 24136
+  reproduced the historical early SDL crash signature (`0xc0000005` at
+  `SDL.dll+0x28c09`) after exact-build/profile logging but before the first
+  OpenGL-hook result. The previous gate could accept any non-empty top-level
+  window owned by the game process. It now requires the visible, stable SDL 1.2
+  `SDL_app` window while deliberately retaining the earlier removal of the
+  unreliable cross-thread `GetPixelFormat(GetDC(hwnd))` check. Startup failure
+  reporting also distinguishes a game that exited on its own from one that is
+  still running. Release builds, 38/38 root CTest, metadata, exact-image
+  verification and `--check-vr` preflight pass without starting the game or
+  SteamVR. This remains **host-tested only** until a fresh real launch crosses
+  `PenumbraVR_Initialize`; the crash is not assigned to a VR subsystem without
+  dump/stack evidence.
+
 - 2026-09-18: Completed the first Black Plague runtime consumer for Rework's
   mine-gallery environmental audio. The exact-build adapter hooks the native
   OpenAL/EFX effect-attach and environment-gain boundaries, applies the shared

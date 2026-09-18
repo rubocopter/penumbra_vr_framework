@@ -112,7 +112,16 @@ BOOL CALLBACK FindGameWindow(HWND window, LPARAM context) {
     auto* readiness = reinterpret_cast<GameWindowReadiness*>(context);
     DWORD window_process_id = 0;
     GetWindowThreadProcessId(window, &window_process_id);
-    if (window_process_id != readiness->process_id) {
+    if (window_process_id != readiness->process_id || !IsWindowVisible(window)) {
+        return TRUE;
+    }
+
+    wchar_t class_name[32]{};
+    if (GetClassNameW(
+            window,
+            class_name,
+            static_cast<int>(sizeof(class_name) / sizeof(class_name[0]))) == 0 ||
+        _wcsicmp(class_name, L"SDL_app") != 0) {
         return TRUE;
     }
 
@@ -171,10 +180,11 @@ bool WaitForBlackPlagueInitializedCode(
         // IAT hooks in that interval races SDL/wgl driver initialization and
         // can crash inside SDL or the display driver. SDL 1.2 may use a private
         // DC (especially for fullscreen), so GetPixelFormat(GetDC(hwnd)) is not
-        // a reliable cross-thread readiness signal. Instead require the game's
-        // non-empty top-level client window to remain unchanged for a short
-        // sequence of polls. This observes the end of the create/resize phase
-        // without depending on visibility or a particular WGL/DC ownership.
+        // a reliable cross-thread readiness signal. Black Plague's SDL 1.2.11
+        // build uses the default SDL_app application window, so require that
+        // visible non-empty top-level client window to remain unchanged for a
+        // short sequence of polls. This rejects helper/hidden process windows
+        // without depending on a particular WGL/DC ownership.
         const auto current_window = ReadGameWindow(process_id);
         if (current_window.window != nullptr) {
             saw_graphics_window = true;
@@ -208,13 +218,13 @@ bool WaitForBlackPlagueInitializedCode(
     } while (GetTickCount64() < deadline);
 
     if (!initialized_code && !saw_graphics_window) {
-        error = L"Timed out waiting for initialized Black Plague code and its SDL game window";
+        error = L"Timed out waiting for initialized Black Plague code and its visible SDL_app game window";
     } else if (!initialized_code) {
         error = L"Timed out waiting for the exact initialized RenderWorld call bytes";
     } else if (!saw_graphics_window) {
-        error = L"Timed out waiting for the SDL game window to be created";
+        error = L"Timed out waiting for the visible SDL_app game window to be created";
     } else {
-        error = L"Timed out waiting for the SDL game window to reach a stable client size";
+        error = L"Timed out waiting for the visible SDL_app game window to reach a stable client size";
     }
     return false;
 }
@@ -1155,8 +1165,19 @@ int LaunchVr(const std::filesystem::path& requested, const std::filesystem::path
         !WaitForBlackPlagueInitializedCode(process.get(), pid, game, 15'000, error) ||
         !InjectAndInitialize(process.get(), pid, probe, capabilities, error) ||
         !StartRemoteVr(process.get(), pid, probe, error)) {
-        // Never kill an existing game or a user's unsaved session on failure.
-        std::wcerr << L"VR startup failed; the game has been left running. " << error << L'\n';
+        // Never kill an existing game or a user's unsaved session on failure,
+        // but do not claim it survived if it exited or crashed on its own.
+        DWORD process_exit_code = STILL_ACTIVE;
+        const bool exit_known =
+            GetExitCodeProcess(process.get(), &process_exit_code) != FALSE;
+        if (exit_known && process_exit_code != STILL_ACTIVE) {
+            std::wcerr << L"VR startup failed; the game exited during VR startup "
+                       << L"(exit code " << process_exit_code << L"). "
+                       << error << L'\n';
+        } else {
+            std::wcerr << L"VR startup failed; the game was left running. "
+                       << error << L'\n';
+        }
         return 8;
     }
     ReportProbeCapabilities(capabilities);

@@ -96,6 +96,19 @@ Abrir directamente el juego en Steam **no** ejecuta este lanzador automáticamen
 SteamVR debe estar instalado y los dispositivos configurados; OpenVR solicita
 su inicialización. El usuario confirmó el arranque directo con el BAT.
 
+El 2026-09-18, PID 24136 reprodujo el antiguo fallo temprano de arranque: el
+probe validó el hash `FD316F...`, escribió los perfiles VR y el proceso terminó
+antes de registrar el resultado del primer hook OpenGL. Windows registró
+`0xc0000005` en `SDL.dll+0x28c09`, la misma firma observable que el fallo
+histórico de PID 28872. Sin dump/stack no se atribuye causalidad a un subsistema
+VR concreto. El boundary comprobablemente demasiado amplio estaba en el
+readiness del launcher: aceptaba cualquier ventana top-level no vacía del
+proceso. El candidato actual exige que la ventana estable sea la ventana SDL 1.2
+visible de clase `SDL_app`; mantiene deliberadamente fuera el antiguo
+`GetPixelFormat(GetDC(hwnd))`, que no es una señal fiable con el DC privado de
+SDL. Este hardening es **host-tested only** hasta que un nuevo arranque real
+supere `PenumbraVR_Initialize`.
+
 ### Estado de la validación shadow y próximas pruebas
 
 La reconciliación shadow ya fue live-tested en PID 28172 mediante

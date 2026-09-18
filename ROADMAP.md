@@ -150,6 +150,12 @@ primary milestone is one clean combined headset run through
 `Start-BlackPlaguePalmCollisionValidation.ps1`; only after that evidence should
 the remaining focused posture/presentation/output rows be closed in the order
 defined by `docs/TRILOGY_PARITY_PLAN.md`.
+PID 24136 did not reach that gameplay gate: it reproduced the historical early
+SDL crash signature before the first OpenGL hook-install result. The launcher
+readiness predicate is now narrowed to a stable visible SDL 1.2 `SDL_app`
+window, with the unreliable cross-thread pixel-format check still excluded.
+That startup hardening is host-tested only and must cross initialization on the
+next real launch before the combined headset evidence can resume.
 The desktop mirror remains experimental. PID 19192 confirmed that mirror-off
 shows 2D menus but suppresses the gameplay world to black, matching the pass
 ownership design; mirror-on remains part of the next validation batch.
