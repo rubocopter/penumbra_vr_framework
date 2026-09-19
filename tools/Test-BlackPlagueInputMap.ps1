@@ -6,6 +6,7 @@ $inputRoot = Split-Path -Parent $PSScriptRoot
 $inputSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/native_input_bridge.cpp') -Raw
 $bodyAdapterSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/black_plague_body_adapter.cpp') -Raw
 $contactSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/hand_contact_probe.cpp') -Raw
+$vrMenuSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/native_vr_settings_menu.cpp') -Raw
 $inputImage = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $ImagePath).Path)
 if ($inputImage.Length -lt 0x27F7BC) { throw 'Capture is too short for the mapped virtual image.' }
 function Assert-Call([int]$Site, [int]$Target) {
@@ -28,6 +29,23 @@ foreach ($inputMatch in $inputQueries) {
     }
     Assert-Call $inputRva $inputTarget
 }
+
+# Native VR settings reuse Black Plague's own cMainMenuWidget_Button objects.
+# Pin the two vtable methods we replace plus the constructor/state-list ABI the
+# lazy Options-page injector consumes. The menu never extends the native state
+# table: all Framework widgets remain registered in Options state 8.
+Assert-Bytes 0x27AD50 @(0x30,0xAC,0x47,0x00) # Button::OnMouseDown -> 0x47AC30
+Assert-Bytes 0x27AD64 @(0xC0,0x3B,0x47,0x00) # widget active-change slot -> 0x473BC0
+Assert-Bytes 0x74110 @(0x6A,0xFF,0x68,0xD9,0x08,0x63,0x00)
+Assert-Bytes 0x73BC0 @(0x33,0xC0,0x89,0x41,0x2C,0x89,0x81,0x80,0x00,0x00,0x00,0x88,0x41,0x04,0xC3)
+Assert-Bytes 0x7B040 @(0x53,0x55,0x56,0x8B,0xE9,0x57,0x8B,0xBD,0xAC,0x00,0x00,0x00)
+Assert-Bytes 0x7A68A @(0x8B,0x87,0xB4,0x00,0x00,0x00,0x8B,0x8F,0xAC,0x00,0x00,0x00,0x89,0x87,0x98,0x00,0x00,0x00,0x89,0x97,0xB4,0x00,0x00,0x00)
+if (-not $vrMenuSource.Contains('constexpr int kOptionsState = 8') -or
+    -not $vrMenuSource.Contains('kButtonMouseDownSlotRva = kButtonVtableRva + 0x0C') -or
+    -not $vrMenuSource.Contains('kButtonActiveChangedSlotRva = kButtonVtableRva + 0x20')) {
+    throw 'Black Plague native VR menu no longer consumes the verified Options/button ABI.'
+}
+Write-Output 'Verified native VR Settings insertion boundary: Options state 8 and exact cMainMenuWidget_Button vtable/constructor/list ABI.'
 
 # Gameplay 2D presentation follows the exact native Scene owner. Black Plague
 # calls Updater::OnPostSceneDraw, obtains GraphicsDrawer and consumes its queue

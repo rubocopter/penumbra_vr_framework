@@ -57,6 +57,8 @@ Exit criterion: one whitelisted Black Plague research hash loads the probe, emit
 - [x] Submit both eyes to OpenVR
 - [x] Preserve functional keyboard and mouse input
 - [x] Implement one-step Steam launch, VR activation and read-only preflight
+- [x] Implement and host-test an installed Black Plague bootstrap for normal Steam `Play` without modifying the protected executable; preserve the launcher/scripts as diagnostic and evidence paths
+- [ ] Live/headset-validate the installed normal-Steam `Play` path, including clean startup and normal game exit
 - [x] Host-test tracked menu panels and controller-ray projection
 - [x] Add host-tested stereo/world/hand/compositor timing telemetry and cache
   per-context presentation GL capability discovery for the graphics baseline
@@ -324,7 +326,8 @@ Exit criterion: the shared runtime contains the proven, game-neutral behavior re
 - [x] Persist the complete shared VR settings schema and host-test the Rework-derived editor policy
 - [x] Define the Black Plague settings capability map from backend-wired behavior
 - [x] Provide an offline Black Plague VR settings editor through `PenumbraVR.ProbeLauncher.exe --configure-vr black-plague`
-- [ ] Integrate a dedicated Black Plague VR settings page after a safe native-menu insertion boundary is demonstrated
+- [x] Integrate and host-test a dedicated Black Plague `VR Settings` page through the verifier-pinned native Options state-8/button boundary
+- [ ] Headset-validate native `VR Settings` navigation, left/right edits, persistence and restart-required labeling on the allowlisted build
 - [x] Consume shared haptic policy for Black Plague pickup/drop, tracked UI select and successful direct-hand contact; host-test focus/pose/cooldown rejection plus per-event OpenVR submission telemetry
 - [x] Extend the combined palm/room-scale headset helper to aggregate `Grab=6`/`Move=2`, tool, crouch, nudge and haptic evidence without treating optional scene coverage as a false failure
 - [ ] Complete Black Plague haptic parity: LightToggle, Damage and confirmed-contact MeleeImpact boundaries are consumed, exact-image verified and host-tested; headset-validate exercised controller submissions, including real melee contact versus an empty swing

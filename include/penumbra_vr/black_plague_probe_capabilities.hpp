@@ -14,6 +14,7 @@ enum class BlackPlagueProbeCapability : std::uint32_t {
     movement_ownership = 1U << 6,
     spatial_interaction = 1U << 7,
     audio_environment = 1U << 8,
+    vr_settings_menu = 1U << 9,
 };
 
 [[nodiscard]] constexpr std::uint32_t BlackPlagueProbeCapabilityMask(

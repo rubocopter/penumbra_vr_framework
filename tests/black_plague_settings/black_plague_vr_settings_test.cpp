@@ -7,6 +7,7 @@
 namespace {
 
 using penumbra_vr::backends::black_plague::BlackPlagueVrSettingCapabilities;
+using penumbra_vr::backends::black_plague::BlackPlagueVrMenuSettings;
 using penumbra_vr::runtime::IsVrSettingAvailable;
 using penumbra_vr::runtime::VrSettingId;
 using penumbra_vr::runtime::VrSettings;
@@ -61,11 +62,30 @@ using penumbra_vr::runtime::VrTurnMode;
         IsVrSettingAvailable(VrSettingId::hrtf, settings, capabilities);
 }
 
+[[nodiscard]] bool TestNativeMenuUsesExactCapabilitySurface() {
+    const auto capabilities = BlackPlagueVrSettingCapabilities();
+    const auto& rows = BlackPlagueVrMenuSettings();
+    if (rows.size() != 17) return false;
+
+    std::array<bool, penumbra_vr::runtime::kVrSettingCount> seen{};
+    for (const auto id : rows) {
+        const auto index = static_cast<std::size_t>(id);
+        if (index >= seen.size() || seen[index] ||
+            !capabilities.supported[index] ||
+            id == VrSettingId::subtitle_scale) {
+            return false;
+        }
+        seen[index] = true;
+    }
+    return seen == capabilities.supported;
+}
+
 } // namespace
 
 int main() {
     if (!TestExactBackendCapabilitySet()) return 1;
     if (!TestDependentTurnRowsRemainRuntimeOwned()) return 2;
+    if (!TestNativeMenuUsesExactCapabilitySurface()) return 3;
     std::cout << "Black Plague VR settings expose only backend-wired capabilities\n";
     return 0;
 }

@@ -3,31 +3,41 @@
 #include <cstddef>
 
 namespace penumbra_vr::backends::black_plague {
+namespace {
+
+constexpr std::array<runtime::VrSettingId, kBlackPlagueVrMenuSettingCount>
+    kMenuSettings{{
+        runtime::VrSettingId::handedness,
+        runtime::VrSettingId::play_mode,
+        runtime::VrSettingId::player_height,
+        runtime::VrSettingId::turn_mode,
+        runtime::VrSettingId::snap_turn_angle,
+        runtime::VrSettingId::smooth_turn_speed,
+        runtime::VrSettingId::turn_dead_zone,
+        runtime::VrSettingId::move_speed,
+        runtime::VrSettingId::move_dead_zone,
+        runtime::VrSettingId::crouch_mode,
+        runtime::VrSettingId::physical_crouch_depth,
+        runtime::VrSettingId::height_offset,
+        runtime::VrSettingId::ui_distance,
+        runtime::VrSettingId::ui_scale,
+        runtime::VrSettingId::render_scale,
+        runtime::VrSettingId::enhanced_visuals,
+        runtime::VrSettingId::hrtf,
+    }};
+
+} // namespace
+
+const std::array<runtime::VrSettingId, kBlackPlagueVrMenuSettingCount>&
+BlackPlagueVrMenuSettings() noexcept {
+    return kMenuSettings;
+}
 
 runtime::VrSettingCapabilities BlackPlagueVrSettingCapabilities() noexcept {
     runtime::VrSettingCapabilities capabilities;
-
-    const auto enable = [&capabilities](runtime::VrSettingId id) noexcept {
+    for (const auto id : kMenuSettings) {
         capabilities.supported[static_cast<std::size_t>(id)] = true;
-    };
-
-    enable(runtime::VrSettingId::handedness);
-    enable(runtime::VrSettingId::turn_mode);
-    enable(runtime::VrSettingId::snap_turn_angle);
-    enable(runtime::VrSettingId::smooth_turn_speed);
-    enable(runtime::VrSettingId::turn_dead_zone);
-    enable(runtime::VrSettingId::move_speed);
-    enable(runtime::VrSettingId::move_dead_zone);
-    enable(runtime::VrSettingId::play_mode);
-    enable(runtime::VrSettingId::player_height);
-    enable(runtime::VrSettingId::height_offset);
-    enable(runtime::VrSettingId::crouch_mode);
-    enable(runtime::VrSettingId::physical_crouch_depth);
-    enable(runtime::VrSettingId::ui_distance);
-    enable(runtime::VrSettingId::ui_scale);
-    enable(runtime::VrSettingId::render_scale);
-    enable(runtime::VrSettingId::enhanced_visuals);
-    enable(runtime::VrSettingId::hrtf);
+    }
 
     return capabilities;
 }

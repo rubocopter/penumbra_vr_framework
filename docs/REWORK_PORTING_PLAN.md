@@ -368,7 +368,7 @@ open.
 - `src/runtime/vr_grab_pose.*` preserves palm/body pose and bounded release behavior and owns the shared attachment-socket composition. Black Plague keeps a resource-specific flashlight socket; its glowstick instead consumes the exact Rework model scale/grip/rotation profile because the relevant primary cylinder geometry was verified identical. The composition is host-tested; definitive tool placement is still a headset/geometry gate.
 - `src/runtime/vr_input_state.*` owns logical actions, dead-zone scaling, context/handedness edge latching, pose-loss releases and action-idle grace.
 - `src/runtime/vr_settings.*` owns Rework-derived defaults, ranges, enum semantics and legacy migration plus framework mirror state; `vr_settings_editor.*` owns the demonstrated 18-row edit/format/dependency policy, and `vr_settings_store.*` persists the complete shared schema.
-- Black Plague exposes an explicit backend capability map for the currently wired editor settings. A dedicated in-game settings page remains game-specific work until a safe native-menu insertion boundary is demonstrated.
+- Black Plague exposes an explicit backend capability map for the currently wired settings and now consumes it through a game-specific native Options page. Exact-build evidence pins the `cMainMenuWidget_Button` vtable/constructor and state-8 list boundary; shared runtime still owns adjustment, formatting and dependent-row policy while the backend owns menu injection and binary layout.
 - `assets/openvr` contains shared actions/bindings; `assets/openvr/overture` preserves exact Overture product mappings.
 
 ## Current host-only extraction frontier

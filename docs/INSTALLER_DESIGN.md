@@ -117,7 +117,8 @@ versioning and rollback of these files remain installer work.
 
 ## Work still required
 
-- choose and validate the production bootstrap mechanism;
+- live/headset-validate the current Black Plague `alut.dll` proxy bootstrap
+  before promoting it from the host-tested production candidate;
 - implement installation discovery and manual selection;
 - implement the transactional filesystem layer and installation record;
 - wire the exact canonical/transformed catalogue identities into transactional apply/repair/uninstall;

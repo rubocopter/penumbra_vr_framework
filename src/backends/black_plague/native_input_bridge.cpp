@@ -24,6 +24,8 @@ namespace {
 runtime::VrUpdateTiming g_update_timing;
 runtime::VrUpdateTimingSample g_timing_sample;
 runtime::VrSettings g_settings;
+std::atomic<runtime::VrHandedness> g_dominant_handedness{
+    runtime::VrHandedness::right};
 using A = runtime::NativeVrAction;
 using Q = runtime::NativeVrQuery;
 struct Entry { std::uintptr_t site; A action; Q query = Q::pressed; };
@@ -204,7 +206,8 @@ struct NativeLightState {
 }
 
 [[nodiscard]] runtime::VrHand BlackPlagueDominantHand() noexcept {
-    return g_settings.handedness == runtime::VrHandedness::left
+    return g_dominant_handedness.load(std::memory_order_acquire) ==
+            runtime::VrHandedness::left
         ? runtime::VrHand::left : runtime::VrHand::right;
 }
 
@@ -897,9 +900,10 @@ NativeMovementBoundaryStatus ReadNativeMovementBoundaryStatus() noexcept {
 }
 void ConfigureNativeInputBridge(runtime::VrSettings settings) noexcept {
     runtime::NormalizeVrSettings(settings);
-    if (!g_installed.load(std::memory_order_acquire)) {
-        g_settings = settings;
-    }
+    AcquireSRWLockExclusive(&g_session_lock);
+    g_settings = settings;
+    ReleaseSRWLockExclusive(&g_session_lock);
+    g_dominant_handedness.store(settings.handedness, std::memory_order_release);
 }
 bool InstallNativeInputBridge(std::string& error) noexcept {
     error.clear();
@@ -1451,11 +1455,13 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         return fail("Black Plague light-state snapshot lost the glow-to-flashlight transition");
     }
 
-    g_settings.handedness = runtime::VrHandedness::right;
+    g_dominant_handedness.store(
+        runtime::VrHandedness::right, std::memory_order_release);
     if (BlackPlagueDominantHand() != runtime::VrHand::right) {
         return fail("Black Plague melee haptic lost right-hand dominance");
     }
-    g_settings.handedness = runtime::VrHandedness::left;
+    g_dominant_handedness.store(
+        runtime::VrHandedness::left, std::memory_order_release);
     if (BlackPlagueDominantHand() != runtime::VrHand::left) {
         return fail("Black Plague melee haptic lost left-hand dominance");
     }

@@ -224,6 +224,7 @@ add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
     src/backends/black_plague/native_input_bridge.cpp
+    src/backends/black_plague/native_vr_settings_menu.cpp
     src/backends/black_plague/spatial_interaction.cpp
 )
 target_include_directories(
@@ -271,11 +272,23 @@ target_link_libraries(
         pvr_openvr_session
         pvr_render_target_policy
         pvr_vr_settings_store
+        pvr_openal_soft_config
         pvr_black_plague_backend_probe)
 set_target_properties(pvr_black_plague_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.BlackPlague.Probe"
 )
 pvr_enable_warnings(pvr_black_plague_probe)
+
+add_library(pvr_black_plague_bootstrap SHARED
+    src/bootstrap/black_plague_alut_proxy.cpp
+)
+target_include_directories(pvr_black_plague_bootstrap PRIVATE include)
+target_link_libraries(pvr_black_plague_bootstrap PRIVATE pvr_build_catalog user32)
+set_target_properties(pvr_black_plague_bootstrap PROPERTIES
+    OUTPUT_NAME "PenumbraVR.BlackPlague.Bootstrap"
+)
+pvr_enable_warnings(pvr_black_plague_bootstrap)
+
 add_custom_target(pvr_openvr_assets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/openvr"

@@ -88,19 +88,26 @@ capacidades necesarias. La prueba WGL compara la salida con la referencia CPU.
 Esto no incluye todavía los programas HPL de ambiente/luz de Rework ni sustituye
 la validación visual y de rendimiento en visor.
 
-## Arrancar sin adjuntar el mod a mano
+## Arranque normal desde Steam
 
-Desde la carpeta de instalación del framework, ejecuta `Start-Black-Plague-VR.cmd`.
-Usa el ejecutable Release y la instalación Steam habitual. También admite la ruta
-del ejecutable como primer argumento si Steam está en otra biblioteca.
+El candidato actual añade una instalación de una sola vez mediante
+`Install-Black-Plague-VR.cmd`. Valida el hash exacto soportado, conserva la
+`alut.dll` retail como `PenumbraVR_alut_original.dll`, instala un proxy ALUT con
+los 20 exports/ordinales reenviados y despliega el probe, `openvr_api.dll` y los
+assets OpenVR. No modifica `Penumbra.exe` ni las opciones de lanzamiento de
+Steam. `Install-Black-Plague-VR.cmd -Restore` define la reversión gestionada.
 
-El lanzador comprueba el hash admitido y los archivos VR, abre Black Plague
-mediante Steam (appid 22120), espera la inicialización del ejecutable protegido,
-adjunta el framework y activa la presentación continua con el mirror guardado.
-No modifica el ejecutable del juego ni sus opciones de lanzamiento en Steam.
-Abrir directamente el juego en Steam **no** ejecuta este lanzador automáticamente.
-SteamVR debe estar instalado y los dispositivos configurados; OpenVR solicita
-su inicialización. El usuario confirmó el arranque directo con el BAT.
+Después de instalarlo, el flujo previsto es el mismo que en Overture desde el
+punto de vista del usuario: iniciar SteamVR y pulsar **Play** normalmente en
+Steam. El proxy se carga como dependencia estática del juego, espera el hash,
+los bytes inicializados y la ventana `SDL_app` estable, carga el probe y activa
+la presentación VR. El probe conserva además su barrera de primer
+`SDL_GL_SwapBuffers` completado antes de instalar los hooks gráficos profundos.
+
+Este nuevo arranque está **host-tested only** hasta realizar una sesión real
+desde el botón Play de Steam. `Start-Black-Plague-VR.cmd` y los scripts
+`Start-BlackPlague*Validation.ps1` se conservan para diagnóstico, validaciones
+instrumentadas y recolección de evidencia; ya no son el diseño del flujo normal.
 
 El 2026-09-18, PID 24136 reprodujo el antiguo fallo temprano de arranque: el
 probe validó el hash `FD316F...`, escribió los perfiles VR y el proceso terminó

@@ -14,21 +14,18 @@ It is not yet a playable VR backend. Its default attached state only observes an
 
 ## Loading model
 
-Launching this executable directly on the development machine exits voluntarily with code 0 after roughly 380 ms. Launching Steam AppID `22120` creates the persistent game process. For that reason, the verified workflow is currently:
+Launching this executable directly on the development machine exits voluntarily with code 0 after roughly 380 ms. Steam AppID `22120` creates the persistent game process, so the installed normal-launch path keeps the protected `Penumbra.exe` untouched and lets Steam remain its owner.
 
-1. Launch Black Plague through Steam.
-2. Locate the resulting process and obtain its executable path.
-3. Recompute and whitelist-check its SHA-256.
-4. Wait for `SDL.dll` and for the exact initialized bytes at the mapped `RenderWorld` call site.
-5. Load the probe DLL with a remote `LoadLibraryW` call.
-6. Call the exported `PenumbraVR_Initialize` function explicitly. Initialization
-   first installs only the `SDL_GL_SwapBuffers` IAT owner and waits for one
-   forwarded swap to return; only then are OpenGL matrix telemetry and
-   RenderWorld hooks installed.
+The current Framework candidate installs an `alut.dll` proxy because ALUT is a static dependency of the allowlisted executable and has a small, exact export surface. The installer preserves the retail DLL as `PenumbraVR_alut_original.dll`; the proxy forwards all 20 original exports with their original ordinals. Its `DllMain` only disables thread callbacks and creates a deferred bootstrap thread. That worker:
 
-No substantial work is performed from `DllMain`; it only disables thread attach/detach notifications.
+1. recomputes and allowlist-checks the running executable SHA-256;
+2. waits for the exact initialized bytes at the mapped `RenderWorld` call site and the same stable visible `SDL_app` window required by the launcher;
+3. loads `PenumbraVR.BlackPlague.Probe.dll` from the game directory;
+4. calls `PenumbraVR_Initialize`, verifies the required capability set and calls `PenumbraVR_StartPresentation`.
 
-The direct-path launcher mode remains useful for diagnosing non-Steam builds, but it is not the verified route for this Steam installation.
+Probe initialization still installs only the `SDL_GL_SwapBuffers` IAT owner first and waits for one forwarded swap to return before deeper OpenGL/RenderWorld work. The proxy therefore changes how the probe enters the process, not the established graphics-readiness boundary.
+
+This installed bootstrap is **host-tested only**: Release builds, all 20 ALUT forwarders and the managed install/backup state have been checked offline, but normal Steam `Play` still needs a real process/headset pass before promotion. `PenumbraVR.ProbeLauncher.exe --launch-vr`, `Start-Black-Plague-VR.cmd` and the focused validation scripts remain developer/diagnostic paths and can attach to the same probe lifecycle.
 
 The initialized-code gate is necessary because the executable is protected. One launch exposed `SDL.dll` before RVA `0x000EE010` had been reconstructed; the probe correctly rejected the still-mismatching call instruction, but loading it that early was itself unsafe. The launcher now polls for the exact five manifest bytes before injecting any DLL.
 
@@ -429,7 +426,9 @@ captured.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes
-the same setting offline, without a PID or an in-game VR settings page.
+the same setting offline, without a PID. `MonitorMirror` remains outside the
+17-row native `VR Settings` capability surface, so mirror changes still use the
+launcher/offline path rather than the injected Options page.
 `--start-vr` applies that value before starting presentation; a missing file
 or key safely defaults to mirror off.
 

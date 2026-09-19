@@ -92,10 +92,11 @@ panel size while keeping its aspect ratio, and `RenderScale` scales the OpenVR
 recommended per-eye dimensions before the existing allocation fallback. The
 same menu geometry is used for drawing and controller-ray hit testing.
 
-The currently wired Black Plague editor capabilities are `Handedness`,
+The currently wired Black Plague editor/menu capabilities are `Handedness`,
 `PlayMode`, `PlayerHeight`, `TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`,
 `TurnDeadZone`, `MoveSpeed`, `MoveDeadZone`, `HeightOffset`, `CrouchMode`,
-`PhysicalCrouchDepth`, `UiDistance`, `UiScale` and `RenderScale`.
+`PhysicalCrouchDepth`, `UiDistance`, `UiScale`, `RenderScale`,
+`EnhancedVisuals` and `HRTF`.
 `PlayMode`/`PlayerHeight` feed the shared seated/standing presentation policy;
 height/crouch controls feed the tracked-Y and native posture paths. Their
 editor exposure is host-tested and does not by itself establish headset comfort.
@@ -121,8 +122,16 @@ preserving persisted-but-unwired fields for future backends/features.
 
 The shared editor policy reproduces the 18 Overture Rework rows, step sizes,
 formatting, enum wrapping, clamps and snap/smooth dependent-row behavior and is
-host-tested. Black Plague does not yet have a demonstrated safe insertion point
-for a dedicated native VR Settings page, so no binary UI hook is invented here.
+host-tested. Black Plague now consumes the same policy through a dedicated native
+`VR Settings` entry under the game's Options state. The backend reuses the exact
+`cMainMenuWidget_Button` ABI and native state-8 widget list; it does not extend the
+game's state table. The page exposes exactly the 17 backend-wired capabilities.
+Left click advances a value and right click steps backward, while unavailable
+snap/smooth rows remain visible but inactive. Accepted changes are persisted
+immediately. Input and tracked-presentation settings are refreshed live;
+`RenderScale` and `HRTF` are labelled as restart-required because their current
+owners allocate eye targets / audio configuration during startup. The insertion
+boundary and behavior are host-tested only until a headset run exercises the page.
 
 Missing keys use normalized Rework defaults. Malformed recognized values make
 preflight fail instead of silently starting with a mixed profile. Values outside

@@ -48,12 +48,13 @@ BlackPlagueProbeStateAfterTeardown(
 // dependencies toward callback producers. A component is entered in the cleanup
 // ledger before its installer runs, so a failed installer can still leave
 // teardown work even when its capability bit was never published.
-inline constexpr std::array<BlackPlagueProbeCapability, 9>
+inline constexpr std::array<BlackPlagueProbeCapability, 10>
     kBlackPlagueProbeInstallOrder{
         BlackPlagueProbeCapability::frame_hook,
         BlackPlagueProbeCapability::matrix_telemetry,
         BlackPlagueProbeCapability::render_world,
         BlackPlagueProbeCapability::native_input,
+        BlackPlagueProbeCapability::vr_settings_menu,
         BlackPlagueProbeCapability::body_collision,
         BlackPlagueProbeCapability::body_adapter,
         BlackPlagueProbeCapability::movement_ownership,
@@ -63,13 +64,14 @@ inline constexpr std::array<BlackPlagueProbeCapability, 9>
 
 // The probe removes callback producers before every dependency they can call.
 // This table is also the durable retry order after a partial teardown.
-inline constexpr std::array<BlackPlagueProbeCapability, 9>
+inline constexpr std::array<BlackPlagueProbeCapability, 10>
     kBlackPlagueProbeTeardownOrder{
         BlackPlagueProbeCapability::audio_environment,
         BlackPlagueProbeCapability::spatial_interaction,
         BlackPlagueProbeCapability::movement_ownership,
         BlackPlagueProbeCapability::body_adapter,
         BlackPlagueProbeCapability::body_collision,
+        BlackPlagueProbeCapability::vr_settings_menu,
         BlackPlagueProbeCapability::native_input,
         BlackPlagueProbeCapability::frame_hook,
         BlackPlagueProbeCapability::render_world,

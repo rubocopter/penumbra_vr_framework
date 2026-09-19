@@ -7,6 +7,7 @@
 #include "render_target_policy.hpp"
 #include "render_world_probe.hpp"
 #include "native_input_bridge.hpp"
+#include "native_vr_settings_menu.hpp"
 #include "body_collision_probe.hpp"
 #include "hand_contact_probe.hpp"
 #include "black_plague_body_adapter.hpp"
@@ -15,6 +16,7 @@
 #include "audio_environment_probe.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_math.hpp"
+#include "openal_soft_config.hpp"
 #include "vr_settings_store.hpp"
 
 #define WIN32_LEAN_AND_MEAN
@@ -134,6 +136,8 @@ void AppendLifecycleError(
             penumbra_vr::backends::black_plague::RemoveBlackPlagueBodyAdapter)) return false;
     if (!remove(C::body_collision, "body/collision",
             penumbra_vr::backends::black_plague::RemoveBodyCollisionProbe)) return false;
+    if (!remove(C::vr_settings_menu, "native VR settings menu",
+            penumbra_vr::backends::black_plague::RemoveNativeVrSettingsMenu)) return false;
     if (!remove(C::native_input, "native input",
             penumbra_vr::backends::black_plague::RemoveNativeInputBridge)) return false;
     if (!remove(C::frame_hook, "SDL frame hook",
@@ -292,6 +296,52 @@ std::string WideToUtf8(const std::wstring& value) {
     WideCharToMultiByte(
         CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), result.data(), size, nullptr, nullptr);
     return result;
+}
+
+bool CommitNativeVrSettings(
+    const penumbra_vr::runtime::VrSettings& settings,
+    std::string& error) noexcept {
+    error.clear();
+    std::wstring settings_error;
+    const auto settings_path =
+        penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
+    if (settings_path.empty() ||
+        !penumbra_vr::launcher::SaveVrSettings(
+            settings_path, settings, settings_error)) {
+        error = WideToUtf8(settings_error);
+        penumbra_vr::probe::WriteLog(
+            "Native VR settings save failed: %s", error.c_str());
+        return false;
+    }
+
+    wchar_t executable_path[MAX_PATH]{};
+    const DWORD executable_path_length =
+        GetModuleFileNameW(nullptr, executable_path, MAX_PATH);
+    if (executable_path_length != 0 && executable_path_length < MAX_PATH) {
+        std::wstring hrtf_error;
+        if (!penumbra_vr::launcher::WriteOpenAlSoftHrtfConfig(
+                executable_path, settings.hrtf_mode, hrtf_error)) {
+            penumbra_vr::probe::WriteLog(
+                "Native VR settings saved but HRTF restart config update failed: %s",
+                WideToUtf8(hrtf_error).c_str());
+        }
+    }
+
+    penumbra_vr::backends::black_plague::ConfigureNativeInputBridge(settings);
+    penumbra_vr::backends::black_plague::ConfigureTrackedPresentation(settings);
+    penumbra_vr::probe::WriteLog(
+        "Native VR settings persisted; live input/presentation refreshed handedness=%.*s turn=%.*s "
+        "move_speed=%.2f render_scale=%.2f enhanced_visuals=%u hrtf=%.*s",
+        static_cast<int>(penumbra_vr::runtime::ToConfigValue(settings.handedness).size()),
+        penumbra_vr::runtime::ToConfigValue(settings.handedness).data(),
+        static_cast<int>(penumbra_vr::runtime::ToConfigValue(settings.turn_mode).size()),
+        penumbra_vr::runtime::ToConfigValue(settings.turn_mode).data(),
+        settings.move_speed,
+        settings.render_scale,
+        settings.enhanced_visuals ? 1U : 0U,
+        static_cast<int>(penumbra_vr::runtime::ToConfigValue(settings.hrtf_mode).size()),
+        penumbra_vr::runtime::ToConfigValue(settings.hrtf_mode).data());
+    return true;
 }
 
 void OnFrame(std::uint64_t frame_number) noexcept {
@@ -1292,6 +1342,8 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     }
     penumbra_vr::backends::black_plague::ConfigureNativeInputBridge(g_vr_settings);
     penumbra_vr::backends::black_plague::ConfigureTrackedPresentation(g_vr_settings);
+    penumbra_vr::backends::black_plague::ConfigureNativeVrSettingsMenu(
+        &g_vr_settings, &CommitNativeVrSettings);
     penumbra_vr::probe::WriteLog(
         "VR input profile handedness=%s move_speed=%.3f move_dead_zone=%.3f turn_mode=%.*s snap_angle=%.1f smooth_speed=%.1f turn_dead_zone=%.3f",
         g_vr_settings.handedness == penumbra_vr::runtime::VrHandedness::left ?
@@ -1373,6 +1425,21 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     if (install_result == ComponentInstallResult::failed_partial) {
         return FailInitializationWithRollback("Native controller input bridge");
     }
+
+    install_result = InstallTrackedComponent(
+        C::vr_settings_menu,
+        penumbra_vr::backends::black_plague::InstallNativeVrSettingsMenu,
+        penumbra_vr::backends::black_plague::RemoveNativeVrSettingsMenu,
+        hook_error);
+    const bool vr_settings_menu_ready =
+        install_result == ComponentInstallResult::installed;
+    penumbra_vr::probe::WriteLog(
+        "Native VR settings menu installed=%u error=%s",
+        vr_settings_menu_ready ? 1U : 0U, hook_error.c_str());
+    if (install_result == ComponentInstallResult::failed_partial) {
+        return FailInitializationWithRollback("Native VR settings menu");
+    }
+
     if (native_input_ready) {
         install_result = InstallTrackedComponent(
             C::body_collision,
