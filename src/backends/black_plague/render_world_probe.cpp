@@ -1127,7 +1127,8 @@ void __fastcall HookedUpdateRenderList(
             }
         }
         PublishGameplayPalmTracking(
-            raw_palms,raw_palm_valid,head_pose,head_valid);
+            raw_palms,raw_palm_valid,head_pose,head_valid,
+            g_presentation_yaw_epoch.load(std::memory_order_acquire));
         for (std::size_t i=0;i<hands.size();++i) {
             runtime::VrMatrix44 resolved{};
             if (hands[i].visible && ReadGameplayPalmPose(i,resolved)) {

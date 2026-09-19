@@ -80,19 +80,19 @@ VrHandArticulation ArticulateVrHand(
         } else if (hold > 0.0F) {
             pose.flexion_degrees={55.0F*curl,70.0F*curl,40.0F*curl};
         } else if (finger==0) {
-            // Rework 23c890f authored the imported rigid-skin thumb around its
-            // diagonal bone axis at 22/28/16 degrees. Preserve Framework's
-            // independent thumb curl while keeping that proven geometry.
-            pose.flexion_degrees={22.0F*curl,28.0F*curl,16.0F*curl};
-        } else if (finger==1) {
-            // Rework's trigger/index pose. Higher procedural ranges fold this
-            // old skin over itself and were visible as contorted fingers.
-            pose.flexion_degrees={48.0F*curl,62.0F*curl,36.0F*curl};
+            // Black Plague's provisional hand was the stronger headset-tested
+            // free-hand reference for curl amplitude. Keep its full three-joint
+            // thumb motion, but let the imported Rework rig provide opposition
+            // through its authored diagonal thumb axis. Adding the procedural
+            // hand's separate yaw on this rigid skin visibly twists the web.
+            pose.flexion_degrees={20.0F*curl,45.0F*curl,60.0F*curl};
         } else {
-            // Middle, ring and little share the proven pure-flexion axis and
-            // 52/66/38 degree grab range. Five skeletal channels remain
-            // independent; only the imported mesh's safe range is shared.
-            pose.flexion_degrees={52.0F*curl,66.0F*curl,38.0F*curl};
+            // Preserve BP's richer independent finger response. Distal flexion
+            // follows progressively so partial sensor curls do not fold every
+            // phalanx in lockstep. Rework's rigidly weighted web cannot safely
+            // consume the provisional hand's per-finger spread, especially on
+            // the little finger, so spread remains zero for this mesh.
+            pose.flexion_degrees={65.0F*curl,85.0F*curl,50.0F*curl*curl};
         }
     }
     return result;

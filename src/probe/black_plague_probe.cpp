@@ -326,7 +326,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                     audio.late_existing_environment_preserved));
         }
         const auto spatial=penumbra_vr::backends::black_plague::ConsumeSpatialDiagnostics();
-        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu nudge_queries=%llu nudge_contacts=%llu nudges_applied=%llu interact_presses=%llu selection_refreshes=%llu selection_ray_batches=%llu selection_rays=%llu selection_candidates=%llu selection_discards=%llu selection_winner_mm=%llu selection_central_rays=%llu selection_auxiliary_rays=%llu grab_enters=%llu move_enters=%llu grab_pending=%llu move_pending=%llu magnetic_queries=%llu magnetic_candidates=%llu magnetic_visibility_rays=%llu magnetic_winners=%llu mechanism_acquired=%llu mechanism_updates=%llu mechanism_rejected=%llu contact_reach_m=0.180",
+        penumbra_vr::probe::WriteLog("spatial tools_attached=%llu tools_native=%llu invalid_tool_pose=%llu blocked_unsafe_grabs=%llu grabs_acquired=%llu grabs_released=%llu moves_acquired=%llu moves_released=%llu guarded_releases=%llu collision_restore_failures=%llu contact_rays=%llu nudge_queries=%llu nudge_contacts=%llu nudges_applied=%llu interact_presses=%llu selection_refreshes=%llu selection_ray_batches=%llu selection_rays=%llu selection_candidates=%llu selection_discards=%llu selection_winner_mm=%llu selection_central_rays=%llu selection_auxiliary_rays=%llu selection_palm_queries=%llu selection_palm_candidates=%llu selection_palm_winners=%llu selection_palm_assisted_winners=%llu grab_enters=%llu move_enters=%llu grab_pending=%llu move_pending=%llu magnetic_queries=%llu magnetic_candidates=%llu magnetic_visibility_rays=%llu magnetic_winners=%llu mechanism_acquired=%llu mechanism_updates=%llu mechanism_rejected=%llu contact_reach_m=0.180",
             static_cast<unsigned long long>(spatial.tools_attached),static_cast<unsigned long long>(spatial.tools_native),
             static_cast<unsigned long long>(spatial.invalid_tool_pose),static_cast<unsigned long long>(spatial.blocked_grabs),
             static_cast<unsigned long long>(spatial.grabs_acquired),static_cast<unsigned long long>(spatial.grabs_released),
@@ -345,6 +345,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long long>(spatial.selection_winner_distance_millimetres),
             static_cast<unsigned long long>(spatial.selection_central_ray),
             static_cast<unsigned long long>(spatial.selection_auxiliary_ray),
+            static_cast<unsigned long long>(spatial.selection_palm_queries),
+            static_cast<unsigned long long>(spatial.selection_palm_candidates),
+            static_cast<unsigned long long>(spatial.selection_palm_winners),
+            static_cast<unsigned long long>(spatial.selection_palm_assisted_winners),
             static_cast<unsigned long long>(spatial.grab_enters),
             static_cast<unsigned long long>(spatial.move_enters),
             static_cast<unsigned long long>(spatial.grab_pending),
@@ -398,7 +402,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         else if (palms.source == penumbra_vr::backends::black_plague::
                 GameplayPalmResolverRequestSource::mutex) palm_source="mutex";
         penumbra_vr::probe::WriteLog(
-            "palm_collision enabled=%u source=%s samples=%llu published=%llu queries=%llu contacts=%llu constrained=%llu tracking_reanchors=%llu recovery_anchors=%llu pullback_recoveries=%llu interaction_assist=%llu held_body_skips=%llu stale_tracking=%llu failures=%llu creates=%llu destroys=%llu world_replacements=%llu",
+            "palm_collision enabled=%u source=%s samples=%llu published=%llu queries=%llu contacts=%llu constrained=%llu tracking_reanchors=%llu recovery_anchors=%llu pullback_recoveries=%llu yaw_epoch_resets=%llu interaction_assist=%llu held_body_skips=%llu stale_tracking=%llu failures=%llu creates=%llu destroys=%llu world_replacements=%llu",
             palms.enabled ? 1U : 0U,palm_source,
             static_cast<unsigned long long>(palms.samples),
             static_cast<unsigned long long>(palms.published_poses),
@@ -408,6 +412,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long long>(palms.tracking_reanchors),
             static_cast<unsigned long long>(palms.recovery_anchors),
             static_cast<unsigned long long>(palms.pullback_recoveries),
+            static_cast<unsigned long long>(palms.yaw_epoch_resets),
             static_cast<unsigned long long>(palms.interaction_assist_samples),
             static_cast<unsigned long long>(palms.held_body_skips),
             static_cast<unsigned long long>(palms.stale_tracking_samples),
@@ -1303,7 +1308,41 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
 
     std::string hook_error;
     using C = penumbra_vr::BlackPlagueProbeCapability;
+    // The launcher can prove that the SDL_app window exists, but that does not
+    // prove the game's owning thread has completed SDL/WGL startup. Install the
+    // narrow atomic SwapBuffers IAT owner first and wait until one real swap has
+    // returned before touching the OpenGL or RenderWorld callsites. During this
+    // bootstrap interval OnFrame is lifecycle-gated and performs no VR work.
     auto install_result = InstallTrackedComponent(
+        C::frame_hook,
+        [&](std::string& error) {
+            return penumbra_vr::hooks::InstallSdlSwapHook(&OnFrame, error);
+        },
+        penumbra_vr::hooks::RemoveSdlSwapHook,
+        hook_error);
+    if (install_result != ComponentInstallResult::installed) {
+        penumbra_vr::probe::WriteLog("SDL frame hook failed: %s", hook_error.c_str());
+        return FailInitializationWithRollback("SDL frame hook");
+    }
+
+    constexpr ULONGLONG kFirstCompletedSwapTimeoutMs = 15'000;
+    const ULONGLONG completed_swap_deadline =
+        GetTickCount64() + kFirstCompletedSwapTimeoutMs;
+    while (penumbra_vr::hooks::CompletedFrameCount() == 0 &&
+           GetTickCount64() < completed_swap_deadline) {
+        Sleep(1);
+    }
+    if (penumbra_vr::hooks::CompletedFrameCount() == 0) {
+        penumbra_vr::probe::WriteLog(
+            "SDL bootstrap did not complete a SwapBuffers call before timeout");
+        return FailInitializationWithRollback("SDL graphics bootstrap");
+    }
+    penumbra_vr::probe::WriteLog(
+        "SDL graphics bootstrap completed=%llu observed=%llu; installing OpenGL/render hooks",
+        static_cast<unsigned long long>(penumbra_vr::hooks::CompletedFrameCount()),
+        static_cast<unsigned long long>(penumbra_vr::hooks::ObservedFrameCount()));
+
+    install_result = InstallTrackedComponent(
         C::matrix_telemetry,
         penumbra_vr::hooks::InstallOpenGlMatrixTelemetry,
         penumbra_vr::hooks::RemoveOpenGlMatrixTelemetry,
@@ -1320,17 +1359,6 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     if (install_result != ComponentInstallResult::installed) {
         penumbra_vr::probe::WriteLog("RenderWorld probe failed: %s", hook_error.c_str());
         return FailInitializationWithRollback("RenderWorld probe");
-    }
-    install_result = InstallTrackedComponent(
-        C::frame_hook,
-        [&](std::string& error) {
-            return penumbra_vr::hooks::InstallSdlSwapHook(&OnFrame, error);
-        },
-        penumbra_vr::hooks::RemoveSdlSwapHook,
-        hook_error);
-    if (install_result != ComponentInstallResult::installed) {
-        penumbra_vr::probe::WriteLog("SDL frame hook failed: %s", hook_error.c_str());
-        return FailInitializationWithRollback("SDL frame hook");
     }
 
     install_result = InstallTrackedComponent(

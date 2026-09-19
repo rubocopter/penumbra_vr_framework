@@ -519,7 +519,12 @@ int main() {
                         open_hand[at+1]!=curled_hand[at+1] ||
                         open_hand[at+2]!=curled_hand[at+2]) ++changed_pixels;
                 }
-                if (changed_pixels<20U) {
+                // BP's thumb chain moves fewer projected pixels than the long
+                // fingers in this 320x240 synthetic view.
+                // Keep a real framebuffer-difference gate for every finger,
+                // while retaining the stronger threshold for the long chains.
+                const std::size_t minimum_changed_pixels = finger==0 ? 12U : 20U;
+                if (changed_pixels<minimum_changed_pixels) {
                     std::cerr<<"Finger "<<finger<<" articulation changed only "
                         <<changed_pixels<<" pixels\n";
                     return 46;
@@ -567,6 +572,12 @@ int main() {
         glEnable(GL_SCISSOR_TEST); glScissor(3,4,51,52);
         glDepthFunc(GL_GREATER); glDepthMask(GL_FALSE);
         while (glGetError()!=GL_NO_ERROR) {}
+        // The live HPL drawer can leave a stale error before the Framework
+        // composes its optional gameplay overlay. The overlay must isolate its
+        // own GL work instead of treating that inherited error as a failure.
+        glEnable(0xFFFFFFFFU);
+        if (glGetError()==GL_NO_ERROR) return 53;
+        glEnable(0xFFFFFFFFU);
         if (!penumbra_vr::graphics::DrawTransparentOverlay(
                 overlay_texture,
                 penumbra_vr::runtime::IdentityMatrix(),

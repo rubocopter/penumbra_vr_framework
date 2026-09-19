@@ -14,6 +14,8 @@ bool test_ui=false;
 std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
 runtime::VrMatrix44 test_resolved_palm{};
+bool test_palm_overlap_available=false;
+GameplayPalmOverlapResult test_palm_overlap{};
 bool test_head_pose_valid=true;
 runtime::VrMatrix44 test_head_pose=runtime::IdentityMatrix();
 GameplayInteractionTargetProvider test_interaction_target_provider=nullptr;
@@ -70,6 +72,15 @@ void __fastcall BodyForceAtPosition(void*,void*,const Vec* force,const Vec* posi
     test_move_force=*force;
     test_move_force_position=*position;
 }
+struct TestPickCallback {
+    struct VTable {
+        bool (__thiscall *before)(void*,void*);
+        bool (__thiscall *intersect)(void*,void*,void*);
+    };
+    VTable* vtable=nullptr;
+    static bool __fastcall Before(void*,void*,void*) { return true; }
+    static bool __fastcall Intersect(void*,void*,void*,void*) { return true; }
+};
 void Jump(std::uintptr_t rva,void* target) {
     auto* entry=g_image+rva;
     entry[0]=0xE9;
@@ -102,7 +113,29 @@ bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
     pose=test_resolved_palm;
     return true;
 }
+bool QueryGameplayPalmOverlaps(std::size_t,
+    const runtime::VrMatrix44&, GameplayPalmOverlapResult& result) noexcept {
+    result={};
+    if (!test_palm_overlap_available) return false;
+    result=test_palm_overlap;
+    return true;
+}
 int RunSpatialTest() {
+    {
+        std::array<std::uint8_t,16> protected_storage{};
+        std::array<std::uint8_t,16> other_storage{};
+        const auto now=GetTickCount64();
+        AcquireSRWLockExclusive(&g_interaction_target_lock);
+        g_interaction_targets[0]={{1.0F,2.0F,3.0F},protected_storage.data(),now,true};
+        ReleaseSRWLockExclusive(&g_interaction_target_lock);
+        if (ProtectedNudgeBody(0,now)!=protected_storage.data() ||
+            ProtectedNudgeBody(1,now)!=nullptr ||
+            ProtectedNudgeBody(0,now+kInteractionTargetMaximumAgeMilliseconds+1)!=nullptr ||
+            protected_storage.data()==other_storage.data()) return 130;
+        AcquireSRWLockExclusive(&g_interaction_target_lock);
+        g_interaction_targets[0]={};
+        ReleaseSRWLockExclusive(&g_interaction_target_lock);
+    }
     {
         const Vec hand_center{0,0,0};
         const Vec contact{0.1F,0,0};
@@ -110,20 +143,24 @@ int RunSpatialTest() {
         const Matrix body_matrix=runtime::IdentityMatrix();
         Vec impulse{};
         float applied_delta=0.0F;
-        if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
-                stationary,stationary,2.0F,0,impulse,&applied_delta) ||
+        NudgePlan gentle{{1,0,0},0.34F,0.65F,0.22F};
+        if (!ComputeNudgeImpulse(hand_center,{1,0,0},gentle.velocity,contact,
+                body_matrix,stationary,stationary,2.0F,gentle,impulse,
+                &applied_delta) ||
             !VecNearlyEqual(impulse,{0.44F,0,0}) ||
             std::abs(applied_delta-0.22F)>=0.00001F) return 40;
-        if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
-                stationary,stationary,20.0F,0,impulse) ||
+        NudgePlan large{{1,0,0},0.22F,0.38F,0.10F};
+        if (!ComputeNudgeImpulse(hand_center,{1,0,0},large.velocity,contact,
+                body_matrix,stationary,stationary,20.0F,large,impulse) ||
             !VecNearlyEqual(impulse,{2.0F,0,0})) return 41;
-        if (!ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
-                stationary,stationary,2.0F,1,impulse) ||
-            !VecNearlyEqual(impulse,{0.72F,0,0})) return 42;
-        if (ComputeNudgeImpulse(hand_center,{-1,0,0},contact,body_matrix,
-                stationary,stationary,2.0F,0,impulse)) return 43;
-        if (ComputeNudgeImpulse(hand_center,{1,0,0},contact,body_matrix,
-                {0.34F,0,0},stationary,2.0F,0,impulse)) return 44;
+        NudgePlan door{{1,0,0},0.30F,0.30F,0.10F};
+        if (!ComputeNudgeImpulse(hand_center,{1,0,0},door.velocity,contact,
+                body_matrix,stationary,stationary,2.0F,door,impulse) ||
+            !VecNearlyEqual(impulse,{0.20F,0,0})) return 42;
+        if (ComputeNudgeImpulse(hand_center,{-1,0,0},{-1,0,0},contact,
+                body_matrix,stationary,stationary,2.0F,gentle,impulse)) return 43;
+        if (ComputeNudgeImpulse(hand_center,{1,0,0},gentle.velocity,contact,
+                body_matrix,{0.34F,0,0},stationary,2.0F,gentle,impulse)) return 44;
     }
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     if (!g_image) return 1;
@@ -166,6 +203,52 @@ int RunSpatialTest() {
     Jump(0x19C2A0,reinterpret_cast<void*>(&Linear)); Jump(0x19C2C0,reinterpret_cast<void*>(&Angular));
     Jump(0x19C590,reinterpret_cast<void*>(&Gravity));
     Jump(0x19C9E0,reinterpret_cast<void*>(&BodyForceAtPosition));
+    {
+        std::array<std::uint8_t,0x500> nudge_body{};
+        std::array<std::uint8_t,0x300> nudge_entity{};
+        Put(nudge_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(nudge_body.data(),kBodyActiveOffset,true);
+        Put(nudge_body.data(),kBodyCollideOffset,true);
+        Put(nudge_body.data(),kBodyUserDataOffset,
+            static_cast<void*>(nudge_entity.data()));
+        Put(nudge_entity.data(),kEntityActiveOffset,true);
+        Put(nudge_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        NudgePlan plan{};
+        test_joints=0;
+        if (!BuildNudgePlan(nudge_body.data(),{1,0,0},{0.1F,0,0},
+                2.0F,0.20F,0,plan) ||
+            std::abs(plan.push_fraction-0.60F)>0.00001F ||
+            std::abs(plan.maximum_push_speed-0.90F)>0.00001F ||
+            std::abs(plan.maximum_delta_velocity-0.28F)>0.00001F)
+            return 55;
+        if (!BuildNudgePlan(nudge_body.data(),{1,0,0},{0.1F,0,0},
+                4.0F,0.80F,0,plan) ||
+            std::abs(plan.push_fraction-0.22F)>0.00001F ||
+            std::abs(plan.maximum_push_speed-0.38F)>0.00001F ||
+            std::abs(plan.maximum_delta_velocity-0.10F)>0.00001F)
+            return 56;
+        test_joints=1;
+        if (BuildNudgePlan(nudge_body.data(),{1,0,0},{0.1F,0,0},
+                4.0F,0.40F,1,plan)) return 57;
+
+        std::array<std::uint8_t,0x180> joint{};
+        Put(nudge_entity.data(),kEntityTypeOffset,kSwingDoorEntityType);
+        Put(joint.data(),0,g_image+kPhysicsJointHingeNewtonVtable);
+        Put(g_image+kPhysicsJointHingeNewtonVtable,kJointTypeVtableSlot,
+            g_image+kHingeGetType);
+        Put(joint.data(),kJointPinDirectionOffset,Vec{0,1,0});
+        Put(joint.data(),kJointPivotPointOffset,Vec{0,0,0});
+        test_joint=joint.data();
+        if (!BuildNudgePlan(nudge_body.data(),{0,0,-1},{1,0,0},
+                4.0F,0.40F,1,plan) ||
+            !VecNearlyEqual(plan.velocity,{0,0,-1}) ||
+            std::abs(plan.push_fraction-0.30F)>0.00001F ||
+            std::abs(plan.maximum_push_speed-0.30F)>0.00001F ||
+            std::abs(plan.maximum_delta_velocity-0.10F)>0.00001F)
+            return 58;
+        test_joint=nullptr;
+        test_joints=0;
+    }
     std::array<std::uint8_t,0x500> body{},player{},state{};
     std::array<void*,10> states{}; states[6]=state.data();
     Put(player.data(),0x2C4,states.data());
@@ -178,6 +261,38 @@ int RunSpatialTest() {
     hand.pose_valid=true; hand.device_connected=true;
     hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
     hand.velocity={2,0,0}; hand.angular_velocity={0,2,0};
+    {
+        std::array<std::uint8_t,0x100> world{};
+        std::array<std::uint8_t,0x500> touched_body{};
+        std::array<std::uint8_t,0x300> touched_entity{};
+        Put(world.data(),0,g_image+kPhysicsWorldVtable);
+        Put(touched_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(touched_body.data(),kBodyActiveOffset,true);
+        Put(touched_body.data(),kBodyCollideOffset,true);
+        Put(touched_body.data(),kBodyUserDataOffset,
+            static_cast<void*>(touched_entity.data()));
+        Put(touched_entity.data(),kEntityActiveOffset,true);
+        Put(touched_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        test_resolved_palm=runtime::IdentityMatrix();
+        test_resolved_palm_valid=true;
+        test_palm_overlap={};
+        test_palm_overlap.valid=true;
+        test_palm_overlap.hit_count=1;
+        test_palm_overlap.hits[0].body=touched_body.data();
+        test_palm_overlap.hits[0].contact_sum={0.04F,0,0};
+        test_palm_overlap.hits[0].contact_count=1;
+        test_palm_overlap_available=true;
+        TestPickCallback::VTable table{
+            reinterpret_cast<bool(__thiscall*)(void*,void*)>(TestPickCallback::Before),
+            reinterpret_cast<bool(__thiscall*)(void*,void*,void*)>(TestPickCallback::Intersect)};
+        TestPickCallback callback{&table};
+        PalmSelectionCandidate selected{};
+        if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+            selected.body!=touched_body.data() || selected.assisted ||
+            std::abs(selected.distance-0.04F)>=0.00001F) return 54;
+        test_palm_overlap_available=false;
+        test_palm_overlap={};
+    }
     test_resolved_palm=runtime::IdentityMatrix();
     test_resolved_palm.values[3]=5; test_resolved_palm.values[7]=6;
     test_resolved_palm.values[11]=7; test_resolved_palm_valid=true;

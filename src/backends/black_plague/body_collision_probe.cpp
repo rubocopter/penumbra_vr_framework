@@ -49,6 +49,10 @@ constexpr std::uintptr_t kCharacterSizeOffset = 0xC4;
 constexpr std::uintptr_t kCharacterPhysicsBodyOffset = 0x23C;
 constexpr std::uintptr_t kCharacterPhysicsWorldOffset = 0x240;
 constexpr std::uintptr_t kCharacterRayCallbackOffset = 0x21C;
+constexpr std::uintptr_t kPhysicsRayNormalYOffset = 0x0C;
+constexpr std::uintptr_t kCharacterMoveSpeedForwardOffset = 0x70;
+constexpr std::uintptr_t kCharacterMoveSpeedRightOffset = 0x74;
+constexpr std::uintptr_t kCharacterPushForceOffset = 0x9C;
 constexpr std::uintptr_t kPhysicsBodyMassOffset = 0x434;
 constexpr std::uintptr_t kPhysicsWorldCharacterUpdateCall = 0xD460A;
 constexpr std::uintptr_t kCharacterUpdate = 0xD6E00;
@@ -127,6 +131,7 @@ struct TickContext {
 };
 thread_local TickContext g_tick;
 thread_local bool g_physical_step_nearest_static = false;
+thread_local float g_physical_step_nearest_normal_y = 0.0F;
 
 void PhysicalRequestGateway() noexcept;
 void PhysicalStepGateway() noexcept;
@@ -398,12 +403,11 @@ __declspec(naked) void PhysicalRequestGateway() noexcept {
     }
 }
 
-bool PhysicalOnlyStepTick() noexcept {
+bool PhysicalRoomScaleStepTick() noexcept {
     const Vec3 native_horizontal_before_injection = Subtract(
         g_tick.physical_position_before, g_tick.position_before);
     return g_tick.character_body != nullptr &&
         g_tick.physical_request_injected &&
-        !g_tick.locomotion_request_injected &&
         HorizontalLength(native_horizontal_before_injection) <= 1.0e-6F;
 }
 
@@ -413,7 +417,7 @@ bool __fastcall HookedCharacterRayIntersect(
     const bool before_collide = Read<std::uint8_t>(callback, 8) != 0;
     const bool result = g_original_character_ray_intersect != nullptr &&
         g_original_character_ray_intersect(callback, body, params);
-    if (!PhysicalOnlyStepTick() || callback == nullptr || body == nullptr ||
+    if (!PhysicalRoomScaleStepTick() || callback == nullptr || body == nullptr ||
         params == nullptr) return result;
     const void* expected_callback = Read<void*>(
         g_tick.character_body, kCharacterRayCallbackOffset);
@@ -431,24 +435,32 @@ bool __fastcall HookedCharacterRayIntersect(
     if (accepted) {
         const float mass = Read<float>(body, kPhysicsBodyMassOffset);
         g_physical_step_nearest_static = std::isfinite(mass) && mass == 0.0F;
+        g_physical_step_nearest_normal_y =
+            Read<float>(params, kPhysicsRayNormalYOffset);
     }
     return result;
 }
 
 bool __cdecl ShouldRejectPhysicalStepHit() noexcept {
-    if (!PhysicalOnlyStepTick() || g_physical_step_nearest_static) return false;
+    if (!PhysicalRoomScaleStepTick()) return false;
+    // Rework 23c890f also requires the winning ray normal to point upward.
+    // Black Plague's older cCharacterBodyRay keeps only distance/collide, but
+    // its cPhysicsRayParams ABI supplies mvNormal.y at +0x0C to this callback.
+    if (g_physical_step_nearest_static &&
+        std::isfinite(g_physical_step_nearest_normal_y) &&
+        g_physical_step_nearest_normal_y >= 0.5F) return false;
     g_tick.physical_step_climb_suppressed = true;
     return true;
 }
 
 // Rework 23c890f allows room-scale step climbing only when the native step ray
-// resolves to static geometry. Black Plague's original cCharacterBodyRay does
-// not retain the winning body, so the vtable observer above records only its
-// static/dynamic classification. This gateway runs immediately after the
-// native CastRay has stored its collide byte for the current step ray and
-// clears that byte only for a physical-only dynamic hit. Native step geometry,
-// shape tests, gravity and jump remain untouched; stick locomotion keeps the
-// original path for all bodies.
+// resolves to static geometry with an upward-facing normal (normal.y >= 0.5).
+// Black Plague's older cCharacterBodyRay stores neither property, so the vtable
+// observer above records both from the accepted nearest hit. This gateway runs
+// immediately after the native ray result is stored and clears an ineligible
+// hit whenever the tick contains physical room-scale translation, including a
+// tick that also carries direct VR locomotion. Pure stick locomotion still has
+// no physical component and keeps the original native step path for all hits.
 __declspec(naked) void PhysicalStepGateway() noexcept {
     __asm {
         pushfd
@@ -498,6 +510,41 @@ bool __fastcall HookedCheckShapeWorldCollision(
         observe = Finite(requested);
     }
 
+    // Rework's cCharacterBodyCollidePush treats vr_velocity as movement even
+    // when the two native move-speed fields are zero, and scales character
+    // push force to 20% for that VR displacement. BP has no vr_velocity field:
+    // our exact-build displacement is injected after native movement has been
+    // calculated, so temporarily adapt only those callback inputs around the
+    // first horizontal solver. The requested transform itself is untouched.
+    const bool vr_displacement = g_tick.character_body != nullptr &&
+        (g_tick.physical_request_injected || g_tick.locomotion_request_injected);
+    float saved_forward = 0.0F;
+    float saved_right = 0.0F;
+    float saved_push_force = 0.0F;
+    bool adapted_push = false;
+    if (vr_displacement) {
+        saved_forward = Read<float>(
+            g_tick.character_body, kCharacterMoveSpeedForwardOffset);
+        saved_right = Read<float>(
+            g_tick.character_body, kCharacterMoveSpeedRightOffset);
+        saved_push_force = Read<float>(
+            g_tick.character_body, kCharacterPushForceOffset);
+        if (std::isfinite(saved_forward) && std::isfinite(saved_right) &&
+            std::isfinite(saved_push_force)) {
+            if (saved_forward == 0.0F && saved_right == 0.0F) {
+                const float movement_signal = 1.0F;
+                std::memcpy(static_cast<std::uint8_t*>(g_tick.character_body) +
+                    kCharacterMoveSpeedForwardOffset,
+                    &movement_signal, sizeof(movement_signal));
+            }
+            const float rework_push_force = saved_push_force * 0.2F;
+            std::memcpy(static_cast<std::uint8_t*>(g_tick.character_body) +
+                kCharacterPushForceOffset,
+                &rework_push_force, sizeof(rework_push_force));
+            adapted_push = true;
+        }
+    }
+
     const bool collided = g_original_collision(
         world,
         resolved_position,
@@ -509,6 +556,18 @@ bool __fastcall HookedCheckShapeWorldCollision(
         callback,
         collide_character,
         debug);
+
+    if (adapted_push) {
+        std::memcpy(static_cast<std::uint8_t*>(g_tick.character_body) +
+            kCharacterMoveSpeedForwardOffset,
+            &saved_forward, sizeof(saved_forward));
+        std::memcpy(static_cast<std::uint8_t*>(g_tick.character_body) +
+            kCharacterMoveSpeedRightOffset,
+            &saved_right, sizeof(saved_right));
+        std::memcpy(static_cast<std::uint8_t*>(g_tick.character_body) +
+            kCharacterPushForceOffset,
+            &saved_push_force, sizeof(saved_push_force));
+    }
 
     Vec3 resolved{};
     if (observe && ReadBytes(resolved_position, &resolved, sizeof(resolved)) &&
@@ -534,6 +593,7 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
     if (observe) {
         g_tick = {};
         g_physical_step_nearest_static = false;
+        g_physical_step_nearest_normal_y = 0.0F;
         g_tick.character_body = character_body;
         g_tick.position_before = position_before;
         tick_sequence = g_body_update_sequence.fetch_add(
@@ -733,6 +793,25 @@ template<std::size_t Size>
         return false;
     }
 
+    // A gateway must never publish a live callsite before its immutable resume
+    // target is available. These targets are process-resident for the supported
+    // image and stay published so an already-entered gateway can finish after
+    // its callsite is restored.
+    void* const physical_request_resume = g_image + kPhysicalRequestInjection +
+        kPhysicalRequestWindow.size();
+    void* const physical_step_resume = g_image + kPhysicalStepDecision +
+        kPhysicalStepWindow.size();
+    if ((g_physical_request_resume != nullptr &&
+         g_physical_request_resume != physical_request_resume) ||
+        (g_physical_step_resume != nullptr &&
+         g_physical_step_resume != physical_step_resume)) {
+        error = "Body/collision gateway resume target belongs to another image";
+        g_image = nullptr;
+        return false;
+    }
+    g_physical_request_resume = physical_request_resume;
+    g_physical_step_resume = physical_step_resume;
+
     // Publish the verified native targets before either live callsite can
     // dispatch to its wrapper on another game thread. Once published, keep
     // them immutable across reinstallations because an old wrapper can still
@@ -782,10 +861,6 @@ template<std::size_t Size>
         }
         return false;
     }
-    if (g_physical_request_resume == nullptr) {
-        g_physical_request_resume = g_image + kPhysicalRequestInjection +
-            kPhysicalRequestWindow.size();
-    }
     if (!hooks::InstallRel32JumpHook(
             g_image + kPhysicalRequestInjection,
             kPhysicalRequestWindow,
@@ -807,10 +882,6 @@ template<std::size_t Size>
         return false;
     }
     g_physical_request_owner_installed.store(true, std::memory_order_release);
-    if (g_physical_step_resume == nullptr) {
-        g_physical_step_resume = g_image + kPhysicalStepDecision +
-            kPhysicalStepWindow.size();
-    }
     void* const expected_ray_intersect = g_image + kCharacterRayIntersect;
     void* live_ray_intersect = nullptr;
     void** const ray_slot = reinterpret_cast<void**>(

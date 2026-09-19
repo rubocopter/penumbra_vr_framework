@@ -48,6 +48,7 @@ int main() {
     SDL_GL_SwapBuffers();
     SDL_GL_SwapBuffers();
     if (g_callback_count != 3 || penumbra_vr::hooks::ObservedFrameCount() != 3 ||
+        penumbra_vr::hooks::CompletedFrameCount() != 3 ||
         SDLStub_GetSwapCount() != 3) {
         std::cerr << "The hook did not observe and forward exactly three swaps\n";
         return 2;
@@ -65,6 +66,13 @@ int main() {
         g_release_callback.store(true, std::memory_order_release);
         in_flight_swap.join();
         return 3;
+    }
+    if (penumbra_vr::hooks::ObservedFrameCount() != 4 ||
+        penumbra_vr::hooks::CompletedFrameCount() != 3) {
+        std::cerr << "An entered swap was reported complete before forwarding returned\n";
+        g_release_callback.store(true, std::memory_order_release);
+        in_flight_swap.join();
+        return 7;
     }
 
     std::atomic<bool> removal_finished{false};
@@ -90,10 +98,14 @@ int main() {
         std::cerr << "RemoveSdlSwapHook failed: " << removal_error << '\n';
         return 5;
     }
+    if (penumbra_vr::hooks::CompletedFrameCount() != 4) {
+        std::cerr << "The completed-frame counter did not advance after the forwarded swap\n";
+        return 8;
+    }
 
     CallImportedSwapAfterUnhook();
     if (g_callback_count != 4 || penumbra_vr::hooks::ObservedFrameCount() != 4 ||
-        SDLStub_GetSwapCount() != 5) {
+        penumbra_vr::hooks::CompletedFrameCount() != 4 || SDLStub_GetSwapCount() != 5) {
         std::cerr << "The original import was not restored correctly: callbacks="
                   << g_callback_count << " observed=" << penumbra_vr::hooks::ObservedFrameCount()
                   << " forwarded=" << SDLStub_GetSwapCount() << '\n';

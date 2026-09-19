@@ -94,26 +94,26 @@ try {
     Write-Host 'Run this combined headset gate, then close the game normally:'
     Write-Host '0. In a tracked menu, point with a controller and activate one normal UI item. Confirm the pointer works and note whether that controller gives the short UI haptic pulse.'
     Write-Host '1. Before touching props, physically translate 5-10 cm in X/Z and crouch/stand once. Room movement, tracked Y and overall embodied feel should match the previously good room-scale build.'
-    Write-Host '2. Inspect both imported Rework hand meshes in open space. Scale/orientation should look natural, each mesh must stay on its tracked/resolved palm, and thumb/index/middle/ring/little should visibly articulate. Also close/open the grip once so the authored held-tool finger pose can be judged separately from free curls.'
+    Write-Host '2. Inspect both imported Rework hand meshes in open space. Scale/orientation should look natural and each mesh must stay on its tracked/resolved palm. Compare all five fingers against the previously better Black Plague provisional hand: each finger should respond naturally to the controller skeletal sensors, especially thumb and little, without collapsing into Rework-style grouped grip motion. Also close/open the grip once so the authored held-tool finger pose can be judged separately from free curls.'
     Write-Host '3. In open space, move both tracked hands around your torso and head. They must follow normally and must not stop on the player character body.'
     Write-Host '4. Without stick input, physically move/lean the player body gently into a wall until horizontal room-scale motion is rejected, hold light pressure for a few seconds, then slide parallel to it. The view/body must remain vertically stable: no repeated mini-jumps or collision bounce.'
-    Write-Host '5. Press each palm slowly into a wall or table, then sweep sideways several times. The visible palm should stop at the surface and slide along it. If it catches or snaps back, note the exact gesture/timing so the reanchor/recovery counters can be correlated with it.'
+    Write-Host '5. Press each palm slowly into a wall or table, then sweep sideways several times. The visible palm should stop at the surface and slide along it. Then perform several snap/smooth turns while one hand is visible: there must be no one-frame opposite-side hand flash or palm reset. The log now distinguishes real tracking reanchors/recoveries from deliberate yaw-epoch rebases.'
     Write-Host '6. Pull each hand back out of contact and repeat at another angle. Recovery must be immediate, without a hand remaining stuck or jumping to a body-side anchor unnecessarily.'
-    Write-Host '7. Make several quick Grab=6 attempts on small free props that were previously hard to acquire, including one while the palm is lightly collision-constrained near a table/wall. Selection may follow the real controller up to the Rework 18 cm bound and may use the bounded interaction-assist skin while moving toward the target; once held, the object must stay aligned with the owning palm.'
-    Write-Host '8. Without grabbing it first, tap or sweep a hand into a light movable prop so the direct hand-nudge path can move it. Note whether the contacting controller gives a subtle interaction haptic.'
-    Write-Host '9. Repeat with one long wooden board/bar that previously behaved better. Then try one door, lever or other clearly jointed mechanism and confirm it keeps its native constrained motion instead of becoming a rigid free-body grab. Try several movable interactions so the log has a chance to exercise both Grab=6 and Move=2 ownership.'
+    Write-Host '7. Touch a small free prop and a chair with the physical palm before pressing Interact, then make several quick Grab=6 attempts. Do not aim the hand ray deliberately: nearby acquisition should prefer real palm overlap. Repeat one attempt while the visible palm is lightly collision-constrained near a table/wall so the bounded 0.18 m controller assist is exercised. Once held, the object must stay naturally aligned with the owning palm.'
+    Write-Host '8. Approach the fallen shelf/other large movable prop with an empty hand and no Interact press. Mere proximity must not launch it away. Then tap or sweep a light loose prop deliberately: direct hand nudge should remain gentle and the contacting controller may give a subtle interaction haptic.'
+    Write-Host '9. Repeat with one long wooden board/bar. Then touch and operate the locker/door plus one lever or other clearly jointed mechanism. They must keep native constrained motion instead of becoming rigid free-body grabs, and hand proximity alone must not hammer the hinge/slider. Try several movable interactions so the log can exercise both Grab=6 and Move=2 ownership.'
     Write-Host '10. If the glowstick is available, toggle it and use it for several seconds. Check the corrected Rework profile specifically: it should no longer sit inside the palm or look obviously undersized, the fingers should wrap plausibly around it, and the off hand should receive the short LightToggle haptic after the native state actually changes. If only the flashlight is available, verify its BP-specific socket/orientation and the same off-hand toggle feedback.'
     Write-Host '11. If a melee weapon is available, land at least one clear hit on an enemy or solid physical prop. The dominant controller should receive the Rework MeleeImpact pulse only after real contact; swinging through empty space must not pulse.'
     Write-Host '12. While holding a small eligible free prop, keep the hand clear for several seconds. The held prop itself must not push its owning palm backward or make the hand freeze; then release it and repeat wall/table contact.'
     Write-Host '13. If a genuinely low ceiling/overhang is nearby, crouch underneath it and attempt to stand. The game must not oscillate, bounce or corrupt body height; note whether standing is blocked/retried until clear. This is optional coverage because not every test area has suitable geometry.'
-    Write-Host '14. Repeat the short physical translation/crouch check after the interactions. Physically walk over one low static beam/step that previously blocked room-scale traversal, then traverse an ordinary stair/ledge with the stick. Physical low static geometry should use native step while stick traversal remains normal; wall pressure must not produce repeated mini-jumps. If you can enter a Push/Move interaction, apply brief stick input there too and note whether movement feels constrained rather than full-speed. Then close Black Plague normally.'
+    Write-Host '14. Repeat the short physical translation/crouch check after the interactions. First approach a low shelf/ground prop while moving physically and with the stick at the same time: there must be no repeated +5 cm step/gravity bounce. Then walk physically and with the stick up to ordinary movable props (bottle/board/chair); they should receive the reduced character push instead of behaving like walls. Finally cross one low static beam/step and one ordinary stair/ledge using stick-only locomotion; native step traversal must remain intact. Then close Black Plague normally.'
 
     Wait-Process -Id $gameProcess.Id
 
     if (-not (Test-Path -LiteralPath $probeLog -PathType Leaf)) {
         throw "Probe log disappeared: '$probeLog'."
     }
-    $pattern = 'palm_collision enabled=(?<enabled>[01]) source=(?<source>\w+) samples=(?<samples>\d+) published=(?<published>\d+) queries=(?<queries>\d+) contacts=(?<contacts>\d+) constrained=(?<constrained>\d+) tracking_reanchors=(?<reanchors>\d+) recovery_anchors=(?<recoveries>\d+) pullback_recoveries=(?<pullbackRecoveries>\d+) interaction_assist=(?<interactionAssist>\d+) held_body_skips=(?<held>\d+) stale_tracking=(?<stale>\d+) failures=(?<failures>\d+) creates=(?<creates>\d+) destroys=(?<destroys>\d+) world_replacements=(?<worlds>\d+)'
+    $pattern = 'palm_collision enabled=(?<enabled>[01]) source=(?<source>\w+) samples=(?<samples>\d+) published=(?<published>\d+) queries=(?<queries>\d+) contacts=(?<contacts>\d+) constrained=(?<constrained>\d+) tracking_reanchors=(?<reanchors>\d+) recovery_anchors=(?<recoveries>\d+) pullback_recoveries=(?<pullbackRecoveries>\d+) yaw_epoch_resets=(?<yawEpochResets>\d+) interaction_assist=(?<interactionAssist>\d+) held_body_skips=(?<held>\d+) stale_tracking=(?<stale>\d+) failures=(?<failures>\d+) creates=(?<creates>\d+) destroys=(?<destroys>\d+) world_replacements=(?<worlds>\d+)'
     [uint64]$samples = 0
     [uint64]$published = 0
     [uint64]$queries = 0
@@ -122,6 +122,7 @@ try {
     [uint64]$trackingReanchors = 0
     [uint64]$recoveryAnchors = 0
     [uint64]$pullbackRecoveries = 0
+    [uint64]$yawEpochResets = 0
     [uint64]$interactionAssist = 0
     [uint64]$held = 0
     [uint64]$failures = 0
@@ -155,6 +156,10 @@ try {
     [uint64]$selectionRays = 0
     [uint64]$selectionCandidates = 0
     [uint64]$selectionWinnerMm = 0
+    [uint64]$selectionPalmQueries = 0
+    [uint64]$selectionPalmCandidates = 0
+    [uint64]$selectionPalmWinners = 0
+    [uint64]$selectionPalmAssistedWinners = 0
     [uint64]$grabEnters = 0
     [uint64]$moveEnters = 0
     [uint64]$grabPending = 0
@@ -215,7 +220,7 @@ try {
             $line -match 'physical_step_suppressed=1') {
             ++$physicalStepSuppressed
         }
-        if ($line -match 'spatial tools_attached=(?<toolsAttached>\d+) tools_native=(?<toolsNative>\d+) invalid_tool_pose=(?<invalidToolPose>\d+) blocked_unsafe_grabs=(?<blockedUnsafeGrabs>\d+) grabs_acquired=(?<grabsAcquired>\d+) grabs_released=(?<grabsReleased>\d+) moves_acquired=(?<movesAcquired>\d+) moves_released=(?<movesReleased>\d+) guarded_releases=(?<guardedReleases>\d+) collision_restore_failures=(?<collisionRestoreFailures>\d+) contact_rays=(?<contactRays>\d+) nudge_queries=(?<nudgeQueries>\d+) nudge_contacts=(?<nudgeContacts>\d+) nudges_applied=(?<nudgesApplied>\d+) interact_presses=(?<interactPresses>\d+) selection_refreshes=(?<selectionRefreshes>\d+) selection_ray_batches=(?<selectionRayBatches>\d+) selection_rays=(?<selectionRays>\d+) selection_candidates=(?<selectionCandidates>\d+) selection_discards=(?<selectionDiscards>\d+) selection_winner_mm=(?<selectionWinnerMm>\d+) selection_central_rays=(?<selectionCentralRays>\d+) selection_auxiliary_rays=(?<selectionAuxiliaryRays>\d+) grab_enters=(?<grabEnters>\d+) move_enters=(?<moveEnters>\d+) grab_pending=(?<grabPending>\d+) move_pending=(?<movePending>\d+) magnetic_queries=(?<magneticQueries>\d+) magnetic_candidates=(?<magneticCandidates>\d+) magnetic_visibility_rays=(?<magneticVisibilityRays>\d+) magnetic_winners=(?<magneticWinners>\d+) mechanism_acquired=(?<mechanismAcquired>\d+) mechanism_updates=(?<mechanismUpdates>\d+) mechanism_rejected=(?<mechanismRejected>\d+)') {
+        if ($line -match 'spatial tools_attached=(?<toolsAttached>\d+) tools_native=(?<toolsNative>\d+) invalid_tool_pose=(?<invalidToolPose>\d+) blocked_unsafe_grabs=(?<blockedUnsafeGrabs>\d+) grabs_acquired=(?<grabsAcquired>\d+) grabs_released=(?<grabsReleased>\d+) moves_acquired=(?<movesAcquired>\d+) moves_released=(?<movesReleased>\d+) guarded_releases=(?<guardedReleases>\d+) collision_restore_failures=(?<collisionRestoreFailures>\d+) contact_rays=(?<contactRays>\d+) nudge_queries=(?<nudgeQueries>\d+) nudge_contacts=(?<nudgeContacts>\d+) nudges_applied=(?<nudgesApplied>\d+) interact_presses=(?<interactPresses>\d+) selection_refreshes=(?<selectionRefreshes>\d+) selection_ray_batches=(?<selectionRayBatches>\d+) selection_rays=(?<selectionRays>\d+) selection_candidates=(?<selectionCandidates>\d+) selection_discards=(?<selectionDiscards>\d+) selection_winner_mm=(?<selectionWinnerMm>\d+) selection_central_rays=(?<selectionCentralRays>\d+) selection_auxiliary_rays=(?<selectionAuxiliaryRays>\d+) selection_palm_queries=(?<selectionPalmQueries>\d+) selection_palm_candidates=(?<selectionPalmCandidates>\d+) selection_palm_winners=(?<selectionPalmWinners>\d+) selection_palm_assisted_winners=(?<selectionPalmAssistedWinners>\d+) grab_enters=(?<grabEnters>\d+) move_enters=(?<moveEnters>\d+) grab_pending=(?<grabPending>\d+) move_pending=(?<movePending>\d+) magnetic_queries=(?<magneticQueries>\d+) magnetic_candidates=(?<magneticCandidates>\d+) magnetic_visibility_rays=(?<magneticVisibilityRays>\d+) magnetic_winners=(?<magneticWinners>\d+) mechanism_acquired=(?<mechanismAcquired>\d+) mechanism_updates=(?<mechanismUpdates>\d+) mechanism_rejected=(?<mechanismRejected>\d+)') {
             $toolsAttached += [uint64]$Matches.toolsAttached
             $toolsNative += [uint64]$Matches.toolsNative
             $invalidToolPose += [uint64]$Matches.invalidToolPose
@@ -238,6 +243,10 @@ try {
             if ($winner -gt 0 -and ($selectionWinnerMm -eq 0 -or $winner -lt $selectionWinnerMm)) {
                 $selectionWinnerMm = $winner
             }
+            $selectionPalmQueries += [uint64]$Matches.selectionPalmQueries
+            $selectionPalmCandidates += [uint64]$Matches.selectionPalmCandidates
+            $selectionPalmWinners += [uint64]$Matches.selectionPalmWinners
+            $selectionPalmAssistedWinners += [uint64]$Matches.selectionPalmAssistedWinners
             $grabEnters += [uint64]$Matches.grabEnters
             $moveEnters += [uint64]$Matches.moveEnters
             $grabPending += [uint64]$Matches.grabPending
@@ -288,15 +297,16 @@ try {
         $trackingReanchors += [uint64]$Matches.reanchors
         $recoveryAnchors += [uint64]$Matches.recoveries
         $pullbackRecoveries += [uint64]$Matches.pullbackRecoveries
+        $yawEpochResets += [uint64]$Matches.yawEpochResets
         $interactionAssist += [uint64]$Matches.interactionAssist
         $held += [uint64]$Matches.held
         $failures += [uint64]$Matches.failures
         $creates += [uint64]$Matches.creates
     }
 
-    Write-Host "Palm totals: samples=$samples published=$published queries=$queries contacts=$contacts constrained=$constrained tracking_reanchors=$trackingReanchors recovery_anchors=$recoveryAnchors pullback_recoveries=$pullbackRecoveries interaction_assist=$interactionAssist held_body_skips=$held failures=$failures creates=$creates physical_step_suppressed=$physicalStepSuppressed"
+    Write-Host "Palm totals: samples=$samples published=$published queries=$queries contacts=$contacts constrained=$constrained tracking_reanchors=$trackingReanchors recovery_anchors=$recoveryAnchors pullback_recoveries=$pullbackRecoveries yaw_epoch_resets=$yawEpochResets interaction_assist=$interactionAssist held_body_skips=$held failures=$failures creates=$creates physical_step_suppressed=$physicalStepSuppressed"
     Write-Host "Crouch totals: physical_entries=$physicalCrouchEntries physical_exits=$physicalCrouchExits native_entries=$nativeCrouchEntries native_exits=$nativeCrouchExits stand_retries=$standRetries mismatch_frames=$crouchMismatchFrames"
-    Write-Host "Spatial totals: tools_attached=$toolsAttached tools_native=$toolsNative invalid_tool_pose=$invalidToolPose blocked_unsafe_grabs=$blockedUnsafeGrabs grabs=$grabsAcquired/$grabsReleased moves=$movesAcquired/$movesReleased guarded_releases=$guardedReleases collision_restore_failures=$collisionRestoreFailures nudge_queries=$nudgeQueries nudge_contacts=$nudgeContacts nudges_applied=$nudgesApplied interact_presses=$interactPresses selection_refreshes=$selectionRefreshes selection_batches=$selectionRayBatches selection_rays=$selectionRays selection_candidates=$selectionCandidates nearest_selection_mm=$selectionWinnerMm grab_enters=$grabEnters grab_pending=$grabPending move_enters=$moveEnters move_pending=$movePending magnetic_queries=$magneticQueries magnetic_candidates=$magneticCandidates magnetic_visibility_rays=$magneticVisibilityRays magnetic_winners=$magneticWinners mechanism_acquired=$mechanismAcquired mechanism_updates=$mechanismUpdates mechanism_rejected=$mechanismRejected"
+    Write-Host "Spatial totals: tools_attached=$toolsAttached tools_native=$toolsNative invalid_tool_pose=$invalidToolPose blocked_unsafe_grabs=$blockedUnsafeGrabs grabs=$grabsAcquired/$grabsReleased moves=$movesAcquired/$movesReleased guarded_releases=$guardedReleases collision_restore_failures=$collisionRestoreFailures nudge_queries=$nudgeQueries nudge_contacts=$nudgeContacts nudges_applied=$nudgesApplied interact_presses=$interactPresses selection_refreshes=$selectionRefreshes selection_batches=$selectionRayBatches selection_rays=$selectionRays selection_candidates=$selectionCandidates nearest_selection_mm=$selectionWinnerMm palm_queries=$selectionPalmQueries palm_candidates=$selectionPalmCandidates palm_winners=$selectionPalmWinners palm_assisted_winners=$selectionPalmAssistedWinners grab_enters=$grabEnters grab_pending=$grabPending move_enters=$moveEnters move_pending=$movePending magnetic_queries=$magneticQueries magnetic_candidates=$magneticCandidates magnetic_visibility_rays=$magneticVisibilityRays magnetic_winners=$magneticWinners mechanism_acquired=$mechanismAcquired mechanism_updates=$mechanismUpdates mechanism_rejected=$mechanismRejected"
     Write-Host "Haptic totals: ui=$uiHapticSubmitted/$uiHapticAttempted pickup=$pickupHapticSubmitted/$pickupHapticAttempted drop=$dropHapticSubmitted/$dropHapticAttempted interaction=$interactionHapticSubmitted/$interactionHapticAttempted light=$lightHapticSubmitted/$lightHapticAttempted melee=$meleeHapticSubmitted/$meleeHapticAttempted damage=$damageHapticSubmitted/$damageHapticAttempted left=$leftHapticSubmitted right=$rightHapticSubmitted submit_failed=$hapticSubmitFailures"
     Write-Host "Footstep totals: cadence=$footstepCadence attempts=$footstepAttempts success=$footstepSuccess rejected=$footstepRejected abi_failures=$footstepAbiFailures"
     if (-not $enabledSeen -or $samples -eq 0 -or $published -eq 0 -or
@@ -336,6 +346,9 @@ try {
     }
     if ($interactionAssist -eq 0 -and $interactPresses -ne 0) {
         Write-Warning 'No bounded interaction-assist sample was captured. A future pickup attempt should approach a nearby free prop while the palm is collision-constrained so the new Rework assist path is exercised.'
+    }
+    if ($selectionPalmWinners -eq 0 -and $interactPresses -ne 0) {
+        Write-Warning 'No physical-palm selection winner was captured. Touch a chair/small prop or locker handle before pressing Interact so the overlap-first acquisition path is exercised.'
     }
     if ($nudgesApplied -eq 0) {
         Write-Warning 'No direct hand nudge was applied. Tap a movable prop with an empty hand on a future run if interaction-contact parity still needs headset evidence.'

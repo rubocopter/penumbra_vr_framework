@@ -16,6 +16,8 @@ struct SpatialDiagnostics {
     std::uint64_t selection_candidates=0, selection_discards=0;
     std::uint64_t selection_winner_distance_millimetres=0;
     std::uint64_t selection_central_ray=0, selection_auxiliary_ray=0;
+    std::uint64_t selection_palm_queries=0, selection_palm_candidates=0;
+    std::uint64_t selection_palm_winners=0, selection_palm_assisted_winners=0;
     std::uint64_t grab_enters=0, move_enters=0;
     std::uint64_t grab_pending=0, move_pending=0;
     std::uint64_t magnetic_queries=0, magnetic_candidates=0;

@@ -676,9 +676,10 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
             curl_input.valid = true;
             curl_input.skeletal = true;
             curl_input.finger_curl = hand.finger_curl;
-            // The Framework action layer does not currently expose normalized
-            // grip/trigger analogs, so use only the evidenced skeletal portion
-            // of the shared policy here. Do not synthesize missing analog data.
+            // Black Plague's provisional hand already demonstrated richer,
+            // hardware-driven five-finger response than Rework. Preserve the
+            // controller skeletal channels directly here; do not collapse them
+            // into Rework's trigger/grip-derived fallback semantics.
             const auto target = runtime::BuildVrHandCurlTargets(curl_input);
             runtime::SmoothVrHandCurls(g_hand_curls[hand_index], target, dt);
             hand.finger_curl = g_hand_curls[hand_index];

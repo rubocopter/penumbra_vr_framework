@@ -10,5 +10,6 @@ using FrameCallback = void (*)(std::uint64_t frame_number) noexcept;
 [[nodiscard]] bool InstallSdlSwapHook(FrameCallback callback, std::string& error) noexcept;
 [[nodiscard]] bool RemoveSdlSwapHook(std::string& error) noexcept;
 [[nodiscard]] std::uint64_t ObservedFrameCount() noexcept;
+[[nodiscard]] std::uint64_t CompletedFrameCount() noexcept;
 
 } // namespace penumbra_vr::hooks

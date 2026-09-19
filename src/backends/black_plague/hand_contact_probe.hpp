@@ -81,6 +81,7 @@ struct GameplayPalmResolverTelemetry {
     std::uint64_t tracking_reanchors = 0;
     std::uint64_t recovery_anchors = 0;
     std::uint64_t pullback_recoveries = 0;
+    std::uint64_t yaw_epoch_resets = 0;
     std::uint64_t interaction_assist_samples = 0;
     std::uint64_t held_body_skips = 0;
     std::uint64_t stale_tracking_samples = 0;
@@ -88,6 +89,18 @@ struct GameplayPalmResolverTelemetry {
     std::uint64_t shape_creates = 0;
     std::uint64_t shape_destroys = 0;
     std::uint64_t world_replacements = 0;
+};
+
+struct GameplayPalmOverlapHit {
+    void* body = nullptr;
+    std::array<float, 3> contact_sum{};
+    std::uint32_t contact_count = 0;
+};
+
+struct GameplayPalmOverlapResult {
+    bool valid = false;
+    std::array<GameplayPalmOverlapHit, 32> hits{};
+    std::size_t hit_count = 0;
 };
 
 using GameplayInteractionTargetProvider = bool(*)(
@@ -131,7 +144,8 @@ void PublishGameplayPalmTracking(
     const std::array<runtime::VrMatrix44, 2>& raw_poses,
     const std::array<bool, 2>& raw_valid,
     const runtime::VrMatrix44& head_pose,
-    bool head_valid) noexcept;
+    bool head_valid,
+    std::uint64_t yaw_epoch) noexcept;
 
 void PublishGameplayPalmHeldBody(
     std::size_t hand_index,
@@ -150,6 +164,14 @@ void ServiceGameplayPalmResolver(
 [[nodiscard]] bool ReadGameplayPalmPose(
     std::size_t hand_index,
     runtime::VrMatrix44& pose) noexcept;
+
+// Reuses the gameplay resolver's exact box shape and world on the game thread.
+// This is a read-only overlap query used by spatial interaction so physical palm
+// contact can own target acquisition without creating a second collision shape.
+[[nodiscard]] bool QueryGameplayPalmOverlaps(
+    std::size_t hand_index,
+    const runtime::VrMatrix44& pose,
+    GameplayPalmOverlapResult& result) noexcept;
 
 [[nodiscard]] GameplayPalmResolverTelemetry
 ConsumeGameplayPalmResolverTelemetry() noexcept;

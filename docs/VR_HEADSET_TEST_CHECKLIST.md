@@ -1,24 +1,26 @@
 # Black Plague — checklist de validación con visor
 
-Actualizado: 2026-09-18.
+Actualizado: 2026-09-19.
 
-## Candidato actual — 2026-09-18
+## Candidato actual — 2026-09-19
 
 La siguiente sesión con visor debe validar el **candidato combinado de Black
 Plague**. No hace falta repetir hitos ya cerrados de body mapping, `0xD7281`,
 stick/collision, crouch/Y general o el antiguo error 108 salvo que aparezca una
 regresión concreta.
 
-El working tree actual deja en **host-tested** las correcciones y consumos que
-todavía necesitan evidencia de visor: resolver de palma + interaction assist,
-adquisición rápida `Grab=6`/`Move=2`, step físico static-only, manos Rework y
-articulación de cinco dedos, perfil Rework del glowstick, magnetic pickup,
-servo de mecanismos para `cGameLever` de un joint y `cGameSwingDoor` hinge de
-un joint, HUD/subtítulos sobre el owner nativo `DrawAll`, haptics
-LightToggle/Damage/MeleeImpact, HRTF de arranque, reverb mine-gallery/bus trim y
-el stage final por ojo de Enhanced Visuals. Wheel, mecanismos compound,
-distance/occlusion y la respuesta HPL de materiales/luces de Enhanced Visuals
-siguen fuera de ese cierre.
+La tanda del 2026-09-19 ya dio evidencia positiva a room-scale abierto,
+mirror-on, colocación/feedback del glowstick, empuje directo de props y bloqueo/
+deslizamiento parcial de palma. El working tree actual deja en **host-tested**
+los fixes que esa misma tanda motivó: adquisición física de palma para
+`Grab=6`/`Move=2`, protección de target frente a nudge, rebase por yaw epoch,
+articulación libre de BP sobre la malla importada, step físico static/upward en
+ticks con componente room-scale y empuje dinámico `0.2x`. Siguen además pendientes
+de evidencia de visor magnetic pickup, mecanismos `cGameLever`/`cGameSwingDoor`,
+HUD/subtítulos sobre `DrawAll`, haptics Damage/MeleeImpact, HRTF de arranque,
+reverb mine-gallery/bus trim y el stage final por ojo de Enhanced Visuals. Wheel,
+mecanismos compound, distance/occlusion y la respuesta HPL de materiales/luces
+de Enhanced Visuals siguen fuera de ese cierre.
 
 El gate host actual es **38/38 CTest Release**, verificador exact-build de Black
 Plague y `git diff --check`. La configuración SDK-less actual también pasa
@@ -142,13 +144,27 @@ frame pacing. PID 26940 sí llegó a esta composición, pero mostró dos regresi
 las manos aparecían negras/con triángulos de colores por estado GL heredado y la
 presión física suave contra paredes producía mini-saltos verticales repetidos
 desde el step-climb nativo. Ambos tienen correcciones **host-tested** en el
-candidato actual. En la repetición comprueba expresamente que la textura de la
+candidato actual. PID 30036 mostró después que acercar la cabeza a pared había
+mejorado, pero todavía registró ciclos de `+0,05 m` cerca de objetos bajos cuando
+room-scale físico y locomoción directa coincidían en el mismo tick; además una
+estantería caída salía despedida solo al acercar la mano y la adquisición de
+silla/taquilla seguía siendo muy difícil. El candidato actual amplía el gate de
+step estático/upward-normal a esos ticks combinados, conserva intacto el path de
+stick puro, aplica clasificación/proyección de nudge derivada de Rework y usa el
+volumen físico de palma ya existente como primera autoridad de selección antes
+de los rayos. Estas tres correcciones están **host-tested**, no validadas en
+visor. En la repetición comprueba expresamente que la textura de la
 mano permanece estable, que los cinco dedos se articulan, que
 `controller_skeletons`/`left_curls`/`right_curls` reflejan el movimiento y que,
 sin stick, mantener presión ligera contra una pared no genera rebote vertical;
-el log debe mostrar `physical_step_suppressed`. Después recorre con stick un
-escalón o borde normal para confirmar que el step nativo de locomoción sigue
-activo. La malla/rig y esta adaptación de colisión siguen host-tested, no
+el log debe mostrar `physical_step_suppressed`. Repite también el acercamiento a
+objeto bajo mientras hay room-scale + stick, acerca la mano a la estantería sin
+pulsar Interact y prueba contacto natural con una silla y la taquilla. Después
+recorre con stick puro un escalón o borde normal para confirmar que el step nativo
+de locomoción sigue activo. Si `Grab=6`/`Move=2` ya adquieren de forma fiable,
+entonces observa por separado si el objeto poseído aún queda flotando/orbitando;
+no usar ese síntoma como diagnóstico de hold mientras la adquisición siga
+fallando. La malla/rig y esta adaptación de colisión siguen host-tested, no
 headset-validated. PID 4720 no sirve para comparar room-scale porque el helper
 antiguo lo lanzó con esa ruta desactivada.
 

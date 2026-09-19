@@ -112,6 +112,8 @@ std::array<bool, 2> g_gameplay_raw_valid{};
 runtime::VrMatrix44 g_gameplay_head_pose{};
 bool g_gameplay_head_valid = false;
 std::uint64_t g_gameplay_tracking_time = 0;
+std::uint64_t g_gameplay_tracking_yaw_epoch = 0;
+std::uint64_t g_gameplay_resolver_yaw_epoch = 0;
 SRWLOCK g_gameplay_pose_lock = SRWLOCK_INIT;
 std::array<runtime::VrMatrix44, 2> g_gameplay_resolved_poses{};
 std::array<bool, 2> g_gameplay_resolved_valid{};
@@ -364,6 +366,66 @@ public:
     bool valid = true;
     std::uint32_t callback_count = 0;
     std::uint32_t contact_count = 0;
+};
+
+class GameplayPalmOverlapCallback final {
+public:
+    virtual void OnCollision(void* body, void* collide_data) {
+        if (body == nullptr) {
+            valid = false;
+            return;
+        }
+        LegacyCollideData data{};
+        if (!ReadBytes(collide_data, &data, sizeof(data)) ||
+            data.point_count < 0 || data.point_count > 32) {
+            valid = false;
+            return;
+        }
+        if (data.point_count == 0) return;
+        if (data.first == nullptr || data.last == nullptr) {
+            valid = false;
+            return;
+        }
+        const auto first = reinterpret_cast<std::uintptr_t>(data.first);
+        const auto last = reinterpret_cast<std::uintptr_t>(data.last);
+        const auto required = static_cast<std::uintptr_t>(data.point_count) *
+            sizeof(CollidePoint);
+        if (last < first || last - first < required) {
+            valid = false;
+            return;
+        }
+
+        GameplayPalmOverlapHit* hit = nullptr;
+        for (std::size_t index = 0; index < result.hit_count; ++index) {
+            if (result.hits[index].body == body) {
+                hit = &result.hits[index];
+                break;
+            }
+        }
+        if (hit == nullptr) {
+            if (result.hit_count >= result.hits.size()) return;
+            hit = &result.hits[result.hit_count++];
+            hit->body = body;
+        }
+        for (std::int32_t index = 0; index < data.point_count; ++index) {
+            CollidePoint point{};
+            const auto* source = reinterpret_cast<const std::uint8_t*>(data.first) +
+                static_cast<std::size_t>(index) * sizeof(CollidePoint);
+            if (!ReadBytes(source, &point, sizeof(point)) ||
+                !Finite(point.point) || !Finite(point.normal) ||
+                !std::isfinite(point.depth) || point.depth < 0.0F) {
+                valid = false;
+                return;
+            }
+            hit->contact_sum[0] += point.point.x;
+            hit->contact_sum[1] += point.point.y;
+            hit->contact_sum[2] += point.point.z;
+            ++hit->contact_count;
+        }
+    }
+
+    GameplayPalmOverlapResult result{};
+    bool valid = true;
 };
 
 struct NativePalmQueryContext {
@@ -887,14 +949,23 @@ void PublishGameplayPalmTracking(
     const std::array<runtime::VrMatrix44, 2>& raw_poses,
     const std::array<bool, 2>& raw_valid,
     const runtime::VrMatrix44& head_pose,
-    bool head_valid) noexcept {
+    bool head_valid,
+    std::uint64_t yaw_epoch) noexcept {
+    bool yaw_epoch_changed = false;
     AcquireSRWLockExclusive(&g_gameplay_tracking_lock);
+    yaw_epoch_changed = g_gameplay_tracking_yaw_epoch != 0 &&
+        yaw_epoch != 0 && yaw_epoch != g_gameplay_tracking_yaw_epoch;
     g_gameplay_raw_poses = raw_poses;
     g_gameplay_raw_valid = raw_valid;
     g_gameplay_head_pose = head_pose;
     g_gameplay_head_valid = head_valid;
+    g_gameplay_tracking_yaw_epoch = yaw_epoch;
     g_gameplay_tracking_time = GetTickCount64();
     ReleaseSRWLockExclusive(&g_gameplay_tracking_lock);
+    // A world-yaw turn rotates the raw palms discontinuously in world space.
+    // Do not render a still-valid resolved pose from the previous yaw epoch
+    // while the game-thread resolver is waiting for its next service tick.
+    if (yaw_epoch_changed) InvalidateGameplayPalmPoses();
 }
 
 void PublishGameplayPalmHeldBody(
@@ -919,6 +990,7 @@ void ServiceGameplayPalmResolver(
             g_gameplay_palm_shape, &lifecycle);
         g_gameplay_shape_active.store(false, std::memory_order_release);
         ResetGameplayPalmStates();
+        g_gameplay_resolver_yaw_epoch = 0;
         AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
         g_gameplay_telemetry.enabled = false;
         g_gameplay_telemetry.shape_destroys += lifecycle.destroy_count;
@@ -959,12 +1031,14 @@ void ServiceGameplayPalmResolver(
     runtime::VrMatrix44 head_pose{};
     bool head_valid = false;
     std::uint64_t tracking_time = 0;
+    std::uint64_t tracking_yaw_epoch = 0;
     AcquireSRWLockShared(&g_gameplay_tracking_lock);
     raw_poses = g_gameplay_raw_poses;
     raw_valid = g_gameplay_raw_valid;
     head_pose = g_gameplay_head_pose;
     head_valid = g_gameplay_head_valid;
     tracking_time = g_gameplay_tracking_time;
+    tracking_yaw_epoch = g_gameplay_tracking_yaw_epoch;
     ReleaseSRWLockShared(&g_gameplay_tracking_lock);
 
     const std::uint64_t now = GetTickCount64();
@@ -1006,6 +1080,21 @@ void ServiceGameplayPalmResolver(
     g_gameplay_shape_active.store(true, std::memory_order_release);
     if (previous_world != nullptr && previous_world != world) {
         ResetGameplayPalmStates();
+    }
+    const bool yaw_epoch_changed = g_gameplay_resolver_yaw_epoch != 0 &&
+        tracking_yaw_epoch != 0 &&
+        tracking_yaw_epoch != g_gameplay_resolver_yaw_epoch;
+    if (yaw_epoch_changed) {
+        // The controller did not teleport; the presentation world rotated.
+        // Reset world-space history so ResolveVrHandPose does not classify the
+        // turn as a tracking reanchor/recovery event.
+        ResetGameplayPalmStates();
+        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+        ++g_gameplay_telemetry.yaw_epoch_resets;
+        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+    }
+    if (tracking_yaw_epoch != 0) {
+        g_gameplay_resolver_yaw_epoch = tracking_yaw_epoch;
     }
 
     std::array<runtime::VrMatrix44, 2> resolved_poses{};
@@ -1100,6 +1189,44 @@ bool ReadGameplayPalmPose(
     ReleaseSRWLockShared(&g_gameplay_pose_lock);
     return valid && time != 0 &&
         GetTickCount64() - time <= kGameplayPalmSampleMaximumAgeMilliseconds;
+}
+
+bool QueryGameplayPalmOverlaps(
+    std::size_t hand_index,
+    const runtime::VrMatrix44& pose,
+    GameplayPalmOverlapResult& result) noexcept {
+    result = {};
+    if (hand_index >= g_gameplay_held_body.size() ||
+        !g_gameplay_shape_active.load(std::memory_order_acquire)) return false;
+    const OwnedPalmShape owned = g_gameplay_palm_shape;
+    if (owned.image == nullptr || owned.world == nullptr || owned.shape == nullptr ||
+        !ValidWorld(owned.image, owned.world) ||
+        Read<void*>(owned.shape, 0) != owned.image + kCollideShapeNewtonVtable ||
+        Read<void*>(owned.shape, kShapeWorldOffset) != owned.world) return false;
+
+    Matrix transform{};
+    transform.values = pose.values;
+    const Vec3 requested{
+        transform.values[3], transform.values[7], transform.values[11]};
+    if (!Finite(requested)) return false;
+    Vec3 corrected = requested;
+    GameplayPalmOverlapCallback callback;
+    bool collided = false;
+    void* const skip_body =
+        g_gameplay_held_body[hand_index].load(std::memory_order_acquire);
+    __try {
+        const auto query = reinterpret_cast<CheckShapeWorldCollision>(
+            owned.image + kCheckShapeWorldCollision);
+        collided = query(owned.world, &corrected, owned.shape, &transform,
+            skip_body, false, false, &callback, false, false);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if (!callback.valid || !Finite(corrected) ||
+        collided != (callback.result.hit_count != 0)) return false;
+    callback.result.valid = true;
+    result = callback.result;
+    return true;
 }
 
 GameplayPalmResolverTelemetry ConsumeGameplayPalmResolverTelemetry() noexcept {

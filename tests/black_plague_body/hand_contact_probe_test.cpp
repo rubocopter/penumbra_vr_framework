@@ -80,6 +80,7 @@ std::uint8_t* g_fake_palm_shape = nullptr;
 Matrix g_last_create_transform{};
 bool g_last_create_transform_valid = false;
 void* g_last_skip_body = nullptr;
+void* g_fake_collision_body = nullptr;
 bool g_last_skip_static = false;
 bool g_last_is_character = false;
 bool g_last_collide_character = true;
@@ -122,7 +123,8 @@ bool __fastcall FakeCheckShapeWorldCollision(
 
     using Callback = void(__thiscall*)(void*, void*, void*);
     auto** const vtable = *reinterpret_cast<void***>(callback);
-    reinterpret_cast<Callback>(vtable[0])(callback, nullptr, &data);
+    reinterpret_cast<Callback>(vtable[0])(
+        callback, g_fake_collision_body, &data);
     resolved_position->x += 0.01F;
 
     if (mode == FakeMode::mutate_shape) {
@@ -440,7 +442,7 @@ int main() {
     const std::array<bool, 2> raw_valid{true, false};
     void* const held_body = replacement_fixture.shape.data();
     bp::PublishGameplayPalmHeldBody(0, held_body);
-    bp::PublishGameplayPalmTracking(raw_poses, raw_valid, head, true);
+    bp::PublishGameplayPalmTracking(raw_poses, raw_valid, head, true, 1);
     bp::ServiceGameplayPalmResolver(
         replacement_fixture.image, replacement_fixture.character.data());
     runtime::VrMatrix44 gameplay_resolved{};
@@ -458,6 +460,45 @@ int main() {
         !NearlyEqual(gameplay_resolved.values[3], left_raw.values[3])) {
         std::cerr << "gameplay palm publication/exclusion contract failed\n";
         return 1;
+    }
+
+    g_mode.store(FakeMode::collided, std::memory_order_relaxed);
+    g_fake_collision_body = replacement_fixture.physics_body.data();
+    bp::GameplayPalmOverlapResult overlap{};
+    if (!bp::QueryGameplayPalmOverlaps(0, gameplay_resolved, overlap) ||
+        !overlap.valid || overlap.hit_count != 1 ||
+        overlap.hits[0].body != g_fake_collision_body ||
+        overlap.hits[0].contact_count != 2 ||
+        !NearlyEqual(overlap.hits[0].contact_sum[0], 5.0F) ||
+        !NearlyEqual(overlap.hits[0].contact_sum[1], 7.0F) ||
+        !NearlyEqual(overlap.hits[0].contact_sum[2], 9.0F) ||
+        g_last_skip_body != held_body || g_last_skip_static ||
+        g_last_is_character || g_last_collide_character || g_last_debug) {
+        std::cerr << "gameplay palm overlap query contract failed\n";
+        return 37;
+    }
+    g_fake_collision_body = nullptr;
+    g_mode.store(FakeMode::clear, std::memory_order_relaxed);
+
+    // A snap/smooth-turn world-yaw epoch is a coordinate-space rebase, not a
+    // tracking teleport. The old resolved pose is invalidated immediately and
+    // resolver history is reset before the next collision solve.
+    runtime::VrMatrix44 turned = left_raw;
+    turned.values[3] += 0.75F;
+    raw_poses[0] = turned;
+    bp::PublishGameplayPalmTracking(raw_poses, raw_valid, head, true, 2);
+    if (bp::ReadGameplayPalmPose(0, gameplay_resolved)) {
+        std::cerr << "yaw epoch retained stale resolved palm pose\n";
+        return 35;
+    }
+    bp::ServiceGameplayPalmResolver(
+        replacement_fixture.image, replacement_fixture.character.data());
+    gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
+    if (!bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
+        gameplay.yaw_epoch_resets != 1 || gameplay.tracking_reanchors != 0 ||
+        gameplay.recovery_anchors != 0) {
+        std::cerr << "yaw epoch palm-history rebase failed\n";
+        return 36;
     }
 
     std::atomic<bool> shutdown_done{false};

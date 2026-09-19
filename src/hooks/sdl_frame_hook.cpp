@@ -13,6 +13,7 @@ namespace {
 using SdlSwapBuffers = void(__cdecl*)();
 
 std::atomic<std::uint64_t> g_frame_count{0};
+std::atomic<std::uint64_t> g_completed_frame_count{0};
 std::atomic<FrameCallback> g_callback{nullptr};
 std::atomic<void*> g_original_swap{nullptr};
 std::atomic<std::uint32_t> g_active_calls{0};
@@ -45,6 +46,7 @@ void __cdecl HookedSdlSwapBuffers() noexcept {
         g_original_swap.load(std::memory_order_acquire));
     if (original != nullptr) {
         original();
+        g_completed_frame_count.fetch_add(1, std::memory_order_release);
     }
 }
 
@@ -58,6 +60,7 @@ bool InstallSdlSwapHook(FrameCallback callback, std::string& error) noexcept {
 
     g_callback.store(callback, std::memory_order_release);
     g_frame_count.store(0, std::memory_order_relaxed);
+    g_completed_frame_count.store(0, std::memory_order_relaxed);
     if (!InstallIatHook(
             "SDL.dll",
             "SDL_GL_SwapBuffers",
@@ -92,6 +95,10 @@ bool RemoveSdlSwapHook(std::string& error) noexcept {
 
 std::uint64_t ObservedFrameCount() noexcept {
     return g_frame_count.load(std::memory_order_relaxed);
+}
+
+std::uint64_t CompletedFrameCount() noexcept {
+    return g_completed_frame_count.load(std::memory_order_acquire);
 }
 
 } // namespace penumbra_vr::hooks

@@ -1,6 +1,6 @@
 # Arranque VR y estado de los mandos
 
-Actualizado: 2026-09-18. Backend **Black Plague FD316F…** únicamente.
+Actualizado: 2026-09-19. Backend **Black Plague FD316F…** únicamente.
 
 La prueba de visor del 2026-09-06 confirmó el arranque mediante BAT, recentrado,
 menús, inventario/libreta, dedos, movimiento, giro, correr/agacharse y luces
@@ -9,12 +9,12 @@ considerarse resueltos: mirror negro/con artefactos, rumbo inicialmente
 desacoplado del HMD, interacción en la mano izquierda cuando no correspondía,
 agarres nativos y glowstick sin anclaje espacial correcto.
 
-Las correcciones posteriores se han incorporado en código y requieren una nueva
-prueba de visor para certificarlas. El glowstick ya siguió la mano en la tanda
-posterior, pero el socket provisional lo dejó dentro de la mano; el ajuste visual
-se aplaza hasta integrar las manos definitivas para no calibrarlo dos veces.
-Los cambios de dedos pasan las pruebas matemáticas, pero no se consideran una
-mejora visual validada hasta una nueva prueba.
+Las tandas posteriores ya han validado partes de ese estado: room-scale abierto,
+mirror-on y la colocación/feedback del glowstick tuvieron resultado positivo el
+2026-09-19. Esa misma sesión dejó abiertos la adquisición natural Grab/Move, la
+continuidad de palma al cambiar `world_yaw`, la articulación de pulgar/meñique y
+el contacto físico con props bajos/dinámicos. Las correcciones actuales de esos
+cuatro puntos están host-tested y necesitan la siguiente prueba dirigida.
 
 ### Estado actual tras la prueba
 
@@ -26,10 +26,16 @@ mejora visual validada hasta una nueva prueba.
   sin el artefacto del punto blanco creciente.
 - **Pendiente de nueva prueba:** el candidato combinado actual integra la palma
   collision-aware con manos/objetos/herramientas, acquisition Grab/Move,
-  static-only physical step, magnetic pickup, glowstick Rework, mecanismos
+  el gate físico static/upward-normal también en ticks room-scale+locomoción,
+  protección de target frente a nudge, rebase de palma por yaw epoch, la
+  articulación independiente de BP, magnetic pickup, mecanismos
   one-joint Lever/SwingDoor, HUD/subtítulos y nuevos haptics. Todo ello conserva
   el estado de evidencia documentado y debe pasar la tanda combinada antes de
   promoción.
+- **Positivo en la tanda 2026-09-19:** room-scale en espacio abierto, mirror-on,
+  posición del glowstick y su feedback de toggle; también hubo empuje directo de
+  props y bloqueo/deslizamiento parcial de palma. Se conservan como regresión,
+  sin convertir esa evidencia parcial en validación de los fixes posteriores.
 - **Ejercitado parcialmente en visor:** room-scale X/Z, crouch/Y, locomoción
   directa y filtro de rechazo ya tienen evidencia positiva en las sesiones
   documentadas. El helper principal actual es
@@ -106,8 +112,21 @@ readiness del launcher: aceptaba cualquier ventana top-level no vacía del
 proceso. El candidato actual exige que la ventana estable sea la ventana SDL 1.2
 visible de clase `SDL_app`; mantiene deliberadamente fuera el antiguo
 `GetPixelFormat(GetDC(hwnd))`, que no es una señal fiable con el DC privado de
-SDL. Este hardening es **host-tested only** hasta que un nuevo arranque real
-supere `PenumbraVR_Initialize`.
+SDL. PID 14024 volvió a reproducir después la misma firma
+`0xc0000005`/`SDL.dll+0x28c09`, demostrando que una ventana estable tampoco
+prueba por sí sola que SDL/WGL haya terminado. El candidato actual usa una
+señal más estrecha: instala primero únicamente el hook atómico de
+`SDL_GL_SwapBuffers`, deja `OnFrame` bloqueado por el lifecycle de
+inicialización y no instala los hooks OpenGL/RenderWorld hasta que un swap real
+haya retornado correctamente. Esta segunda barrera sigue **host-tested only**
+hasta el siguiente arranque real.
+
+En PID 25952 el arranque/OpenVR sí llegó más lejos: acciones y targets por ojo
+3400x3468 se inicializaron, pero el primer frame 3D desactivó el estéreo al
+atribuir al nuevo overlay 2D un error OpenGL pendiente dejado por HPL. El draw
+del overlay ahora consume los errores heredados antes de empezar y comprueba/
+reporta únicamente los generados por su propio trabajo. La corrección pasa la
+suite Release completa y queda igualmente pendiente de validación en visor.
 
 ### Estado de la validación shadow y próximas pruebas
 

@@ -81,6 +81,7 @@ constexpr std::uintptr_t kBodyListPayloadOffset = 0x08;
 constexpr std::uintptr_t kEntityActiveOffset = 0x14;
 constexpr std::uintptr_t kEntityTypeOffset = 0xC0;
 constexpr std::uintptr_t kItemSubtypeOffset = 0x250;
+constexpr int kObjectEntityType = 1;
 constexpr int kItemEntityType = 5;
 constexpr int kSwingDoorEntityType = 8;
 constexpr int kLeverEntityType = 0x12;
@@ -124,6 +125,8 @@ std::atomic<std::uint64_t> g_selection_ray_batches{0},g_selection_rays{0};
 std::atomic<std::uint64_t> g_selection_candidates{0},g_selection_discards{0};
 std::atomic<std::uint64_t> g_selection_winner_distance_millimetres{0};
 std::atomic<std::uint64_t> g_selection_central_ray{0},g_selection_auxiliary_ray{0};
+std::atomic<std::uint64_t> g_selection_palm_queries{0},g_selection_palm_candidates{0};
+std::atomic<std::uint64_t> g_selection_palm_winners{0},g_selection_palm_assisted_winners{0};
 std::atomic<std::uint64_t> g_grab_enters{0},g_move_enters{0};
 std::atomic<std::uint64_t> g_grab_pending{0},g_move_pending{0};
 std::atomic<std::uint64_t> g_magnetic_queries{0},g_magnetic_candidates{0};
@@ -134,6 +137,7 @@ std::array<std::atomic<float>,2> g_tool_grip_weight{};
 std::array<std::atomic<std::uint64_t>,2> g_tool_grip_time{};
 struct InteractionTarget {
     std::array<float,3> point{};
+    void* body = nullptr;
     std::uint64_t time = 0;
     bool valid = false;
 };
@@ -190,6 +194,13 @@ struct MoveHold {
     float hinge_lightness = 1.0F;
 } g_move_hold;
 
+struct NudgePlan {
+    Vec velocity{};
+    float push_fraction = 0.0F;
+    float maximum_push_speed = 0.0F;
+    float maximum_delta_velocity = 0.0F;
+};
+
 struct OwnedNudgeShape {
     std::uint8_t* image = nullptr;
     void* world = nullptr;
@@ -203,6 +214,8 @@ struct NudgeHit {
 };
 
 bool Copy(const void* source, void* dest, std::size_t size) noexcept;
+[[nodiscard]] float Dot(const Vec& left,const Vec& right) noexcept;
+[[nodiscard]] Vec Cross(const Vec& left,const Vec& right) noexcept;
 
 class NudgeContactCallback final {
 public:
@@ -435,6 +448,95 @@ bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + k
         return false;
     return true;
 }
+[[nodiscard]] bool BuildNudgePlan(void* body, const Vec& hand_velocity,
+    const Vec& contact, float mass, float radius, int joint_count,
+    NudgePlan& plan) noexcept {
+    plan={};
+    if (!BodyMatches(body) || !FiniteVec(hand_velocity) || !FiniteVec(contact) ||
+        !std::isfinite(mass) || mass<=0.0F || !std::isfinite(radius) || radius<0.0F ||
+        joint_count<0 || !Read<bool>(body,kBodyActiveOffset) ||
+        !Read<bool>(body,kBodyCollideOffset) || Read<bool>(body,kBodyCharacterOffset) ||
+        Read<bool>(body,kBodyPlayerOffset)) return false;
+    void* const entity=Read<void*>(body,kBodyUserDataOffset);
+    if (!entity || !Read<bool>(entity,kEntityActiveOffset)) return false;
+    const int entity_type=Read<int>(entity,kEntityTypeOffset);
+    if (entity_type!=kObjectEntityType && entity_type!=kItemEntityType &&
+        entity_type!=kSwingDoorEntityType) return false;
+
+    plan.velocity=hand_velocity;
+    if (joint_count>0) {
+        // The exact Black Plague evidence currently proves only the same
+        // one-joint hinge/slider families already consumed by Move. Unknown
+        // jointed Objects fail closed instead of receiving an unconstrained
+        // palm impulse.
+        MoveHold mechanism{};
+        if (!BindRecognizedMechanism(body,mechanism)) return false;
+        const float pin_length=runtime::vr_mechanism_policy::Length(mechanism.joint_pin);
+        if (!std::isfinite(pin_length) || pin_length<=1.0e-6F) return false;
+        const Vec pin{
+            mechanism.joint_pin[0]/pin_length,
+            mechanism.joint_pin[1]/pin_length,
+            mechanism.joint_pin[2]/pin_length};
+        if (mechanism.mode==MoveHold::Mode::slider) {
+            const float along=Dot(hand_velocity,pin);
+            plan.velocity={pin[0]*along,pin[1]*along,pin[2]*along};
+        } else if (mechanism.mode==MoveHold::Mode::hinge) {
+            Vec radial{
+                contact[0]-mechanism.joint_pivot[0],
+                contact[1]-mechanism.joint_pivot[1],
+                contact[2]-mechanism.joint_pivot[2]};
+            const float along_pin=Dot(radial,pin);
+            for (std::size_t axis=0;axis<3;++axis) radial[axis]-=pin[axis]*along_pin;
+            const float radial_length=runtime::vr_mechanism_policy::Length(radial);
+            if (!std::isfinite(radial_length) || radial_length<=0.02F) return false;
+            const Vec tangent_raw=Cross(pin,radial);
+            const float tangent_length=runtime::vr_mechanism_policy::Length(tangent_raw);
+            if (!std::isfinite(tangent_length) || tangent_length<=1.0e-6F) return false;
+            const Vec tangent{
+                tangent_raw[0]/tangent_length,
+                tangent_raw[1]/tangent_length,
+                tangent_raw[2]/tangent_length};
+            const float tangent_speed=Dot(hand_velocity,tangent);
+            plan.velocity={
+                tangent[0]*tangent_speed,
+                tangent[1]*tangent_speed,
+                tangent[2]*tangent_speed};
+        } else return false;
+
+        // Nudge is only a proximity fallback. Keep SwingDoor contact at the
+        // conservative locked-door cap; the native Move transition remains the
+        // authoritative path for actually opening an unlocked door.
+        plan.push_fraction=0.30F;
+        plan.maximum_push_speed=0.30F;
+        plan.maximum_delta_velocity=0.10F;
+        return runtime::vr_mechanism_policy::Length(plan.velocity)>=0.02F;
+    }
+
+    if (entity_type==kSwingDoorEntityType) return false;
+    const bool small_light=mass<=3.0F && radius<=0.30F;
+    const bool large_heavy=mass>=12.0F || radius>=0.75F;
+    if (small_light) {
+        plan.push_fraction=0.60F;
+        plan.maximum_push_speed=0.90F;
+        plan.maximum_delta_velocity=0.28F;
+    } else if (large_heavy) {
+        plan.push_fraction=0.22F;
+        plan.maximum_push_speed=0.38F;
+        plan.maximum_delta_velocity=0.10F;
+    } else if (entity_type==kObjectEntityType) {
+        // BP does not yet have a verifier-pinned Object interact-mode/breakable
+        // field. Treat ordinary Objects as Rework's gentle grab/move class;
+        // this is conservative for breakables and avoids proximity punches.
+        plan.push_fraction=0.34F;
+        plan.maximum_push_speed=0.65F;
+        plan.maximum_delta_velocity=0.22F;
+    } else {
+        plan.push_fraction=0.50F;
+        plan.maximum_push_speed=1.00F;
+        plan.maximum_delta_velocity=0.40F;
+    }
+    return true;
+}
 [[nodiscard]] bool SafeNativeRayBefore(void* callback,void* body) noexcept {
     if (!callback || !body) return false;
     __try {
@@ -515,29 +617,29 @@ void DestroyNudgeShape() noexcept {
     return true;
 }
 [[nodiscard]] bool ComputeNudgeImpulse(const Vec& hand_center,const Vec& hand_velocity,
-    const Vec& contact,const Matrix& body_matrix,const Vec& linear_velocity,
-    const Vec& angular_velocity,float mass,int joint_count,Vec& impulse,
+    const Vec& push_velocity,const Vec& contact,const Matrix& body_matrix,
+    const Vec& linear_velocity,const Vec& angular_velocity,float mass,
+    const NudgePlan& plan,Vec& impulse,
     float* applied_delta=nullptr) noexcept {
     impulse={};
     if (applied_delta) *applied_delta=0.0F;
-    if (!FiniteVec(hand_center) || !FiniteVec(hand_velocity) || !FiniteVec(contact) ||
+    if (!FiniteVec(hand_center) || !FiniteVec(hand_velocity) || !FiniteVec(push_velocity) ||
+        !FiniteVec(contact) ||
         !FiniteVec(linear_velocity) || !FiniteVec(angular_velocity) ||
-        !std::isfinite(mass) || mass<=0) return false;
-    const float speed=std::hypot(std::hypot(hand_velocity[0],hand_velocity[1]),
-        hand_velocity[2]);
+        !std::isfinite(mass) || mass<=0 || !std::isfinite(plan.push_fraction) ||
+        !std::isfinite(plan.maximum_push_speed) ||
+        !std::isfinite(plan.maximum_delta_velocity) || plan.push_fraction<=0.0F ||
+        plan.maximum_push_speed<=0.0F || plan.maximum_delta_velocity<=0.0F) return false;
+    const float speed=std::hypot(std::hypot(push_velocity[0],push_velocity[1]),
+        push_velocity[2]);
     if (!std::isfinite(speed) || speed<kNudgeMinimumHandSpeed) return false;
     const Vec to_object{contact[0]-hand_center[0],contact[1]-hand_center[1],
         contact[2]-hand_center[2]};
     if (Dot(hand_velocity,to_object)<=0) return false;
-    const Vec push_direction{hand_velocity[0]/speed,hand_velocity[1]/speed,
-        hand_velocity[2]/speed};
-    float fraction=0.34F,max_speed=0.65F,max_delta=0.22F;
-    if (joint_count>0) {
-        fraction=0.80F; max_speed=1.35F; max_delta=0.36F;
-    } else if (mass>=12.0F) {
-        fraction=0.22F; max_speed=0.38F; max_delta=0.10F;
-    }
-    const float desired_speed=std::clamp(speed*fraction,0.0F,max_speed);
+    const Vec push_direction{push_velocity[0]/speed,push_velocity[1]/speed,
+        push_velocity[2]/speed};
+    const float desired_speed=std::clamp(speed*plan.push_fraction,0.0F,
+        plan.maximum_push_speed);
     const Vec body_position{body_matrix.values[3],body_matrix.values[7],
         body_matrix.values[11]};
     if (!FiniteVec(body_position)) return false;
@@ -548,7 +650,8 @@ void DestroyNudgeShape() noexcept {
         linear_velocity[2]+spin[2]};
     const float current_speed=Dot(contact_velocity,push_direction);
     if (!std::isfinite(current_speed)) return false;
-    const float delta=std::clamp(desired_speed-current_speed,0.0F,max_delta);
+    const float delta=std::clamp(desired_speed-current_speed,0.0F,
+        plan.maximum_delta_velocity);
     if (delta<=0.005F) return false;
     impulse={push_direction[0]*delta*mass,push_direction[1]*delta*mass,
         push_direction[2]*delta*mass};
@@ -690,7 +793,7 @@ struct MagneticSightCallback final {
     }
 };
 
-[[nodiscard]] bool CastMagneticSight(void* world, const Vec& origin, void* candidate,
+[[nodiscard]] bool CastSolidSight(void* world, const Vec& origin, void* candidate,
     const Vec& sample, MagneticRayHit& hit) noexcept {
     hit={};
     const Vec ray{sample[0]-origin[0],sample[1]-origin[1],sample[2]-origin[2]};
@@ -704,7 +807,6 @@ struct MagneticSightCallback final {
         reinterpret_cast<bool(__thiscall*)(void*,void*)>(MagneticSightCallback::Before),
         reinterpret_cast<bool(__thiscall*)(void*,void*,void*)>(MagneticSightCallback::Intersect)};
     MagneticSightCallback callback{&table,candidate};
-    ++g_magnetic_visibility_rays;
     __try {
         reinterpret_cast<Ray>(g_image+0x189E30)(
             world,&callback,&origin,&end,true,false,true,true);
@@ -712,6 +814,12 @@ struct MagneticSightCallback final {
     if (callback.nearest_body!=candidate || !FiniteVec(callback.nearest.point)) return false;
     hit=callback.nearest;
     return true;
+}
+
+[[nodiscard]] bool CastMagneticSight(void* world, const Vec& origin, void* candidate,
+    const Vec& sample, MagneticRayHit& hit) noexcept {
+    ++g_magnetic_visibility_rays;
+    return CastSolidSight(world,origin,candidate,sample,hit);
 }
 
 [[nodiscard]] bool FindMagneticTarget(void* world, runtime::VrHand hand,
@@ -879,6 +987,101 @@ bool InteractionHandPose(runtime::VrHand hand, Matrix& pose, Vec& velocity, Vec&
     pose=runtime::rework_hand_profile::ApplyVisualLocalPose(pose);
     return true;
 }
+
+struct PalmSelectionCandidate {
+    void* body = nullptr;
+    Vec point{};
+    float distance = INFINITY;
+    bool assisted = false;
+};
+
+[[nodiscard]] bool PalmAcquisitionEntity(void* body) noexcept {
+    if (!BodyMatches(body) || !Read<bool>(body,kBodyActiveOffset) ||
+        !Read<bool>(body,kBodyCollideOffset) || Read<bool>(body,kBodyCharacterOffset) ||
+        Read<bool>(body,kBodyPlayerOffset)) return false;
+    void* const entity=Read<void*>(body,kBodyUserDataOffset);
+    if (!entity || !Read<bool>(entity,kEntityActiveOffset)) return false;
+    const int type=Read<int>(entity,kEntityTypeOffset);
+    return type==kObjectEntityType || type==kItemEntityType ||
+        type==kSwingDoorEntityType || type==kLeverEntityType;
+}
+
+[[nodiscard]] bool FindPalmOverlapTarget(void* world,void* native_callback,
+    runtime::VrHand hand,PalmSelectionCandidate& selected) noexcept {
+    selected={};
+    if (!ValidPhysicsWorld(world) || !native_callback) return false;
+    const std::size_t hand_index=hand==runtime::VrHand::left ? 0U : 1U;
+    runtime::VrMatrix44 resolved{};
+    if (!ReadGameplayPalmPose(hand_index,resolved)) return false;
+    const Vec resolved_center{
+        resolved.values[3],resolved.values[7],resolved.values[11]};
+    if (!FiniteVec(resolved_center)) return false;
+
+    Matrix raw{}; Vec velocity{},angular{};
+    if (!RawHandPose(hand,false,raw,velocity,angular)) return false;
+    Matrix assisted_pose=raw;
+    Vec reach{
+        raw.values[3]-resolved.values[3],
+        raw.values[7]-resolved.values[7],
+        raw.values[11]-resolved.values[11]};
+    const float raw_reach=runtime::vr_mechanism_policy::Length(reach);
+    if (!std::isfinite(raw_reach)) return false;
+    const float reach_scale=raw_reach>
+            runtime::vr_interaction_policy::kMaximumCollisionInteractionReach && raw_reach>0.0F
+        ? runtime::vr_interaction_policy::kMaximumCollisionInteractionReach/raw_reach
+        : 1.0F;
+    assisted_pose.values[3]=resolved.values[3]+reach[0]*reach_scale;
+    assisted_pose.values[7]=resolved.values[7]+reach[1]*reach_scale;
+    assisted_pose.values[11]=resolved.values[11]+reach[2]*reach_scale;
+
+    auto choose_from_overlap=[&](const Matrix& pose,bool assisted,
+            PalmSelectionCandidate& winner) noexcept -> bool {
+        GameplayPalmOverlapResult overlap{};
+        ++g_selection_palm_queries;
+        if (!QueryGameplayPalmOverlaps(hand_index,pose,overlap) || !overlap.valid)
+            return false;
+        PalmSelectionCandidate best_item{},best_other{};
+        for (std::size_t hit_index=0;hit_index<overlap.hit_count;++hit_index) {
+            const auto& hit=overlap.hits[hit_index];
+            if (!hit.body || hit.contact_count==0 || !PalmAcquisitionEntity(hit.body) ||
+                !SafeNativeRayBefore(native_callback,hit.body)) continue;
+            Vec point{};
+            for (std::size_t axis=0;axis<3;++axis)
+                point[axis]=hit.contact_sum[axis]/static_cast<float>(hit.contact_count);
+            if (!FiniteVec(point)) continue;
+            const Vec delta{
+                point[0]-resolved_center[0],
+                point[1]-resolved_center[1],
+                point[2]-resolved_center[2]};
+            const float distance=runtime::vr_mechanism_policy::Length(delta);
+            if (!std::isfinite(distance)) continue;
+            if (assisted && distance>0.001F) {
+                MagneticRayHit sight{};
+                if (!CastSolidSight(world,resolved_center,hit.body,point,sight)) continue;
+            }
+            ++g_selection_palm_candidates;
+            ++g_selection_candidates;
+            void* const entity=Read<void*>(hit.body,kBodyUserDataOffset);
+            const bool item=entity && Read<int>(entity,kEntityTypeOffset)==kItemEntityType;
+            auto& slot=item ? best_item : best_other;
+            if (distance<slot.distance) {
+                if (slot.body) ++g_selection_discards;
+                slot={hit.body,point,distance,assisted};
+            } else ++g_selection_discards;
+        }
+        winner=best_item.body ? best_item : best_other;
+        return winner.body!=nullptr;
+    };
+
+    // Collision-resolved palm contact is authoritative. Only if it has no
+    // valid target do we move the same proven palm box toward the real
+    // controller by the bounded 18 cm Rework reach, with solid LOS.
+    if (choose_from_overlap(resolved,false,selected)) return true;
+    const float bounded_reach=raw_reach*reach_scale;
+    if (bounded_reach<=0.001F) return false;
+    if (!choose_from_overlap(assisted_pose,true,selected)) return false;
+    return true;
+}
 void __fastcall HookedHandsUpdate(void* hands, void*, float dt) {
     CallbackScope scope;
     auto* previous = g_updating_hands;
@@ -938,33 +1141,48 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
     if (g_enabled.load(std::memory_order_acquire) &&
         reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == reinterpret_cast<std::uintptr_t>(g_image)+0xAD852) {
         const auto frame = ReadNativeControllerFrame();
-        Matrix pose; Vec velocity{},angular{},from{},to{};
-        if (Copy(origin,from.data(),sizeof(from)) && Copy(end,to.data(),sizeof(to)) &&
-            InteractionHandPose(frame.interact_source,pose,velocity,angular)) {
+        Vec from{},to{};
+        if (Copy(origin,from.data(),sizeof(from)) && Copy(end,to.data(),sizeof(to))) {
             const float native_length = std::hypot(to[0]-from[0],to[1]-from[1],to[2]-from[2]);
             if (std::isfinite(native_length) && native_length > 0 && native_length <= 20) {
-                // Rework keeps physical overlap authoritative for props and
-                // uses long-range aim assistance only as an inventory fallback.
                 g_vr_selection_ready = true;
-                ++g_selection_ray_batches;
-                const auto rays=InteractionRaySegments(pose,native_length);
-                // The centre ray owns the initial candidate. Auxiliary rays
-                // are used only during explicit refresh and keep a stable
-                // order so later rays do not silently replace a valid result.
-                const std::size_t ray_count=g_vr_selection_refresh_active ? rays.size() : 1U;
                 RankedRayCallback::VTable table{
                     reinterpret_cast<bool(__thiscall*)(void*,void*)>(RankedRayCallback::Before),
                     reinterpret_cast<bool(__thiscall*)(void*,void*,void*)>(RankedRayCallback::Intersect)};
                 RankedRayCallback ranked{&table,callback};
-                for (std::size_t ray_index=0;ray_index<ray_count;++ray_index) {
-                    ranked.ray_index = ray_index;
-                    ++g_contact_rays;
-                    ++g_selection_rays;
-                    if (ray_index==0) ++g_selection_central_ray;
-                    else ++g_selection_auxiliary_ray;
-                    reinterpret_cast<Ray>(g_image+0x189E30)(world,&ranked,
-                        &rays[ray_index].from,&rays[ray_index].to,
-                        distance,normal,point,prefilter);
+                PalmSelectionCandidate palm_target{};
+                const bool palm_winner=FindPalmOverlapTarget(
+                    world,callback,frame.interact_source,palm_target);
+                if (palm_winner) {
+                    ranked.best_body=palm_target.body;
+                    ranked.best_distance=palm_target.distance;
+                    ranked.best_score=palm_target.distance;
+                    ranked.best_point=palm_target.point;
+                    ranked.best_normal={};
+                    ++g_selection_palm_winners;
+                    if (palm_target.assisted) ++g_selection_palm_assisted_winners;
+                } else {
+                    // Rework falls back to directional picking only when the
+                    // physical palm volume has no valid nearby target.
+                    Matrix pose{}; Vec velocity{},angular{};
+                    if (InteractionHandPose(frame.interact_source,pose,velocity,angular)) {
+                        ++g_selection_ray_batches;
+                        const auto rays=InteractionRaySegments(pose,native_length);
+                        // The centre ray owns the initial candidate. Auxiliary
+                        // rays widen the selection only during explicit refresh.
+                        const std::size_t ray_count=
+                            g_vr_selection_refresh_active ? rays.size() : 1U;
+                        for (std::size_t ray_index=0;ray_index<ray_count;++ray_index) {
+                            ranked.ray_index = ray_index;
+                            ++g_contact_rays;
+                            ++g_selection_rays;
+                            if (ray_index==0) ++g_selection_central_ray;
+                            else ++g_selection_auxiliary_ray;
+                            reinterpret_cast<Ray>(g_image+0x189E30)(world,&ranked,
+                                &rays[ray_index].from,&rays[ray_index].to,
+                                distance,normal,point,prefilter);
+                        }
+                    }
                 }
                 bool magnetic_winner=false;
                 MagneticRayHit magnetic_hit{};
@@ -1002,8 +1220,13 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
                 // Rework's nearby physical-contact assistance.
                 target.valid = ranked.best_body != nullptr && !magnetic_winner;
                 target.time = target.valid ? GetTickCount64() : 0;
-                if (target.valid) target.point = ranked.best_point;
-                else target.point = {};
+                if (target.valid) {
+                    target.point = ranked.best_point;
+                    target.body = ranked.best_body;
+                } else {
+                    target.point = {};
+                    target.body = nullptr;
+                }
                 ReleaseSRWLockExclusive(&g_interaction_target_lock);
                 return;
             }
@@ -1353,6 +1576,8 @@ SpatialDiagnostics ConsumeSpatialDiagnostics() noexcept {
         g_selection_rays.exchange(0),g_selection_candidates.exchange(0),
         g_selection_discards.exchange(0),g_selection_winner_distance_millimetres.exchange(0),
         g_selection_central_ray.exchange(0),g_selection_auxiliary_ray.exchange(0),
+        g_selection_palm_queries.exchange(0),g_selection_palm_candidates.exchange(0),
+        g_selection_palm_winners.exchange(0),g_selection_palm_assisted_winners.exchange(0),
         g_grab_enters.exchange(0),g_move_enters.exchange(0),
         g_grab_pending.exchange(0),g_move_pending.exchange(0),
         g_magnetic_queries.exchange(0),g_magnetic_candidates.exchange(0),
@@ -1387,6 +1612,22 @@ bool ReadSpatialInteractionTarget(
     world_point = target.point;
     return std::all_of(world_point.begin(),world_point.end(),
         [](float value) { return std::isfinite(value); });
+}
+
+[[nodiscard]] void* ProtectedNudgeBody(
+    std::size_t hand_index,
+    std::uint64_t now) noexcept {
+    if (hand_index >= g_interaction_targets.size()) return nullptr;
+    InteractionTarget target{};
+    AcquireSRWLockShared(&g_interaction_target_lock);
+    target = g_interaction_targets[hand_index];
+    ReleaseSRWLockShared(&g_interaction_target_lock);
+    if (!target.valid || target.body == nullptr || target.time == 0 ||
+        now < target.time ||
+        now - target.time > kInteractionTargetMaximumAgeMilliseconds) {
+        return nullptr;
+    }
+    return target.body;
 }
 bool InstallSpatialInteraction(std::string& error) noexcept {
     error.clear();
@@ -1586,6 +1827,13 @@ void ServiceSpatialHandNudge(void* character_body) noexcept {
             (g_pending_move_state && g_pending_move_hand==hand) ||
             (frame.input.state.interact.pressed && frame.interact_source==hand)) continue;
 
+        // Rework keeps acquisition and physical pushing as separate routes.
+        // Protect only the fresh native selection winner while the hand is
+        // approaching it, so the nudge cannot repel the object before Enter
+        // establishes ownership. Other contacted props remain pushable.
+        void* const protected_body = ProtectedNudgeBody(
+            hand_index, GetTickCount64());
+
         Matrix raw{}; Vec velocity{},angular{};
         if (!RawHandPose(hand,false,raw,velocity,angular) || !FiniteVec(velocity)) continue;
         const float speed=std::hypot(std::hypot(velocity[0],velocity[1]),velocity[2]);
@@ -1605,6 +1853,7 @@ void ServiceSpatialHandNudge(void* character_body) noexcept {
         for (std::size_t hit_index=0;hit_index<callback.hit_count;++hit_index) {
             const auto& hit=callback.hits[hit_index];
             if (!hit.body || !hit.contact_count || !BodyMatches(hit.body) ||
+                hit.body == protected_body ||
                 (g_held.load(std::memory_order_acquire) && g_hold.body==hit.body) ||
                 (g_move_held.load(std::memory_order_acquire) && g_move_hold.body==hit.body)) continue;
             g_nudge_contacts.fetch_add(hit.contact_count,std::memory_order_relaxed);
@@ -1615,14 +1864,22 @@ void ServiceSpatialHandNudge(void* character_body) noexcept {
                 contact[axis]=hit.contact_sum[axis]/static_cast<float>(hit.contact_count);
             if (!FiniteVec(contact)) continue;
             const int joint_count=reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(hit.body);
+            Vec body_centre{},body_minimum{},body_maximum{};
+            float body_radius=0.0F;
+            if (!ReadBodyBoundingVolume(hit.body,body_centre,body_minimum,
+                    body_maximum,body_radius)) continue;
+            NudgePlan plan{};
+            if (!BuildNudgePlan(hit.body,velocity,contact,mass,body_radius,
+                    joint_count,plan)) continue;
             Vec linear{},body_angular{};
             if (!BodyVelocity(hit.body,kGetLinearVelocity,linear) ||
                 !BodyVelocity(hit.body,kGetAngularVelocity,body_angular)) continue;
             const Matrix body_matrix=Read<Matrix>(hit.body,0x34);
             Vec impulse{};
             float nudge_strength=0.0F;
-            if (!ComputeNudgeImpulse(center,velocity,contact,body_matrix,linear,
-                    body_angular,mass,joint_count,impulse,&nudge_strength)) continue;
+            if (!ComputeNudgeImpulse(center,velocity,plan.velocity,contact,
+                    body_matrix,linear,body_angular,mass,plan,impulse,
+                    &nudge_strength)) continue;
             if (SafeAddImpulseAtPosition(hit.body,&impulse,&contact)) {
                 ++g_nudges_applied;
                 NativeControllerHaptic(

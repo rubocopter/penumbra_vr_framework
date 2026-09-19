@@ -155,10 +155,15 @@ D6E00`. La ruta normal de BP conserva sus límites 3.0/4.5 m/s y su vertical/jum
 nativo. El gate room-scale transitorio evita esos ejes solo para el analog VR y
 encola la política compartida `1.5/2.25 m/s` en `0xD7281`; no se emulan campos
 añadidos por Rework como `vr_velocity` ni argumentos de solver que no existen en
-la build binaria. La semántica de `vr_stepstaticonly` sí se adapta ahora en la
-frontera exact-build: se observa el ray callback nativo de step y se descarta
-solo un ganador dinámico durante un tick físico puro, sin añadir campo, segundo
-raycast ni segundo update.
+la build binaria. La semántica de step físico de Rework se adapta en la frontera
+exact-build: se observa el ray callback nativo y, en cualquier tick que contenga
+traslación room-scale física, se descarta un ganador dinámico o uno cuya normal
+no cumpla `normal.y >= 0.5`.
+Esta segunda condición importa porque el `cCharacterBodyRay` binario de BP solo
+conserva distancia/collide, mientras Rework `23c890f` sí aplica la normal
+ascendente antes del step. El layout exacto de `cPhysicsRayParams` queda fijado
+por el callback Newton de la build soportada; no se añade campo, segundo raycast
+ni segundo update.
 
 La segunda extracción común también está hecha: `PlanBodyReconciliation`,
 `ReconcilePhysicalBodyMotion` y `CarryHeadAnchorWithLocomotion` viven en
@@ -621,5 +626,37 @@ resolver usa ese contrato. La integración gameplay ya publica por mano el cuerp
 sostenido, entrega la palma resuelta a manos/objetos/herramientas y suministra al
 resolver el target físico seleccionado para la asistencia limitada de Rework.
 Esa integración, la nueva adquisición y la colocación corregida del glowstick
-siguen host-tested; mecanismos articulados continúan separados y los gates live
-anteriores no implican validación de esta candidata en visor ni soporte.
+recibieron por fin evidencia parcial de visor el 2026-09-19: room-scale abierto,
+mirror, colocación/feedback del glowstick y empuje directo de props fueron
+positivos; la palma llegó a bloquear/deslizar parcialmente. La misma prueba
+expuso cuatro fallos distintos que no se deben confundir con tracking global:
+el nudge expulsaba el cuerpo seleccionado antes de poder adquirirlo; cambios de
+`world_yaw` podían dejar una pose resuelta de la época anterior y hacer que el
+resolver interpretase el salto de coordenadas como discontinuidad; la malla
+importada de Rework mostraba peor articulación de pulgar/meñique que la mano
+provisional previa de BP pese a que esta última respondía bien a los cinco
+canales esqueléticos del mando, por lo que no debe sustituirse esa semántica por
+el fallback agrupado de Rework; y los props dinámicos bloqueaban al
+personaje porque `cCharacterBodyCollidePush::OnCollision` (`0xD5A60`, vtable
+`0x67F7AC`) solo considera movimiento si `CharacterBody+0x70/+0x74` no son cero,
+mientras la inyección VR BP llega después de ese cálculo. El mismo callback usa
+`+0x98` como masa máxima empujable y `+0x9C` como fuerza.
+
+La corrección de dedos restaura además la articulación libre anterior a
+`868482c`: oposición explícita del pulgar, apertura lateral espejada y flexión
+progresiva independiente de los cuatro dedos largos. La pose dedicada al
+agarre de herramientas permanece separada. Esto está host-tested; la malla
+importada todavía necesita validación en visor con los PS VR2 Sense.
+
+La candidata actual corrige esas diferencias sin cambiar room-scale, mirror ni
+el socket del glowstick: el cuerpo ganador de selección queda excluido del nudge
+solo durante su ventana fresca de adquisición; un cambio de época de yaw invalida
+de inmediato la pose resuelta antigua y resetea el historial del resolver antes
+de la siguiente muestra; el bridge conserva los cinco canales esqueléticos
+independientes de BP y recupera las amplitudes de la mano provisional que ya
+habían dado mejor respuesta en visor; y el primer solver horizontal presenta
+temporalmente al callback nativo una señal
+de movimiento junto con `0.2x` de su fuerza de empuje, igual que el branch
+`vr_velocity` de Rework, restaurando `+0x70/+0x74/+0x9C` al retornar. Build Release,
+tests focales y suite completa 38/38 pasan. Todo este bloque nuevo sigue
+`host-tested`; necesita la prueba dirigida de visor antes de cualquier promoción.

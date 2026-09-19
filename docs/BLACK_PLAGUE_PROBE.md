@@ -21,13 +21,23 @@ Launching this executable directly on the development machine exits voluntarily 
 3. Recompute and whitelist-check its SHA-256.
 4. Wait for `SDL.dll` and for the exact initialized bytes at the mapped `RenderWorld` call site.
 5. Load the probe DLL with a remote `LoadLibraryW` call.
-6. Call the exported `PenumbraVR_Initialize` function explicitly.
+6. Call the exported `PenumbraVR_Initialize` function explicitly. Initialization
+   first installs only the `SDL_GL_SwapBuffers` IAT owner and waits for one
+   forwarded swap to return; only then are OpenGL matrix telemetry and
+   RenderWorld hooks installed.
 
 No substantial work is performed from `DllMain`; it only disables thread attach/detach notifications.
 
 The direct-path launcher mode remains useful for diagnosing non-Steam builds, but it is not the verified route for this Steam installation.
 
 The initialized-code gate is necessary because the executable is protected. One launch exposed `SDL.dll` before RVA `0x000EE010` had been reconstructed; the probe correctly rejected the still-mismatching call instruction, but loading it that early was itself unsafe. The launcher now polls for the exact five manifest bytes before injecting any DLL.
+
+Window creation is not treated as final graphics readiness. PID 14024 reproduced
+the historical `SDL.dll+0x28c09` crash even after the launcher required a stable
+visible `SDL_app` window. The current probe therefore stages initialization at
+the first completed `SDL_GL_SwapBuffers` call. The frame-hook test distinguishes
+an entered swap from a completed forwarded swap so OpenGL/RenderWorld hook
+installation cannot race the first active SDL/WGL presentation call.
 
 ## Frame hook
 
@@ -378,23 +388,29 @@ single-finger articulation difference. The probe now logs skeleton validity and
 all five curls per hand so the next headset run can distinguish live input loss
 from rig/render faults.
 
-The PID 26940 log also correlated repeated physical wall-contact mini-jumps with
-Black Plague's native step-climb phase: physical VR requests are horizontal, but
-blocked/partial solves repeatedly produced roughly 5 cm vertical body changes.
+The PID 26940 log correlated repeated physical wall-contact mini-jumps with
+Black Plague's native step-climb phase, and PID 22004 reproduced the defect in
+the 2026-09-19 headset run: while a physical-only request was blocked against a
+wall, the body repeatedly rose exactly `0.05 m`, fell over the following native
+gravity ticks and climbed again.
 The first Framework fix skipped step climbing for every physical-only tick. A
 later physical-low-obstacle test showed why that was too broad: exact Rework
 `23c890f` sets `vr_stepstaticonly=true`, so room-scale step climbing is still
-allowed when the winning ray body is static. The current exact-build adaptation
-observes Black Plague's existing character-ray callback at character body
-`+0x21C` (vtable `0x67F7B0`, `OnIntersect` RVA `0xD4E00`) and records whether the
-accepted nearest body has zero mass using the already-proven body field `+0x434`.
-At RVA `0xD7772`, immediately after the native ray result is stored, it clears
-only a dynamic winning hit on a physical-HMD-only tick. Static geometry keeps
-the native step path; stick/native locomotion keeps it for all bodies. Gravity,
-jump and the existing single `D6E00` update remain native. The supported-image
-verifier pins the callback/vtable and this static-only boundary. The adaptation
-is host-tested only; `physical_step_suppressed` now counts dynamic physical-only
-rejections rather than blanket physical-step suppression.
+allowed when the winning ray body is static. PID 22004 then exposed the missing
+half of that port: Black Plague's older 12-byte `cCharacterBodyRay` stores only
+distance/collide, while Rework `23c890f` also requires `normal.y >= 0.5` before
+a step may be taken. The exact-build adaptation observes the existing character
+ray callback at character body `+0x21C` (vtable `0x67F7B0`, `OnIntersect` RVA
+`0xD4E00`), records whether the accepted nearest body has zero mass using the
+already-proven body field `+0x434`, and recovers `cPhysicsRayParams::mvNormal.y`
+from `+0x0C`. PhysicsWorldNewton's exact-image callback pins that params layout.
+At RVA `0xD7772`, immediately after the native ray result is stored, the gateway
+clears an ineligible winner whenever that native tick carries physical room-scale
+translation, including ticks that also contain direct VR locomotion. Pure
+stick/native locomotion keeps the original path. Gravity, jump and the existing
+single `D6E00` update remain native. This expanded adaptation is host-tested only
+and requires a focused wall/low-prop plus genuine low-static-obstacle headset
+retest.
 
 PID 4720 later showed that the old focused palm helper was not exercising the
 known-good room-scale composition at all: startup logged physical displacement,
@@ -405,10 +421,11 @@ The same focused run is now also the headset presentation gate for the imported
 Rework hand rigs: both hands must have plausible scale/orientation, stay on the
 resolved palms, articulate all five shared finger channels and preserve normal
 frame pacing. It must also confirm stable diffuse texture with no black/rainbow
-corruption and no repeated vertical body bounce under physical-only wall
-pressure, followed by normal stair/ledge stepping with stick locomotion. The
-corrected mesh/rig and static-only physical-step paths are host-tested only until
-those observations are captured.
+corruption and no repeated vertical body bounce under physical wall pressure or
+combined room-scale plus direct-locomotion contact with low props, followed by
+normal stair/ledge stepping with pure stick locomotion. The corrected mesh/rig
+and physical-step paths are host-tested only until those observations are
+captured.
 
 `--vr-mirror-on` and `--vr-mirror-off` persist the successful live choice in
 `%LOCALAPPDATA%\PenumbraVR\settings.ini`. `--set-vr-mirror on|off` changes

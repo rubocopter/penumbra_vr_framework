@@ -19,6 +19,9 @@ void* g_test_player = g_player_storage.data();
 unsigned int g_native_update_calls = 0;
 bool g_stationary_native_update = false;
 float g_collision_x_adjustment = -0.15F;
+float g_collision_seen_forward = 0.0F;
+float g_collision_seen_right = 0.0F;
+float g_collision_seen_push_force = 0.0F;
 
 template<class T>
 void Put(void* object, std::size_t offset, const T& value) {
@@ -37,6 +40,14 @@ void Jump(std::uint8_t* image, std::uintptr_t rva, void* target) {
 bool __fastcall FakeCollision(
     void*, void*, Vec3* resolved, void*, const Matrix* requested,
     void*, bool, bool, void*, bool, bool) {
+    if (g_tick.character_body != nullptr) {
+        g_collision_seen_forward = Read<float>(
+            g_tick.character_body, kCharacterMoveSpeedForwardOffset);
+        g_collision_seen_right = Read<float>(
+            g_tick.character_body, kCharacterMoveSpeedRightOffset);
+        g_collision_seen_push_force = Read<float>(
+            g_tick.character_body, kCharacterPushForceOffset);
+    }
     *resolved = {
         requested->values[3] + g_collision_x_adjustment,
         requested->values[7],
@@ -164,27 +175,73 @@ int RunBodyCollisionProbeTest() {
     if (!physical_boundary.initialized || physical_boundary.live[0] != 0xE9)
         return 38;
 
-    // Rework's physical-room-scale step rule keeps static geometry eligible
-    // and discards dynamic winners only. Stick locomotion keeps the original
-    // native step path for both classes.
+    // Rework's physical-room-scale step rule keeps only static geometry with
+    // an upward-facing normal eligible. BP's older native ray callback omits
+    // that normal gate, so the adapter supplies it only for physical HMD ticks.
+    // Stick locomotion keeps the original native step path.
     g_tick = {};
     g_tick.character_body = g_body_storage.data();
     g_tick.physical_request_injected = true;
     g_physical_step_nearest_static = true;
-    if (!PhysicalOnlyStepTick() || ShouldRejectPhysicalStepHit() ||
+    g_physical_step_nearest_normal_y = 1.0F;
+    if (!PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
         g_tick.physical_step_climb_suppressed) return 87;
+    g_physical_step_nearest_normal_y = 0.0F;
+    if (!ShouldRejectPhysicalStepHit() ||
+        !g_tick.physical_step_climb_suppressed) return 92;
+    g_tick.physical_step_climb_suppressed = false;
+    g_physical_step_nearest_normal_y = 1.0F;
     g_physical_step_nearest_static = false;
     if (!ShouldRejectPhysicalStepHit() ||
         !g_tick.physical_step_climb_suppressed) return 89;
     g_tick.physical_step_climb_suppressed = false;
     g_tick.locomotion_request_injected = true;
-    if (PhysicalOnlyStepTick() || ShouldRejectPhysicalStepHit() ||
+    g_physical_step_nearest_static = true;
+    g_physical_step_nearest_normal_y = 1.0F;
+    if (!PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
         g_tick.physical_step_climb_suppressed) return 88;
+    g_physical_step_nearest_static = false;
+    if (!ShouldRejectPhysicalStepHit() ||
+        !g_tick.physical_step_climb_suppressed) return 93;
+    g_tick.physical_step_climb_suppressed = false;
     g_tick.locomotion_request_injected = false;
     g_tick.position_before = {};
     g_tick.physical_position_before = {0.01F, 0.0F, 0.0F};
-    if (PhysicalOnlyStepTick() || ShouldRejectPhysicalStepHit() ||
+    if (PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
         g_tick.physical_step_climb_suppressed) return 90;
+    g_tick = {};
+    g_tick.character_body = g_body_storage.data();
+    g_tick.locomotion_request_injected = true;
+    g_physical_step_nearest_static = false;
+    if (PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
+        g_tick.physical_step_climb_suppressed) return 94;
+    g_tick = {};
+
+    // BP's native push callback gates on +70/+74. Rework's vr_velocity bypasses
+    // that stationary guard and applies 20% character push force. The BP
+    // adapter must present the same callback semantics only during the solver
+    // call, then restore all native fields exactly.
+    Put(g_body_storage.data(), kCharacterMoveSpeedForwardOffset, 0.0F);
+    Put(g_body_storage.data(), kCharacterMoveSpeedRightOffset, 0.0F);
+    Put(g_body_storage.data(), kCharacterPushForceOffset, 10.0F);
+    g_tick.character_body = g_body_storage.data();
+    g_tick.physical_request_injected = true;
+    Matrix push_request{};
+    push_request.values[0] = push_request.values[5] =
+        push_request.values[10] = push_request.values[15] = 1.0F;
+    Vec3 push_resolved{};
+    static_cast<void>(HookedCheckShapeWorldCollision(
+        reinterpret_cast<void*>(0x2222), nullptr, &push_resolved,
+        reinterpret_cast<void*>(0x3333), &push_request,
+        reinterpret_cast<void*>(0x4444), false, true,
+        reinterpret_cast<void*>(0x5555), true, false));
+    if (g_collision_seen_forward == 0.0F && g_collision_seen_right == 0.0F)
+        return 91;
+    if (!Near(g_collision_seen_push_force, 2.0F) ||
+        !Near(Read<float>(g_body_storage.data(),kCharacterMoveSpeedForwardOffset),0.0F) ||
+        !Near(Read<float>(g_body_storage.data(),kCharacterMoveSpeedRightOffset),0.0F) ||
+        !Near(Read<float>(g_body_storage.data(),kCharacterPushForceOffset),10.0F))
+        return 92;
     g_tick = {};
 
     if (QueuePhysicalBodyDisplacement(

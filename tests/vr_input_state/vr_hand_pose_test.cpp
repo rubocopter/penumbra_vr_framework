@@ -43,11 +43,11 @@ int main() {
         const auto right=ArticulateVrHand(curls,false),left=ArticulateVrHand(curls,true);
         if (right.thumb_yaw_degrees!=0 || left.thumb_yaw_degrees!=0) return 9;
         for (std::size_t f=0;f<5;++f) {
-            if (right.fingers[f].spread_degrees!=0 ||
-                left.fingers[f].spread_degrees!=0) return 10;
+            if (right.fingers[f].spread_degrees!=0 || left.fingers[f].spread_degrees!=0)
+                return 10;
             for (std::size_t j=0;j<3;++j) {
                 const float angle=right.fingers[f].flexion_degrees[j];
-                if (!std::isfinite(angle) || angle<0 || angle>66 ||
+                if (!std::isfinite(angle) || angle<0 || angle>85 ||
                     angle<previous.fingers[f].flexion_degrees[j] ||
                     angle!=left.fingers[f].flexion_degrees[j]) return 11;
             }
@@ -56,22 +56,23 @@ int main() {
     }
     curls={0,0.5F,0,0,0};
     const auto isolated=ArticulateVrHand(curls,false);
-    if (isolated.fingers[1].flexion_degrees!=std::array<float,3>{24.0F,31.0F,18.0F} ||
+    if (isolated.fingers[1].flexion_degrees!=std::array<float,3>{32.5F,42.5F,12.5F} ||
         isolated.fingers[2].flexion_degrees!=std::array<float,3>{}) return 12;
     curls={std::numeric_limits<float>::quiet_NaN(),-1,2,std::numeric_limits<float>::infinity(),0};
     const auto invalid=ArticulateVrHand(curls,false);
     if (invalid.thumb_yaw_degrees!=0 ||
         invalid.fingers[0].flexion_degrees!=std::array<float,3>{} ||
         invalid.fingers[1].flexion_degrees!=std::array<float,3>{} ||
-        invalid.fingers[2].flexion_degrees!=std::array<float,3>{52,66,38} ||
+        invalid.fingers[2].flexion_degrees!=std::array<float,3>{65,85,50} ||
         invalid.fingers[3].flexion_degrees!=std::array<float,3>{}) return 13;
     curls={1,1,1,1,1};
     const auto closed=ArticulateVrHand(curls,false);
-    if (closed.fingers[0].flexion_degrees!=std::array<float,3>{22,28,16} ||
-        closed.fingers[1].flexion_degrees!=std::array<float,3>{48,62,36} ||
-        closed.fingers[2].flexion_degrees!=std::array<float,3>{52,66,38} ||
-        closed.fingers[3].flexion_degrees!=std::array<float,3>{52,66,38} ||
-        closed.fingers[4].flexion_degrees!=std::array<float,3>{52,66,38}) return 14;
+    if (closed.thumb_yaw_degrees!=0 ||
+        closed.fingers[0].flexion_degrees!=std::array<float,3>{20,45,60} ||
+        closed.fingers[1].flexion_degrees!=std::array<float,3>{65,85,50} ||
+        closed.fingers[2].flexion_degrees!=std::array<float,3>{65,85,50} ||
+        closed.fingers[3].flexion_degrees!=std::array<float,3>{65,85,50} ||
+        closed.fingers[4].flexion_degrees!=std::array<float,3>{65,85,50}) return 14;
     curls.fill(0.0F);
     const auto held=ArticulateVrHand(curls,false,1.0F);
     if (held.fingers[0].flexion_degrees!=std::array<float,3>{28,34,20} ||
@@ -79,5 +80,5 @@ int main() {
         held.fingers[2].flexion_degrees!=std::array<float,3>{55,70,40} ||
         held.fingers[3].flexion_degrees!=std::array<float,3>{55,70,40} ||
         held.fingers[4].flexion_degrees!=std::array<float,3>{55,70,40}) return 15;
-    std::cout<<"Hand conditioning and articulation: Rework mapping, smoothing and rigid-skin pose limits passed\n";
+    std::cout<<"Hand conditioning and articulation: BP free-hand response plus Rework held-tool pose passed\n";
 }

@@ -41,15 +41,18 @@ BlackPlagueProbeStateAfterTeardown(
         : BlackPlagueProbeLifecycle::partial;
 }
 
-// Installation proceeds from dependencies toward callback producers. A
-// component is entered in the cleanup ledger before its installer runs, so a
-// failed installer can still leave teardown work even when its capability bit
-// was never published.
+// Bootstrap is the deliberate exception to dependency-first installation: the
+// lifecycle-gated SDL frame owner is installed first so the probe can observe a
+// completed native SwapBuffers before touching OpenGL/RenderWorld callsites.
+// Once that readiness gate passes, installation proceeds through the remaining
+// dependencies toward callback producers. A component is entered in the cleanup
+// ledger before its installer runs, so a failed installer can still leave
+// teardown work even when its capability bit was never published.
 inline constexpr std::array<BlackPlagueProbeCapability, 9>
     kBlackPlagueProbeInstallOrder{
+        BlackPlagueProbeCapability::frame_hook,
         BlackPlagueProbeCapability::matrix_telemetry,
         BlackPlagueProbeCapability::render_world,
-        BlackPlagueProbeCapability::frame_hook,
         BlackPlagueProbeCapability::native_input,
         BlackPlagueProbeCapability::body_collision,
         BlackPlagueProbeCapability::body_adapter,

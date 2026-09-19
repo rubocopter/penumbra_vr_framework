@@ -23,9 +23,9 @@ struct VrHandCurlInput {
 void SmoothVrHandCurls(std::array<float,5>& current,
     const std::array<float,5>& target, float dt) noexcept;
 
-// Framework preserves five independent finger channels. The articulation range
-// is the proven Rework 23c890f pose authored for the imported HAND_Low rigid
-// skin; mesh adapters still own the actual bind-pose bone axes.
+// Framework preserves five independent finger channels. Black Plague uses its
+// richer free-hand curl amplitudes while held tools retain Rework's authored
+// pose. Mesh adapters own bind-pose axes and any rig-specific spread/opposition.
 struct VrFingerArticulation {
     std::array<float,3> flexion_degrees{};
     float spread_degrees=0;

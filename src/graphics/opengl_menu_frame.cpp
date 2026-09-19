@@ -214,6 +214,12 @@ bool DrawTransparentOverlay(
         return false;
     }
 
+    // HPL's legacy fixed-function drawer can leave an unrelated GL error
+    // pending. Attribute only errors produced by this overlay draw; otherwise
+    // a harmless pre-existing error turns the optional HUD pass into a false
+    // stereo failure on the first gameplay frame.
+    while (glGetError() != GL_NO_ERROR) {}
+
     State state;
     if (!state.valid) {
         error = "Overlay draw requires GL multitexture/program APIs";
@@ -238,7 +244,13 @@ bool DrawTransparentOverlay(
     glTexCoord2f(1, 1); glVertex3f(right, top,    -distance);
     glTexCoord2f(0, 1); glVertex3f(left,  top,    -distance);
     glEnd();
-    return glGetError() == GL_NO_ERROR;
+    const GLenum gl_error = glGetError();
+    if (gl_error != GL_NO_ERROR) {
+        error = "Overlay draw produced OpenGL error " +
+            std::to_string(static_cast<unsigned int>(gl_error));
+        return false;
+    }
+    return true;
 }
 bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
     const runtime::VrMatrix44& view, const runtime::VrMatrix44& projection, std::string& error) noexcept {
