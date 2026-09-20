@@ -17,6 +17,7 @@ bool test_ui=false;
 std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
 runtime::VrMatrix44 test_resolved_palm{};
+std::uint64_t test_resolved_palm_generation=0;
 bool test_palm_overlap_available=false;
 GameplayPalmOverlapResult test_palm_overlap{};
 bool test_head_pose_valid=true;
@@ -127,6 +128,9 @@ bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
     if (!test_resolved_palm_valid) return false;
     pose=test_resolved_palm;
     return true;
+}
+std::uint64_t GameplayPalmPoseGeneration(std::size_t) noexcept {
+    return test_resolved_palm_generation;
 }
 bool QueryGameplayPalmOverlaps(std::size_t,
     const runtime::VrMatrix44&, GameplayPalmOverlapResult& result) noexcept {
@@ -361,6 +365,12 @@ int RunSpatialTest() {
         HookedEnter(state.data(),nullptr,nullptr);
         Put(player.data(),0x2BC,6); // Native ChangeState commits only after Enter.
         ServiceSpatialInteraction(player.data(),false);
+        if (g_prepared_grab.active) {
+            if (test_resolved_palm_valid)
+                test_resolved_palm=runtime::ExpandMatrix(hand.device_to_absolute);
+            ++test_resolved_palm_generation;
+            ServiceSpatialInteraction(player.data(),false);
+        }
     };
     // A native/fallback transition with no VR grip selection must not be
     // promoted into a VR grab merely because the VR button edge is present.
@@ -389,6 +399,15 @@ int RunSpatialTest() {
     HookedEnter(state.data(),nullptr,nullptr);
     Put(player.data(),0x2BC,6);
     test_frame.input.state.interact.just_pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_prepared_grab.active || g_held.load() ||
+        test_palm_held[1]!=body.data()) return 40;
+    const auto body_before_refresh=Read<Matrix>(body.data(),0x34);
+    HookedGrabUpdate(state.data(),nullptr,0.016F);
+    if (test_native_updates ||
+        Read<Matrix>(body.data(),0x34).values!=body_before_refresh.values)
+        return 40;
+    ++test_resolved_palm_generation;
     ServiceSpatialInteraction(player.data(),false);
     if (!g_held.load() || g_hold.hand!=runtime::VrHand::right) return 40;
     test_frame.input.state.interact.pressed=false;
@@ -424,16 +443,21 @@ int RunSpatialTest() {
     if (g_held.load() || Read<bool>(body.data(),0x3C8)) return 21;
     Put(body.data(),0x3C8,true);
 
-    // A collision-stopped visible palm must not make a nearby selected prop
-    // impossible to acquire. The hold itself still anchors to the resolved
-    // palm after the bounded raw-controller acquisition succeeds.
+    // Rework excludes a newly held body before resolving the grab palm. BP's
+    // resolver publishes asynchronously, so acquisition must wait for that
+    // refreshed result rather than anchor to the collision-stopped old palm.
     const float collision_body_x=Read<Matrix>(body.data(),0x34).values[3];
     hand.device_to_absolute.values[3]=collision_body_x;
     test_resolved_palm=runtime::IdentityMatrix();
     test_resolved_palm.values[3]=collision_body_x-0.19F;
     test_resolved_palm_valid=true;
     begin();
-    if (!g_held.load()) return 38;
+    Matrix refreshed_grab_palm{}; Vec refreshed_velocity{},refreshed_angular{};
+    if (!HandPose(runtime::VrHand::right,false,refreshed_grab_palm,
+            refreshed_velocity,refreshed_angular) || !g_held.load() ||
+        !VecNearlyEqual(g_hold.previous_palm,
+            {refreshed_grab_palm.values[3],refreshed_grab_palm.values[7],
+                refreshed_grab_palm.values[11]})) return 38;
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load()) return 39;
@@ -506,6 +530,40 @@ int RunSpatialTest() {
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load()) return 139;
     Put(state.data(),0x14,Vec{});
+
+    // Grab=6 must consume the exact VR winner just as Rework mirrors its hand
+    // target into the legacy picked point before entering Grab. A stale native
+    // contact must neither reject the grab nor become the rigid palm anchor.
+    Put(body.data(),0x34,runtime::IdentityMatrix());
+    Put(state.data(),0x14,Vec{2.0F,0,0});
+    Put(state.data(),0xE1,true);
+    hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
+    Matrix anchored_selected_pose{};
+    Vec anchored_selected_velocity{},anchored_selected_angular{};
+    if (!InteractionHandPose(runtime::VrHand::right,anchored_selected_pose,
+            anchored_selected_velocity,anchored_selected_angular)) return 148;
+    const Vec selected_contact=TransformPoint(anchored_selected_pose,{0.04F,0,0});
+    g_interaction_targets[1]={selected_contact,body.data(),GetTickCount64(),true};
+    begin();
+    if (!g_held.load()) return 149;
+    HookedGrabUpdate(state.data(),nullptr,0.016F);
+    Matrix selected_palm{};
+    if (!HandPose(runtime::VrHand::right,false,selected_palm,
+            anchored_selected_velocity,anchored_selected_angular)) return 150;
+    const auto anchored_contact=TransformPoint(
+        Read<Matrix>(body.data(),0x34),selected_contact);
+    if (!VecNearlyEqual(anchored_contact,
+            {selected_palm.values[3],selected_palm.values[7],
+                selected_palm.values[11]},0.001F)) return 151;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load()) return 152;
+    g_interaction_targets[1]={};
+    Put(state.data(),0x14,Vec{});
+    Put(state.data(),0xE1,false);
+    Matrix restored_body_pose=runtime::IdentityMatrix();
+    restored_body_pose.values[3]=body_x;
+    Put(body.data(),0x34,restored_body_pose);
 
     // Acquisition still rejects a selected body beyond Rework's bounded raw
     // interaction reach even if the native state transition itself commits.

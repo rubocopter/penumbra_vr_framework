@@ -473,6 +473,7 @@ int main() {
     runtime::VrMatrix44 gameplay_resolved{};
     auto gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
     if (!bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
+        bp::GameplayPalmPoseGeneration(0) != 1 ||
         gameplay.enabled == false ||
         gameplay.source != bp::GameplayPalmResolverRequestSource::production ||
         gameplay.samples != 1 || gameplay.published_poses != 1 ||
@@ -532,6 +533,7 @@ int main() {
         replacement_fixture.image, replacement_fixture.character.data());
     gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
     if (!bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
+        bp::GameplayPalmPoseGeneration(0) != 2 ||
         gameplay.yaw_epoch_resets != 1 || gameplay.tracking_reanchors != 0 ||
         gameplay.recovery_anchors != 0) {
         std::cerr << "yaw epoch palm-history rebase failed\n";

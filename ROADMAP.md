@@ -60,6 +60,10 @@ deferred as release tooling.
 ### Hands and interaction
 
 - [ ] Revalidate all five finger channels on the imported Rework hand mesh.
+- [ ] Restore a lit, non-emissive presentation for the imported hand mesh. The
+  Overture reference material is lit with zero emission; the current Black
+  Plague compatibility draw uses the diffuse texture without that material
+  response and has appeared white/fullbright in headset.
 - [ ] Revalidate palm blocking/sliding and yaw-turn continuity with production
   palm collision enabled.
 - [ ] Confirm reliable natural acquisition and stable `Grab=6` / free-body
@@ -79,8 +83,13 @@ deferred as release tooling.
 - [ ] Headset/audio-device validate HRTF and environmental reverb/bus trim.
 - [ ] Map a safe target boundary for the remaining distance/occlusion low-pass
   behavior.
-- [ ] Headset-validate the transferable Enhanced Visuals per-eye stage; keep
-  Overture-specific HPL material behavior product-owned unless proven reusable.
+- [ ] Complete the Black Plague side of Enhanced Visuals before final headset
+  validation. The final eye pass already matches Rework v4 (`1.25` exposure,
+  `1.12` saturation, `1.08` contrast and `0.94` gamma), but headset testing is
+  currently too dark and saturated because Black Plague does not yet reproduce
+  the corresponding pre-tone material/ambient/light preparation. Preserve the
+  shared final calibration until the target-specific input signal is corrected;
+  keep renderer-specific HPL behavior backend-owned unless reuse is proven.
 - [ ] Validate representative chapter progression and loading transitions.
 - [ ] Exercise available controller families and record per-device gaps without
   inferring support from JSON bindings alone.

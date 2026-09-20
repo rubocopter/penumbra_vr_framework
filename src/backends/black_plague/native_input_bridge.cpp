@@ -101,7 +101,14 @@ std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
 std::array<hooks::Rel32CallHook, 2> g_move_hooks;
 std::array<hooks::Rel32CallHook, kPlayerDamageCallsites.size()> g_damage_hooks;
 struct PointerEntry { std::uintptr_t site, target, cursor; };
-constexpr PointerEntry kPointers[]{{0x4477,0x797B0,0xA0}, {0x4C70,0x945F0,0x84}, {0x4FF2,0x6C7C0,0xAC}};
+constexpr PointerEntry kPointers[]{
+    {0x4477,0x797B0,0xA0},
+    // The exact-build death screen and adjacent full-screen overlay both use
+    // cGameMenu::AddMousePos (0x8AC0). Their cursor lives at +0x38/+0x3C.
+    {0x4965,0x8AC0,0x38},
+    {0x4AFA,0x8AC0,0x38},
+    {0x4C70,0x945F0,0x84},
+    {0x4FF2,0x6C7C0,0xAC}};
 std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks;
 hooks::Rel32CallHook g_melee_enemy_damage_hook;
 std::array<hooks::Rel32CallHook, kMeleeHitBodyCallsites.size()>
@@ -1333,6 +1340,22 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         cleanup();
         return false;
     };
+
+    const auto has_pointer_entry = [](std::uintptr_t site,
+                                      std::uintptr_t target,
+                                      std::uintptr_t cursor) noexcept {
+        return std::any_of(std::begin(kPointers), std::end(kPointers),
+            [=](const PointerEntry& entry) noexcept {
+                return entry.site == site && entry.target == target &&
+                    entry.cursor == cursor;
+            });
+    };
+    if (!has_pointer_entry(0x4965, 0x8AC0, 0x38)) {
+        return fail("death-screen pointer call is not hooked");
+    }
+    if (!has_pointer_entry(0x4AFA, 0x8AC0, 0x38)) {
+        return fail("secondary overlay pointer call is not hooked");
+    }
 
     // Model only the exact fields read by UiContext. This proves that the
     // native inventory/notebook active bytes drive the existing tracked-menu

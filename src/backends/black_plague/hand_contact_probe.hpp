@@ -166,6 +166,12 @@ void ServiceGameplayPalmResolver(
     std::size_t hand_index,
     runtime::VrMatrix44& pose) noexcept;
 
+// Monotonic per-hand publication sequence. Spatial interaction uses this to
+// wait until the game-thread resolver has recomputed a palm after the newly
+// held body becomes that hand's skip body.
+[[nodiscard]] std::uint64_t GameplayPalmPoseGeneration(
+    std::size_t hand_index) noexcept;
+
 // Reuses the gameplay resolver's exact box shape and world on the game thread.
 // This is a read-only overlap query used by spatial interaction so physical palm
 // contact can own target acquisition without creating a second collision shape.

@@ -118,6 +118,7 @@ std::uint64_t g_gameplay_resolver_yaw_epoch = 0;
 SRWLOCK g_gameplay_pose_lock = SRWLOCK_INIT;
 std::array<runtime::VrMatrix44, 2> g_gameplay_resolved_poses{};
 std::array<bool, 2> g_gameplay_resolved_valid{};
+std::array<std::uint64_t, 2> g_gameplay_resolved_generation{};
 std::uint64_t g_gameplay_resolved_time = 0;
 SRWLOCK g_gameplay_telemetry_lock = SRWLOCK_INIT;
 GameplayPalmResolverTelemetry g_gameplay_telemetry{};
@@ -1193,6 +1194,9 @@ void ServiceGameplayPalmResolver(
     AcquireSRWLockExclusive(&g_gameplay_pose_lock);
     g_gameplay_resolved_poses = resolved_poses;
     g_gameplay_resolved_valid = resolved_valid;
+    for (std::size_t hand = 0; hand < resolved_valid.size(); ++hand) {
+        if (resolved_valid[hand]) ++g_gameplay_resolved_generation[hand];
+    }
     g_gameplay_resolved_time = published != 0 ? now : 0;
     ReleaseSRWLockExclusive(&g_gameplay_pose_lock);
 
@@ -1225,6 +1229,15 @@ bool ReadGameplayPalmPose(
     ReleaseSRWLockShared(&g_gameplay_pose_lock);
     return valid && time != 0 &&
         GetTickCount64() - time <= kGameplayPalmSampleMaximumAgeMilliseconds;
+}
+
+std::uint64_t GameplayPalmPoseGeneration(std::size_t hand_index) noexcept {
+    if (hand_index >= g_gameplay_resolved_generation.size()) return 0;
+    AcquireSRWLockShared(&g_gameplay_pose_lock);
+    const std::uint64_t generation =
+        g_gameplay_resolved_generation[hand_index];
+    ReleaseSRWLockShared(&g_gameplay_pose_lock);
+    return generation;
 }
 
 bool QueryGameplayPalmOverlaps(

@@ -335,6 +335,22 @@ int RunBodyCollisionProbeTest() {
         g_tick.physical_injected, g_tick.locomotion_injected,
         {0.035F, 0.0F, 0.0F});
     if (!Near(accepted_partition.x, 0.02F)) return 73;
+
+    // D7281 runs after Black Plague has already added native vPosAdd to
+    // mvPosition. The later step phase normalizes that local vPosAdd to aim its
+    // climb rays. A direct VR request must therefore be reflected in the local
+    // motion vector as well as mvPosition; otherwise a mixed room-scale +
+    // locomotion collision can step with a stale/zero direction.
+    if (!QueueLocomotionBodyDisplacement({0.0F, 0.0F, 0.02F})) return 135;
+    g_tick = {};
+    g_tick.character_body = g_body_storage.data();
+    injected_position = start;
+    native_step_motion = {0.01F, 0.25F, -0.005F};
+    ApplyQueuedPhysicalDisplacement(
+        g_body_storage.data(), &injected_position, &native_step_motion);
+    if (!Near(native_step_motion.x, 0.01F) ||
+        !Near(native_step_motion.y, 0.25F) ||
+        !Near(native_step_motion.z, 0.015F)) return 136;
     g_tick = {};
     static_cast<void>(ConsumePhysicalBodyDisplacementTelemetry());
 

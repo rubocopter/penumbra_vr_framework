@@ -496,8 +496,10 @@ bool __cdecl ShouldRejectPhysicalStepHit() noexcept {
 // observer above records both from the accepted nearest hit. This gateway runs
 // immediately after the native ray result is stored and clears an ineligible
 // hit whenever the tick contains physical room-scale translation, including a
-// tick that also carries direct VR locomotion. Pure stick locomotion still has
-// no physical component and keeps the original native step path for all hits.
+// tick that also carries direct VR locomotion. D7281 separately keeps native
+// vPosAdd synchronized with the injected VR displacement so this step search is
+// aimed along the motion that actually reached the collision. Pure stick/native
+// locomotion without a physical component keeps the original step eligibility.
 __declspec(naked) void PhysicalStepGateway() noexcept {
     __asm {
         pushfd

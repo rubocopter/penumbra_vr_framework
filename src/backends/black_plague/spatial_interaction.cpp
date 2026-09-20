@@ -111,6 +111,7 @@ constexpr Vec kGlowstickGripPoint{0.0F,0.0078F,-0.078F};
 constexpr float kGlowstickRotationX = 4.71F;
 constexpr std::uint64_t kToolGripMaximumAgeMilliseconds = 100;
 constexpr std::uint64_t kInteractionTargetMaximumAgeMilliseconds = 100;
+constexpr std::uint64_t kGrabPalmRefreshTimeoutMilliseconds = 250;
 constexpr std::array<float,9> kToolModelToHandRotation{
     1,0,0,
     0,0,-1,
@@ -183,6 +184,14 @@ struct Hold {
     bool collide_character = true;
     bool discard_momentum = false;
 } g_hold;
+struct PreparedGrab {
+    Hold hold;
+    Vec local_contact{};
+    bool contact_in_palm = false;
+    std::uint64_t palm_generation = 0;
+    std::uint64_t started = 0;
+    bool active = false;
+} g_prepared_grab;
 struct MoveHold {
     enum class Mode : std::uint8_t { free_body, hinge, slider };
     void* state = nullptr;
@@ -1446,6 +1455,8 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
     hold.state=state; hold.player=player; hold.body=body;
     hold.player_generation=player_generation; hold.hand=pending_hand;
     hold.local_body_contact=local_body_contact;
+    // Rework Move preserves the initial hand-to-contact offset so entering a
+    // force-driven drag cannot create an opening impulse.
     hold.local_hand_contact=InverseTransformPoint(palm,world_contact);
     hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
     hold.max_linear=max_linear; hold.max_angular=max_angular;
@@ -1577,14 +1588,15 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation,
     const auto frame = ReadNativeControllerFrame();
     auto* player=Read<void*>(state,0x10);
     auto* body=Read<void*>(state,0x20);
-    if (!g_enabled.load(std::memory_order_acquire) || g_held.load() || !frame.focused ||
+    if (!g_enabled.load(std::memory_order_acquire) || g_held.load() ||
+        g_prepared_grab.active || !frame.focused ||
         !frame.input.state.interact.pressed || frame.interact_source != pending_hand ||
         Read<int>(player,0x2BC)!=6 || !BodyMatches(body) || Read<void*>(body,0x330)!=nullptr ||
         Read<void*>(body,0x10)!=nullptr ||
         reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(body)!=0) return;
-    Matrix palm,interaction_pose,body_pose; Vec velocity{},angular{},interaction_velocity{},interaction_angular{};
-    if (!HandPose(pending_hand,false,palm,velocity,angular) ||
-        !InteractionHandPose(pending_hand,interaction_pose,interaction_velocity,interaction_angular) ||
+    Matrix interaction_pose,body_pose; Vec interaction_velocity{},interaction_angular{};
+    if (!InteractionHandPose(pending_hand,interaction_pose,
+            interaction_velocity,interaction_angular) ||
         !Copy(static_cast<std::uint8_t*>(body)+0x34,&body_pose,sizeof(body_pose))) return;
     const float max_linear=Read<float>(body,0x42C),max_angular=Read<float>(body,0x430);
     const float mass=Read<float>(body,0x434);
@@ -1618,18 +1630,93 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation,
         ++g_blocked_grabs;
         return;
     }
-    std::string error;
-    if (!hold.pose.Begin(palm,body_pose,local_contact,Read<bool>(state,0xE1),error)) return;
-    hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
-    const bool no_character_collision=false;
-    if (!Store(static_cast<std::uint8_t*>(body)+0x3C8,&no_character_collision,sizeof(no_character_collision))) return;
-    g_hold=hold;
+    // Rework marks the body as held before resolving the grab palm, so the
+    // target body is excluded from that resolver pass. BP publishes resolved
+    // palms asynchronously after the character update. Stage ownership for one
+    // fresh publication instead of anchoring to the old collision-stopped palm
+    // and moving the prop by the whole hand/body gap on the following frame.
+    PreparedGrab prepared;
+    prepared.hold=hold;
+    prepared.local_contact=local_contact;
+    prepared.contact_in_palm=Read<bool>(state,0xE1);
+    prepared.palm_generation=GameplayPalmPoseGeneration(hand_index);
+    prepared.started=now;
+    prepared.active=true;
+    g_prepared_grab=prepared;
+    PublishGameplayPalmHeldBody(hand_index,body);
+}
+
+void CancelPreparedGrab(bool guarded) noexcept {
+    if (!g_prepared_grab.active) return;
+    const auto hand=g_prepared_grab.hold.hand;
+    g_prepared_grab={};
     PublishGameplayPalmHeldBody(
-        hold.hand == runtime::VrHand::left ? 0U : 1U, hold.body);
-    SetFloat(body,0x19C360,20); SetFloat(body,0x19C380,30);
+        hand==runtime::VrHand::left ? 0U : 1U,nullptr);
+    if (guarded) ++g_guarded_releases;
+}
+
+void FinishPreparedGrab(void* player,std::uint64_t player_generation,bool ui) {
+    if (!g_prepared_grab.active) return;
+    const PreparedGrab prepared=g_prepared_grab;
+    const Hold& hold=prepared.hold;
+    if (!player || hold.player!=player ||
+        hold.player_generation!=player_generation) {
+        CancelPreparedGrab(true);
+        return;
+    }
+    auto* const states=Read<void*>(player,0x2C4);
+    const bool state_owned=Read<int>(player,0x2BC)==6 && states &&
+        Read<void*>(states,6*sizeof(void*))==hold.state &&
+        Read<void*>(hold.state,0x10)==player;
+    const auto frame=ReadNativeControllerFrame();
+    if (!g_enabled.load(std::memory_order_acquire) || ui || !state_owned ||
+        !frame.focused || !frame.input.state.interact.pressed ||
+        frame.interact_source!=hold.hand || !BodyMatches(hold.body)) {
+        CancelPreparedGrab(!g_enabled.load(std::memory_order_acquire) || ui ||
+            !frame.focused || !state_owned || !BodyMatches(hold.body));
+        return;
+    }
+    const std::size_t hand_index=
+        hold.hand==runtime::VrHand::left ? 0U : 1U;
+    if (GameplayPalmPoseGeneration(hand_index)<=prepared.palm_generation) {
+        const std::uint64_t now=GetTickCount64();
+        if (now>=prepared.started &&
+            now-prepared.started<=kGrabPalmRefreshTimeoutMilliseconds) return;
+        ++g_blocked_grabs;
+        CancelPreparedGrab(true);
+        return;
+    }
+    Matrix palm,body_pose; Vec velocity{},angular{};
+    if (!HandPose(hold.hand,false,palm,velocity,angular) ||
+        !Copy(static_cast<std::uint8_t*>(hold.body)+0x34,
+            &body_pose,sizeof(body_pose))) {
+        ++g_blocked_grabs;
+        CancelPreparedGrab(true);
+        return;
+    }
+    Hold acquired=hold;
+    std::string error;
+    if (!acquired.pose.Begin(palm,body_pose,prepared.local_contact,
+            prepared.contact_in_palm,error)) {
+        ++g_blocked_grabs;
+        CancelPreparedGrab(true);
+        return;
+    }
+    acquired.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
+    const bool no_character_collision=false;
+    if (!Store(static_cast<std::uint8_t*>(acquired.body)+0x3C8,
+            &no_character_collision,sizeof(no_character_collision))) {
+        ++g_blocked_grabs;
+        CancelPreparedGrab(true);
+        return;
+    }
+    g_prepared_grab={};
+    g_hold=acquired;
+    SetFloat(acquired.body,0x19C360,20);
+    SetFloat(acquired.body,0x19C380,30);
     g_held.store(true,std::memory_order_release);
     ++g_grabs_acquired;
-    NativeControllerHaptic(hold.hand,runtime::VrHapticEvent::object_pickup);
+    NativeControllerHaptic(acquired.hand,runtime::VrHapticEvent::object_pickup);
 }
 
 void RestoreHeldBody(const Hold& hold, const Vec& velocity,
@@ -1650,6 +1737,8 @@ void RestoreHeldBody(const Hold& hold, const Vec& velocity,
 void __fastcall HookedLeave(void* state, void*, void* next) {
     CallbackScope scope;
     if (g_pending_state == state) g_pending_state = nullptr;
+    if (g_prepared_grab.active && g_prepared_grab.hold.state==state)
+        CancelPreparedGrab(false);
     const bool owned=g_held.load(std::memory_order_acquire) && g_hold.state==state;
     Hold hold;
     Vec velocity{},angular{};
@@ -1676,6 +1765,12 @@ void __fastcall HookedLeave(void* state, void*, void* next) {
 }
 void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     CallbackScope scope;
+    if (g_prepared_grab.active && g_prepared_grab.hold.state==state) {
+        // Native Grab owns the state lifecycle, but its camera-relative mouse
+        // update must not move the body during the one resolver publication
+        // needed to establish the VR palm anchor.
+        return;
+    }
     if (!g_held.load(std::memory_order_acquire) || g_hold.state!=state) {
         reinterpret_cast<Update>(g_image+0xABA90)(state,dt); return;
     }
@@ -1940,7 +2035,8 @@ bool RemoveSpatialInteraction(std::string& error) noexcept {
     g_enabled.store(false,std::memory_order_release);
     g_player_collision_filter_ready.store(false,std::memory_order_release);
     SetGameplayInteractionTargetProvider(nullptr);
-    if (g_held.load(std::memory_order_acquire) || g_move_held.load(std::memory_order_acquire)) {
+    if (g_prepared_grab.active || g_held.load(std::memory_order_acquire) ||
+        g_move_held.load(std::memory_order_acquire)) {
         error="Release the tracked body before removing spatial hooks";
         return false;
     }
@@ -2088,6 +2184,8 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
             Read<void*>(pending,0x10)==player)
             AcquirePendingGrab(pending,player_generation,pending_hand);
     }
+    FinishPreparedGrab(player,player_generation,ui);
+    if (g_prepared_grab.active) return;
     if (g_pending_move_state) {
         auto* pending = g_pending_move_state;
         const auto pending_hand = g_pending_move_hand;
