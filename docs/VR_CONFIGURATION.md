@@ -1,58 +1,93 @@
-# VR configuration baseline
+# VR configuration
 
-This document records the recommended starting configuration for the Penumbra
-trilogy. It is a developer baseline, not yet an installer-managed preset. Edit
-`settings.cfg` only while the corresponding game is closed: HPL1 writes its
-live state on exit and can overwrite changes made while it is running.
+`assets/settings/recommended.json` is the machine-readable source for the
+maintainer-tested baseline. This document explains those values and separates a
+recommended game profile from personal VR calibration.
 
-The game-independent defaults, ranges, enum values and migration behavior live
-in `src/runtime/vr_settings.*`. The Framework INI now persists the complete
-shared schema. Persistence does not imply backend support: Black Plague applies
-only the settings named by its backend capability map, while Overture keeps its
-source-game integration and Requiem remains separate integration work.
+Edit a game's `settings.cfg` only while the game is closed; HPL1 can overwrite
+live changes on exit.
 
-## Common baseline
+## Recommended game settings
 
-Use these values in the `Graphics` and `Screen` sections for all three games:
+These are the current clean-profile recommendations for all three games. Display
+resolution, key bindings, current map and save-state values are deliberately not
+part of the preset.
 
-| Section | Key | Value | Reason |
+| Setting | Overture | Black Plague | Requiem |
 | --- | --- | --- | --- |
-| `Graphics` | `LimitFPS` | `false` | Avoid the legacy 60 FPS render cap; VR frame pacing is owned by the runtime. |
-| `Screen` | `Vsync` | `false` | Avoid synchronizing the desktop swap in addition to the VR compositor. |
-| `Graphics` | `FSAA` | `0` | The high-resolution eye targets already provide substantial spatial sampling; legacy window multisampling adds memory and GPU cost. |
-| `Graphics` | `MotionBlur` | `false` | Preserve head-tracked clarity and reduce discomfort. |
-| `Graphics` | `DepthOfField` | `false` | Avoid a focus effect that does not follow the player's real accommodation. |
-| `Graphics` | `NoiseFilter` | `false` | Preserve clarity and avoid an unnecessary full-screen effect. |
+| Language | `Espanol.lang` | `Espanol.lang` | `Espanol_exp.lang` |
+| `Graphics/LimitFPS` | `false` | `false` | `false` |
+| `Screen/Vsync` | `false` | `false` | `false` |
+| `Graphics/FSAA` | `0` | `0` | `0` |
+| `Graphics/MotionBlur` | `false` | `false` | `false` |
+| `Graphics/DepthOfField` | `false` | `false` | `false` |
+| `Graphics/NoiseFilter` | `false` | `false` | `false` |
+| `Graphics/TextureSizeLevel` | `0` | `0` | `0` |
+| `Graphics/TextureAnisotropy` | `16` | `16` | `16` |
+| `Graphics/ShaderQuality` | `3` | `3` | `3` |
+| `Graphics/Shadows` | `0` | `0` | `0` |
+| `Graphics/Bloom` | `true` | `true` | `true` |
+| `Graphics/PostEffects` | `false` | `true` | `true` |
+| `Graphics/Refractions` | `false` | `true` | `true` |
+| `Physics/UpdatesPerSec` | `60` | `60` | `60` |
+| Environmental audio | `true` | `true` | `true` |
 
-Keep `Physics/UpdatesPerSec` at `60`. The physics rate is not the headset refresh
-rate, and raising it without simulation validation can change gameplay.
+Overture uses the app-local `OpenAL Soft` device. The observed Black Plague and
+Requiem profiles keep `UseSoundHardware=false` and `UseThreading=true`.
 
-The current balanced visual baseline keeps full-resolution textures,
-`ShaderQuality=3`, anisotropic filtering at `16`, bloom, post effects and
-refractions where the game already enables them. Shadows remain at `0` while
-frame pacing is still being optimized. If performance remains below the
-headset refresh rate, reduce VR render scale before reducing texture quality.
+### Why these values
 
-## Overture Rework
+- `LimitFPS=false` avoids the legacy 60 FPS render cap competing with VR pacing.
+- `Vsync=false` avoids synchronizing the desktop swap in addition to the VR
+  compositor.
+- Legacy window `FSAA=0` avoids extra memory/GPU cost on top of high-resolution
+  eye targets.
+- Motion blur, depth of field and noise are disabled for head-tracked clarity.
+- Physics remains at 60 updates/s; headset refresh rate is not a reason to alter
+  gameplay simulation rate.
+- Full-resolution textures, shader quality 3, anisotropy 16 and bloom remain the
+  visual baseline. Reduce VR render scale before reducing texture quality when
+  performance is insufficient.
 
-Overture Rework has additional settings in the `VR` section. The recommended
-starting points are:
+## Overture VR reference profile
 
-- `RenderScale=1.0`; use `0.75` as the first performance fallback.
-- `EnhancedVisuals=true` to retain the Rework lighting, HDR/tonemapping and
-  related visual path.
-- `HRTF=On` for headphones when OpenAL Soft is the selected device.
-- `Game/RenderToMonitor=false` for normal play. Set it to `true` only when a
-  desktop mirror is needed for menu operation, capture or spectators.
+The maintainer's current tested Overture VR values are:
 
-Locomotion mode, turn mode, handedness, player height, UI distance and UI scale
-are comfort or calibration choices and should not be overwritten by a generic
-performance preset.
+```ini
+[VR]
+SettingsVersion=1
+MoveSpeed=1.0
+MoveDeadZone=0.15
+HeightOffset=0.0
+TurnMode=Smooth
+SnapTurnAngle=90
+SmoothTurnSpeed=90
+TurnDeadZone=0.20
+UIDistance=2.0
+UIScale=2.0
+CrouchMode=Hybrid
+PhysicalCrouchDepth=0.25
+SubtitleScale=1.55
+Handedness=Right
+PlayMode=Standing
+PlayerHeight=1.730447
+RenderScale=1.0
+EnhancedVisuals=true
+HRTF=On
+```
 
-## Black Plague framework profile
+`Game/RenderToMonitor=false` is the normal-play recommendation. `RenderScale=1.0`
+is the quality baseline; `0.75` is the first suggested performance fallback.
 
-Black Plague reads this profile from `%LOCALAPPDATA%\PenumbraVR\settings.ini`
-when the probe is attached:
+Height, handedness, turn mode, UI geometry and subtitle size are a tested
+maintainer reference rather than universal values. An installer should offer
+those values on a new profile but preserve an existing user's calibration unless
+explicitly asked to replace it.
+
+## Black Plague Framework profile
+
+Black Plague uses `%LOCALAPPDATA%\PenumbraVR\settings.ini`. The maintainer's
+current effective profile is:
 
 ```ini
 [VR]
@@ -78,73 +113,35 @@ SubtitleScale=1.35
 HRTF=Auto
 ```
 
-`Handedness` accepts `Right` or `Left`; it selects the matching action/UI set,
-aim pointer and interaction hand, while flashlight/glowstick use the opposite
-hand. `TurnMode` accepts `Disabled`, `Snap` or `Smooth`. Angles and smooth speed
-are degrees and degrees/second. `MoveSpeed` is the Rework movement multiplier.
-The normal Black Plague path still applies it to analog input; the transient
-room-scale gate applies it to the direct metric `1.5/2.25 m/s` walk/sprint
-policy. It does not alter physics or game time. The current local profile uses
-`0.85`, so that gate requests `1.275/1.9125 m/s` at full stick; set `1.0` when
-comparing the absolute Rework default speeds.
-`UiDistance` is the menu distance in metres, `UiScale` changes the physical
-panel size while keeping its aspect ratio, and `RenderScale` scales the OpenVR
-recommended per-eye dimensions before the existing allocation fallback. The
-same menu geometry is used for drawing and controller-ray hit testing.
+`MoveSpeed` scales the shared `1.5/2.25 m/s` walk/sprint policy. `UiDistance` is
+in metres and `UiScale` changes panel size. `RenderScale` multiplies the OpenVR
+recommended per-eye dimensions before allocation fallback.
 
-The currently wired Black Plague editor/menu capabilities are `Handedness`,
-`PlayMode`, `PlayerHeight`, `TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`,
-`TurnDeadZone`, `MoveSpeed`, `MoveDeadZone`, `HeightOffset`, `CrouchMode`,
-`PhysicalCrouchDepth`, `UiDistance`, `UiScale`, `RenderScale`,
-`EnhancedVisuals` and `HRTF`.
-`PlayMode`/`PlayerHeight` feed the shared seated/standing presentation policy;
-height/crouch controls feed the tracked-Y and native posture paths. Their
-editor exposure is host-tested and does not by itself establish headset comfort.
-`MonitorMirror` is a separate launcher/runtime toggle. `EnhancedVisuals` and
-`HRTF` now have Black Plague backend application and are host-tested only:
-Enhanced Visuals selects the Rework-derived per-eye RGBA16F/MSAA/final-treatment
-stage with direct-eye fallback, while HRTF is applied before native audio-device
-creation. `SubtitleScale` remains persisted but must not be presented as a
-functional Black Plague control until its product-owned message boundary is
-validated in-eye and wired.
+The Black Plague backend currently consumes handedness, play mode/height, turn
+settings, movement/dead zones, height offset, crouch settings, UI distance/scale,
+render scale, Enhanced Visuals and HRTF. `MonitorMirror` remains a separate
+presentation setting. `SubtitleScale` is persisted for schema continuity but is
+not yet a validated Black Plague control.
 
-Edit the currently supported Black Plague controls offline with:
+The native Black Plague `VR Settings` page and offline editor use this shared
+schema. Edit the profile offline with:
 
 ```powershell
-.\build\Release\PenumbraVR.ProbeLauncher.exe --configure-vr black-plague
+.\build\bin\Release\PenumbraVR.ProbeLauncher.exe --configure-vr black-plague
 ```
 
-The editor does not launch Black Plague or require an attached probe. It shows
-only controls the backend currently consumes plus `MonitorMirror`; snap/smooth
-dependent rows follow the shared Rework editor policy. `S` saves, `Q` discards
-and `R` restores defaults only for Black Plague-supported controls plus mirror,
-preserving persisted-but-unwired fields for future backends/features.
-
-The shared editor policy reproduces the 18 Overture Rework rows, step sizes,
-formatting, enum wrapping, clamps and snap/smooth dependent-row behavior and is
-host-tested. Black Plague now consumes the same policy through a dedicated native
-`VR Settings` entry under the game's Options state. The backend reuses the exact
-`cMainMenuWidget_Button` ABI and native state-8 widget list; it does not extend the
-game's state table. The page exposes exactly the 17 backend-wired capabilities.
-Left click advances a value and right click steps backward, while unavailable
-snap/smooth rows remain visible but inactive. Accepted changes are persisted
-immediately. Input and tracked-presentation settings are refreshed live;
-`RenderScale` and `HRTF` are labelled as restart-required because their current
-owners allocate eye targets / audio configuration during startup. The insertion
-boundary and behavior are host-tested only until a headset run exercises the page.
-
-Missing keys use normalized Rework defaults. Malformed recognized values make
-preflight fail instead of silently starting with a mixed profile. Values outside
-the documented runtime ranges are clamped. Changes take effect on the next probe
-attachment. `--vr-mirror-on` and `--vr-mirror-off` still update only the mirror
-key after a successful live change.
+Missing keys use normalized shared defaults; malformed recognized values fail
+preflight and out-of-range numeric values are clamped.
 
 ## Requiem
 
-Requiem is configuration-ready only. The shared settings model and schema can be
-used as the backend develops, but there is no playable Requiem VR backend yet.
-Do not treat the Black Plague profile above as evidence of Requiem support.
+Requiem's recommended game-level profile is versioned in
+`assets/settings/recommended.json`, but there is no Requiem VR backend yet. The
+profile therefore contains no active Requiem VR settings block. Shared VR values
+will be adopted only when the backend actually consumes them.
 
-The eventual installer should apply these settings through a reversible,
-per-game preset, preserve unrelated user preferences, and create a backup
-before modifying an existing file.
+## Installer policy
+
+The future unified installer should treat recommended settings as an optional,
+reversible preset. It must back up existing files, preserve unrelated preferences
+and avoid silently replacing user-specific calibration.

@@ -9,6 +9,9 @@ runtime::VrControllerFrame test_frame;
 int test_joints=0, test_leaves=0, test_native_updates=0;
 int test_move_leaves=0, test_native_move_updates=0;
 void* test_joint=nullptr;
+void* test_joint_secondary=nullptr;
+int test_active_calls=0, test_auto_freeze_calls=0;
+bool test_active_value=false, test_auto_freeze_value=true;
 Vec test_move_force{},test_move_force_position{};
 bool test_ui=false;
 std::array<void*,2> test_palm_held{};
@@ -52,7 +55,11 @@ void __fastcall NativeStop(void* state, void*) {
     Put(Read<void*>(state,0x10),0x2BC,0);
 }
 int __fastcall JointCount(void*,void*) { return test_joints; }
-void* __fastcall BodyJoint(void*,void*,int index) { return index==0 ? test_joint : nullptr; }
+void* __fastcall BodyJoint(void*,void*,int index) {
+    if (index==0) return test_joint;
+    if (index==1) return test_joint_secondary;
+    return nullptr;
+}
 int __fastcall HingeType(void*,void*) { return kHingeJointType; }
 int __fastcall SliderType(void*,void*) { return kSliderJointType; }
 void __fastcall NativeMoveEnter(void*,void*,void*) {}
@@ -67,6 +74,14 @@ void __fastcall MaxAngular(void* body,void*,float value) { Put(body,0x430,value)
 void __fastcall Linear(void* body,void*,const Vec* value) { Put(body,0x450,*value); }
 void __fastcall Angular(void* body,void*,const Vec* value) { Put(body,0x460,*value); }
 void __fastcall Gravity(void* body,void*,bool value) { Put(body,0x428,value); }
+void __fastcall Active(void*,void*,bool value) {
+    ++test_active_calls;
+    test_active_value=value;
+}
+void __fastcall AutoFreeze(void*,void*,bool value) {
+    ++test_auto_freeze_calls;
+    test_auto_freeze_value=value;
+}
 void __fastcall BodyMatrix(void* body,void*,const Matrix* value) { Put(body,0x34,*value); }
 void __fastcall BodyForceAtPosition(void*,void*,const Vec* force,const Vec* position) {
     test_move_force=*force;
@@ -202,6 +217,8 @@ int RunSpatialTest() {
     Jump(0x19C360,reinterpret_cast<void*>(&MaxLinear)); Jump(0x19C380,reinterpret_cast<void*>(&MaxAngular));
     Jump(0x19C2A0,reinterpret_cast<void*>(&Linear)); Jump(0x19C2C0,reinterpret_cast<void*>(&Angular));
     Jump(0x19C590,reinterpret_cast<void*>(&Gravity));
+    Jump(0x19C3F0,reinterpret_cast<void*>(&Active));
+    Jump(0x19C450,reinterpret_cast<void*>(&AutoFreeze));
     Jump(0x19C9E0,reinterpret_cast<void*>(&BodyForceAtPosition));
     {
         std::array<std::uint8_t,0x500> nudge_body{};
@@ -227,18 +244,27 @@ int RunSpatialTest() {
             std::abs(plan.maximum_push_speed-0.38F)>0.00001F ||
             std::abs(plan.maximum_delta_velocity-0.10F)>0.00001F)
             return 56;
-        test_joints=1;
-        if (BuildNudgePlan(nudge_body.data(),{1,0,0},{0.1F,0,0},
-                4.0F,0.40F,1,plan)) return 57;
-
         std::array<std::uint8_t,0x180> joint{};
-        Put(nudge_entity.data(),kEntityTypeOffset,kSwingDoorEntityType);
         Put(joint.data(),0,g_image+kPhysicsJointHingeNewtonVtable);
         Put(g_image+kPhysicsJointHingeNewtonVtable,kJointTypeVtableSlot,
             g_image+kHingeGetType);
         Put(joint.data(),kJointPinDirectionOffset,Vec{0,1,0});
         Put(joint.data(),kJointPivotPointOffset,Vec{0,0,0});
         test_joint=joint.data();
+        test_joints=1;
+        // Rework nudges recognized hinge/slider Objects directly; Move state
+        // commitment is only required for taking over the sustained mechanism
+        // servo. A locker/drawer must therefore not be rejected merely because
+        // its entity family is Object.
+        if (!BuildNudgePlan(nudge_body.data(),{0,0,-1},{1,0,0},
+                4.0F,0.40F,1,plan) ||
+            !VecNearlyEqual(plan.velocity,{0,0,-1}) ||
+            std::abs(plan.push_fraction-0.80F)>0.00001F ||
+            std::abs(plan.maximum_push_speed-1.35F)>0.00001F ||
+            std::abs(plan.maximum_delta_velocity-0.36F)>0.00001F)
+            return 57;
+
+        Put(nudge_entity.data(),kEntityTypeOffset,kSwingDoorEntityType);
         if (!BuildNudgePlan(nudge_body.data(),{0,0,-1},{1,0,0},
                 4.0F,0.40F,1,plan) ||
             !VecNearlyEqual(plan.velocity,{0,0,-1}) ||
@@ -378,6 +404,8 @@ int RunSpatialTest() {
     hand.device_to_absolute.values[3]=0.2F;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (Read<Matrix>(body.data(),0x34).values[3]!=0.2F || test_native_updates) return 4;
+    if (test_active_calls!=1 || !test_active_value ||
+        test_auto_freeze_calls!=1 || test_auto_freeze_value) return 132;
     HookedGrabUpdate(state.data(),nullptr,0.016F); // stable second release sample
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
@@ -421,9 +449,35 @@ int RunSpatialTest() {
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 10;
 
+    // Rework's acquisition volume is a box around the palm/fingers, not the
+    // old 18 cm radial guard. A contact near a valid box corner can be farther
+    // than 18 cm from the palm origin and must still enter the kinematic hold.
+    const float body_x=Read<Matrix>(body.data(),0x34).values[3];
+    hand.device_to_absolute.values[3]=body_x;
+    Matrix interaction_volume_pose{}; Vec volume_velocity{},volume_angular{};
+    if (!InteractionHandPose(runtime::VrHand::right,interaction_volume_pose,
+            volume_velocity,volume_angular)) return 137;
+    const Vec interaction_local_contact{
+        runtime::vr_interaction_policy::kInteractionOffsetX+
+            runtime::vr_interaction_policy::kInteractionSizeX*0.5F-0.001F,
+        runtime::vr_interaction_policy::kInteractionOffsetY+
+            runtime::vr_interaction_policy::kInteractionSizeY*0.5F-0.001F,
+        runtime::vr_interaction_policy::kInteractionOffsetZ+
+            runtime::vr_interaction_policy::kInteractionSizeZ*0.5F-0.001F};
+    const Vec interaction_world_contact=
+        TransformPoint(interaction_volume_pose,interaction_local_contact);
+    const Matrix current_body_pose=Read<Matrix>(body.data(),0x34);
+    Put(state.data(),0x14,
+        InverseTransformPoint(current_body_pose,interaction_world_contact));
+    begin();
+    if (!g_held.load()) return 138;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load()) return 139;
+    Put(state.data(),0x14,Vec{});
+
     // Acquisition still rejects a selected body beyond Rework's bounded raw
     // interaction reach even if the native state transition itself commits.
-    const float body_x=Read<Matrix>(body.data(),0x34).values[3];
     hand.device_to_absolute.values[3]=body_x+0.25F;
     begin();
     if (g_held.load()) return 25;
@@ -482,6 +536,109 @@ int RunSpatialTest() {
         Read<float>(body.data(),0x42C)!=3 || Read<float>(body.data(),0x430)!=4 ||
         test_palm_held[1]!=nullptr) return 34;
 
+    // Move acquisition uses the same Rework palm/finger interaction box as
+    // Grab. A valid contact near a box corner must not be rejected by the old
+    // 18 cm radial guard after native Move=2 has already committed.
+    hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
+    Matrix move_interaction_pose{}; Vec move_volume_velocity{},move_volume_angular{};
+    if (!InteractionHandPose(runtime::VrHand::right,move_interaction_pose,
+            move_volume_velocity,move_volume_angular)) return 140;
+    const Vec move_local_contact{
+        runtime::vr_interaction_policy::kInteractionOffsetX+
+            runtime::vr_interaction_policy::kInteractionSizeX*0.5F-0.001F,
+        runtime::vr_interaction_policy::kInteractionOffsetY+
+            runtime::vr_interaction_policy::kInteractionSizeY*0.5F-0.001F,
+        runtime::vr_interaction_policy::kInteractionOffsetZ+
+            runtime::vr_interaction_policy::kInteractionSizeZ*0.5F-0.001F};
+    const Vec move_world_contact=TransformPoint(move_interaction_pose,move_local_contact);
+    Put(move_state.data(),0x38,
+        InverseTransformPoint(Read<Matrix>(body.data(),0x34),move_world_contact));
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load()) return 141;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load()) return 142;
+    Put(move_state.data(),0x38,Vec{});
+
+    // The VR target that won selection is the contact Rework carries into its
+    // Move interaction. Native Move=2 remains authoritative for lock/script
+    // lifecycle, but a different legacy state contact must not shrink the
+    // already-selected palm target back to a tiny activation point.
+    g_interaction_targets[1]={move_world_contact,body.data(),GetTickCount64(),true};
+    Put(move_state.data(),0x38,Vec{2.0F,0,0});
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load()) return 143;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load()) return 144;
+    g_interaction_targets[1]={};
+    Put(move_state.data(),0x38,Vec{});
+
+    // Rework constrains no-joint Object drawers by deriving a slide axis from
+    // the movable body to a static sibling body owned by the same entity. BP's
+    // exact iGameEntity layout exposes mvBodies at +0x14C/+0x150. Once native
+    // Move=2 has committed the Object, the Framework should consume that same
+    // axis instead of treating the drawer as a free-body Move.
+    {
+        std::array<std::uint8_t,0x300> drawer_entity{};
+        std::array<std::uint8_t,0x500> frame_body{};
+        std::array<void*,2> drawer_bodies{body.data(),frame_body.data()};
+        Put(drawer_entity.data(),kEntityActiveOffset,true);
+        Put(drawer_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        Put(drawer_entity.data(),0x14C,drawer_bodies.data());
+        Put(drawer_entity.data(),0x150,drawer_bodies.data()+drawer_bodies.size());
+        Put(body.data(),kBodyUserDataOffset,static_cast<void*>(drawer_entity.data()));
+        Put(frame_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(frame_body.data(),kBodyUserDataOffset,static_cast<void*>(drawer_entity.data()));
+        Put(frame_body.data(),0x434,0.0F);
+        Matrix drawer_pose=runtime::IdentityMatrix();
+        drawer_pose.values[3]=0.40F;
+        Matrix frame_pose=runtime::IdentityMatrix();
+        Put(body.data(),0x34,drawer_pose);
+        Put(frame_body.data(),0x34,frame_pose);
+        Put(body.data(),0x42C,3.0F); Put(body.data(),0x430,4.0F);
+        Put(body.data(),0x434,2.0F);
+        Put(move_state.data(),0x38,Vec{});
+        hand.device_to_absolute={{1,0,0,0.40F,0,1,0,0,0,0,1,0}};
+        test_joints=0;
+        test_frame.input.state.interact.pressed=true;
+        test_frame.input.state.interact.just_pressed=true;
+        g_vr_selection_ready=true; g_vr_selection_player=player.data();
+        HookedMoveEnter(move_state.data(),nullptr,nullptr);
+        Put(player.data(),0x2BC,2);
+        ServiceSpatialInteraction(player.data(),false);
+        if (!g_move_held.load() || g_move_hold.mode!=MoveHold::Mode::slider ||
+            !VecNearlyEqual(g_move_hold.joint_pin,{1,0,0}) ||
+            Read<float>(body.data(),0x42C)!=runtime::vr_mechanism_policy::kJointedMaximumLinearSpeed ||
+            Read<float>(body.data(),0x430)!=runtime::vr_mechanism_policy::kJointedMaximumAngularSpeed)
+            return 145;
+        hand.device_to_absolute.values[3]=0.45F;
+        hand.device_to_absolute.values[7]=0.10F;
+        Put(body.data(),0x450,Vec{}); Put(body.data(),0x460,Vec{});
+        HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+        const auto drawer_velocity=Read<Vec>(body.data(),0x450);
+        if (drawer_velocity[0]<=0.0F || std::abs(drawer_velocity[1])>0.00001F ||
+            std::abs(drawer_velocity[2])>0.00001F || test_native_move_updates!=0)
+            return 146;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3.0F ||
+            Read<float>(body.data(),0x430)!=4.0F) return 147;
+        Put(body.data(),kBodyUserDataOffset,static_cast<void*>(nullptr));
+        Put(body.data(),0x34,runtime::IdentityMatrix());
+        Put(player.data(),0x2BC,0);
+    }
+
     // A representative cGameLever with one recognized hinge consumes the
     // shared Rework servo while native Move Enter/Leave retain lifecycle
     // ownership (controllers, gravity and scripts).
@@ -520,6 +677,26 @@ int RunSpatialTest() {
     if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3 ||
         Read<float>(body.data(),0x430)!=4) return 49;
 
+    // Once the native game has already committed an Object to Move=2, Rework
+    // drives its recognized hinge/slider exactly like other Move mechanisms.
+    // The native transition remains the authority for locks/scripts; this is
+    // deliberately narrower than allowing arbitrary jointed Objects to nudge.
+    Put(mechanism_entity.data(),kEntityTypeOffset,kObjectEntityType);
+    Put(joint.data(),0,g_image+kPhysicsJointHingeNewtonVtable);
+    hand.device_to_absolute.values[11]=0;
+    Put(body.data(),0x450,Vec{}); Put(body.data(),0x460,Vec{});
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load() || g_move_hold.mode!=MoveHold::Mode::hinge)
+        return 135;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load()) return 136;
+
     // Rework routes SwingDoor through the same Move hinge servo while the
     // entity owns controller/gravity lifecycle and hinge limits. Black Plague
     // consumes only the exact one-joint hinge form; a slider-shaped door must
@@ -551,7 +728,35 @@ int RunSpatialTest() {
     Put(g_image+kPhysicsJointSliderNewtonVtable,kJointTypeVtableSlot,g_image+kSliderGetType);
     MoveHold rejected_door{};
     if (BindRecognizedMechanism(body.data(),rejected_door)) return 53;
-    test_joint=nullptr; test_joints=0; Put(player.data(),0x2BC,0);
+
+    // Rework selects the joint that actually constrains the grabbed body.
+    // A mechanism body can also parent another joint, so joint 0 is not a
+    // reliable drive joint. The exact BP joint layout exposes parent at +2C
+    // and child at +30.
+    std::array<std::uint8_t,0x180> parent_joint{},drive_joint{};
+    std::array<std::uint8_t,0x500> linked_body{};
+    Put(linked_body.data(),0,g_image+kPhysicsBodyVtable);
+    Put(parent_joint.data(),0,g_image+kPhysicsJointHingeNewtonVtable);
+    Put(parent_joint.data(),0x2C,static_cast<void*>(body.data()));
+    Put(parent_joint.data(),0x30,static_cast<void*>(linked_body.data()));
+    Put(parent_joint.data(),kJointPinDirectionOffset,Vec{1,0,0});
+    Put(parent_joint.data(),kJointPivotPointOffset,Vec{});
+    Put(drive_joint.data(),0,g_image+kPhysicsJointHingeNewtonVtable);
+    Put(drive_joint.data(),0x2C,static_cast<void*>(linked_body.data()));
+    Put(drive_joint.data(),0x30,static_cast<void*>(body.data()));
+    Put(drive_joint.data(),kJointPinDirectionOffset,Vec{0,1,0});
+    Put(drive_joint.data(),kJointPivotPointOffset,Vec{});
+    Put(mechanism_entity.data(),kEntityTypeOffset,kLeverEntityType);
+    test_joint=parent_joint.data();
+    test_joint_secondary=drive_joint.data();
+    test_joints=2;
+    MoveHold multi_joint{};
+    if (!BindRecognizedMechanism(body.data(),multi_joint) ||
+        multi_joint.mode!=MoveHold::Mode::hinge ||
+        !VecNearlyEqual(multi_joint.joint_pin,{0,1,0})) return 131;
+
+    test_joint=nullptr; test_joint_secondary=nullptr; test_joints=0;
+    Put(player.data(),0x2BC,0);
 
     const auto diagnostics=ConsumeSpatialDiagnostics();
     if (diagnostics.grabs_acquired<5 || diagnostics.grabs_released<5 ||

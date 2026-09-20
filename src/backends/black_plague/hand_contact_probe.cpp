@@ -101,6 +101,7 @@ runtime::VrHandResolveState g_resolver_state;
 bool g_resolver_first_tick_complete = false;
 
 OwnedPalmShape g_gameplay_palm_shape;
+OwnedPalmShape g_gameplay_interaction_shape;
 std::atomic<bool> g_gameplay_shape_active{false};
 std::array<runtime::VrHandResolveState, 2> g_gameplay_resolver_state{};
 std::array<std::atomic<void*>, 2> g_gameplay_held_body{};
@@ -263,10 +264,12 @@ struct GameplaySnapshot {
     return true;
 }
 
-[[nodiscard]] bool EnsureOwnedPalmShape(
+[[nodiscard]] bool EnsureOwnedBoxShape(
     std::uint8_t* image,
     void* world,
     OwnedPalmShape& owned_shape,
+    const Vec3& size,
+    const Matrix& local_transform,
     PalmResolverValidationTelemetry& telemetry) noexcept {
     if (!ValidWorld(image, world)) return false;
     if (owned_shape.shape != nullptr &&
@@ -280,14 +283,11 @@ struct GameplaySnapshot {
         if (!SafeDestroyOwnedPalmShape(owned_shape, &telemetry)) return false;
     }
 
-    using namespace runtime::vr_interaction_policy;
-    const Vec3 size{kCollisionSizeX, kCollisionSizeY, kCollisionSizeZ};
-    Matrix local_transform{};
-    local_transform.values = runtime::rework_hand_profile::CollisionLocalPose().values;
     void* shape = nullptr;
     __try {
         const auto create = reinterpret_cast<CreateBoxShape>(image + kCreateBoxShape);
-        shape = create(world, &size, &local_transform);
+        auto transform = local_transform;
+        shape = create(world, &size, &transform);
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         shape = nullptr;
     }
@@ -316,6 +316,38 @@ struct GameplaySnapshot {
     return std::isfinite(telemetry.shape_size[0]) &&
         std::isfinite(telemetry.shape_size[1]) &&
         std::isfinite(telemetry.shape_size[2]);
+}
+
+[[nodiscard]] bool EnsureOwnedPalmShape(
+    std::uint8_t* image,
+    void* world,
+    OwnedPalmShape& owned_shape,
+    PalmResolverValidationTelemetry& telemetry) noexcept {
+    using namespace runtime::vr_interaction_policy;
+    const Vec3 size{kCollisionSizeX, kCollisionSizeY, kCollisionSizeZ};
+    Matrix local_transform{};
+    local_transform.values = runtime::rework_hand_profile::CollisionLocalPose().values;
+    return EnsureOwnedBoxShape(
+        image, world, owned_shape, size, local_transform, telemetry);
+}
+
+[[nodiscard]] bool EnsureOwnedInteractionShape(
+    std::uint8_t* image,
+    void* world,
+    OwnedPalmShape& owned_shape,
+    PalmResolverValidationTelemetry& telemetry) noexcept {
+    using namespace runtime::vr_interaction_policy;
+    const Vec3 size{kInteractionSizeX, kInteractionSizeY, kInteractionSizeZ};
+    Matrix local_transform{};
+    local_transform.values[0] = 1.0F;
+    local_transform.values[5] = 1.0F;
+    local_transform.values[10] = 1.0F;
+    local_transform.values[15] = 1.0F;
+    local_transform.values[3] = kInteractionOffsetX;
+    local_transform.values[7] = kInteractionOffsetY;
+    local_transform.values[11] = kInteractionOffsetZ;
+    return EnsureOwnedBoxShape(
+        image, world, owned_shape, size, local_transform, telemetry);
 }
 
 class ResolverContactCallback final {
@@ -510,9 +542,8 @@ GameplayPalmResolverRequested() noexcept {
     }
     HANDLE request = OpenMutexW(
         SYNCHRONIZE, FALSE, kGameplayPalmRequestMutexName);
-    if (request == nullptr) {
-        return GameplayPalmResolverRequestSource::disabled;
-    }
+    if (request == nullptr)
+        return GameplayPalmResolverRequestSource::production;
     CloseHandle(request);
     return GameplayPalmResolverRequestSource::mutex;
 }
@@ -986,8 +1017,11 @@ void ServiceGameplayPalmResolver(
     if (g_gameplay_shutdown_requested.exchange(
             false, std::memory_order_acq_rel)) {
         PalmResolverValidationTelemetry lifecycle{};
-        const bool destroyed = SafeDestroyOwnedPalmShape(
+        const bool interaction_destroyed = SafeDestroyOwnedPalmShape(
+            g_gameplay_interaction_shape, &lifecycle);
+        const bool collision_destroyed = SafeDestroyOwnedPalmShape(
             g_gameplay_palm_shape, &lifecycle);
+        const bool destroyed = interaction_destroyed && collision_destroyed;
         g_gameplay_shape_active.store(false, std::memory_order_release);
         ResetGameplayPalmStates();
         g_gameplay_resolver_yaw_epoch = 0;
@@ -1078,6 +1112,8 @@ void ServiceGameplayPalmResolver(
         return;
     }
     g_gameplay_shape_active.store(true, std::memory_order_release);
+    const bool interaction_shape_ready = EnsureOwnedInteractionShape(
+        image, world, g_gameplay_interaction_shape, lifecycle);
     if (previous_world != nullptr && previous_world != world) {
         ResetGameplayPalmStates();
     }
@@ -1108,7 +1144,7 @@ void ServiceGameplayPalmResolver(
     std::uint64_t pullback_recoveries = 0;
     std::uint64_t interaction_assist_samples = 0;
     std::uint64_t held_skips = 0;
-    std::uint64_t failures = 0;
+    std::uint64_t failures = interaction_shape_ready ? 0U : 1U;
 
     for (std::size_t hand = 0; hand < raw_poses.size(); ++hand) {
         if (!raw_valid[hand]) continue;
@@ -1198,7 +1234,7 @@ bool QueryGameplayPalmOverlaps(
     result = {};
     if (hand_index >= g_gameplay_held_body.size() ||
         !g_gameplay_shape_active.load(std::memory_order_acquire)) return false;
-    const OwnedPalmShape owned = g_gameplay_palm_shape;
+    const OwnedPalmShape owned = g_gameplay_interaction_shape;
     if (owned.image == nullptr || owned.world == nullptr || owned.shape == nullptr ||
         !ValidWorld(owned.image, owned.world) ||
         Read<void*>(owned.shape, 0) != owned.image + kCollideShapeNewtonVtable ||

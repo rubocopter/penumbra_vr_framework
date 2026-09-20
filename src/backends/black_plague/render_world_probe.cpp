@@ -7,8 +7,10 @@
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
 #include "native_input_bridge.hpp"
+#include "particle_stereo_refresh.hpp"
 #include "presentation_timing.hpp"
 #include "spatial_interaction.hpp"
+#include "spawn_yaw_rebase.hpp"
 #include "vr_grab_pose.hpp"
 #include "rel32_call_hook.hpp"
 #include "stereo_render_policy.hpp"
@@ -16,6 +18,7 @@
 #include "vr_panel_policy.hpp"
 #include "vr_play_mode_policy.hpp"
 #include "vr_tracking_space.hpp"
+#include "iat_hook.hpp"
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -52,6 +55,15 @@ constexpr std::uintptr_t kGraphicsGetDrawerRva = 0x000DF730;
 constexpr std::uintptr_t kGraphicsGetDrawerCallSiteRva = 0x000EE03B;
 constexpr std::uintptr_t kGraphicsDrawerDrawAllRva = 0x000F3920;
 constexpr std::uintptr_t kGraphicsDrawerDrawAllCallSiteRva = 0x000EE042;
+constexpr std::uintptr_t kMapLoadSetStartPosCallSiteRva = 0x000916EC;
+constexpr std::uintptr_t kPlayerSetStartPosRva = 0x0009DFC0;
+constexpr std::uintptr_t kSpawnCameraSetYawCallSiteRva = 0x0009E1C0;
+constexpr std::uintptr_t kCameraSetYawRva = 0x001139F0;
+constexpr std::uintptr_t kCameraYawOffset = 0x24;
+constexpr std::uintptr_t kParticleGetModelMatrixSlotRva = 0x002875B8;
+constexpr std::uintptr_t kParticleUpdateGraphicsSlotRva = 0x002875C0;
+constexpr std::uintptr_t kParticleGetModelMatrixRva = 0x00169C50;
+constexpr std::uintptr_t kParticleUpdateGraphicsRva = 0x00169FF0;
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
 constexpr GLenum kGlMaxRenderbufferSize = 0x84E8;
 constexpr std::array<std::uint8_t, 5> kExpectedRenderWorldCall{
@@ -68,6 +80,15 @@ constexpr std::array<std::uint8_t, 5> kExpectedGraphicsGetDrawerCall{
 };
 constexpr std::array<std::uint8_t, 5> kExpectedGraphicsDrawerDrawAllCall{
     0xE8, 0xD9, 0x58, 0x00, 0x00,
+};
+constexpr std::array<std::uint8_t, 5> kExpectedMapLoadSetStartPosCall{
+    0xE8, 0xCF, 0xC8, 0x00, 0x00,
+};
+constexpr std::array<std::uint8_t, 5> kExpectedSpawnCameraSetYawCall{
+    0xE8, 0x2B, 0x58, 0x07, 0x00,
+};
+constexpr std::array<std::uint8_t, 3> kExpectedCameraYawStore{
+    0x89, 0x41, 0x24,
 };
 constexpr float kGameplayOverlayLeft = -400.0F / 450.0F;
 constexpr float kGameplayOverlayRight = 400.0F / 450.0F;
@@ -95,6 +116,8 @@ using UpdateRenderList = void(__thiscall*)(
     void* camera,
     float frame_time);
 using GraphicsDrawerDrawAll = void(__thiscall*)(void* drawer);
+using CameraSetYaw = void(__thiscall*)(void* camera, float yaw);
+using ParticleGetModelMatrix = void*(__thiscall*)(void* emitter, void* camera);
 
 enum class DuplicationState : std::uint8_t {
     idle,
@@ -300,9 +323,16 @@ struct StereoProcessingResult {
 hooks::Rel32CallHook g_hook;
 hooks::Rel32CallHook g_visibility_hook;
 hooks::Rel32CallHook g_draw_all_hook;
+hooks::Rel32CallHook g_spawn_yaw_hook;
+hooks::IatHook g_particle_get_model_matrix_hook;
+hooks::IatHook g_particle_update_graphics_hook;
 std::atomic<void*> g_original_target{nullptr};
 std::atomic<void*> g_original_visibility_target{nullptr};
 std::atomic<void*> g_original_draw_all_target{nullptr};
+std::atomic<void*> g_original_spawn_yaw_target{nullptr};
+std::atomic<void*> g_original_particle_get_model_matrix{nullptr};
+std::atomic<void*> g_original_particle_update_graphics{nullptr};
+ParticleStereoRefreshState g_particle_stereo_refresh;
 std::atomic<std::uint32_t> g_active_calls{0};
 std::atomic<DuplicationState> g_duplication_state{DuplicationState::idle};
 std::atomic<std::uint32_t> g_duplication_requested_frames{0};
@@ -351,6 +381,8 @@ SRWLOCK g_tracking_yaw_lock = SRWLOCK_INIT;
 runtime::VrTrackingSpace g_tracking_yaw_space;
 float g_native_tracking_yaw = 0.0F;
 bool g_native_tracking_yaw_known = false;
+float g_pending_spawn_native_yaw_delta = 0.0F;
+bool g_pending_spawn_yaw_rebase = false;
 bool g_menu_anchor_valid = false;
 runtime::VrMatrix34 g_menu_anchor{};
 SRWLOCK g_menu_pointer_lock = SRWLOCK_INIT;
@@ -375,6 +407,8 @@ void ResetTrackedWorldYawForRecenter() noexcept {
     g_tracking_yaw_space.SetWorldYaw(0.0F);
     g_native_tracking_yaw = 0.0F;
     g_native_tracking_yaw_known = false;
+    g_pending_spawn_native_yaw_delta = 0.0F;
+    g_pending_spawn_yaw_rebase = false;
     ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
 }
 
@@ -396,7 +430,21 @@ void ResetTrackedWorldYawForRecenter() noexcept {
     float tracking_world_yaw = 0.0F;
     bool native_rebased = false;
     AcquireSRWLockExclusive(&g_tracking_yaw_lock);
-    if (!g_native_tracking_yaw_known) {
+    if (g_pending_spawn_yaw_rebase) {
+        const auto rebase = ComputeSpawnYawRebase(
+            g_tracking_yaw_space.world_yaw(),
+            0.0F,
+            g_pending_spawn_native_yaw_delta);
+        if (rebase.valid) {
+            g_tracking_yaw_space.SetWorldYaw(rebase.world_yaw);
+            native_rebased =
+                std::abs(rebase.native_delta) > kNativeYawRebaseEpsilonRadians;
+        }
+        g_pending_spawn_native_yaw_delta = 0.0F;
+        g_pending_spawn_yaw_rebase = false;
+        g_native_tracking_yaw = native_yaw;
+        g_native_tracking_yaw_known = true;
+    } else if (!g_native_tracking_yaw_known) {
         g_native_tracking_yaw = native_yaw;
         g_native_tracking_yaw_known = true;
     } else {
@@ -543,6 +591,70 @@ public:
         g_active_calls.fetch_sub(1, std::memory_order_acq_rel);
     }
 };
+
+void __fastcall HookedParticleUpdateGraphics(
+    void* emitter,
+    void*,
+    void* camera,
+    float frame_time,
+    void* render_list) noexcept {
+    ActiveCall active_call;
+    g_particle_stereo_refresh.Capture(camera, frame_time, render_list);
+    const auto original = reinterpret_cast<ParticleUpdateGraphics>(
+        g_original_particle_update_graphics.load(std::memory_order_acquire));
+    if (original != nullptr) {
+        original(emitter, camera, frame_time, render_list);
+    }
+}
+
+void* __fastcall HookedParticleGetModelMatrix(
+    void* emitter,
+    void*,
+    void* camera) noexcept {
+    ActiveCall active_call;
+    const void* const update_target =
+        g_original_particle_update_graphics.load(std::memory_order_acquire);
+    static_cast<void>(g_particle_stereo_refresh.Refresh(
+        emitter,
+        camera,
+        const_cast<void*>(update_target)));
+    const auto original = reinterpret_cast<ParticleGetModelMatrix>(
+        g_original_particle_get_model_matrix.load(std::memory_order_acquire));
+    return original != nullptr ? original(emitter, camera) : nullptr;
+}
+
+void __fastcall HookedSpawnCameraSetYaw(
+    void* camera,
+    void*,
+    float requested_yaw) noexcept {
+    ActiveCall active_call;
+    const auto original = reinterpret_cast<CameraSetYaw>(
+        g_original_spawn_yaw_target.load(std::memory_order_acquire));
+    if (original == nullptr || camera == nullptr) return;
+
+    float old_yaw = 0.0F;
+    std::memcpy(
+        &old_yaw,
+        static_cast<const std::uint8_t*>(camera) + kCameraYawOffset,
+        sizeof(old_yaw));
+    original(camera, requested_yaw);
+    float new_yaw = 0.0F;
+    std::memcpy(
+        &new_yaw,
+        static_cast<const std::uint8_t*>(camera) + kCameraYawOffset,
+        sizeof(new_yaw));
+
+    const auto rebase = ComputeSpawnYawRebase(0.0F, old_yaw, new_yaw);
+    if (!rebase.valid ||
+        std::abs(rebase.native_delta) <= kNativeYawRebaseEpsilonRadians) {
+        return;
+    }
+    AcquireSRWLockExclusive(&g_tracking_yaw_lock);
+    g_pending_spawn_native_yaw_delta = WrapSpawnYaw(
+        g_pending_spawn_native_yaw_delta + rebase.native_delta);
+    g_pending_spawn_yaw_rebase = true;
+    ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
+}
 
 class DeferredStereoFrameRelease final {
 public:
@@ -1219,10 +1331,22 @@ void __fastcall HookedUpdateRenderList(
 
     runtime::OpenVrSession* session =
         g_stereo_session.load(std::memory_order_acquire);
+    std::string error;
+    CameraMatrixSnapshot camera_snapshot;
+    if (!adapters::hpl1::CaptureCameraMatrices(
+            camera, kCameraLayout, camera_snapshot, error)) {
+        FailStereoMatrixValidation("Could not capture the HPL camera: " + error);
+        return result;
+    }
+    if (!LooksLikeMappedGameplayCamera(camera_snapshot)) {
+        FailStereoMatrixValidation(
+            "The active camera does not match the mapped infinite-perspective layout");
+        return result;
+    }
+
     runtime::VrHmdPose pose;
     PresentationSnapshot presentation;
     bool presentation_from_visibility = false;
-    std::string error;
     bool presentation_recentered = false;
     if (session != nullptr && g_stereo_persistent.load(std::memory_order_acquire) &&
         g_stereo_track_head_rotation) {
@@ -1244,10 +1368,23 @@ void __fastcall HookedUpdateRenderList(
             g_last_submitted_presentation_sequence.load(std::memory_order_acquire);
         if (!runtime::IsFreshPresentationSequence(
                 presentation.pose.identity.sequence, last_submitted)) {
+            if (!runtime::ShouldRefreshPresentationSequence(
+                    presentation.pose.identity.sequence, last_submitted)) {
+                AcquireSRWLockExclusive(&g_telemetry_lock);
+                ++g_telemetry.presentation_pose_stale_rejects;
+                ReleaseSRWLockExclusive(&g_telemetry_lock);
+                return result;
+            }
+            if (!AcquirePresentationSnapshot(
+                    presentation, presentation_recentered, error) ||
+                !ResolvePresentationTrackingYaw(
+                    camera_snapshot.view, presentation, error)) {
+                InvalidateWorldTracking();
+                return result;
+            }
             AcquireSRWLockExclusive(&g_telemetry_lock);
-            ++g_telemetry.presentation_pose_stale_rejects;
+            ++g_telemetry.presentation_pose_acquisitions;
             ReleaseSRWLockExclusive(&g_telemetry_lock);
-            return result;
         }
         pose = presentation.pose;
         presentation_from_visibility = true;
@@ -1266,18 +1403,6 @@ void __fastcall HookedUpdateRenderList(
                 "The compositor frame did not contain a valid connected HMD pose");
             return result;
         }
-    }
-
-    CameraMatrixSnapshot camera_snapshot;
-    if (!adapters::hpl1::CaptureCameraMatrices(
-            camera, kCameraLayout, camera_snapshot, error)) {
-        FailStereoMatrixValidation("Could not capture the HPL camera: " + error);
-        return result;
-    }
-    if (!LooksLikeMappedGameplayCamera(camera_snapshot)) {
-        FailStereoMatrixValidation(
-            "The active camera does not match the mapped infinite-perspective layout");
-        return result;
     }
 
     runtime::VrMatrix44 head_view = camera_snapshot.view;
@@ -1667,7 +1792,9 @@ void __fastcall HookedRenderWorld(
 bool InstallRenderWorldProbe(std::string& error) noexcept {
     error.clear();
     if (g_hook.installed() || g_visibility_hook.installed() ||
-        g_draw_all_hook.installed()) {
+        g_draw_all_hook.installed() || g_spawn_yaw_hook.installed() ||
+        g_particle_get_model_matrix_hook.installed() ||
+        g_particle_update_graphics_hook.installed()) {
         error = "The Black Plague RenderWorld probe is already installed";
         return false;
     }
@@ -1717,6 +1844,43 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         error = "The manifest call displacement does not target GraphicsDrawer::DrawAll";
         return false;
     }
+    std::uint8_t* map_start_call_site =
+        image + kMapLoadSetStartPosCallSiteRva;
+    if (DecodeExpectedTarget(
+            map_start_call_site, kExpectedMapLoadSetStartPosCall) !=
+        image + kPlayerSetStartPosRva) {
+        error = "The map-load call displacement does not target Player::SetStartPos";
+        return false;
+    }
+    std::uint8_t* spawn_yaw_call_site =
+        image + kSpawnCameraSetYawCallSiteRva;
+    void* const expected_spawn_yaw_target = image + kCameraSetYawRva;
+    if (DecodeExpectedTarget(
+            spawn_yaw_call_site, kExpectedSpawnCameraSetYawCall) !=
+        expected_spawn_yaw_target) {
+        error = "The spawn call displacement does not target Camera3D::SetYaw";
+        return false;
+    }
+    if (!std::equal(
+            kExpectedCameraYawStore.begin(),
+            kExpectedCameraYawStore.end(),
+            image + kCameraSetYawRva + 0x0D)) {
+        error = "The Camera3D yaw field store does not match the exact build";
+        return false;
+    }
+    auto** const particle_get_model_matrix_slot = reinterpret_cast<void**>(
+        image + kParticleGetModelMatrixSlotRva);
+    auto** const particle_update_graphics_slot = reinterpret_cast<void**>(
+        image + kParticleUpdateGraphicsSlotRva);
+    void* const expected_particle_get_model_matrix =
+        image + kParticleGetModelMatrixRva;
+    void* const expected_particle_update_graphics =
+        image + kParticleUpdateGraphicsRva;
+    if (*particle_get_model_matrix_slot != expected_particle_get_model_matrix ||
+        *particle_update_graphics_slot != expected_particle_update_graphics) {
+        error = "The ParticleEmitter3D vtable does not match the exact build";
+        return false;
+    }
 
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
@@ -1758,6 +1922,13 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         expected_visibility_target, std::memory_order_release);
     g_original_draw_all_target.store(
         expected_draw_all_target, std::memory_order_release);
+    g_original_spawn_yaw_target.store(
+        expected_spawn_yaw_target, std::memory_order_release);
+    g_original_particle_get_model_matrix.store(
+        expected_particle_get_model_matrix, std::memory_order_release);
+    g_original_particle_update_graphics.store(
+        expected_particle_update_graphics, std::memory_order_release);
+    g_particle_stereo_refresh.Reset();
 
     if (!hooks::InstallRel32CallHook(
             call_site,
@@ -1807,7 +1978,60 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         }
         return false;
     }
+    if (!hooks::InstallRel32CallHook(
+            spawn_yaw_call_site,
+            kExpectedSpawnCameraSetYawCall,
+            reinterpret_cast<void*>(&HookedSpawnCameraSetYaw),
+            g_spawn_yaw_hook,
+            error)) {
+        std::string draw_all_rollback_error;
+        std::string visibility_rollback_error;
+        std::string render_rollback_error;
+        const bool draw_all_rolled_back = hooks::RemoveRel32CallHook(
+            g_draw_all_hook, draw_all_rollback_error);
+        const bool visibility_rolled_back = hooks::RemoveRel32CallHook(
+            g_visibility_hook, visibility_rollback_error);
+        const bool render_rolled_back = hooks::RemoveRel32CallHook(
+            g_hook, render_rollback_error);
+        if (!draw_all_rolled_back && !draw_all_rollback_error.empty()) {
+            error += "; DrawAll hook rollback also failed: " +
+                draw_all_rollback_error;
+        }
+        if (!visibility_rolled_back && !visibility_rollback_error.empty()) {
+            error += "; UpdateRenderList hook rollback also failed: " +
+                visibility_rollback_error;
+        }
+        if (!render_rolled_back && !render_rollback_error.empty()) {
+            error += "; RenderWorld hook rollback also failed: " +
+                render_rollback_error;
+        }
+        return false;
+    }
     if (!hooks::InstallOpenGlEyeScissor(error)) {
+        std::string rollback_error;
+        if (!RemoveRenderWorldProbe(rollback_error)) {
+            error += "; render hook rollback also failed: " + rollback_error;
+        }
+        return false;
+    }
+    if (!hooks::InstallPointerHook(
+            particle_update_graphics_slot,
+            expected_particle_update_graphics,
+            reinterpret_cast<void*>(&HookedParticleUpdateGraphics),
+            g_particle_update_graphics_hook,
+            error)) {
+        std::string rollback_error;
+        if (!RemoveRenderWorldProbe(rollback_error)) {
+            error += "; render hook rollback also failed: " + rollback_error;
+        }
+        return false;
+    }
+    if (!hooks::InstallPointerHook(
+            particle_get_model_matrix_slot,
+            expected_particle_get_model_matrix,
+            reinterpret_cast<void*>(&HookedParticleGetModelMatrix),
+            g_particle_get_model_matrix_hook,
+            error)) {
         std::string rollback_error;
         if (!RemoveRenderWorldProbe(rollback_error)) {
             error += "; render hook rollback also failed: " + rollback_error;
@@ -1827,7 +2051,16 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         error = "A controlled stereo-matrix request is still active";
         return false;
     }
+    std::string particle_get_model_matrix_error;
+    const bool particle_get_model_matrix_removed = hooks::RemoveIatHook(
+        g_particle_get_model_matrix_hook, particle_get_model_matrix_error);
+    std::string particle_update_graphics_error;
+    const bool particle_update_graphics_removed = hooks::RemoveIatHook(
+        g_particle_update_graphics_hook, particle_update_graphics_error);
     std::string draw_all_error;
+    std::string spawn_yaw_error;
+    const bool spawn_yaw_removed =
+        hooks::RemoveRel32CallHook(g_spawn_yaw_hook, spawn_yaw_error);
     const bool draw_all_removed =
         hooks::RemoveRel32CallHook(g_draw_all_hook, draw_all_error);
     std::string visibility_error;
@@ -1835,16 +2068,47 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         hooks::RemoveRel32CallHook(g_visibility_hook, visibility_error);
     std::string render_error;
     const bool render_removed = hooks::RemoveRel32CallHook(g_hook, render_error);
-    if (!draw_all_removed || !visibility_removed || !render_removed) {
-        error = !draw_all_removed
+    if (!particle_get_model_matrix_removed || !particle_update_graphics_removed ||
+        !spawn_yaw_removed || !draw_all_removed || !visibility_removed ||
+        !render_removed) {
+        error = !particle_get_model_matrix_removed
+            ? "Could not remove the ParticleEmitter3D GetModelMatrix hook: " +
+                particle_get_model_matrix_error
+            : !particle_update_graphics_removed
+            ? "Could not remove the ParticleEmitter3D UpdateGraphics hook: " +
+                particle_update_graphics_error
+            : !spawn_yaw_removed
+            ? "Could not remove the spawn-yaw hook: " + spawn_yaw_error
+            : !draw_all_removed
             ? "Could not remove the GraphicsDrawer::DrawAll hook: " + draw_all_error
             : !visibility_removed
             ? "Could not remove the UpdateRenderList hook: " + visibility_error
             : "Could not remove the RenderWorld hook: " + render_error;
-        if (!visibility_removed && !draw_all_removed) {
+        if (!particle_update_graphics_removed &&
+            !particle_get_model_matrix_removed) {
+            error += "; UpdateGraphics hook removal also failed: " +
+                particle_update_graphics_error;
+        }
+        if (!spawn_yaw_removed &&
+            (!particle_get_model_matrix_removed ||
+             !particle_update_graphics_removed)) {
+            error += "; spawn-yaw hook removal also failed: " + spawn_yaw_error;
+        }
+        if (!draw_all_removed &&
+            (!particle_get_model_matrix_removed ||
+             !particle_update_graphics_removed || !spawn_yaw_removed)) {
+            error += "; DrawAll hook removal also failed: " + draw_all_error;
+        }
+        if (!visibility_removed &&
+            (!particle_get_model_matrix_removed ||
+             !particle_update_graphics_removed || !spawn_yaw_removed ||
+             !draw_all_removed)) {
             error += "; UpdateRenderList hook removal also failed: " + visibility_error;
         }
-        if (!render_removed && (!draw_all_removed || !visibility_removed)) {
+        if (!render_removed &&
+            (!particle_get_model_matrix_removed ||
+             !particle_update_graphics_removed || !spawn_yaw_removed ||
+             !draw_all_removed || !visibility_removed)) {
             error += "; RenderWorld hook removal also failed: " + render_error;
         }
         return false;

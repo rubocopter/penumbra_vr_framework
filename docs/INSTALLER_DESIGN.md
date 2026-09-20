@@ -1,130 +1,127 @@
 # Unified installer design
 
-## User-facing model
+Penumbra VR should install as one product while preserving the different
+integration model required by each game. The installer is not implemented yet;
+this document defines the durable contract it must consume.
 
-Penumbra VR is installed as one product. The installer discovers any supported
-Penumbra installations, identifies each executable by content rather than by
-filename, and deploys the integration required by that exact game build.
+## User-facing flow
 
 ```text
-discover installations
+discover installation
         |
-fingerprint each executable
+fingerprint executable
         |
-match an exact-build manifest
+match known game/build
         |
-plan backup + LAA + payload
+plan executable + payload + settings changes
         |
-apply transaction and verify
+backup -> apply -> verify
+        |
+record state for repair/uninstall
 ```
 
-Overture may receive a rebuilt source-based executable. Black Plague and
-Requiem require a bootstrap and an exact-build binary backend. This difference
-is internal; users still install, repair and remove one Penumbra VR product.
+A filename is only a hint. SHA-256/build manifests determine identity. Unknown
+hashes fail closed and are never patched or injected.
 
-## Detection rules
+## Transaction rules
 
-- A filename is a hint, never proof of identity. Overture and Black Plague may
-  both be named `Penumbra.exe`.
-- SHA-256 selects an exact-build manifest.
-- An unknown hash is reported as unsupported and is never patched or injected.
-- The installer records the original and installed hashes so it can distinguish
-  a clean game, a known Penumbra VR installation and an externally modified
-  executable.
-- Steam discovery is supplemented by explicit manual folder selection.
+Every write is planned before modification. A transaction records the detected
+game/build, original hashes, backups, intended payload and expected installed
+hashes.
 
-## Transaction model
+Apply must:
 
-Every installation change must be planned before the first write. A transaction
-contains the detected game/build, original file hashes, intended payload,
-backup locations and expected installed hashes.
+1. revalidate source/target identity immediately before writes;
+2. create and hash-verify backups;
+3. prepare transformed/replacement files without destroying the only original;
+4. verify prepared PE/payload state;
+5. replace files atomically where possible;
+6. write the installation record only after every step succeeds;
+7. roll back changed files on failure.
 
-The apply sequence is:
+Repair repeats validation against the recorded state. Uninstall restores verified
+originals and refuses to overwrite unexpected third-party/user modifications
+silently.
 
-1. Revalidate every source hash immediately before modification.
-2. Write backups and verify that their hashes match the originals.
-3. Prepare changed files in the same filesystem without replacing live files.
-4. Verify the prepared files, including their PE and LAA state where applicable.
-5. Replace files atomically where Windows permits it.
-6. Write the installation record only after every replacement succeeds.
-7. On any failure, restore all files already changed and report the exact step.
+## Executable policy
 
-Repair repeats the same validation against the recorded state. Uninstall uses
-the verified backups and refuses to overwrite unexpected user or third-party
-changes without an explicit recovery choice.
+Overture uses a Framework-owned rebuilt source executable. Black Plague and
+Requiem are exact-build binary integrations.
 
-## Large Address Aware policy
+The observed Black Plague/Requiem executables are 32-bit PE32 without Large
+Address Aware. `src/deployment/pe_large_address.*` implements the one-bit LAA
+transform and the exact canonical/transformed hashes are recorded in the build
+catalogue/manifests.
 
-The observed Overture, Black Plague and Requiem retail executables are 32-bit.
-The observed Black Plague and Requiem Steam binaries are PE32 images without
-`IMAGE_FILE_LARGE_ADDRESS_AWARE`; Overture VR Rework enables the equivalent
-linker option for its rebuilt executable.
+The production installer may apply that transform only when:
 
-The unified installer should enable LAA for every allowlisted 32-bit game build
-used by Penumbra VR. High-resolution stereo, depth buffers, MSAA and Enhanced
-visuals consume substantially more address space than the original renderer.
-LAA does not improve image quality by itself; it gives the process enough
-virtual address space for those resources on 64-bit Windows.
+- the canonical x86 build is allowlisted;
+- a verified backup exists;
+- only the `IMAGE_FILE_LARGE_ADDRESS_AWARE` bit changes;
+- the transformed hash matches the recorded variant;
+- rollback restores the exact canonical executable.
 
-The transformation must:
+The filesystem transaction that performs this safely is still open work.
 
-- accept only an allowlisted x86 PE32 executable;
-- preserve every byte except the `IMAGE_FILE_LARGE_ADDRESS_AWARE` bit;
-- be idempotent when the bit is already set;
-- operate on a prepared copy, never directly on the only installed executable;
-- record and verify both the original and transformed hashes;
-- restore the exact original executable during rollback.
+## Payload contract
 
-`src/deployment/pe_large_address.*` implements and unit-tests the pure in-memory
-PE inspection and one-bit transformation. The build catalogue and canonical
-Black Plague/Requiem manifests now also record the exact transformed LAA hashes,
-and metadata validation checks each transformed variant against its canonical
-build identity. Offline verification confirmed the transform changes only the
-PE characteristics byte required for `0x010F -> 0x012F` and reproduces the
-catalogued hashes.
+`assets/deployment/manifest.json` is the source of truth for installable payload
+ownership. It records logical IDs, source classes, destinations and restore
+policy so development deploys and the future installer do not maintain separate
+hand-written file lists.
 
-Deployment remains deliberately incomplete: the filesystem transaction that
-revalidates a known canonical hash, prepares the transformed copy, backs up the
-original, atomically replaces it and rolls it back has not been implemented.
+The current Black Plague development product definition includes:
 
-## Payload selection
+- ALUT bootstrap proxy;
+- Framework probe DLL;
+- `openvr_api.dll`;
+- shared OpenVR action/binding assets;
+- Rework hand diffuse used by the imported hand renderer;
+- Framework-owned Spanish localization;
+- generated `alsoft.ini` HRTF configuration ownership.
 
-Common payloads may include the OpenVR loader, action manifest, controller
-bindings, configuration schema and shared runtime. Each exact-build manifest
-selects one backend and its bootstrap method. A backend must never be chosen by
-probing arbitrary addresses in an unknown process.
+The normal-Steam Black Plague development installer consumes this contract and
+its bootstrap path has reached gameplay VR from Steam's ordinary **Play** button.
+That live result validates the bootstrap concept; later runtime changes still
+retain their own capability-specific evidence levels.
 
-Spanish localization is also a Framework-owned deployment payload for the two
-binary games. `assets/localization/manifest.json` records the exact repository
-file, SHA-256 and install-relative destination for each game:
+Black Plague deploy preserves/restores a pre-existing Spanish language file and
+creates the default HRTF config only when no prior `alsoft.ini` exists. Runtime
+settings remain authoritative for later HRTF changes.
+
+## Localization and OpenVR assets
+
+`assets/localization/manifest.json` owns the binary-game Spanish payloads and
+hashes:
 
 - Black Plague: `redist/config/Espanol.lang`;
 - Requiem: `redist/expansion01/config/Espanol_exp.lang`.
 
-The original attribution notice supplied with each translation is retained
-under `assets/localization/<game>/leeme.txt`. The installer must treat an
-existing destination language file like any other owned replacement: record and
-verify it before modification, back it up, verify the copied translation, and
-restore the original on uninstall/rollback. Overture's Spanish file remains in
-its source-product overlay at `products/overture/data/config/Espanol.lang`.
+Original attribution notices remain beside each payload. Overture keeps its
+Spanish file inside the source-product overlay.
 
-The action files under `assets/openvr` are now consumed by the framework's
-runtime input path: the shared action manifest/bindings are copied into the
-build output, real OpenVR action polling is implemented, and Black Plague's
-native intent bridge consumes the resulting logical actions. This does **not**
-mean they are installer-managed yet. Production deployment, registration,
-versioning and rollback of these files remain installer work.
+`assets/openvr` owns the shared action manifest and controller bindings. They are
+already runtime/build inputs; transactional production registration/versioning
+and rollback remain installer work.
 
-## Work still required
+## Recommended settings
 
-- live/headset-validate the current Black Plague `alut.dll` proxy bootstrap
-  before promoting it from the host-tested production candidate;
-- implement installation discovery and manual selection;
-- implement the transactional filesystem layer and installation record;
-- wire the exact canonical/transformed catalogue identities into transactional apply/repair/uninstall;
-- package per-build backends and shared runtime assets;
-- define the exact ownership/versioning rules for deployed OpenVR action files;
-- deploy the imported Black Plague/Requiem Spanish localization payloads through
-  the transactional install/repair/uninstall path;
-- test install, repair, upgrade and rollback on clean game copies;
-- design a recovery flow for missing backups and externally modified files.
+`assets/settings/recommended.json` contains maintainer-tested game/profile values
+for an optional installer preset. It intentionally excludes save state, key
+bindings and machine-specific display resolution.
+
+Recommended settings must be applied reversibly and must not silently overwrite
+personal calibration such as height, handedness, turn preference or UI scale in
+an existing profile.
+
+## Remaining installer work
+
+- Steam discovery plus manual folder selection;
+- transactional filesystem/install-state implementation;
+- known-build LAA apply/repair/uninstall path;
+- Overture/Requiem payload entries as their unified installer paths become
+  active;
+- production OpenVR action registration/versioning/rollback;
+- transactional localization and recommended-settings application;
+- license/attribution packaging;
+- clean install, upgrade, repair, external-modification and rollback tests.

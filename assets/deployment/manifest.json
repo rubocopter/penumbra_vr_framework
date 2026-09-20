@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "products": [
+    {
+      "game": "black_plague",
+      "installRoot": "redist",
+      "payloads": [
+        {
+          "id": "bootstrap_proxy",
+          "source": {
+            "kind": "build-output",
+            "path": "PenumbraVR.BlackPlague.Bootstrap.dll"
+          },
+          "destination": "alut.dll",
+          "restorePolicy": "backup-required"
+        },
+        {
+          "id": "probe",
+          "source": {
+            "kind": "build-output",
+            "path": "PenumbraVR.BlackPlague.Probe.dll"
+          },
+          "destination": "PenumbraVR.BlackPlague.Probe.dll",
+          "restorePolicy": "remove-if-owned"
+        },
+        {
+          "id": "openvr_loader",
+          "source": {
+            "kind": "build-output",
+            "path": "openvr_api.dll"
+          },
+          "destination": "openvr_api.dll",
+          "restorePolicy": "remove-if-owned"
+        },
+        {
+          "id": "openvr_actions",
+          "source": {
+            "kind": "repository-directory",
+            "path": "assets/openvr"
+          },
+          "destination": "vr",
+          "restorePolicy": "replace-managed-directory"
+        },
+        {
+          "id": "hand_texture",
+          "source": {
+            "kind": "repository-file",
+            "path": "products/overture/data/models/hud_objects/HAND_Low_C.jpg"
+          },
+          "destination": "assets/rework/HAND_Low_C.jpg",
+          "restorePolicy": "remove-if-owned"
+        },
+        {
+          "id": "spanish_localization",
+          "source": {
+            "kind": "repository-file",
+            "path": "assets/localization/black_plague/redist/config/Espanol.lang"
+          },
+          "destination": "config/Espanol.lang",
+          "restorePolicy": "backup-if-present"
+        },
+        {
+          "id": "openal_hrtf_config",
+          "source": {
+            "kind": "generated",
+            "generator": "openal-soft-hrtf"
+          },
+          "destination": "alsoft.ini",
+          "restorePolicy": "remove-if-created"
+        }
+      ]
+    }
+  ]
+}

@@ -31,4 +31,12 @@ struct StereoRenderPlan {
     std::uint64_t sequence,
     std::uint64_t last_submitted_sequence) noexcept;
 
+// UpdateRenderList may run less often than RenderWorld. When the presentation
+// sample owned by the last visibility update has already been submitted, the
+// render boundary must acquire the next compositor sample instead of falling
+// back to a non-VR world pass for that iteration.
+[[nodiscard]] bool ShouldRefreshPresentationSequence(
+    std::uint64_t sequence,
+    std::uint64_t last_submitted_sequence) noexcept;
+
 } // namespace penumbra_vr::runtime

@@ -32,6 +32,14 @@ enum class BlackPlagueProbeLifecycle : std::uint32_t {
         kBlackPlagueProbeRequiredCapabilities;
 }
 
+[[nodiscard]] constexpr bool BlackPlagueDeepHookBootstrapReady(
+    std::uint64_t completed_swaps) noexcept {
+    // HPL1 performs one SDL_GL_SwapBuffers call inside LowLevelGraphicsSDL::Init
+    // before the rest of GameInit completes. The next completed swap is reached
+    // from the normal Game::Run loop, after engine and user initialization.
+    return completed_swaps >= 2;
+}
+
 [[nodiscard]] constexpr BlackPlagueProbeLifecycle
 BlackPlagueProbeStateAfterTeardown(
     std::uint32_t capabilities,
@@ -43,7 +51,7 @@ BlackPlagueProbeStateAfterTeardown(
 
 // Bootstrap is the deliberate exception to dependency-first installation: the
 // lifecycle-gated SDL frame owner is installed first so the probe can observe a
-// completed native SwapBuffers before touching OpenGL/RenderWorld callsites.
+// completed normal-loop SwapBuffers before touching OpenGL/RenderWorld callsites.
 // Once that readiness gate passes, installation proceeds through the remaining
 // dependencies toward callback producers. A component is entered in the cleanup
 // ledger before its installer runs, so a failed installer can still leave

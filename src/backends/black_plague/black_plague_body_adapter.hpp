@@ -62,6 +62,7 @@ struct BlackPlagueShadowTelemetry {
 // was received without changing body or camera ownership.
 enum class BlackPlagueShadowRequestSource : std::uint8_t {
     disabled,
+    production,
     environment,
     mutex,
     physical_validation,
@@ -114,6 +115,7 @@ ConsumeBlackPlaguePhysicalValidationTelemetry() noexcept;
 
 enum class BlackPlagueRoomScaleRequestSource : std::uint8_t {
     disabled,
+    production,
     environment,
     mutex,
 };
@@ -136,8 +138,9 @@ struct BlackPlagueRoomScaleCameraSample {
     runtime::VrTrackingSampleIdentity tracking_identity{};
 };
 
-// Default-off active validation boundary. It is enabled only when the
-// collision-aware physical-displacement path is also explicitly requested.
+// Production room-scale is enabled when the exact collision-aware physical
+// displacement owner is available. The request source distinguishes ordinary
+// product use from explicit diagnostic validation requests.
 [[nodiscard]] BlackPlagueRoomScaleStatus
 ReadBlackPlagueRoomScaleStatus() noexcept;
 [[nodiscard]] BlackPlagueRoomScaleCameraSample

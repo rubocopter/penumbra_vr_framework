@@ -14,10 +14,14 @@ namespace {
 
 std::array<std::uint8_t, 0x300> g_player_storage{};
 std::array<std::uint8_t, 0x300> g_body_storage{};
+std::array<std::uint8_t, 0x20> g_death_helper_storage{};
 std::array<void*, 16> g_move_states{};
 void* g_test_player = g_player_storage.data();
 unsigned int g_native_update_calls = 0;
 bool g_stationary_native_update = false;
+bool g_replace_player_body_during_native_update = false;
+bool g_activate_death_during_native_update = false;
+void* g_replacement_player_body = nullptr;
 float g_collision_x_adjustment = -0.15F;
 float g_collision_seen_forward = 0.0F;
 float g_collision_seen_right = 0.0F;
@@ -67,6 +71,13 @@ void __fastcall FakeUpdate(void* body, void*, float) {
     auto* const current_position = reinterpret_cast<Vec3*>(
         static_cast<std::uint8_t*>(body) + kCharacterPositionOffset);
     ApplyQueuedPhysicalDisplacement(body, current_position);
+    if (g_replace_player_body_during_native_update) {
+        Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
+            g_replacement_player_body);
+    }
+    if (g_activate_death_during_native_update) {
+        Put(g_death_helper_storage.data(), 0, true);
+    }
     const Vec3 requested_position = Read<Vec3>(body, kCharacterPositionOffset);
     if (std::abs(requested_position.x - before.x) < 0.00001F &&
         std::abs(requested_position.z - before.z) < 0.00001F) {
@@ -157,6 +168,10 @@ int RunBodyCollisionProbeTest() {
         reinterpret_cast<void*>(0x5678));
     Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
         static_cast<void*>(g_body_storage.data()));
+    Put(g_player_storage.data(), 0x1DC, true);
+    Put(g_player_storage.data(), 0x28C,
+        static_cast<void*>(g_death_helper_storage.data()));
+    Put(g_death_helper_storage.data(), 0, false);
     Put(g_player_storage.data(), kPlayerGroundField268Offset,
         static_cast<std::int32_t>(7));
     Put(g_player_storage.data(), kPlayerGroundField26cOffset,
@@ -306,6 +321,19 @@ int RunBodyCollisionProbeTest() {
     const Vec3 opposite_partition = PhysicalAcceptedFromCombined(
         {0.02F, 0.0F, 0.0F}, {-0.02F, 0.0F, 0.0F}, {});
     if (!Near(opposite_partition.x, 0.02F)) return 78;
+
+    // Rework reconciles physical tracking only along the requested head-move
+    // direction, clamped to the requested distance. Native collision/step
+    // correction can move the character sideways or even away from the HMD
+    // request; that correction must not become accepted room-scale motion.
+    const Vec3 physical_only_collision = PhysicalAcceptedFromCombined(
+        {0.0F, 0.0F, -0.002F}, {}, {0.010F, 0.0F, 0.050F});
+    if (!Near(physical_only_collision.x, 0.0F) ||
+        !Near(physical_only_collision.z, 0.0F)) return 133;
+    const Vec3 physical_only_overshoot = PhysicalAcceptedFromCombined(
+        {0.002F, 0.0F, 0.0F}, {}, {0.050F, 0.0F, 0.010F});
+    if (!Near(physical_only_overshoot.x, 0.002F) ||
+        !Near(physical_only_overshoot.z, 0.0F)) return 134;
 
     // Queue order is not an ownership contract. A physical plan published
     // after input must retain and re-bound the already queued locomotion.
@@ -459,7 +487,8 @@ int RunBodyCollisionProbeTest() {
     shadow = ConsumeBlackPlagueShadowTelemetry();
     if (g_native_update_calls != calls_before + 1 || !shadow.latest.valid ||
         !Near(shadow.latest.physical_delta[0], 0.03F) ||
-        shadow.latest.physical_observation_available) return 23;
+        !shadow.latest.physical_observation_available ||
+        !shadow.latest.physical_reconciliation.valid) return 23;
 
     std::array<std::uint8_t, 0x300> replacement = g_body_storage;
     Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
@@ -484,10 +513,17 @@ int RunBodyCollisionProbeTest() {
     if (!RemoveBlackPlagueBodyAdapter(error)) return 29;
     SetEnvironmentVariableA("PVR_BP_RECONCILIATION_SHADOW", nullptr);
     if (!InstallBlackPlagueBodyAdapter(error)) return 30;
-    if (ReadBlackPlagueShadowStatus().enabled) return 33;
+    const auto production_shadow = ReadBlackPlagueShadowStatus();
+    const auto production_room_scale = ReadBlackPlagueRoomScaleStatus();
+    if (!production_shadow.enabled || production_shadow.source !=
+            BlackPlagueShadowRequestSource::production ||
+        !production_room_scale.enabled || production_room_scale.source !=
+            BlackPlagueRoomScaleRequestSource::production ||
+        ReadBlackPlaguePhysicalValidationStatus().enabled ||
+        !BlackPlagueDirectLocomotionAvailable(g_test_player)) return 33;
     PublishBlackPlagueShadowTracking(head, 0.0F, true);
     HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
-    if (ConsumeBlackPlagueShadowTelemetry().observed_ticks != 0 ||
+    if (ConsumeBlackPlagueShadowTelemetry().observed_ticks != 1 ||
         g_native_update_calls != calls_before + 7) return 31;
 
     // The body observer owns only cadence measurement. Crossing Rework's
@@ -562,10 +598,9 @@ int RunBodyCollisionProbeTest() {
     }
     CloseHandle(shadow_mutex);
 
-    // Physical validation is a separate, default-off mode. The body-update
-    // owner prepares the request from B0 before the one native update, the
-    // exact physical gateway consumes it in that same tick, and reconciliation
-    // runs once from the resulting B1 observation.
+    // Physical validation remains a separate, default-off diagnostic mode.
+    // Production already uses the same exact physical gateway; the mutex only
+    // turns on the additional validation source/status/telemetry.
     HANDLE physical_mutex = CreateMutexW(nullptr, FALSE,
         L"Local\\PenumbraVR.BlackPlague.PhysicalDisplacementValidation");
     if (physical_mutex == nullptr) return 51;
@@ -578,7 +613,7 @@ int RunBodyCollisionProbeTest() {
     if (!physical_status.enabled || physical_status.source !=
             BlackPlaguePhysicalValidationRequestSource::mutex ||
         !implied_shadow_status.enabled || implied_shadow_status.source !=
-            BlackPlagueShadowRequestSource::physical_validation) {
+            BlackPlagueShadowRequestSource::production) {
         CloseHandle(physical_mutex);
         return 53;
     }
@@ -676,9 +711,9 @@ int RunBodyCollisionProbeTest() {
     CloseHandle(physical_mutex);
     if (ReadBlackPlaguePhysicalValidationStatus().enabled) return 59;
 
-    // Active room-scale remains a separate opt-in. It must fail closed unless
-    // the already-proven physical request owner is requested at the same time,
-    // then publish only a fresh reconciled horizontal camera offset.
+    // Room-scale is a production feature when the exact physical request owner
+    // exists. The mutex remains a diagnostic source override and must not be a
+    // prerequisite for ordinary gameplay.
     HANDLE room_scale_only_mutex = CreateMutexW(nullptr, FALSE,
         L"Local\\PenumbraVR.BlackPlague.RoomScaleValidation");
     if (room_scale_only_mutex == nullptr) return 60;
@@ -686,7 +721,10 @@ int RunBodyCollisionProbeTest() {
         CloseHandle(room_scale_only_mutex);
         return 61;
     }
-    if (ReadBlackPlagueRoomScaleStatus().enabled) return 62;
+    const auto room_scale_only_status = ReadBlackPlagueRoomScaleStatus();
+    if (!room_scale_only_status.enabled || room_scale_only_status.source !=
+            BlackPlagueRoomScaleRequestSource::mutex ||
+        ReadBlackPlaguePhysicalValidationStatus().enabled) return 62;
     if (!RemoveBlackPlagueBodyAdapter(error)) return 63;
     CloseHandle(room_scale_only_mutex);
 
@@ -756,6 +794,58 @@ int RunBodyCollisionProbeTest() {
         return 77;
     PublishBlackPlagueShadowTracking(head, 0.0F, true);
     if (ReadBlackPlagueRoomScaleCameraSample().valid) return 69;
+
+    // Death can become active inside the native character update while the
+    // player and outer cCharacterBody pointers remain identical. Rework stops
+    // gameplay services on IsDead() at this boundary. BP must likewise avoid
+    // all post-update body/palm/nudge work before anything touches +0x23C.
+    Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
+        static_cast<void*>(replacement.data()));
+    Put(g_death_helper_storage.data(), 0, false);
+    g_stationary_native_update = true;
+    g_collision_x_adjustment = 0.0F;
+    g_activate_death_during_native_update = true;
+    static_cast<void>(ConsumeBlackPlagueBodyMotion());
+    static_cast<void>(ConsumeBodyCollisionTelemetry());
+    const auto death_calls_before = g_native_update_calls;
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    g_activate_death_during_native_update = false;
+    const auto death_collision = ConsumeBodyCollisionTelemetry();
+    const auto death_motion = ConsumeBlackPlagueBodyMotion();
+    if (g_native_update_calls != death_calls_before + 1 ||
+        !Read<bool>(g_death_helper_storage.data(), 0) ||
+        Read<void*>(g_player_storage.data(), kPlayerCharacterBodyOffset) !=
+            replacement.data() ||
+        death_collision.valid || death_motion.valid) {
+        return 137;
+    }
+    Put(g_death_helper_storage.data(), 0, false);
+
+    // Death/map teardown can replace the player's character body from inside
+    // the native update. A pre-update ownership check must not authorize the
+    // framework's post-update services against that now-stale body.
+    std::array<std::uint8_t,0x300> teardown_replacement{};
+    Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
+        static_cast<void*>(replacement.data()));
+    g_stationary_native_update = true;
+    g_collision_x_adjustment = 0.0F;
+    g_replace_player_body_during_native_update = true;
+    g_replacement_player_body = teardown_replacement.data();
+    static_cast<void>(ConsumeBlackPlagueBodyMotion());
+    static_cast<void>(ConsumeBodyCollisionTelemetry());
+    HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+    g_replace_player_body_during_native_update = false;
+    g_replacement_player_body = nullptr;
+    const auto teardown_collision = ConsumeBodyCollisionTelemetry();
+    const auto teardown_motion = ConsumeBlackPlagueBodyMotion();
+    if (teardown_collision.valid || teardown_motion.valid) {
+        std::cerr << "teardown collision_valid=" << teardown_collision.valid
+                  << " updates=" << teardown_collision.character_updates
+                  << " requests=" << teardown_collision.horizontal_collision_requests
+                  << " motion_valid=" << teardown_motion.valid << '\n';
+        return 96;
+    }
+
     if (!RemoveBlackPlagueBodyAdapter(error)) return 70;
     CloseHandle(room_scale_mutex);
     CloseHandle(physical_mutex);

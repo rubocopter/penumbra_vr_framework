@@ -1,20 +1,24 @@
 # Observed and supported builds
 
-This document distinguishes **observed executables**, **validated development targets** and **supported releases**. Recognition by the fingerprinting tool or successful use by a research backend does not by itself make a public build supported.
+Recognition, development validation and public support are separate states. A
+known hash may be usable for research or an exact-build backend without being a
+supported public release.
 
-## Observed executables
+## Known executables
 
-| Game/build | Architecture | Size | LAA state | SHA-256 | Status in this repository |
-|---|---:|---:|---|---|---|
-| Overture retail executable observed before VR deployment | x86 | 3,104,768 | Not recorded | `95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448` | Recognized retail baseline only |
-| Overture VR Rework v0.1.0 validated executable | x86 | 3,314,176 | Enabled at link time | `A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71` | Historical/proven Rework reference |
-| Framework-owned autonomous Overture Release executable | x86 | 3,302,912 | Enabled/validated by product build | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial functional SteamVR/headset/controller validation; not a supported public release |
-| Black Plague Steam executable used by the exact-build backend | x86 PE32 | 3,338,240 | Disabled (`Characteristics=0x010F`) | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted experimental backend/research target; stereo/head rotation and body-adapter boundaries have live/headset evidence, but gameplay support is incomplete |
-| Black Plague exact LAA transform of the row above | x86 PE32 | 3,338,240 | Enabled (`Characteristics=0x012F`) | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Recognized transformed variant of the same semantic build; host/offline verified only, not a supported release |
-| Requiem Steam executable observed during initial audit | x86 PE32 | 3,350,528 | Disabled (`Characteristics=0x010F`) | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Static research evidence only; not an active backend |
-| Requiem exact LAA transform of the row above | x86 PE32 | 3,350,528 | Enabled (`Characteristics=0x012F`) | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant of the same semantic build; host/offline verified only, not an active backend |
+| Game/build | Architecture | SHA-256 | Repository status |
+| --- | --- | --- | --- |
+| Overture retail baseline | x86 | `95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448` | Recognized retail baseline only |
+| Overture VR Rework v0.1.0 | x86, LAA | `A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71` | Proven historical/public Rework reference |
+| Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
+| Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
+| Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Recognized transformed variant; offline/host verified only |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Static research/configuration preparation only |
+| Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
-Evidence manifests currently exist for the canonical [Black Plague](../manifests/black_plague/FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF.json) and [Requiem](../manifests/requiem/B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2.json) builds. Their `executable.transformedVariants` entries record the exact LAA fingerprints above while preserving the canonical semantic build identity. A manifest or transformed-variant entry does not make that executable a supported release.
+Canonical Black Plague and Requiem evidence lives in the corresponding files
+under `manifests/`. Their transformed-variant entries preserve the canonical
+semantic build identity.
 
 ## Validation terminology
 
@@ -22,32 +26,45 @@ Use these states consistently:
 
 `planned` → `implemented` → `host-tested` → `live-tested` → `headset-validated` → `supported`
 
-Examples at the current checkpoint:
+At the current checkpoint:
 
-- the autonomous Overture Framework build has an initial functional `headset-validated` integration pass, but is not yet a supported release;
-- the Black Plague body/collision, narrow body-adapter, default-off reconciliation shadow and collision-aware physical X/Z request boundaries are `live-tested` on the allowlisted hash;
-- Black Plague native stereo/yaw tracking have prior headset validation;
-- Black Plague active positional HMD/body reconciliation has headset evidence for the technical render/stick/collision route (PIDs 13672 and 8092), and PID 22096 supplies positive headset evidence for the current presentation-sequence owner. PID 25484 adds focused headset evidence for continuous tracked Y, the current physical/button crouch path, direct locomotion and the rejected-direction short-X/Z comfort filter. The 2026-09-19 combined headset run additionally reported open-space room-scale, mirror-on and glowstick placement/toggle feedback as good and demonstrated direct hand pushing plus partial palm sliding, but it failed natural acquisition because nudge repelled the selected target, showed occasional palm resets/turn hand-frame discontinuity, bad thumb/little articulation, wall-contact vertical bounce and repeated mini-jumps when ordinary movable props blocked the character. PID 22004 identifies the wall bounce as repeated native `+0.05 m` step-up followed by gravity descent. The current host-tested physical-step adaptation now requires the Rework-equivalent static plus `normal.y >= 0.5` winner, while the dynamic-body path temporarily supplies Rework's VR movement signal and `0.2x` push force around the existing solver. Earlier BP provisional-hand behavior is the stronger headset reference for finger response: its independent skeletal channels and stronger free-hand curl amplitudes are restored, while the imported Rework rigid skin keeps its authored axes instead of inheriting the procedural hand's spread/thumb-yaw transforms; the dedicated held-tool pose remains separate. Target-specific nudge protection, yaw-epoch palm rebasing, restored BP free-hand articulation, the expanded physical-step gate and reduced dynamic-body character push require the next focused headset run;
-- Black Plague's native `VR Settings` Options-page integration is `host-tested` and exact-image verified on the allowlisted build. It reuses Options state 8 and the verified `cMainMenuWidget_Button` ABI, exposes the 17 backend-wired settings, and still requires a live/headset navigation and persistence pass before promotion;
-- Black Plague's installed normal-Steam bootstrap is `host-tested` on the allowlisted retail files: the original `Penumbra.exe` remains untouched, the known `alut.dll` is backed up transactionally, the proxy preserves all 20 named exports/ordinals as forwarders, and the deferred worker reuses the existing exact-build/window readiness gates before loading and starting the probe. A real Steam `Play`/headset launch is still required before this path can be called live-tested;
-- Black Plague HRTF startup and the mine-gallery OpenAL/EFX reverb/bus-trim adapter are `host-tested` on the allowlisted build; the reverb callsites/vtable/setters are exact-image verified, while live headset/audio-device validation and the separate distance/occlusion low-pass adaptation remain open;
-- Requiem remains research/planned work.
+- **Overture:** the original Rework v0.1.0 is the proven public product baseline.
+  The Framework-owned Overture product builds/deploys autonomously and has an
+  initial functional headset/controller regression pass, but the Framework has
+  no public release yet.
+- **Black Plague:** tracked stereo, camera/head tracking and multiple body/input
+  paths have real headset evidence. The normal-Steam bootstrap has also reached
+  gameplay VR from the standard Steam **Play** button. The current development
+  candidate contains later host-tested fixes for presentation pacing, hand asset
+  deployment, physical-motion reconciliation, map-start yaw, particle refresh,
+  native settings labels and interaction/body lifecycle edges; those fixes must
+  be revalidated before their evidence level is promoted.
+- **Requiem:** executable identity, LAA transform, localization and recommended
+  game settings are prepared; there is no active gameplay VR backend.
+
+Capability-level state is maintained in `TRILOGY_PARITY_PLAN.md` rather than
+expanded here into session chronology.
 
 ## Support rules
 
-- A binary backend installs hooks only for hashes explicitly allowlisted and validated for that evidence level.
-- Module-relative RVAs remain required even when an observed executable uses a preferred fixed image base.
-- Signatures must be derived from and tested against real binaries; placeholder byte sequences are not accepted.
-- A signature should be unique in the intended executable and accompanied by contextual verification.
-- Unknown hashes fail closed and generate diagnostics without installing or activating hooks.
-- Initialized-process validation must account for Framework-owned hooks already installed by an earlier owner; one callsite still has exactly one owner, and consumers bind through verified fan-out/status rather than re-patching it.
-- Known transformed executables are fingerprinted independently and map back to their canonical semantic build identity; all other modified hashes still fail closed.
-- The repository recognizes the exact host-verified LAA variants above, but installed executables must eventually be changed only through the known-build-gated backup-and-rollback transaction. Recognition is not permission to patch arbitrary executables.
+- Unknown executable hashes fail closed.
+- Binary signatures/RVAs/calling conventions are exact-build evidence, never a
+  generic HPL contract.
+- Module-relative addresses remain required even when an image uses its preferred
+  base.
+- One native callsite has one Framework owner; additional consumers use explicit
+  fan-out/status boundaries.
+- A compiled test or exact-image check does not imply live/headset support.
+- Evidence from one game, build or controller family does not automatically
+  transfer to another.
+- LAA transformation is permitted only for the recorded canonical build and
+  ultimately belongs inside the transactional installer with verified backup and
+  rollback.
 
-To inspect a candidate executable without modifying it:
+Inspect a candidate executable without modifying it with:
 
 ```powershell
 .\tools\Get-PenumbraBuildInfo.ps1 "C:\path\to\Penumbra.exe"
 ```
 
-Use `-AsJson` when attaching the result to a research note or issue.
+Use `-AsJson` when the result needs to be attached to an issue or research note.

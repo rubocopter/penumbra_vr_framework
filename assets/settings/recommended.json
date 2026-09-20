@@ -1,0 +1,155 @@
+{
+  "schemaVersion": 1,
+  "profile": "maintainer-recommended",
+  "description": "Versioned reference for the maintainer-tested Penumbra VR settings. Only intentional player-facing configuration is recorded; save state, key bindings, map state, resolution and other machine-specific values are excluded.",
+  "games": [
+    {
+      "game": "overture",
+      "status": "playable-vr",
+      "gameConfig": {
+        "Game": {
+          "LanguageFile": "Espanol.lang",
+          "RenderToMonitor": false
+        },
+        "Graphics": {
+          "NoiseFilter": false,
+          "Bloom": true,
+          "MotionBlur": false,
+          "DepthOfField": false,
+          "TextureSizeLevel": 0,
+          "TextureAnisotropy": 16.0,
+          "FSAA": 0,
+          "PostEffects": false,
+          "ShaderQuality": 3,
+          "LimitFPS": false,
+          "Shadows": 0,
+          "Refractions": false
+        },
+        "Screen": {
+          "Vsync": false
+        },
+        "Sound": {
+          "DeviceName": "OpenAL Soft",
+          "UseEnvironmentalAudio": true
+        },
+        "Physics": {
+          "UpdatesPerSec": 60.0
+        }
+      },
+      "vr": {
+        "SettingsVersion": 1,
+        "MoveSpeed": 1.0,
+        "MoveDeadZone": 0.15,
+        "HeightOffset": 0.0,
+        "TurnMode": "Smooth",
+        "SnapTurnAngle": 90.0,
+        "SmoothTurnSpeed": 90.0,
+        "TurnDeadZone": 0.20,
+        "UIDistance": 2.0,
+        "UIScale": 2.0,
+        "CrouchMode": "Hybrid",
+        "PhysicalCrouchDepth": 0.25,
+        "SubtitleScale": 1.55,
+        "Handedness": "Right",
+        "PlayMode": "Standing",
+        "PlayerHeight": 1.730447,
+        "RenderScale": 1.0,
+        "EnhancedVisuals": true,
+        "HRTF": "On"
+      }
+    },
+    {
+      "game": "black_plague",
+      "status": "framework-vr-in-progress",
+      "gameConfig": {
+        "Game": {
+          "LanguageFile": "Espanol.lang"
+        },
+        "Graphics": {
+          "NoiseFilter": false,
+          "Bloom": true,
+          "MotionBlur": false,
+          "DepthOfField": false,
+          "Refractions": true,
+          "TextureSizeLevel": 0,
+          "TextureAnisotropy": 16.0,
+          "FSAA": 0,
+          "PostEffects": true,
+          "ShaderQuality": 3,
+          "LimitFPS": false,
+          "Shadows": 0
+        },
+        "Screen": {
+          "Vsync": false
+        },
+        "Sound": {
+          "UseSoundHardware": false,
+          "UseEnvironmentalAudio": true,
+          "UseThreading": true
+        },
+        "Physics": {
+          "UpdatesPerSec": 60.0
+        }
+      },
+      "vr": {
+        "SettingsVersion": 1,
+        "MonitorMirror": true,
+        "Handedness": "Right",
+        "PlayMode": "Standing",
+        "PlayerHeight": 1.70,
+        "MoveSpeed": 0.85,
+        "MoveDeadZone": 0.15,
+        "HeightOffset": 0.0,
+        "TurnMode": "Snap",
+        "SnapTurnAngle": 45.0,
+        "SmoothTurnSpeed": 90.0,
+        "TurnDeadZone": 0.20,
+        "UiDistance": 1.75,
+        "UiScale": 1.0,
+        "RenderScale": 1.0,
+        "EnhancedVisuals": false,
+        "CrouchMode": "Hybrid",
+        "PhysicalCrouchDepth": 0.25,
+        "SubtitleScale": 1.35,
+        "HRTF": "Auto"
+      },
+      "vrProvenance": "Values explicitly present in the Framework profile are combined with normalized shared defaults for keys that are currently omitted from settings.ini."
+    },
+    {
+      "game": "requiem",
+      "status": "configuration-ready-no-vr-backend",
+      "gameConfig": {
+        "Game": {
+          "LanguageFile": "Espanol_exp.lang"
+        },
+        "Graphics": {
+          "NoiseFilter": false,
+          "Bloom": true,
+          "MotionBlur": false,
+          "DepthOfField": false,
+          "Refractions": true,
+          "TextureSizeLevel": 0,
+          "TextureAnisotropy": 16.0,
+          "FSAA": 0,
+          "PostEffects": true,
+          "ShaderQuality": 3,
+          "LimitFPS": false,
+          "Shadows": 0
+        },
+        "Screen": {
+          "Vsync": false
+        },
+        "Sound": {
+          "UseSoundHardware": false,
+          "UseEnvironmentalAudio": true,
+          "UseThreading": true
+        },
+        "Physics": {
+          "UpdatesPerSec": 60.0
+        }
+      },
+      "vr": null,
+      "vrProvenance": "No Requiem VR recommendation is declared until a functional backend consumes and validates the shared settings schema."
+    }
+  ]
+}

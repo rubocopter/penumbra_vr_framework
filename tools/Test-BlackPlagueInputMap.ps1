@@ -6,6 +6,7 @@ $inputRoot = Split-Path -Parent $PSScriptRoot
 $inputSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/native_input_bridge.cpp') -Raw
 $bodyAdapterSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/black_plague_body_adapter.cpp') -Raw
 $contactSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/hand_contact_probe.cpp') -Raw
+$spatialSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/spatial_interaction.cpp') -Raw
 $vrMenuSource = Get-Content -LiteralPath (Join-Path $inputRoot 'src/backends/black_plague/native_vr_settings_menu.cpp') -Raw
 $inputImage = [System.IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $ImagePath).Path)
 if ($inputImage.Length -lt 0x27F7BC) { throw 'Capture is too short for the mapped virtual image.' }
@@ -246,13 +247,39 @@ $spatialSlots = @{
     0x27D0E4 = 0xA9FD0; 0x27D13C = 0xAD6C0
     0x27CF74 = 0xAA690; 0x27CF84 = 0xAA030; 0x27CFCC = 0xAAC80; 0x27CFD0 = 0xAAED0
     0x292C3C = 0x19C2A0; 0x292C40 = 0x19C6D0; 0x292C44 = 0x19C2C0; 0x292C48 = 0x19C720
-    0x292C5C = 0x19C360; 0x292C64 = 0x19C380; 0x292C84 = 0x19C9E0; 0x292C90 = 0x19C3D0; 0x292CC4 = 0x19C590
+    0x292C5C = 0x19C360; 0x292C64 = 0x19C380; 0x292C84 = 0x19C9E0; 0x292C90 = 0x19C3D0
+    0x292C94 = 0x19C3F0; 0x292C9C = 0x19C450; 0x292CC4 = 0x19C590
 }
 foreach ($spatialSlot in $spatialSlots.GetEnumerator()) {
     if ([BitConverter]::ToUInt32($inputImage, $spatialSlot.Key) -ne (0x400000 + $spatialSlot.Value)) {
         throw ('Spatial vtable mismatch at RVA 0x{0:X}' -f $spatialSlot.Key)
     }
 }
+$spatialConstants = @{
+    kEntityBodiesBeginOffset = 0x14C
+    kEntityBodiesEndOffset = 0x150
+    kJointParentBodyOffset = 0x2C
+    kJointChildBodyOffset = 0x30
+}
+foreach ($spatialConstant in $spatialConstants.GetEnumerator()) {
+    $pattern = '\b{0}\s*=\s*0x([0-9A-Fa-f]+)\s*;' -f
+        [regex]::Escape($spatialConstant.Key)
+    $sourceConstant = [regex]::Match($spatialSource, $pattern)
+    if (-not $sourceConstant.Success -or
+        [Convert]::ToInt32($sourceConstant.Groups[1].Value, 16) -ne
+            $spatialConstant.Value) {
+        throw ('Spatial source constant mismatch: {0}' -f $spatialConstant.Key)
+    }
+}
+# iGameEntity::mvBodies is an exact-build std::vector<void*> at +14C/+150.
+# This native loop computes (end-begin)/4 and indexes the begin pointer.
+Assert-Bytes 0x2AAA7 @(0x8B,0xBE,0x4C,0x01,0,0,0x33,0xD2,0x90,0x85,0xFF,0x74,0x2E,
+    0x8B,0x86,0x50,0x01,0,0,0x2B,0xC7,0xC1,0xF8,0x02,0x3B,0xD0,0x73,0x1F,
+    0x8B,0x86,0x4C,0x01,0,0)
+# iPhysicsJointNewton's teardown reads child at +30 first and parent at +2C as
+# the fallback, pinning the ownership fields consumed by ReworkMoveJoint.
+Assert-Bytes 0x19EE43 @(0x8B,0x46,0x30,0x85,0xC0,0xC7,0x06,0x78,0x2E,0x69,0,
+    0x75,0x07,0x8B,0x46,0x2C,0x85,0xC0,0x74,0x17)
 Assert-Bytes 0xCA120 @(0x56,0x8B,0x74,0x24,0x08,0x57,0x8B,0xC1)
 Assert-Bytes 0x9BD31 @(0x8B,0x8E,0x90,0x02,0,0,0x8A,0x41,0x04)
 Assert-Bytes 0x9BE55 @(0x8B,0x8E,0x9C,0x02,0,0,0x80,0x39,0)
@@ -274,7 +301,7 @@ Assert-Bytes 0xD4952 @(0x8A,0x86,0xC8,0x03,0,0) # character-aware world query
 Assert-Bytes 0xD4E0E @(0x8A,0x90,0xC8,0x03,0,0) # character body ray filter
 Assert-Bytes 0x19D2D0 @(0x8A,0x90,0xC8,0x03,0,0) # Newton contact: body 2 vs character 1
 Assert-Bytes 0x19D2E4 @(0x8A,0x91,0xC8,0x03,0,0) # Newton contact: body 1 vs character 2
-Write-Output 'Verified 18 spatial/HUD/physics method slots, Grab/Move state ownership, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
+Write-Output 'Verified 20 spatial/HUD/physics method slots, Grab/Move state ownership, exact entity-body/joint ownership fields, HUD matrix and light calls, string comparison call, state ordering, SetMatrix/GetJointNum entries, local contact stores and CollideCharacter field consumers.'
 
 # Pin the exact-build inventory-item identity before Black Plague consumes the
 # shared magnetic-pickup policy. The Item loader constructs cGameItem through

@@ -14,6 +14,7 @@ namespace {
 int main() {
     using penumbra_vr::runtime::IsFreshPresentationSequence;
     using penumbra_vr::runtime::PlanStereoWorldRendering;
+    using penumbra_vr::runtime::ShouldRefreshPresentationSequence;
 
     if (IsFreshPresentationSequence(0, 0) ||
         !IsFreshPresentationSequence(1, 0) ||
@@ -22,6 +23,14 @@ int main() {
         !IsFreshPresentationSequence(6, 5)) {
         std::cerr << "Presentation sequence single-consumption policy failed\n";
         return 5;
+    }
+    if (ShouldRefreshPresentationSequence(0, 0) ||
+        ShouldRefreshPresentationSequence(1, 0) ||
+        !ShouldRefreshPresentationSequence(1, 1) ||
+        !ShouldRefreshPresentationSequence(4, 5) ||
+        ShouldRefreshPresentationSequence(6, 5)) {
+        std::cerr << "Presentation sequence refresh policy failed\n";
+        return 6;
     }
 
     constexpr float kFrameTime = 1.0F / 60.0F;

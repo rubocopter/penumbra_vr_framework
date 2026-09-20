@@ -76,9 +76,13 @@ std::atomic<FakeMode> g_mode{FakeMode::clear};
 std::atomic<std::uint32_t> g_create_count{0};
 std::atomic<std::uint32_t> g_destroy_count{0};
 std::uint8_t* g_fake_image = nullptr;
-std::uint8_t* g_fake_palm_shape = nullptr;
+std::array<std::uint8_t*, 4> g_fake_palm_shapes{};
+std::size_t g_fake_palm_shape_count = 0;
+std::array<Vec3, 4> g_created_sizes{};
+std::array<Matrix, 4> g_created_transforms{};
 Matrix g_last_create_transform{};
 bool g_last_create_transform_valid = false;
+void* g_last_query_shape = nullptr;
 void* g_last_skip_body = nullptr;
 void* g_fake_collision_body = nullptr;
 bool g_last_skip_static = false;
@@ -108,6 +112,7 @@ bool __fastcall FakeCheckShapeWorldCollision(
     g_last_is_character = is_character;
     g_last_collide_character = collide_character;
     g_last_debug = debug;
+    g_last_query_shape = shape;
     const FakeMode mode = g_mode.load(std::memory_order_relaxed);
     if (mode == FakeMode::clear) return false;
 
@@ -139,44 +144,57 @@ void* __fastcall FakeCreateBoxShape(
     void*,
     const Vec3* size,
     Matrix* transform) {
+    const auto create_index = g_create_count.load(std::memory_order_relaxed);
     if (world == nullptr || size == nullptr || transform == nullptr ||
-        g_fake_image == nullptr || g_fake_palm_shape == nullptr) {
+        g_fake_image == nullptr || create_index >= g_fake_palm_shape_count) {
         return nullptr;
     }
+    auto* const fake_shape = g_fake_palm_shapes[create_index];
+    if (fake_shape == nullptr) return nullptr;
+    g_created_sizes[create_index] = *size;
+    g_created_transforms[create_index] = *transform;
     g_last_create_transform = *transform;
     g_last_create_transform_valid = true;
     ++g_create_count;
-    std::memset(g_fake_palm_shape, 0, 0x100);
-    *reinterpret_cast<void**>(g_fake_palm_shape) =
+    std::memset(fake_shape, 0, 0x100);
+    *reinterpret_cast<void**>(fake_shape) =
         g_fake_image + kCollideShapeNewtonVtable;
-    std::memcpy(g_fake_palm_shape + 0x04, &size->x, sizeof(float));
-    std::memcpy(g_fake_palm_shape + 0x08, &size->y, sizeof(float));
-    std::memcpy(g_fake_palm_shape + 0x0C, &size->z, sizeof(float));
-    *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeTypeOffset) = 1;
+    std::memcpy(fake_shape + 0x04, &size->x, sizeof(float));
+    std::memcpy(fake_shape + 0x08, &size->y, sizeof(float));
+    std::memcpy(fake_shape + 0x0C, &size->z, sizeof(float));
+    *reinterpret_cast<std::int32_t*>(fake_shape + kShapeTypeOffset) = 1;
     // HPL1 CreateBoxShape returns a standalone shape with no body users.
-    *reinterpret_cast<std::int32_t*>(g_fake_palm_shape + kShapeUserCountOffset) = 0;
-    *reinterpret_cast<void**>(g_fake_palm_shape + kShapeWorldOffset) = world;
-    return g_fake_palm_shape;
+    *reinterpret_cast<std::int32_t*>(fake_shape + kShapeUserCountOffset) = 0;
+    *reinterpret_cast<void**>(fake_shape + kShapeWorldOffset) = world;
+    return fake_shape;
 }
 
 void __fastcall FakeDestroyShape(void*, void*, void* shape) {
-    if (shape == g_fake_palm_shape) ++g_destroy_count;
+    for (std::size_t index = 0; index < g_fake_palm_shape_count; ++index) {
+        if (shape == g_fake_palm_shapes[index]) {
+            ++g_destroy_count;
+            return;
+        }
+    }
 }
 
 bool NearlyEqual(float left, float right) {
     return std::fabs(left - right) < 1.0e-6F;
 }
 
-bool MatchesExpectedPalmTransform() {
-    if (!g_last_create_transform_valid) return false;
+bool MatchesExpectedPalmTransform(const Matrix& actual) {
     const auto expected = runtime::rework_hand_profile::CollisionLocalPose();
     for (std::size_t index = 0; index < expected.values.size(); ++index) {
-        if (!NearlyEqual(g_last_create_transform.values[index],
-                expected.values[index])) {
+        if (!NearlyEqual(actual.values[index], expected.values[index])) {
             return false;
         }
     }
     return true;
+}
+
+bool MatchesExpectedPalmTransform() {
+    return g_last_create_transform_valid &&
+        MatchesExpectedPalmTransform(g_last_create_transform);
 }
 
 struct Fixture {
@@ -241,11 +259,17 @@ struct Fixture {
             &position, sizeof(position));
 
         g_fake_image = image;
-        g_fake_palm_shape = palm_shape.data();
+        g_fake_palm_shape_count = palm_shapes.size();
+        for (std::size_t index = 0; index < palm_shapes.size(); ++index) {
+            g_fake_palm_shapes[index] = palm_shapes[index].data();
+        }
+        g_created_sizes = {};
+        g_created_transforms = {};
         g_create_count.store(0, std::memory_order_relaxed);
         g_destroy_count.store(0, std::memory_order_relaxed);
         g_last_create_transform = {};
         g_last_create_transform_valid = false;
+        g_last_query_shape = nullptr;
         g_last_skip_body = nullptr;
         g_last_skip_static = true;
         g_last_is_character = true;
@@ -254,7 +278,8 @@ struct Fixture {
     }
 
     ~Fixture() {
-        g_fake_palm_shape = nullptr;
+        g_fake_palm_shapes = {};
+        g_fake_palm_shape_count = 0;
         g_fake_image = nullptr;
         if (image != nullptr) VirtualFree(image, 0, MEM_RELEASE);
     }
@@ -264,7 +289,7 @@ struct Fixture {
     std::vector<std::uint8_t> world2 = std::vector<std::uint8_t>(0x100);
     std::vector<std::uint8_t> physics_body = std::vector<std::uint8_t>(0x400);
     std::vector<std::uint8_t> shape = std::vector<std::uint8_t>(0x100);
-    std::vector<std::uint8_t> palm_shape = std::vector<std::uint8_t>(0x100);
+    std::array<std::array<std::uint8_t, 0x100>, 4> palm_shapes{};
     std::vector<std::uint8_t> character = std::vector<std::uint8_t>(0x300);
 };
 
@@ -424,7 +449,7 @@ int main() {
         return 1;
     }
 
-    SetEnvironmentVariableA("PVR_BP_PALM_COLLISION_VALIDATION", "1");
+    SetEnvironmentVariableA("PVR_BP_PALM_COLLISION_VALIDATION", nullptr);
     g_mode.store(FakeMode::clear, std::memory_order_relaxed);
     runtime::VrMatrix44 left_raw{};
     left_raw.values[0] = left_raw.values[5] =
@@ -449,12 +474,12 @@ int main() {
     auto gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
     if (!bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
         gameplay.enabled == false ||
-        gameplay.source != bp::GameplayPalmResolverRequestSource::environment ||
+        gameplay.source != bp::GameplayPalmResolverRequestSource::production ||
         gameplay.samples != 1 || gameplay.published_poses != 1 ||
         gameplay.queries < 2 || gameplay.contacts != 0 ||
         gameplay.held_body_skips != 1 || gameplay.query_failures != 0 ||
-        gameplay.shape_creates != 1 || gameplay.shape_destroys != 0 ||
-        !MatchesExpectedPalmTransform() ||
+        gameplay.shape_creates != 2 || gameplay.shape_destroys != 0 ||
+        !MatchesExpectedPalmTransform(g_created_transforms[2]) ||
         g_last_skip_body != held_body || g_last_skip_static ||
         g_last_is_character || g_last_collide_character || g_last_debug ||
         !NearlyEqual(gameplay_resolved.values[3], left_raw.values[3])) {
@@ -473,7 +498,19 @@ int main() {
         !NearlyEqual(overlap.hits[0].contact_sum[1], 7.0F) ||
         !NearlyEqual(overlap.hits[0].contact_sum[2], 9.0F) ||
         g_last_skip_body != held_body || g_last_skip_static ||
-        g_last_is_character || g_last_collide_character || g_last_debug) {
+        g_last_is_character || g_last_collide_character || g_last_debug ||
+        g_create_count.load(std::memory_order_relaxed) != 4 ||
+        g_last_query_shape != replacement_fixture.palm_shapes[3].data() ||
+        !NearlyEqual(g_created_sizes[3].x, 0.34F) ||
+        !NearlyEqual(g_created_sizes[3].y, 0.17F) ||
+        !NearlyEqual(g_created_sizes[3].z, 0.24F) ||
+        !NearlyEqual(g_created_transforms[3].values[0], 1.0F) ||
+        !NearlyEqual(g_created_transforms[3].values[5], 1.0F) ||
+        !NearlyEqual(g_created_transforms[3].values[10], 1.0F) ||
+        !NearlyEqual(g_created_transforms[3].values[15], 1.0F) ||
+        !NearlyEqual(g_created_transforms[3].values[3], 0.011F) ||
+        !NearlyEqual(g_created_transforms[3].values[7], 0.002F) ||
+        !NearlyEqual(g_created_transforms[3].values[11], -0.011F)) {
         std::cerr << "gameplay palm overlap query contract failed\n";
         return 37;
     }
@@ -520,8 +557,8 @@ int main() {
     gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
     if (!shutdown_ok || !shutdown_error.empty() ||
         bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
-        gameplay.enabled || gameplay.shape_destroys != 1 ||
-        g_destroy_count.load(std::memory_order_relaxed) != 3) {
+        gameplay.enabled || gameplay.shape_destroys != 2 ||
+        g_destroy_count.load(std::memory_order_relaxed) != 4) {
         std::cerr << "gameplay palm game-thread teardown failed: "
                   << shutdown_error << '\n';
         return 1;

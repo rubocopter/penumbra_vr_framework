@@ -4,6 +4,8 @@ A community-made PCVR rework that brings **Penumbra: Overture** to full room-sca
 
 > First stable — current release: **v0.1.0** (2 September 2026). You must own **Penumbra: Overture** on Steam; the original game is not included.
 
+This directory documents the stable Overture product baseline. For the current trilogy/framework state, see the root [README](../../README.md), [ROADMAP](../../ROADMAP.md), [trilogy parity plan](../../docs/TRILOGY_PARITY_PLAN.md), and [supported builds](../../docs/SUPPORTED_BUILDS.md).
+
 **[Download v0.1.0](https://github.com/rubocopter/penumbra_vr_rework/releases/tag/v0.1.0)** · [Controls and VR settings](docs/INPUT.md)
 
 ## Why try it?

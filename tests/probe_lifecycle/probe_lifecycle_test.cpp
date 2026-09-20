@@ -47,6 +47,16 @@ constexpr std::uint32_t AllCapabilities() noexcept {
                 BlackPlagueProbeCapability::render_world));
 }
 
+[[nodiscard]] bool TestGraphicsBootstrapReadiness() {
+    // HPL1 performs one SDL_GL_SwapBuffers call inside graphics Init. Deep
+    // OpenGL/native hooks must wait for the next completed swap, which is the
+    // first one reached from the normal Game::Run loop after GameInit returns.
+    return !penumbra_vr::BlackPlagueDeepHookBootstrapReady(0) &&
+        !penumbra_vr::BlackPlagueDeepHookBootstrapReady(1) &&
+        penumbra_vr::BlackPlagueDeepHookBootstrapReady(2) &&
+        penumbra_vr::BlackPlagueDeepHookBootstrapReady(3);
+}
+
 [[nodiscard]] bool TestEveryTeardownFailureCanRetry() {
     for (std::size_t failed_index = 0;
          failed_index < penumbra_vr::kBlackPlagueProbeTeardownOrder.size();
@@ -159,13 +169,17 @@ int main() {
         std::cerr << "probe callback/readiness lifecycle policy failed\n";
         return 1;
     }
+    if (!TestGraphicsBootstrapReadiness()) {
+        std::cerr << "probe deep-hook graphics bootstrap policy failed\n";
+        return 2;
+    }
     if (!TestEveryTeardownFailureCanRetry()) {
         std::cerr << "probe teardown retry ledger failed\n";
-        return 2;
+        return 3;
     }
     if (!TestEveryStartupInstallFailure()) {
         std::cerr << "probe startup install/rollback ledger failed\n";
-        return 3;
+        return 4;
     }
     std::cout << "probe partial lifecycle ledger passed\n";
     return 0;

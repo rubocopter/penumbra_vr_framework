@@ -11,6 +11,16 @@ inline constexpr float kCollisionSizeX = 0.190F;
 inline constexpr float kCollisionSizeY = 0.052F;
 inline constexpr float kCollisionSizeZ = 0.125F;
 
+// Rework keeps target acquisition on a separate, broader palm/finger volume.
+// Black Plague is the second consumer, so these demonstrated dimensions now
+// belong to shared interaction policy while each backend owns native shapes.
+inline constexpr float kInteractionSizeX = 0.34F;
+inline constexpr float kInteractionSizeY = 0.17F;
+inline constexpr float kInteractionSizeZ = 0.24F;
+inline constexpr float kInteractionOffsetX = 0.011F;
+inline constexpr float kInteractionOffsetY = 0.002F;
+inline constexpr float kInteractionOffsetZ = -0.011F;
+
 inline constexpr float kSweepStep = 0.020F;
 inline constexpr int kSlideIterations = 4;
 inline constexpr int kSweepRefineIterations = 7;

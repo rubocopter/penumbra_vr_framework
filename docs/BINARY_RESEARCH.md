@@ -51,3 +51,16 @@ An internal symbol can enter a build manifest only when its entry contains:
 7. status distinguishing static mapping from runtime hook validation
 
 Prefer stable semantic structure over long compiler-specific byte sequences. Absolute imported-function addresses must be wildcarded if included in a future cross-build signature.
+
+## Evidence retention
+
+Binary captures, dumps, disassemblies, screenshots and videos are working
+material, not project documentation. Keep them only while they answer an
+unresolved question or reproduce an active verifier workflow. Once a finding is
+encoded in code/tests/manifests and summarized in the durable state documents,
+delete the local evidence. Git history preserves implementation chronology; the
+repository tree should not become a media/archive store.
+
+The small initialized Black Plague image used by focused offline verifier
+scripts may remain local while those scripts still consume it. Its presence is
+never treated as versioned source or public support evidence.

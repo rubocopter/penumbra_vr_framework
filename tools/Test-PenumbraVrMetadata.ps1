@@ -9,6 +9,7 @@ $manifestRoot = Join-Path $repositoryRoot 'manifests'
 $openVrAssetRoot = Join-Path $repositoryRoot 'assets\openvr'
 $overtureOpenVrAssetRoot = Join-Path $openVrAssetRoot 'overture'
 $localizationAssetRoot = Join-Path $repositoryRoot 'assets\localization'
+$deploymentAssetRoot = Join-Path $repositoryRoot 'assets\deployment'
 
 function Read-JsonFile([string]$Path) {
     try {
@@ -379,6 +380,92 @@ foreach ($defaultBinding in $actionManifest.default_bindings) {
             }
         }
     }
+}
+
+$deploymentManifestPath = Join-Path $deploymentAssetRoot 'manifest.json'
+if (-not (Test-Path -LiteralPath $deploymentManifestPath -PathType Leaf)) {
+    throw "Deployment payload manifest is missing: $deploymentManifestPath"
+}
+$deploymentManifest = Read-JsonFile $deploymentManifestPath
+if ($deploymentManifest.schemaVersion -ne 1) {
+    throw "assets\deployment\manifest.json has unsupported schemaVersion '$($deploymentManifest.schemaVersion)'."
+}
+
+$blackPlagueDeployment = @($deploymentManifest.products | Where-Object { $_.game -eq 'black_plague' })
+if ($blackPlagueDeployment.Count -ne 1) {
+    throw 'Deployment payload metadata must contain exactly one Black Plague product entry.'
+}
+if ($blackPlagueDeployment[0].installRoot -cne 'redist') {
+    throw "Black Plague deployment root must be 'redist'."
+}
+$blackPlaguePayloadIds = @($blackPlagueDeployment[0].payloads | ForEach-Object { $_.id })
+if (($blackPlaguePayloadIds | Sort-Object -Unique).Count -ne $blackPlaguePayloadIds.Count) {
+    throw 'Black Plague deployment payload metadata contains duplicate payload IDs.'
+}
+$requiredBlackPlaguePayloadIds = @(
+    'bootstrap_proxy',
+    'probe',
+    'openvr_loader',
+    'openvr_actions',
+    'hand_texture',
+    'spanish_localization',
+    'openal_hrtf_config'
+)
+if (@(Compare-Object -ReferenceObject ($requiredBlackPlaguePayloadIds | Sort-Object) -DifferenceObject ($blackPlaguePayloadIds | Sort-Object)).Count -ne 0) {
+    throw 'Black Plague deployment payload metadata is incomplete or contains unexpected payload IDs.'
+}
+
+$expectedBlackPlagueDestinations = @{
+    bootstrap_proxy = 'alut.dll'
+    probe = 'PenumbraVR.BlackPlague.Probe.dll'
+    openvr_loader = 'openvr_api.dll'
+    openvr_actions = 'vr'
+    hand_texture = 'assets/rework/HAND_Low_C.jpg'
+    spanish_localization = 'config/Espanol.lang'
+    openal_hrtf_config = 'alsoft.ini'
+}
+foreach ($payload in @($blackPlagueDeployment[0].payloads)) {
+    if ($payload.destination -cne $expectedBlackPlagueDestinations[$payload.id]) {
+        throw "Black Plague deployment payload '$($payload.id)' has unexpected destination '$($payload.destination)'."
+    }
+    if ([System.IO.Path]::IsPathRooted([string]$payload.destination) -or
+        ([string]$payload.destination).Split('/') -contains '..') {
+        throw "Black Plague deployment payload '$($payload.id)' has unsafe destination '$($payload.destination)'."
+    }
+
+    $sourceKind = [string]$payload.source.kind
+    if ($sourceKind -eq 'repository-file' -or $sourceKind -eq 'repository-directory') {
+        if ([System.IO.Path]::IsPathRooted([string]$payload.source.path) -or
+            ([string]$payload.source.path).Split('/') -contains '..') {
+            throw "Black Plague deployment payload '$($payload.id)' has unsafe repository source '$($payload.source.path)'."
+        }
+        $sourcePath = Join-Path $repositoryRoot ([string]$payload.source.path -replace '/', '\')
+        $expectedPathType = if ($sourceKind -eq 'repository-directory') { 'Container' } else { 'Leaf' }
+        if (-not (Test-Path -LiteralPath $sourcePath -PathType $expectedPathType)) {
+            throw "Black Plague deployment payload '$($payload.id)' source is missing: $($payload.source.path)"
+        }
+    } elseif ($sourceKind -eq 'build-output') {
+        if ([System.IO.Path]::IsPathRooted([string]$payload.source.path) -or
+            ([string]$payload.source.path).Contains('/') -or
+            ([string]$payload.source.path).Contains('\')) {
+            throw "Black Plague build-output payload '$($payload.id)' must name one Release artifact."
+        }
+    } elseif ($sourceKind -ne 'generated') {
+        throw "Black Plague deployment payload '$($payload.id)' uses unknown source kind '$sourceKind'."
+    }
+}
+
+$spanishDeployment = @($blackPlagueDeployment[0].payloads | Where-Object { $_.id -eq 'spanish_localization' })[0]
+$blackPlagueLocalization = @($localizationEntries | Where-Object { $_.game -eq 'black_plague' })[0]
+if ($spanishDeployment.source.kind -ne 'repository-file' -or
+    $spanishDeployment.source.path -cne $blackPlagueLocalization.sourcePath -or
+    ('redist/' + $spanishDeployment.destination) -cne $blackPlagueLocalization.installPath) {
+    throw 'Black Plague deployment localization disagrees with assets\localization\manifest.json.'
+}
+
+$audioDeployment = @($blackPlagueDeployment[0].payloads | Where-Object { $_.id -eq 'openal_hrtf_config' })[0]
+if ($audioDeployment.source.kind -ne 'generated' -or $audioDeployment.source.generator -ne 'openal-soft-hrtf') {
+    throw 'Black Plague audio deployment must declare alsoft.ini as the generated OpenAL Soft HRTF configuration.'
 }
 
 Write-Host (

@@ -245,7 +245,7 @@ target_link_libraries(
         pvr_spatial_audio
         pvr_stereo_render_policy)
 target_link_libraries(pvr_black_plague_backend_probe PUBLIC pvr_vr_native_intents pvr_iat_hook)
-target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32)
+target_link_libraries(pvr_black_plague_backend_probe PRIVATE opengl32 shell32)
 pvr_enable_warnings(pvr_black_plague_backend_probe)
 
 target_link_libraries(pvr_sdl_frame_hook PUBLIC pvr_iat_hook)
@@ -380,6 +380,14 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook pvr_rel32_call_hook)
     pvr_enable_warnings(pvr_spatial_interaction_test)
     add_test(NAME spatial_interaction COMMAND pvr_spatial_interaction_test)
+
+    add_executable(pvr_black_plague_particle_stereo_refresh_test
+        tests/black_plague_render/particle_stereo_refresh_test.cpp)
+    target_include_directories(pvr_black_plague_particle_stereo_refresh_test PRIVATE
+        src/backends/black_plague)
+    pvr_enable_warnings(pvr_black_plague_particle_stereo_refresh_test)
+    add_test(NAME black_plague_particle_stereo_refresh
+        COMMAND pvr_black_plague_particle_stereo_refresh_test)
 
     add_executable(pvr_black_plague_audio_environment_test
         tests/black_plague_audio/audio_environment_policy_test.cpp)
@@ -524,6 +532,16 @@ if(BUILD_TESTING)
     add_test(
         NAME black_plague_presentation_timing
         COMMAND pvr_black_plague_presentation_timing_test)
+
+    add_executable(pvr_black_plague_spawn_yaw_rebase_test
+        tests/black_plague_tracking/spawn_yaw_rebase_test.cpp)
+    target_include_directories(
+        pvr_black_plague_spawn_yaw_rebase_test PRIVATE
+        src/backends/black_plague)
+    pvr_enable_warnings(pvr_black_plague_spawn_yaw_rebase_test)
+    add_test(
+        NAME black_plague_spawn_yaw_rebase
+        COMMAND pvr_black_plague_spawn_yaw_rebase_test)
 
     add_executable(pvr_vr_panel_policy_test
         tests/vr_panel_policy/vr_panel_policy_test.cpp

@@ -28,4 +28,11 @@ bool IsFreshPresentationSequence(
     return sequence != 0 && sequence > last_submitted_sequence;
 }
 
+bool ShouldRefreshPresentationSequence(
+    std::uint64_t sequence,
+    std::uint64_t last_submitted_sequence) noexcept {
+    return sequence != 0 &&
+        !IsFreshPresentationSequence(sequence, last_submitted_sequence);
+}
+
 } // namespace penumbra_vr::runtime

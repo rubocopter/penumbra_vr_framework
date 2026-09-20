@@ -62,7 +62,11 @@ constexpr std::uintptr_t kCheckShapeWorldCollision = 0xD4830;
 constexpr std::uintptr_t kGetLinearVelocity = 0x19C6D0;
 constexpr std::uintptr_t kGetAngularVelocity = 0x19C720;
 constexpr std::uintptr_t kAddImpulseAtPosition = 0x19C3D0;
+constexpr std::uintptr_t kSetBodyEnabled = 0x19C3F0;
+constexpr std::uintptr_t kSetBodyAutoDisable = 0x19C450;
 constexpr std::uintptr_t kGetBodyJoint = 0xCD240;
+constexpr std::uintptr_t kJointParentBodyOffset = 0x2C;
+constexpr std::uintptr_t kJointChildBodyOffset = 0x30;
 constexpr std::uintptr_t kPhysicsJointHingeNewtonVtable = 0x292EC8;
 constexpr std::uintptr_t kPhysicsJointSliderNewtonVtable = 0x292FB8;
 constexpr std::uintptr_t kHingeGetType = 0x156750;
@@ -80,6 +84,8 @@ constexpr std::uintptr_t kWorldBodyListOffset = 0x14;
 constexpr std::uintptr_t kBodyListPayloadOffset = 0x08;
 constexpr std::uintptr_t kEntityActiveOffset = 0x14;
 constexpr std::uintptr_t kEntityTypeOffset = 0xC0;
+constexpr std::uintptr_t kEntityBodiesBeginOffset = 0x14C;
+constexpr std::uintptr_t kEntityBodiesEndOffset = 0x150;
 constexpr std::uintptr_t kItemSubtypeOffset = 0x250;
 constexpr int kObjectEntityType = 1;
 constexpr int kItemEntityType = 5;
@@ -378,6 +384,24 @@ struct RankedRayCallback final {
         matrix.values[2]*delta[0] + matrix.values[6]*delta[1] + matrix.values[10]*delta[2]};
 }
 
+[[nodiscard]] bool InteractionContactInsideAcquisitionVolume(
+    const Matrix& interaction_pose,
+    const Vec& world_contact) noexcept {
+    if (!std::isfinite(world_contact[0]) || !std::isfinite(world_contact[1]) ||
+        !std::isfinite(world_contact[2])) return false;
+    const Vec local = InverseTransformPoint(interaction_pose, world_contact);
+    if (!std::isfinite(local[0]) || !std::isfinite(local[1]) ||
+        !std::isfinite(local[2])) return false;
+    using namespace runtime::vr_interaction_policy;
+    const float tolerance = kInteractionContactTolerance;
+    return std::abs(local[0] - kInteractionOffsetX) <=
+            kInteractionSizeX * 0.5F + tolerance &&
+        std::abs(local[1] - kInteractionOffsetY) <=
+            kInteractionSizeY * 0.5F + tolerance &&
+        std::abs(local[2] - kInteractionOffsetZ) <=
+            kInteractionSizeZ * 0.5F + tolerance;
+}
+
 bool Copy(const void* source, void* dest, std::size_t size) noexcept {
     if (!source) return false;
     __try { std::memcpy(dest,source,size); return true; }
@@ -403,20 +427,114 @@ bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + k
     if (mass>=5.0F) return 1.75F;
     return 1.35F;
 }
-[[nodiscard]] bool BindRecognizedMechanism(void* body, MoveHold& hold) noexcept {
-    if (!BodyMatches(body) ||
-        reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(body)!=1)
+[[nodiscard]] int NativeBodyJointCount(void* body) noexcept {
+    if (!BodyMatches(body)) return 0;
+    __try {
+        return reinterpret_cast<int(__thiscall*)(void*)>(g_image+0xCCF00)(body);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return 0;
+    }
+}
+[[nodiscard]] void* NativeBodyJoint(void* body, int index) noexcept {
+    if (!BodyMatches(body) || index < 0) return nullptr;
+    __try {
+        return reinterpret_cast<void*(__thiscall*)(void*,int)>(
+            g_image+kGetBodyJoint)(body,index);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return nullptr;
+    }
+}
+[[nodiscard]] void* ReworkMoveJoint(void* body) noexcept {
+    const int joint_count=NativeBodyJointCount(body);
+    if (joint_count<=0) return nullptr;
+    void* fallback=nullptr;
+    for (int index=0;index<joint_count;++index) {
+        void* const joint=NativeBodyJoint(body,index);
+        if (!joint) continue;
+        if (!fallback) fallback=joint;
+        if (Read<void*>(joint,kJointChildBodyOffset)==body) return joint;
+    }
+    for (int index=0;index<joint_count;++index) {
+        void* const link_joint=NativeBodyJoint(body,index);
+        if (!link_joint || Read<void*>(link_joint,kJointParentBodyOffset)!=body)
+            continue;
+        void* const child=Read<void*>(link_joint,kJointChildBodyOffset);
+        if (!BodyMatches(child)) continue;
+        const int child_joint_count=NativeBodyJointCount(child);
+        for (int child_index=0;child_index<child_joint_count;++child_index) {
+            void* const drive_joint=NativeBodyJoint(child,child_index);
+            if (drive_joint && drive_joint!=link_joint &&
+                Read<void*>(drive_joint,kJointChildBodyOffset)==child)
+                return drive_joint;
+        }
+    }
+    return fallback;
+}
+[[nodiscard]] bool BindNoJointObjectSlideAxis(void* body, MoveHold& hold) noexcept {
+    if (!BodyMatches(body) || NativeBodyJointCount(body)!=0) return false;
+    void* const entity=Read<void*>(body,kBodyUserDataOffset);
+    if (!entity || !Read<bool>(entity,kEntityActiveOffset) ||
+        Read<int>(entity,kEntityTypeOffset)!=kObjectEntityType) return false;
+
+    auto** const begin=Read<void**>(entity,kEntityBodiesBeginOffset);
+    auto** const end=Read<void**>(entity,kEntityBodiesEndOffset);
+    const auto begin_address=reinterpret_cast<std::uintptr_t>(begin);
+    const auto end_address=reinterpret_cast<std::uintptr_t>(end);
+    if (!begin || !end || end_address<=begin_address) return false;
+    const auto byte_count=end_address-begin_address;
+    if (byte_count%sizeof(void*)!=0) return false;
+    const std::size_t body_count=byte_count/sizeof(void*);
+    if (body_count<2 || body_count>256) return false;
+
+    Matrix drawer_pose{};
+    if (!Copy(static_cast<std::uint8_t*>(body)+0x34,&drawer_pose,sizeof(drawer_pose)))
         return false;
+    const Vec drawer_position{
+        drawer_pose.values[3],drawer_pose.values[7],drawer_pose.values[11]};
+    if (!FiniteVec(drawer_position)) return false;
+
+    for (std::size_t index=0;index<body_count;++index) {
+        void* candidate=nullptr;
+        if (!Copy(begin+index,&candidate,sizeof(candidate)) || candidate==body ||
+            !BodyMatches(candidate) ||
+            Read<void*>(candidate,kBodyUserDataOffset)!=entity) continue;
+        const float mass=Read<float>(candidate,0x434);
+        if (!std::isfinite(mass) || mass!=0.0F) continue;
+        Matrix frame_pose{};
+        if (!Copy(static_cast<std::uint8_t*>(candidate)+0x34,&frame_pose,sizeof(frame_pose)))
+            continue;
+        const Vec frame_position{
+            frame_pose.values[3],frame_pose.values[7],frame_pose.values[11]};
+        if (!FiniteVec(frame_position)) continue;
+        const Vec axis{
+            drawer_position[0]-frame_position[0],
+            drawer_position[1]-frame_position[1],
+            drawer_position[2]-frame_position[2]};
+        const float length=runtime::vr_mechanism_policy::Length(axis);
+        if (!std::isfinite(length) || length<=0.01F) continue;
+        hold.mode=MoveHold::Mode::slider;
+        hold.joint_pin={axis[0]/length,axis[1]/length,axis[2]/length};
+        hold.joint_pivot={};
+        return true;
+    }
+    return false;
+}
+[[nodiscard]] bool BindRecognizedMechanism(void* body, MoveHold& hold,
+    bool native_move_committed_object = false) noexcept {
+    if (!BodyMatches(body) || NativeBodyJointCount(body)<=0) return false;
     void* const entity=Read<void*>(body,kBodyUserDataOffset);
     if (!entity || !Read<bool>(entity,kEntityActiveOffset)) return false;
     const int entity_type=Read<int>(entity,kEntityTypeOffset);
     const bool is_lever=entity_type==kLeverEntityType;
     const bool is_swing_door=entity_type==kSwingDoorEntityType;
-    if (!is_lever && !is_swing_door) return false;
-    void* joint=nullptr;
-    __try {
-        joint=reinterpret_cast<void*(__thiscall*)(void*,int)>(g_image+kGetBodyJoint)(body,0);
-    } __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+    const bool is_committed_object=
+        native_move_committed_object && entity_type==kObjectEntityType;
+    // Rework's Move state drives recognized joints on GameObject too. Keep
+    // that consumption behind an already-committed native Move transition so
+    // Object locks/scripts remain game-owned; direct nudge continues to call
+    // this helper without the opt-in and therefore stays fail-closed.
+    if (!is_lever && !is_swing_door && !is_committed_object) return false;
+    void* const joint=ReworkMoveJoint(body);
     if (!joint) return false;
     void* const vtable=Read<void*>(joint,0);
     int expected_type=0;
@@ -465,12 +583,12 @@ bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + k
 
     plan.velocity=hand_velocity;
     if (joint_count>0) {
-        // The exact Black Plague evidence currently proves only the same
-        // one-joint hinge/slider families already consumed by Move. Unknown
-        // jointed Objects fail closed instead of receiving an unconstrained
-        // palm impulse.
+        // Rework nudges recognized Object hinge/slider mechanisms directly;
+        // native Move commitment is only required when VR takes over the
+        // sustained Move servo. Keep unknown joint families fail-closed.
         MoveHold mechanism{};
-        if (!BindRecognizedMechanism(body,mechanism)) return false;
+        if (!BindRecognizedMechanism(
+                body,mechanism,entity_type==kObjectEntityType)) return false;
         const float pin_length=runtime::vr_mechanism_policy::Length(mechanism.joint_pin);
         if (!std::isfinite(pin_length) || pin_length<=1.0e-6F) return false;
         const Vec pin{
@@ -503,12 +621,20 @@ bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + k
                 tangent[2]*tangent_speed};
         } else return false;
 
-        // Nudge is only a proximity fallback. Keep SwingDoor contact at the
-        // conservative locked-door cap; the native Move transition remains the
-        // authoritative path for actually opening an unlocked door.
-        plan.push_fraction=0.30F;
-        plan.maximum_push_speed=0.30F;
-        plan.maximum_delta_velocity=0.10F;
+        if (entity_type==kObjectEntityType) {
+            // Rework's constrained mechanism profile. BP still lacks a pinned
+            // generic Object lock/breakable field, so only the already-proven
+            // hinge/slider family reaches this branch.
+            plan.push_fraction=0.80F;
+            plan.maximum_push_speed=1.35F;
+            plan.maximum_delta_velocity=0.36F;
+        } else {
+            // Lock state is not verifier-pinned for BP SwingDoor yet. Retain
+            // the conservative door cap until that game-owned field is mapped.
+            plan.push_fraction=0.30F;
+            plan.maximum_push_speed=0.30F;
+            plan.maximum_delta_velocity=0.10F;
+        }
         return runtime::vr_mechanism_policy::Length(plan.velocity)>=0.02F;
     }
 
@@ -1279,8 +1405,9 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
     if (joint_count<0) return;
     MoveHold hold;
     if (joint_count==0) {
-        if (Read<void*>(body,0x330)!=nullptr || Read<void*>(body,0x10)!=nullptr) return;
-    } else if (!BindRecognizedMechanism(body,hold)) {
+        if (!BindNoJointObjectSlideAxis(body,hold) &&
+            (Read<void*>(body,0x330)!=nullptr || Read<void*>(body,0x10)!=nullptr)) return;
+    } else if (!BindRecognizedMechanism(body,hold,true)) {
         ++g_mechanism_rejected;
         return;
     }
@@ -1292,14 +1419,27 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
     const float mass=Read<float>(body,0x434);
     if (!std::isfinite(max_linear) || !std::isfinite(max_angular) || max_linear<0 || max_angular<0 ||
         !std::isfinite(mass) || mass<=0) return;
-    const auto local_body_contact=Read<Vec>(state,0x38);
-    const auto world_contact=TransformPoint(body_pose,local_body_contact);
-    const float contact_distance=std::hypot(
-        world_contact[0]-interaction_pose.values[3], world_contact[1]-interaction_pose.values[7],
-        world_contact[2]-interaction_pose.values[11]);
-    if (!std::isfinite(contact_distance) || contact_distance>
-        runtime::vr_interaction_policy::kMaximumCollisionInteractionReach+
-            runtime::vr_interaction_policy::kInteractionContactTolerance) {
+    auto local_body_contact=Read<Vec>(state,0x38);
+    auto world_contact=TransformPoint(body_pose,local_body_contact);
+    const std::size_t hand_index=
+        pending_hand==runtime::VrHand::left ? 0U : 1U;
+    InteractionTarget selected_target{};
+    AcquireSRWLockShared(&g_interaction_target_lock);
+    selected_target=g_interaction_targets[hand_index];
+    ReleaseSRWLockShared(&g_interaction_target_lock);
+    const std::uint64_t now=GetTickCount64();
+    if (selected_target.valid && selected_target.body==body &&
+        selected_target.time!=0 && now>=selected_target.time &&
+        now-selected_target.time<=kInteractionTargetMaximumAgeMilliseconds &&
+        FiniteVec(selected_target.point)) {
+        // Rework carries the contact chosen by the VR hand into Move. The
+        // native state still owns whether Move=2 was allowed, while the VR
+        // winner owns the palm-relative manipulation point.
+        world_contact=selected_target.point;
+        local_body_contact=InverseTransformPoint(body_pose,world_contact);
+    }
+    if (!InteractionContactInsideAcquisitionVolume(
+            interaction_pose, world_contact)) {
         ++g_blocked_grabs;
         return;
     }
@@ -1456,13 +1596,8 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation,
     hold.collide_character=Read<bool>(body,0x3C8);
     const auto local_contact=Read<Vec>(state,0x14);
     const auto world_contact=TransformPoint(body_pose,local_contact);
-    const float contact_distance=std::hypot(
-        world_contact[0]-interaction_pose.values[3],
-        world_contact[1]-interaction_pose.values[7],
-        world_contact[2]-interaction_pose.values[11]);
-    if (!std::isfinite(contact_distance) || contact_distance>
-        runtime::vr_interaction_policy::kMaximumCollisionInteractionReach+
-            runtime::vr_interaction_policy::kInteractionContactTolerance) {
+    if (!InteractionContactInsideAcquisitionVolume(
+            interaction_pose, world_contact)) {
         ++g_blocked_grabs;
         return;
     }
@@ -1539,6 +1674,12 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     g_hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
     g_hold.release_velocity.Add(velocity,angular);
     reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19C590)(g_hold.body,false);
+    // Rework keeps a kinematically held body awake on every frame. Newton can
+    // otherwise leave a sleeping body visually fixed while the tracked hand
+    // continues moving. These are Black Plague's independently verified
+    // cPhysicsBodyNewton SetEnabled/SetAutoDisable boundaries.
+    reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+kSetBodyEnabled)(g_hold.body,true);
+    reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+kSetBodyAutoDisable)(g_hold.body,false);
     // SetMatrix not a raw write: native transform callbacks update Newton and
     // the linked scene node. Parented/jointed bodies never enter this path.
     reinterpret_cast<void(__thiscall*)(void*,const Matrix*)>(g_image+0xCA120)(g_hold.body,&destination);
@@ -1672,7 +1813,8 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
     // Also validate each body-method slot used by direct native calls.
     for (const auto& pair : {std::array<std::uintptr_t,2>{0x34,0x19C2A0}, {0x38,kGetLinearVelocity},
         {0x3C,0x19C2C0},{0x40,kGetAngularVelocity},{0x54,0x19C360},{0x5C,0x19C380},
-        {0x7C,0x19C9E0},{0x88,kAddImpulseAtPosition},{0xBC,0x19C590}})
+        {0x7C,0x19C9E0},{0x88,kAddImpulseAtPosition},{0x8C,kSetBodyEnabled},
+        {0x94,kSetBodyAutoDisable},{0xBC,0x19C590}})
         if (Read<void*>(g_image+kPhysicsBodyVtable,pair[0])!=g_image+pair[1]) { error="Physics body method mismatch"; return false; }
     if (Read<void*>(g_image+kPhysicsJointHingeNewtonVtable,kJointTypeVtableSlot)!=
             g_image+kHingeGetType ||

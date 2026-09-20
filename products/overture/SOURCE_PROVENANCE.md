@@ -12,8 +12,8 @@ not read by compilation, validation or packaging.
 
 This is a scoped source snapshot rather than Git-history transplantation. The
 original copyright headers and license files remain with their components.
-Behavioral derivation is additionally recorded in the root `THIRD_PARTY.md` and
-`docs/OVERTURE_BACKEND_MIGRATION.md`.
+Behavioral derivation is additionally recorded in the root `THIRD_PARTY.md`,
+`ARCHITECTURE.md` and `docs/REWORK_PORTING_PLAN.md`.
 
 ## Coherent product boundary imported
 

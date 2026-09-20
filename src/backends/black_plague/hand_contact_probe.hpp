@@ -65,8 +65,9 @@ struct PalmResolverValidationTelemetry {
 
 enum class GameplayPalmResolverRequestSource : std::uint8_t {
     disabled = 0,
-    environment = 1,
-    mutex = 2,
+    production = 1,
+    environment = 2,
+    mutex = 3,
 };
 
 struct GameplayPalmResolverTelemetry {

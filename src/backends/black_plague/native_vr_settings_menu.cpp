@@ -6,12 +6,18 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <shlobj.h>
 
+#include <algorithm>
 #include <array>
 #include <atomic>
+#include <cctype>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 
 namespace penumbra_vr::backends::black_plague {
@@ -28,7 +34,7 @@ constexpr std::uintptr_t kAddWidgetToStateRva = 0x7B040;
 constexpr std::uintptr_t kGameAllocateRva = 0x1EECC8;
 constexpr std::uintptr_t kWideStringConstructorIatRva = 0x2721FC;
 constexpr std::uintptr_t kWideStringDestructorIatRva = 0x2721F0;
-constexpr std::uintptr_t kWideStringAssignIatRva = 0x272200;
+constexpr std::uintptr_t kWideStringAssignIatRva = 0x272180;
 
 constexpr std::ptrdiff_t kWidgetInitOffset = 0x08;
 constexpr std::ptrdiff_t kWidgetYPositionOffset = 0x14;
@@ -82,6 +88,13 @@ std::array<void*, kBlackPlagueVrMenuSettingCount> g_rows{};
 std::atomic<bool> g_installed{false};
 bool g_page_active = false;
 bool g_injecting = false;
+
+enum class MenuLanguage : std::uint8_t {
+    english,
+    spanish,
+};
+
+MenuLanguage g_language = MenuLanguage::english;
 
 template <typename T>
 [[nodiscard]] T Read(const void* base, std::ptrdiff_t offset = 0) noexcept {
@@ -144,8 +157,59 @@ void ForEachStateWidget(void* menu, int state, Callback&& callback) noexcept {
     }
 }
 
+[[nodiscard]] MenuLanguage ReadMenuLanguage() noexcept {
+    wchar_t documents[MAX_PATH]{};
+    if (FAILED(SHGetFolderPathW(
+            nullptr, CSIDL_PERSONAL, nullptr, SHGFP_TYPE_CURRENT, documents))) {
+        return MenuLanguage::english;
+    }
+    const std::filesystem::path settings_path =
+        std::filesystem::path(documents) / L"Penumbra" / L"Black Plague" /
+        L"settings.cfg";
+    std::ifstream input(settings_path, std::ios::binary);
+    if (!input) return MenuLanguage::english;
+    std::string text{
+        std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>()};
+    std::transform(text.begin(), text.end(), text.begin(), [](unsigned char value) {
+        return static_cast<char>(std::tolower(value));
+    });
+    return text.find("languagefile=\"espanol.lang\"") != std::string::npos
+        ? MenuLanguage::spanish
+        : MenuLanguage::english;
+}
+
+[[nodiscard]] const wchar_t* RootText() noexcept {
+    return g_language == MenuLanguage::spanish ? L"Ajustes de VR" : L"VR Settings";
+}
+
+[[nodiscard]] const wchar_t* BackText() noexcept {
+    return g_language == MenuLanguage::spanish ? L"Volver" : L"Back";
+}
+
 [[nodiscard]] const wchar_t* SettingName(runtime::VrSettingId id) noexcept {
     using I = runtime::VrSettingId;
+    if (g_language == MenuLanguage::spanish) {
+        switch (id) {
+        case I::handedness: return L"Mano dominante";
+        case I::play_mode: return L"Modo de juego";
+        case I::player_height: return L"Altura del jugador";
+        case I::turn_mode: return L"Modo de giro";
+        case I::snap_turn_angle: return L"Ángulo de giro";
+        case I::smooth_turn_speed: return L"Velocidad de giro";
+        case I::turn_dead_zone: return L"Zona muerta de giro";
+        case I::move_speed: return L"Velocidad de movimiento";
+        case I::move_dead_zone: return L"Zona muerta de movimiento";
+        case I::crouch_mode: return L"Modo de agachado";
+        case I::physical_crouch_depth: return L"Profundidad de agachado";
+        case I::height_offset: return L"Ajuste de altura";
+        case I::ui_distance: return L"Distancia de interfaz";
+        case I::ui_scale: return L"Escala de interfaz";
+        case I::render_scale: return L"Escala de renderizado (reinicio)";
+        case I::enhanced_visuals: return L"Mejoras visuales";
+        case I::hrtf: return L"HRTF (reinicio)";
+        default: return L"Ajuste de VR";
+        }
+    }
     switch (id) {
     case I::handedness: return L"Handedness";
     case I::play_mode: return L"Play mode";
@@ -172,13 +236,55 @@ void ForEachStateWidget(void* menu, int state, Callback&& callback) noexcept {
     return std::wstring(value.begin(), value.end());
 }
 
+[[nodiscard]] std::wstring SettingValue(runtime::VrSettingId id) {
+    if (g_language != MenuLanguage::spanish) {
+        return WidenAscii(runtime::FormatVrSettingValue(id, *g_settings));
+    }
+    using I = runtime::VrSettingId;
+    switch (id) {
+    case I::handedness:
+        return g_settings->handedness == runtime::VrHandedness::left
+            ? L"Izquierda" : L"Derecha";
+    case I::play_mode:
+        return g_settings->play_mode == runtime::VrPlayMode::seated
+            ? L"Sentado" : L"De pie";
+    case I::turn_mode:
+        switch (g_settings->turn_mode) {
+        case runtime::VrTurnMode::disabled: return L"Desactivado";
+        case runtime::VrTurnMode::snap: return L"Por pasos";
+        case runtime::VrTurnMode::smooth: return L"Suave";
+        }
+        break;
+    case I::crouch_mode:
+        switch (g_settings->crouch_mode) {
+        case runtime::VrCrouchMode::physical: return L"Físico";
+        case runtime::VrCrouchMode::button: return L"Botón";
+        case runtime::VrCrouchMode::hybrid: return L"Híbrido";
+        }
+        break;
+    case I::enhanced_visuals:
+        return g_settings->enhanced_visuals ? L"Activadas" : L"Desactivadas";
+    case I::hrtf:
+        switch (g_settings->hrtf_mode) {
+        case runtime::VrHrtfMode::automatic: return L"Automático";
+        case runtime::VrHrtfMode::on: return L"Activado";
+        case runtime::VrHrtfMode::off: return L"Desactivado";
+        }
+        break;
+    default:
+        break;
+    }
+    return WidenAscii(runtime::FormatVrSettingValue(id, *g_settings));
+}
+
 [[nodiscard]] std::wstring RowText(runtime::VrSettingId id) {
     std::wstring result = SettingName(id);
     result += L": ";
-    result += WidenAscii(runtime::FormatVrSettingValue(id, *g_settings));
+    result += SettingValue(id);
     const auto capabilities = BlackPlagueVrSettingCapabilities();
     if (!runtime::IsVrSettingAvailable(id, *g_settings, capabilities)) {
-        result += L" [inactive]";
+        result += g_language == MenuLanguage::spanish
+            ? L" [inactivo]" : L" [inactive]";
     }
     return result;
 }
@@ -201,6 +307,14 @@ void RefreshRows() noexcept {
             AssignButtonText(g_rows[index], RowText(settings[index]));
         }
     }
+}
+
+void RefreshLocalizedText() noexcept {
+    const MenuLanguage next_language = ReadMenuLanguage();
+    if (next_language != g_language) g_language = next_language;
+    if (g_root != nullptr) AssignButtonText(g_root, RootText());
+    if (g_back != nullptr) AssignButtonText(g_back, BackText());
+    RefreshRows();
 }
 
 [[nodiscard]] void* CreateButton(
@@ -270,10 +384,11 @@ void MoveNativeBackForVrEntry(void* menu) noexcept {
         return false;
     }
     std::array<void*, kBlackPlagueVrMenuSettingCount> rows{};
+    g_language = ReadMenuLanguage();
     void* root = CreateButton(init, NativeVec3{220.0F, 378.0F, 40.0F},
-        L"VR Settings", kRootSentinel, 25.0F);
+        RootText(), kRootSentinel, 25.0F);
     void* back = CreateButton(init, NativeVec3{400.0F, 500.0F, 40.0F},
-        L"Back", kBackSentinel, 23.0F);
+        BackText(), kBackSentinel, 23.0F);
     bool complete = root != nullptr && back != nullptr;
     const auto& settings = BlackPlagueVrMenuSettings();
     for (std::size_t index = 0; complete && index < settings.size(); ++index) {
@@ -318,6 +433,7 @@ void MoveNativeBackForVrEntry(void* menu) noexcept {
 
 void ApplyPageState(bool page_active) noexcept {
     if (g_menu == nullptr) return;
+    RefreshLocalizedText();
     g_page_active = page_active;
     ForEachStateWidget(g_menu, kOptionsState, [page_active](void* widget) noexcept {
         if (widget == nullptr) return;
@@ -326,7 +442,6 @@ void ApplyPageState(bool page_active) noexcept {
         else if (widget == g_back || RowIndex(widget) >= 0) desired = page_active;
         SetWidgetActive(widget, desired);
     });
-    if (page_active) RefreshRows();
 }
 
 void __fastcall HookedButtonMouseDown(void* widget, void*, int button) noexcept {

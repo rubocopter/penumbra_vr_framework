@@ -77,4 +77,10 @@ Versioned documentation describes durable architecture, current capability/evide
 
 Temporary investigation, debugging chronology, discarded hypotheses, prompts and agent continuity belong under ignored `work/`. If `work/LOCAL_DOCS.md` exists, it describes the local documentation boundary; local notes are never authoritative over code and versioned state documents.
 
+Large local evidence is disposable once consumed. After a video, screenshot,
+contact sheet, dump, disassembly or research checkout has produced a durable
+code/test/manifest/document conclusion, remove the local evidence instead of
+keeping it as a historical archive. Retain only evidence still required to
+reproduce an unresolved gate or an active verifier workflow.
+
 After meaningful changes, update only the versioned documents that own the affected fact. Avoid repeating the same status in multiple files. Do not mark support or headset validation without corresponding evidence.

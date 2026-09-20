@@ -448,6 +448,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             ConsumeGameplayPalmResolverTelemetry();
         const char* palm_source="disabled";
         if (palms.source == penumbra_vr::backends::black_plague::
+                GameplayPalmResolverRequestSource::production) palm_source="production";
+        else if (palms.source == penumbra_vr::backends::black_plague::
                 GameplayPalmResolverRequestSource::environment) palm_source="environment";
         else if (palms.source == penumbra_vr::backends::black_plague::
                 GameplayPalmResolverRequestSource::mutex) palm_source="mutex";
@@ -1362,9 +1364,11 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     using C = penumbra_vr::BlackPlagueProbeCapability;
     // The launcher can prove that the SDL_app window exists, but that does not
     // prove the game's owning thread has completed SDL/WGL startup. Install the
-    // narrow atomic SwapBuffers IAT owner first and wait until one real swap has
-    // returned before touching the OpenGL or RenderWorld callsites. During this
-    // bootstrap interval OnFrame is lifecycle-gated and performs no VR work.
+    // narrow atomic SwapBuffers IAT owner first. HPL1 performs one swap inside
+    // LowLevelGraphicsSDL::Init, before GameInit has finished, so wait for the
+    // next completed swap from the normal Game::Run loop before touching the
+    // OpenGL or RenderWorld callsites. During this bootstrap interval OnFrame is
+    // lifecycle-gated and performs no VR work.
     auto install_result = InstallTrackedComponent(
         C::frame_hook,
         [&](std::string& error) {
@@ -1377,20 +1381,24 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         return FailInitializationWithRollback("SDL frame hook");
     }
 
-    constexpr ULONGLONG kFirstCompletedSwapTimeoutMs = 15'000;
+    constexpr ULONGLONG kGraphicsBootstrapTimeoutMs = 15'000;
     const ULONGLONG completed_swap_deadline =
-        GetTickCount64() + kFirstCompletedSwapTimeoutMs;
-    while (penumbra_vr::hooks::CompletedFrameCount() == 0 &&
+        GetTickCount64() + kGraphicsBootstrapTimeoutMs;
+    while (!penumbra_vr::BlackPlagueDeepHookBootstrapReady(
+               penumbra_vr::hooks::CompletedFrameCount()) &&
            GetTickCount64() < completed_swap_deadline) {
         Sleep(1);
     }
-    if (penumbra_vr::hooks::CompletedFrameCount() == 0) {
+    if (!penumbra_vr::BlackPlagueDeepHookBootstrapReady(
+            penumbra_vr::hooks::CompletedFrameCount())) {
         penumbra_vr::probe::WriteLog(
-            "SDL bootstrap did not complete a SwapBuffers call before timeout");
+            "SDL bootstrap did not reach a normal-loop SwapBuffers call before timeout; completed=%llu observed=%llu",
+            static_cast<unsigned long long>(penumbra_vr::hooks::CompletedFrameCount()),
+            static_cast<unsigned long long>(penumbra_vr::hooks::ObservedFrameCount()));
         return FailInitializationWithRollback("SDL graphics bootstrap");
     }
     penumbra_vr::probe::WriteLog(
-        "SDL graphics bootstrap completed=%llu observed=%llu; installing OpenGL/render hooks",
+        "SDL normal-loop graphics bootstrap completed=%llu observed=%llu; installing OpenGL/render hooks",
         static_cast<unsigned long long>(penumbra_vr::hooks::CompletedFrameCount()),
         static_cast<unsigned long long>(penumbra_vr::hooks::ObservedFrameCount()));
 
@@ -1480,6 +1488,9 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
                 ReadBlackPlagueRoomScaleStatus();
         const char* shadow_source = "disabled";
         if (shadow_status.source == penumbra_vr::backends::black_plague::
+                BlackPlagueShadowRequestSource::production) {
+            shadow_source = "production";
+        } else if (shadow_status.source == penumbra_vr::backends::black_plague::
                 BlackPlagueShadowRequestSource::environment) {
             shadow_source = "environment";
         } else if (shadow_status.source == penumbra_vr::backends::black_plague::
@@ -1501,6 +1512,9 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
         }
         const char* room_scale_source = "disabled";
         if (room_scale_status.source == penumbra_vr::backends::black_plague::
+                BlackPlagueRoomScaleRequestSource::production) {
+            room_scale_source = "production";
+        } else if (room_scale_status.source == penumbra_vr::backends::black_plague::
                 BlackPlagueRoomScaleRequestSource::environment) {
             room_scale_source = "environment";
         } else if (room_scale_status.source ==

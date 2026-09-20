@@ -1,5 +1,6 @@
 #include "body_collision_probe.hpp"
 
+#include "black_plague_body_adapter.hpp"
 #include "black_plague_body_callbacks.hpp"
 
 #include "hand_contact_probe.hpp"
@@ -37,6 +38,8 @@ using CheckShapeWorldCollision = bool(__thiscall*)(
 using CharacterRayIntersect = bool(__thiscall*)(void*, void*, void*);
 
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
+constexpr std::uintptr_t kPlayerActiveOffset = 0x1DC;
+constexpr std::uintptr_t kPlayerDeathHelperOffset = 0x28C;
 constexpr std::uintptr_t kPlayerGroundField268Offset = 0x268;
 constexpr std::uintptr_t kPlayerGroundField26cOffset = 0x26C;
 constexpr std::uintptr_t kPlayerJumpButtonDownOffset = 0x1FC;
@@ -196,11 +199,20 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
     const Vec3& physical_request,
     const Vec3& locomotion_request,
     const Vec3& accepted_combined) noexcept {
-    if (HorizontalLength(locomotion_request) <= 1.0e-6F) {
-        return {accepted_combined.x, 0.0F, accepted_combined.z};
-    }
     const float physical_length = HorizontalLength(physical_request);
     if (physical_length <= 1.0e-6F) return {};
+    if (HorizontalLength(locomotion_request) <= 1.0e-6F) {
+        // Rework 23c890f reconciles room-scale motion only along the actual
+        // requested head-move direction. Collision/step resolution may move
+        // the native character sideways or backwards; treating that solver
+        // correction as accepted physical motion makes the tracking anchor
+        // chase the wall and produces visible oscillation.
+        const float accepted_along = std::clamp(
+            (accepted_combined.x * physical_request.x +
+                accepted_combined.z * physical_request.z) / physical_length,
+            0.0F, physical_length);
+        return Scale(physical_request, accepted_along / physical_length);
+    }
     // Black Plague exposes one native collision solve where Rework can run
     // physical tracking and stick displacement in sequence. Attribute only
     // the rejected part of the combined solve to the physical request. This
@@ -250,6 +262,12 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
     player = NativePlayerPointer();
     return player != nullptr &&
         Read<void*>(player, kPlayerCharacterBodyOffset) == character_body;
+}
+
+[[nodiscard]] bool GameplayBodyServicesAllowed(void* player) noexcept {
+    if (player == nullptr || !Read<bool>(player, kPlayerActiveOffset)) return false;
+    void* const death_helper = Read<void*>(player, kPlayerDeathHelperOffset);
+    return death_helper == nullptr || !Read<bool>(death_helper, 0);
 }
 
 [[nodiscard]] bool PhysicalRequestOwnerMatchesLive() noexcept {
@@ -605,6 +623,17 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
     g_original_update(character_body, delta_seconds);
 
     if (observe) {
+        void* current_player = nullptr;
+        if (!IsCurrentPlayerBody(character_body, current_player) ||
+            current_player != player || !GameplayBodyServicesAllowed(current_player)) {
+            // The native update may transition maps/death state and replace
+            // the player's character body, or end gameplay while retaining
+            // the same outer pointer. Never let the pre-update ownership
+            // decision authorize post-update services after either boundary.
+            InvalidateBlackPlagueShadowTracking();
+            g_tick = previous;
+            return;
+        }
         ServiceNoWriteHandContactQuery(g_image, character_body);
         ServicePalmResolverValidation(g_image, character_body);
         ServiceGameplayPalmResolver(g_image, character_body);
