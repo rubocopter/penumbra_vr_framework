@@ -406,13 +406,17 @@ int RunSpatialTest() {
     if (Read<Matrix>(body.data(),0x34).values[3]!=0.2F || test_native_updates) return 4;
     if (test_active_calls!=1 || !test_active_value ||
         test_auto_freeze_calls!=1 || test_auto_freeze_value) return 132;
-    HookedGrabUpdate(state.data(),nullptr,0.016F); // stable second release sample
+    HookedGrabUpdate(state.data(),nullptr,0.016F); // stable historical samples
+    // Rework samples the controller velocity at the release boundary. A quick
+    // final throw gesture must not be replaced by the older hold-history median.
+    hand.velocity={4,0,0};
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || test_leaves!=1 || Read<float>(body.data(),0x42C)!=3 ||
         Read<float>(body.data(),0x430)!=4 || Read<float>(body.data(),0x434)!=10 ||
         !Read<bool>(body.data(),0x428) || !Read<bool>(body.data(),0x3C8) ||
-        Read<Vec>(body.data(),0x450)!=Vec{2.5F,0,0} || test_palm_held[1]!=nullptr) return 5;
+        Read<Vec>(body.data(),0x450)!=Vec{5.0F,0,0} || test_palm_held[1]!=nullptr) return 5;
+    hand.velocity={2,0,0};
     // Bodies authored not to collide with characters must retain that policy.
     Put(body.data(),0x3C8,false); begin();
     test_frame.input.state.interact.pressed=false;
@@ -448,6 +452,33 @@ int RunSpatialTest() {
     hand.device_to_absolute.values[3]+=2;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 10;
+
+    // Grab must consume the same VR-selected surface point as Move. The native
+    // screen/camera contact can be stale or on the wrong side of a large prop.
+    Put(body.data(),0x34,runtime::IdentityMatrix());
+    hand.device_to_absolute.values[3]=0.0F;
+    Put(state.data(),0x14,Vec{10.0F,0,0});
+    Put(state.data(),0xE1,true);
+    Matrix selected_pose{}; Vec selected_velocity{},selected_angular{};
+    if (!InteractionHandPose(runtime::VrHand::right,selected_pose,
+            selected_velocity,selected_angular)) return 140;
+    const Vec selected_world_contact=TransformPoint(selected_pose,{
+        runtime::vr_interaction_policy::kInteractionOffsetX,
+        runtime::vr_interaction_policy::kInteractionOffsetY,
+        runtime::vr_interaction_policy::kInteractionOffsetZ});
+    AcquireSRWLockExclusive(&g_interaction_target_lock);
+    g_interaction_targets[1]={selected_world_contact,body.data(),GetTickCount64(),true};
+    ReleaseSRWLockExclusive(&g_interaction_target_lock);
+    begin();
+    if (!g_held.load()) return 140;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_held.load()) return 141;
+    AcquireSRWLockExclusive(&g_interaction_target_lock);
+    g_interaction_targets[1]={};
+    ReleaseSRWLockExclusive(&g_interaction_target_lock);
+    Put(state.data(),0x14,Vec{});
+    Put(state.data(),0xE1,false);
 
     // Rework's acquisition volume is a box around the palm/fingers, not the
     // old 18 cm radial guard. A contact near a valid box corner can be farther

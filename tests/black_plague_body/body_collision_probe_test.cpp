@@ -190,6 +190,14 @@ int RunBodyCollisionProbeTest() {
     if (!physical_boundary.initialized || physical_boundary.live[0] != 0xE9)
         return 38;
 
+    // D7281 runs after pushfd/pushad. The original native vPosAdd at ESP+20h
+    // is therefore addressed at current ESP+44h and forwarded as arg #3.
+    const std::array<std::uint8_t,9> physical_gateway_prefix{
+        0x9C,0x60,0x8D,0x44,0x24,0x44,0x50,0x57,0x56};
+    if (std::memcmp(reinterpret_cast<const void*>(&PhysicalRequestGateway),
+            physical_gateway_prefix.data(), physical_gateway_prefix.size()) != 0)
+        return 137;
+
     // Rework's physical-room-scale step rule keeps only static geometry with
     // an upward-facing normal eligible. BP's older native ray callback omits
     // that normal gate, so the adapter supplies it only for physical HMD ticks.
@@ -197,6 +205,16 @@ int RunBodyCollisionProbeTest() {
     g_tick = {};
     g_tick.character_body = g_body_storage.data();
     g_tick.physical_request_injected = true;
+    std::array<std::uint8_t, 0x10> step_ray_callback{};
+    Put(g_body_storage.data(), kCharacterRayCallbackOffset,
+        static_cast<void*>(step_ray_callback.data()));
+    Put(step_ray_callback.data(), 4, size.y + 0.05F);
+    g_physical_step_nearest_static = true;
+    g_physical_step_nearest_normal_y = 1.0F;
+    if (!ShouldRejectPhysicalStepHit() ||
+        !g_tick.physical_step_climb_suppressed) return 138;
+    g_tick.physical_step_climb_suppressed = false;
+    Put(step_ray_callback.data(), 4, size.y - 0.05F);
     g_physical_step_nearest_static = true;
     g_physical_step_nearest_normal_y = 1.0F;
     if (!PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
@@ -301,13 +319,18 @@ int RunBodyCollisionProbeTest() {
     g_tick = {};
     g_tick.character_body = g_body_storage.data();
     injected_position = start;
-    ApplyQueuedPhysicalDisplacement(g_body_storage.data(), &injected_position);
+    Vec3 native_step_motion{0.0F, 0.25F, 0.0F};
+    ApplyQueuedPhysicalDisplacement(
+        g_body_storage.data(), &injected_position, &native_step_motion);
     if (!g_tick.physical_request_injected ||
         !g_tick.locomotion_request_injected ||
         !Near(g_tick.physical_injected.x, 0.02F) ||
         !Near(g_tick.locomotion_injected.x, 0.03F) ||
         !Near(g_tick.combined_injected.x, 0.05F) ||
-        !Near(injected_position.x, start.x + 0.05F)) return 72;
+        !Near(injected_position.x, start.x + 0.05F) ||
+        !Near(native_step_motion.x, 0.05F) ||
+        !Near(native_step_motion.y, 0.25F) ||
+        !Near(native_step_motion.z, 0.0F)) return 139;
     const Vec3 accepted_partition = PhysicalAcceptedFromCombined(
         g_tick.physical_injected, g_tick.locomotion_injected,
         {0.035F, 0.0F, 0.0F});

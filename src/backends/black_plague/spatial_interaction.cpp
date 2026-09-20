@@ -1594,8 +1594,25 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation,
     hold.player_generation=player_generation; hold.hand=pending_hand;
     hold.max_linear=max_linear; hold.max_angular=max_angular;
     hold.collide_character=Read<bool>(body,0x3C8);
-    const auto local_contact=Read<Vec>(state,0x14);
-    const auto world_contact=TransformPoint(body_pose,local_contact);
+    auto local_contact=Read<Vec>(state,0x14);
+    auto world_contact=TransformPoint(body_pose,local_contact);
+    const std::size_t hand_index=
+        pending_hand==runtime::VrHand::left ? 0U : 1U;
+    InteractionTarget selected_target{};
+    AcquireSRWLockShared(&g_interaction_target_lock);
+    selected_target=g_interaction_targets[hand_index];
+    ReleaseSRWLockShared(&g_interaction_target_lock);
+    const std::uint64_t now=GetTickCount64();
+    if (selected_target.valid && selected_target.body==body &&
+        selected_target.time!=0 && now>=selected_target.time &&
+        now-selected_target.time<=kInteractionTargetMaximumAgeMilliseconds &&
+        FiniteVec(selected_target.point)) {
+        // Rework anchors Grab at the physical pick point. The native state still
+        // owns whether Grab=6 was entered; the VR winner owns where the palm
+        // actually contacted that accepted body.
+        world_contact=selected_target.point;
+        local_contact=InverseTransformPoint(body_pose,world_contact);
+    }
     if (!InteractionContactInsideAcquisitionVolume(
             interaction_pose, world_contact)) {
         ++g_blocked_grabs;
@@ -1638,7 +1655,14 @@ void __fastcall HookedLeave(void* state, void*, void* next) {
     Vec velocity{},angular{};
     if (owned) {
         hold=g_hold;
-        if (!hold.discard_momentum) hold.release_velocity.Estimate(velocity,angular);
+        if (!hold.discard_momentum) {
+            // Rework 23c890f samples the grabbing controller at LeaveState, so
+            // a fast final throw gesture is preserved. Keep the history only as
+            // a fallback for a transient tracking loss at the release boundary.
+            Matrix release_palm{};
+            if (!HandPose(hold.hand,false,release_palm,velocity,angular))
+                hold.release_velocity.Estimate(velocity,angular);
+        }
         g_hold={}; g_held.store(false,std::memory_order_release);
         PublishGameplayPalmHeldBody(
             hold.hand == runtime::VrHand::left ? 0U : 1U, nullptr);

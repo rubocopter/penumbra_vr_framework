@@ -319,7 +319,8 @@ void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcep
 }
 
 void __cdecl ApplyQueuedPhysicalDisplacement(
-    void* character_body, Vec3* position) noexcept {
+    void* character_body, Vec3* position,
+    Vec3* native_step_motion = nullptr) noexcept {
     if (character_body == nullptr || position == nullptr ||
         g_tick.character_body != character_body) return;
 
@@ -391,6 +392,14 @@ void __cdecl ApplyQueuedPhysicalDisplacement(
     g_tick.physical_position_before = *position;
     position->x += request[0];
     position->z += request[2];
+    if (native_step_motion != nullptr) {
+        // D7369+ derives the native step rays from vPosAdd, not mvPosition.
+        // Rework replaces vPosAdd.x/z with vr_velocity, so keep BP's local
+        // step direction synchronized with the exact VR displacement injected
+        // at D7281. Native Y/gravity/jump ownership remains untouched.
+        native_step_motion->x += request[0];
+        native_step_motion->z += request[2];
+    }
     g_tick.physical_position_after = *position;
     g_tick.physical_request_consumed = physical_pending;
     g_tick.physical_request_injected = physical_pending;
@@ -409,10 +418,14 @@ __declspec(naked) void PhysicalRequestGateway() noexcept {
     __asm {
         pushfd
         pushad
+        // Original vPosAdd begins at original ESP+20h. pushfd (4) plus
+        // pushad (32) moves that location to current ESP+44h.
+        lea eax, [esp + 44h]
+        push eax
         push edi
         push esi
         call ApplyQueuedPhysicalDisplacement
-        add esp, 8
+        add esp, 0Ch
         popad
         popfd
         fld dword ptr [edi]
@@ -461,12 +474,18 @@ bool __fastcall HookedCharacterRayIntersect(
 
 bool __cdecl ShouldRejectPhysicalStepHit() noexcept {
     if (!PhysicalRoomScaleStepTick()) return false;
-    // Rework 23c890f also requires the winning ray normal to point upward.
-    // Black Plague's older cCharacterBodyRay keeps only distance/collide, but
-    // its cPhysicsRayParams ABI supplies mvNormal.y at +0x0C to this callback.
+    // Rework 23c890f requires an eligible static/upward hit to describe an
+    // actual positive step. A ray that reaches the floor through/around a low
+    // prop can otherwise look static and upward while producing stepHeight<=0.
+    void* const callback = Read<void*>(
+        g_tick.character_body, kCharacterRayCallbackOffset);
+    const Vec3 size = Read<Vec3>(g_tick.character_body, kCharacterSizeOffset);
+    const float min_distance = Read<float>(callback, 4);
+    const float step_height = size.y - min_distance;
     if (g_physical_step_nearest_static &&
         std::isfinite(g_physical_step_nearest_normal_y) &&
-        g_physical_step_nearest_normal_y >= 0.5F) return false;
+        g_physical_step_nearest_normal_y >= 0.5F &&
+        std::isfinite(step_height) && step_height > 0.0F) return false;
     g_tick.physical_step_climb_suppressed = true;
     return true;
 }
