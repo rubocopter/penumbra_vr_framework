@@ -36,8 +36,8 @@ For a finished Overture package today, use [Penumbra: Overture VR Rework](https:
 
 ## Documentation
 
-[Roadmap](ROADMAP.md) ·
-[Architecture](ARCHITECTURE.md) ·
+[Roadmap](docs/ROADMAP.md) ·
+[Architecture](docs/ARCHITECTURE.md) ·
 [Trilogy parity](docs/TRILOGY_PARITY_PLAN.md) ·
 [Supported builds](docs/SUPPORTED_BUILDS.md) ·
 [VR configuration](docs/VR_CONFIGURATION.md) ·
@@ -65,4 +65,4 @@ Engineering rules and implementation contracts are documented in [AGENTS.md](AGE
 
 Penumbra VR Framework is an unofficial community project and is not affiliated with or endorsed by Frictional Games, Valve or Sony Interactive Entertainment.
 
-Licensed under **GNU GPL v3 or later**; see [COPYING](COPYING) and [THIRD_PARTY.md](THIRD_PARTY.md).
+Licensed under **GNU GPL v3 or later**; see [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY.md).
