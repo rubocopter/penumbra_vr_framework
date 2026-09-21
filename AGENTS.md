@@ -1,6 +1,6 @@
 # Penumbra VR Framework — Agent instructions
 
-Read this file before changing code. Use `ARCHITECTURE.md` and `docs/DESIGN_DECISIONS.md` for ownership/invariants, `docs/TRILOGY_PARITY_PLAN.md` for cross-game capability state, `docs/SUPPORTED_BUILDS.md` for evidence/build status, `docs/REWORK_PORTING_PLAN.md` for the extraction contract, and `ROADMAP.md` for current work order.
+Read this file before changing code. Use `docs/ARCHITECTURE.md` and `docs/DESIGN_DECISIONS.md` for ownership/invariants, `docs/TRILOGY_PARITY_PLAN.md` for cross-game capability state, `docs/SUPPORTED_BUILDS.md` for evidence/build status, `docs/REWORK_PORTING_PLAN.md` for the extraction contract, and `docs/ROADMAP.md` for current work order.
 
 ## Core rule
 
@@ -61,7 +61,7 @@ Do not patch a visible symptom until the difference and likely ownership boundar
 - Do not copy Overture RVAs, model-specific grip values or body layouts into Black Plague or Requiem.
 - Keep mirror/focus behavior as its own presentation gate while it remains experimental; do not let mirror work redefine headset pacing.
 
-The detailed Black Plague capability/evidence state changes frequently. Read `docs/TRILOGY_PARITY_PLAN.md`, `docs/SUPPORTED_BUILDS.md` and `ROADMAP.md` instead of carrying PID/session chronology in this file.
+The detailed Black Plague capability/evidence state changes frequently. Read `docs/TRILOGY_PARITY_PLAN.md`, `docs/SUPPORTED_BUILDS.md` and `docs/ROADMAP.md` instead of carrying PID/session chronology in this file.
 
 ## Reuse and scope discipline
 
