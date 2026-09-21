@@ -2,7 +2,7 @@
 setlocal
 set "PVR_GAME=%ProgramFiles(x86)%\Steam\steamapps\common\Penumbra Black Plague\redist\penumbra.exe"
 if not "%~1"=="" set "PVR_GAME=%~1"
-set "PVR_LAUNCHER=%~dp0build\bin\Release\PenumbraVR.ProbeLauncher.exe"
+set "PVR_LAUNCHER=%~dp0..\build\bin\Release\PenumbraVR.ProbeLauncher.exe"
 if not exist "%PVR_LAUNCHER%" (
   echo No se encuentra el launcher Release. Compila el framework primero.
   pause
