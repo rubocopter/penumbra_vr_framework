@@ -18,6 +18,10 @@ std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
 runtime::VrMatrix44 test_resolved_palm{};
 std::uint64_t test_resolved_palm_generation=0;
+int test_palm_resolver_services=0;
+void* test_palm_resolver_character_body=nullptr;
+bool test_palm_resolver_saw_held_body=false;
+bool test_palm_resolver_publish_on_service=false;
 bool test_palm_overlap_available=false;
 GameplayPalmOverlapResult test_palm_overlap{};
 bool test_head_pose_valid=true;
@@ -131,6 +135,15 @@ bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
 }
 std::uint64_t GameplayPalmPoseGeneration(std::size_t) noexcept {
     return test_resolved_palm_generation;
+}
+void ServiceGameplayPalmResolver(std::uint8_t*,void* character_body) noexcept {
+    ++test_palm_resolver_services;
+    test_palm_resolver_character_body=character_body;
+    test_palm_resolver_saw_held_body=
+        test_palm_held[0]!=nullptr || test_palm_held[1]!=nullptr;
+    if (test_palm_resolver_publish_on_service &&
+        test_palm_resolver_saw_held_body && test_resolved_palm_valid)
+        ++test_resolved_palm_generation;
 }
 bool QueryGameplayPalmOverlaps(std::size_t,
     const runtime::VrMatrix44&, GameplayPalmOverlapResult& result) noexcept {
@@ -280,8 +293,10 @@ int RunSpatialTest() {
         test_joints=0;
     }
     std::array<std::uint8_t,0x500> body{},player{},state{};
+    std::array<std::uint8_t,0x200> character_body{};
     std::array<void*,10> states{}; states[6]=state.data();
     Put(player.data(),0x2C4,states.data());
+    Put(player.data(),0x274,static_cast<void*>(character_body.data()));
     Put(state.data(),0x10,player.data()); Put(state.data(),0x20,body.data());
     Put(body.data(),0,g_image+0x292C08); Put(body.data(),0x34,runtime::IdentityMatrix());
     Put(body.data(),0x42C,3.0F); Put(body.data(),0x430,4.0F);
@@ -291,6 +306,58 @@ int RunSpatialTest() {
     hand.pose_valid=true; hand.device_connected=true;
     hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
     hand.velocity={2,0,0}; hand.angular_velocity={0,2,0};
+    {
+        // Rework UseItem casts from the dominant controller aim along its
+        // local -Z axis. Black Plague's native state instead starts at the
+        // camera, which makes a syringe selected from inventory impossible to
+        // point with the hand. Preserve the native ray length while replacing
+        // only that origin/orientation boundary.
+        auto& aim=test_frame.hands[1].aim;
+        aim.pose_valid=true; aim.device_connected=true;
+        aim.device_to_absolute={{1,0,0,1,0,1,0,2,0,0,1,3}};
+        Vec use_from{},use_to{};
+        if (!BuildUseItemHandRay(test_frame,2.0F,use_from,use_to) ||
+            !VecNearlyEqual(use_from,{1,2,3}) ||
+            !VecNearlyEqual(use_to,{1,2,1})) return 156;
+        test_frame.interact_source=runtime::VrHand::left;
+        if (BuildUseItemHandRay(test_frame,2.0F,use_from,use_to)) return 157;
+        test_frame.interact_source=runtime::VrHand::right;
+        aim.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
+
+        std::array<std::uint8_t,0x40> use_state{};
+        std::array<std::uint8_t,0x200> use_init{};
+        std::array<std::uint8_t,0x400> use_effect{};
+        std::array<std::uint8_t,0x40> use_pick{};
+        void* use_init_pointer=use_init.data();
+        void* use_effect_pointer=use_effect.data();
+        void* use_pick_pointer=use_pick.data();
+        Put(use_state.data(),0x0C,use_init_pointer);
+        Put(use_state.data(),0x10,static_cast<void*>(player.data()));
+        Put(use_init.data(),0x15C,use_effect_pointer);
+        Put(player.data(),0x27C,use_pick_pointer);
+        Put(player.data(),0x2BC,4);
+        Put(use_pick.data(),0x04,static_cast<void*>(body.data()));
+        Put(use_pick.data(),0x1C,Vec{1,2,1.25F});
+        Put(use_effect.data(),0x30C,true);
+        PublishUseItemLaserFromNativeState(
+            use_state.data(),{1,2,3},{1,2,1});
+        Vec published_from{},published_to{};
+        bool published_usable=false;
+        if (!ReadUseItemLaser(published_from,published_to,published_usable) ||
+            !published_usable || !VecNearlyEqual(published_from,{1,2,3}) ||
+            !VecNearlyEqual(published_to,{1,2,1.25F})) return 158;
+        Put(use_effect.data(),0x30C,false);
+        Put(use_pick.data(),0x04,static_cast<void*>(nullptr));
+        PublishUseItemLaserFromNativeState(
+            use_state.data(),{1,2,3},{1,2,1});
+        if (!ReadUseItemLaser(published_from,published_to,published_usable) ||
+            published_usable || !VecNearlyEqual(published_to,{1,2,1}))
+            return 159;
+        ClearUseItemLaser();
+        if (ReadUseItemLaser(
+                published_from,published_to,published_usable)) return 160;
+        Put(player.data(),0x2BC,0);
+    }
     {
         std::array<std::uint8_t,0x100> world{};
         std::array<std::uint8_t,0x500> touched_body{};
@@ -390,29 +457,34 @@ int RunSpatialTest() {
     // ChangeState publishes the committed state after Enter returns. The
     // OpenVR edge may therefore be gone by the next service point; the pending
     // transition must retain its originating hand while the button remains
-    // held instead of requiring just_pressed twice.
+    // held instead of requiring just_pressed twice. Rework then excludes the
+    // accepted body and resolves the grab palm synchronously before anchoring
+    // it; acquisition must not depend on a later character-update publication.
     g_enabled.store(true); Put(player.data(),0x2BC,0);
     test_frame.input.state.interact.pressed=true;
     test_frame.input.state.interact.just_pressed=true;
     test_frame.interact_source=runtime::VrHand::right;
     g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    test_resolved_palm=runtime::ExpandMatrix(hand.device_to_absolute);
+    test_resolved_palm_valid=true;
+    test_palm_resolver_publish_on_service=true;
+    test_palm_resolver_services=0;
+    test_palm_resolver_character_body=nullptr;
+    test_palm_resolver_saw_held_body=false;
     HookedEnter(state.data(),nullptr,nullptr);
     Put(player.data(),0x2BC,6);
     test_frame.input.state.interact.just_pressed=false;
     ServiceSpatialInteraction(player.data(),false);
-    if (!g_prepared_grab.active || g_held.load() ||
-        test_palm_held[1]!=body.data()) return 40;
-    const auto body_before_refresh=Read<Matrix>(body.data(),0x34);
-    HookedGrabUpdate(state.data(),nullptr,0.016F);
-    if (test_native_updates ||
-        Read<Matrix>(body.data(),0x34).values!=body_before_refresh.values)
-        return 40;
-    ++test_resolved_palm_generation;
-    ServiceSpatialInteraction(player.data(),false);
-    if (!g_held.load() || g_hold.hand!=runtime::VrHand::right) return 40;
+    if (!g_held.load() || g_prepared_grab.active ||
+        g_hold.hand!=runtime::VrHand::right || test_palm_held[1]!=body.data() ||
+        test_palm_resolver_services!=1 ||
+        test_palm_resolver_character_body!=character_body.data() ||
+        !test_palm_resolver_saw_held_body) return 40;
+    test_palm_resolver_publish_on_service=false;
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load()) return 41;
+    test_resolved_palm_valid=false;
     test_leaves=0;
 
     begin();
@@ -420,8 +492,14 @@ int RunSpatialTest() {
         test_palm_held[1]!=body.data()) return 2;
     HookedGrabUpdate(state.data(),nullptr,0);
     if (!g_held.load() || test_leaves) return 3;
+    test_palm_resolver_services=0;
+    test_palm_resolver_character_body=nullptr;
+    test_palm_resolver_saw_held_body=false;
     hand.device_to_absolute.values[3]=0.2F;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
+    if (test_palm_resolver_services!=1 ||
+        test_palm_resolver_character_body!=character_body.data() ||
+        !test_palm_resolver_saw_held_body) return 153;
     if (Read<Matrix>(body.data(),0x34).values[3]!=0.2F || test_native_updates) return 4;
     if (test_active_calls!=1 || !test_active_value ||
         test_auto_freeze_calls!=1 || test_auto_freeze_value) return 132;
@@ -611,11 +689,20 @@ int RunSpatialTest() {
     g_vr_selection_ready=true; g_vr_selection_player=player.data();
     HookedMoveEnter(move_state.data(),nullptr,nullptr);
     Put(player.data(),0x2BC,2);
+    test_palm_resolver_services=0;
+    test_palm_resolver_character_body=nullptr;
+    test_palm_resolver_saw_held_body=false;
     ServiceSpatialInteraction(player.data(),false);
     if (!g_move_held.load() || Read<float>(body.data(),0x42C)!=10 ||
         Read<float>(body.data(),0x430)!=15 || test_palm_held[1]!=body.data()) return 32;
+    if (test_palm_resolver_services!=1 ||
+        test_palm_resolver_character_body!=character_body.data() ||
+        !test_palm_resolver_saw_held_body) return 154;
     hand.device_to_absolute.values[3]=0.1F;
     HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+    if (test_palm_resolver_services!=2 ||
+        test_palm_resolver_character_body!=character_body.data() ||
+        !test_palm_resolver_saw_held_body) return 155;
     if (std::abs(test_move_force[0]-250.0F)>0.001F ||
         test_move_force[1]!=0 || test_move_force[2]!=0 ||
         test_move_force_position!=Vec{} || test_native_move_updates) return 33;

@@ -5,7 +5,7 @@
 
 namespace penumbra_vr::runtime {
 enum class NativeVrAction : std::uint8_t {
-    pause, select, back, inventory, notebook, light, jump, sprint, crouch,
+    pause, select, drag, back, inventory, notebook, light, jump, sprint, crouch,
     interact, examine, holster, count
 };
 enum class NativeVrQuery : std::uint8_t { held, pressed, released };

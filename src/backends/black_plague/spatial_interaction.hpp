@@ -37,6 +37,13 @@ void ServiceSpatialHandNudge(void* character_body) noexcept;
 [[nodiscard]] bool ReadAttachedToolGrip(
     std::size_t hand_index,
     float& pose_weight) noexcept;
+// Rework UseItem beam, published after Black Plague's native pick callback has
+// calculated the final target. `usable` is the native ItemFlash decision used
+// by the same state before R2 invokes the selected inventory item.
+[[nodiscard]] bool ReadUseItemLaser(
+    std::array<float,3>& from,
+    std::array<float,3>& to,
+    bool& usable) noexcept;
 // Latest ordinary physical pick target for Rework's bounded collision/contact
 // assistance. Returns false for stale/no target; inventory magnetism is a
 // separate policy and is intentionally not synthesized here.

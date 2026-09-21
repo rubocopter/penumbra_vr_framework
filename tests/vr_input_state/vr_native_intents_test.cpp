@@ -63,11 +63,14 @@ int main() {
     intents.Begin(state, VrInputContext::gameplay);
     if (!intents.Query(A::interact,Q::released) || intents.Query(A::interact,Q::released) ||
         intents.Query(A::interact,Q::held)) return 2;
-    state.ui_select = {true,true,true,false}; state.ui_close = {true,true,true,false};
+    state.ui_select = {true,true,true,false};
+    state.ui_drag = {true,true,true,false};
+    state.ui_close = {true,true,true,false};
     intents.Begin(state, VrInputContext::ui);
     if (intents.Move(0,false) != 0 || intents.Query(A::interact,Q::released) ||
         !intents.Query(A::select,Q::pressed) || !intents.Query(A::pause,Q::pressed) ||
-        intents.Query(A::select,Q::pressed) || intents.Query(A::count,Q::pressed)) return 3;
+        !intents.Query(A::drag,Q::pressed) || intents.Query(A::select,Q::pressed) ||
+        intents.Query(A::drag,Q::pressed) || intents.Query(A::count,Q::pressed)) return 3;
     state.move.x = std::numeric_limits<float>::quiet_NaN();
     intents.Begin(state, VrInputContext::gameplay);
     if (intents.Move(0.25F,true) != 0.25F) return 4;

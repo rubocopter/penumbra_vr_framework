@@ -16,7 +16,8 @@ void VrNativeIntents::Begin(const VrInputState& s, VrInputContext context, float
     };
     set(NativeVrAction::pause, Merge(s.pause, s.ui_close));
     if (context == VrInputContext::ui) {
-        set(NativeVrAction::select, Merge(s.ui_select, s.ui_drag));
+        set(NativeVrAction::select, s.ui_select);
+        set(NativeVrAction::drag, s.ui_drag);
         set(NativeVrAction::back, s.ui_back);
         // Inventory/notebook close is routed through the native Escape path.
     } else {

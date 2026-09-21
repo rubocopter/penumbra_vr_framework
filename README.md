@@ -19,12 +19,18 @@ backend.
 > active backend and already runs in tracked stereo from Steam's normal **Play**
 > path on the allowlisted build. Requiem remains the next gameplay backend.
 
+<p align="center">
+  <img src="docs/images/landing/overture-vr.png" alt="Penumbra: Overture VR" width="31%">
+  <img src="docs/images/landing/black-plague-vr.png" alt="Penumbra: Black Plague VR" width="31%">
+  <img src="docs/images/landing/requiem-vr.png" alt="Penumbra: Requiem VR" width="31%">
+</p>
+
 ## Current state
 
 | Game | Current Framework state |
 | --- | --- |
 | **Overture** | Framework-owned source product builds and deploys independently; the proven Rework behavior remains the reference and has an initial Framework headset regression pass. |
-| **Black Plague** | Exact-build backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, hands, physical interaction, native VR settings, HRTF/reverb integration and normal-Steam bootstrap. Current work is focused on remaining interaction, comfort, presentation and headset-validation gaps. |
+| **Black Plague** | Exact-build backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, hands, physical interaction, tracked inventory/notebook input with controller-aim item use, native VR settings, HRTF/reverb integration and normal-Steam bootstrap. Current work is focused on remaining interaction, comfort, presentation and headset-validation gaps. |
 | **Requiem** | Exact executable identity, LAA transform metadata, localization and shared configuration data are prepared. Gameplay VR implementation has not started. |
 
 The shared runtime already owns reusable tracking transforms, locomotion and

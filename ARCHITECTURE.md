@@ -179,10 +179,13 @@ through the verified Options UI boundary. Input/presentation settings that are
 safe to refresh apply live; render-scale/audio startup settings keep their
 restart semantics.
 
-Inventory/notebook activation reuses mapped native actions. The gameplay HUD and
-subtitle queue is captured from the existing native draw owner and composited
-into both eyes; `SubtitleScale` remains below functional-support status until the
-surface is headset-validated.
+Inventory/notebook activation reuses mapped native actions. The current candidate
+keeps drag, default-use and contextual item actions distinct at their verified
+native query boundaries, and redirects the native `UseItem=4` pick through the
+active controller aim while preserving the game's red/green usability result.
+The gameplay HUD and subtitle queue is captured from the existing native draw
+owner and composited into both eyes; `SubtitleScale` remains below
+functional-support status until the surface is headset-validated.
 
 ### Audio and visuals
 

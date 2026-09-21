@@ -1238,6 +1238,17 @@ void __fastcall HookedUpdateRenderList(
                 hand.hold_pose_weight=attached_grip;
             }
         }
+        std::array<float,3> use_item_from{},use_item_to{};
+        bool use_item_usable=false;
+        if (frame.focused && ReadUseItemLaser(
+                use_item_from,use_item_to,use_item_usable)) {
+            const std::size_t hand_index=
+                frame.interact_source==runtime::VrHand::left ? 0U : 1U;
+            hands[hand_index].colored_ray=true;
+            hands[hand_index].ray_usable=use_item_usable;
+            hands[hand_index].ray_from=use_item_from;
+            hands[hand_index].ray_to=use_item_to;
+        }
         PublishGameplayPalmTracking(
             raw_palms,raw_palm_valid,head_pose,head_valid,
             g_presentation_yaw_epoch.load(std::memory_order_acquire));

@@ -536,6 +536,28 @@ int main() {
             if (!penumbra_vr::graphics::DrawTrackedHands(hands,penumbra_vr::runtime::IdentityMatrix(),projection,error)) return 37;
             glReadPixels(160,120,1,1,GL_RGBA,GL_UNSIGNED_BYTE,palm.data());
             if (palm!=std::array<GLubyte,4>{0,0,0,255}) return 38;
+            // UseItem keeps the game's depth buffer authoritative but colors
+            // its controller-space beam with the native usability result,
+            // matching Rework's red/green feedback.
+            glClearDepth(1); glDepthFunc(GL_LESS); glDepthMask(GL_TRUE);
+            glClearColor(0,0,0,1); glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+            hands={};
+            hands[1].colored_ray=true;
+            hands[1].ray_from={-0.1F,0,-0.5F};
+            hands[1].ray_to={0.1F,0,-0.5F};
+            if (!penumbra_vr::graphics::DrawTrackedHands(
+                    hands,penumbra_vr::runtime::IdentityMatrix(),projection,error))
+                return 52;
+            std::array<GLubyte,4> beam{};
+            glReadPixels(160,120,1,1,GL_RGBA,GL_UNSIGNED_BYTE,beam.data());
+            if (beam[0]<180 || beam[1]>80 || beam[2]>80) return 53;
+            glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+            hands[1].ray_usable=true;
+            if (!penumbra_vr::graphics::DrawTrackedHands(
+                    hands,penumbra_vr::runtime::IdentityMatrix(),projection,error))
+                return 54;
+            glReadPixels(160,120,1,1,GL_RGBA,GL_UNSIGNED_BYTE,beam.data());
+            if (beam[1]<180 || beam[0]>80 || beam[2]>80) return 55;
             glClearDepth(1); glDepthFunc(GL_LESS);
             if (!menu_targets.EndEye(binding, error)) return 32;
         }

@@ -280,11 +280,30 @@ bool DrawTrackedHands(const std::array<TrackedHandVisual,2>& hands,
             glColor3f(0.30F,0.27F,0.23F);
             Box(0.041F,0.014F,0.047F);
         }
-        if (hand.ray && Rigid(hand.aim)) {
+        if (hand.ray && !hand.colored_ray && Rigid(hand.aim)) {
             const auto ray=ColumnMajor(runtime::Multiply(view,hand.aim));
             glLoadMatrixf(ray.data()); glLineWidth(1); glColor3f(0.6F,0.65F,0.55F);
             glBegin(GL_LINES); glVertex3f(0,0,-0.08F); glVertex3f(0,0,-2); glEnd();
         }
+    }
+    const auto world_view=ColumnMajor(view);
+    for (const auto& hand:hands) {
+        const bool finite_ray=
+            std::all_of(hand.ray_from.begin(),hand.ray_from.end(),
+                [](float value){return std::isfinite(value);}) &&
+            std::all_of(hand.ray_to.begin(),hand.ray_to.end(),
+                [](float value){return std::isfinite(value);});
+        if (!hand.colored_ray || !finite_ray) continue;
+        glLoadMatrixf(world_view.data());
+        glDisable(GL_TEXTURE_2D);
+        glDisable(GL_BLEND);
+        glLineWidth(2.0F);
+        if (hand.ray_usable) glColor3f(0.0F,1.0F,0.0F);
+        else glColor3f(1.0F,0.0F,0.0F);
+        glBegin(GL_LINES);
+        glVertex3f(hand.ray_from[0],hand.ray_from[1],hand.ray_from[2]);
+        glVertex3f(hand.ray_to[0],hand.ray_to[1],hand.ray_to[2]);
+        glEnd();
     }
     return true;
 }

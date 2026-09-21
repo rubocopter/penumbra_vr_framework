@@ -37,8 +37,9 @@ At the current checkpoint:
   gameplay VR from the standard Steam **Play** button. The current development
   candidate contains later host-tested fixes for presentation pacing, hand asset
   deployment, physical-motion reconciliation, map-start yaw, particle refresh,
-  native settings labels and interaction/body lifecycle edges; those fixes must
-  be revalidated before their evidence level is promoted.
+  native settings labels, same-sample held-palm refresh, inventory
+  drag/default/context routing and controller-aim `UseItem` targeting; those
+  fixes must be revalidated before their evidence level is promoted.
 - **Requiem:** executable identity, LAA transform, localization and recommended
   game settings are prepared; there is no active gameplay VR backend.
 

@@ -39,6 +39,10 @@ deferred as release tooling.
 
 ### Presentation and tracking
 
+- [ ] Capture a full stack and eliminate the recurring Black Plague SDL mutex
+  lifetime crash (`SDL_mutexP`/`SDL_DestroyMutex`, retail SDL RVAs `0x28C09`
+  and `0x28BD6`). The existing stable-window and completed-swap bootstrap gates
+  reduce the startup race but do not eliminate it.
 - [ ] Headset-revalidate continuous presentation after the current per-loop pose
   acquisition fix; no alternating stale-pose/native frames.
 - [ ] Validate map/door transitions after authored spawn-yaw compensation.
@@ -76,8 +80,10 @@ deferred as release tooling.
 
 ### UI, audio and visuals
 
-- [ ] Headset-validate inventory/notebook and the captured native HUD/subtitle
-  surface before enabling `SubtitleScale` as a Black Plague control.
+- [ ] Headset-validate inventory/notebook, including drag, default-use,
+  contextual item actions and the controller-aim `UseItem` red/green beam needed
+  for progression, plus the captured native HUD/subtitle surface before enabling
+  `SubtitleScale` as a Black Plague control.
 - [ ] Headset-validate the native `VR Settings` page, persistence and
   restart-required labels.
 - [ ] Headset/audio-device validate HRTF and environmental reverb/bus trim.

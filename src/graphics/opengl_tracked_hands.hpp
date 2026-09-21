@@ -10,6 +10,10 @@ struct TrackedHandVisual {
     float hold_pose_weight = 0.0F;
     bool visible = false;
     bool ray = false;
+    bool colored_ray = false;
+    bool ray_usable = false;
+    std::array<float,3> ray_from{};
+    std::array<float,3> ray_to{};
 };
 // Uses the proven Rework hand mesh/rig with Framework-owned five-finger
 // articulation. The world's depth buffer remains authoritative and the caller's

@@ -488,6 +488,31 @@ int main() {
         return 1;
     }
 
+    // Grab/Move can request the palm again during the same game tick. Reusing
+    // the identical tracking sample with the identical held-body exclusion
+    // must not advance the resolver twice; changing the exclusion must force a
+    // fresh solve even when the tracking sample itself did not change.
+    bp::ServiceGameplayPalmResolver(
+        replacement_fixture.image, replacement_fixture.character.data());
+    gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
+    if (bp::GameplayPalmPoseGeneration(0) != 1 || gameplay.queries != 0) {
+        std::cerr << "gameplay palm resolver repeated an identical sample\n";
+        return 38;
+    }
+    bp::PublishGameplayPalmHeldBody(0, nullptr);
+    bp::ServiceGameplayPalmResolver(
+        replacement_fixture.image, replacement_fixture.character.data());
+    gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
+    if (bp::GameplayPalmPoseGeneration(0) != 2 || gameplay.queries == 0 ||
+        g_last_skip_body != nullptr) {
+        std::cerr << "gameplay palm resolver failed to refresh held-body exclusion: generation="
+                  << bp::GameplayPalmPoseGeneration(0)
+                  << " queries=" << gameplay.queries
+                  << " skip=" << g_last_skip_body << '\n';
+        return 39;
+    }
+    bp::PublishGameplayPalmHeldBody(0, held_body);
+
     g_mode.store(FakeMode::collided, std::memory_order_relaxed);
     g_fake_collision_body = replacement_fixture.physics_body.data();
     bp::GameplayPalmOverlapResult overlap{};
@@ -533,7 +558,7 @@ int main() {
         replacement_fixture.image, replacement_fixture.character.data());
     gameplay = bp::ConsumeGameplayPalmResolverTelemetry();
     if (!bp::ReadGameplayPalmPose(0, gameplay_resolved) ||
-        bp::GameplayPalmPoseGeneration(0) != 2 ||
+        bp::GameplayPalmPoseGeneration(0) != 3 ||
         gameplay.yaw_epoch_resets != 1 || gameplay.tracking_reanchors != 0 ||
         gameplay.recovery_anchors != 0) {
         std::cerr << "yaw epoch palm-history rebase failed\n";

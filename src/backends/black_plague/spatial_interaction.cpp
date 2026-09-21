@@ -53,6 +53,7 @@ static_assert(sizeof(LegacyNudgeCollideData) == 0x14);
 constexpr std::uintptr_t kPhysicsWorldVtable = 0x291B80;
 constexpr std::uintptr_t kPhysicsBodyVtable = 0x292C08;
 constexpr std::uintptr_t kCollideShapeNewtonVtable = 0x292D40;
+constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kCharacterPhysicsBodyOffset = 0x23C;
 constexpr std::uintptr_t kCharacterPhysicsWorldOffset = 0x240;
 constexpr std::uintptr_t kCreateSphereShape = 0x18ACB0;
@@ -111,6 +112,7 @@ constexpr Vec kGlowstickGripPoint{0.0F,0.0078F,-0.078F};
 constexpr float kGlowstickRotationX = 4.71F;
 constexpr std::uint64_t kToolGripMaximumAgeMilliseconds = 100;
 constexpr std::uint64_t kInteractionTargetMaximumAgeMilliseconds = 100;
+constexpr std::uint64_t kUseItemLaserMaximumAgeMilliseconds = 100;
 constexpr std::uint64_t kGrabPalmRefreshTimeoutMilliseconds = 250;
 constexpr std::array<float,9> kToolModelToHandRotation{
     1,0,0,
@@ -119,7 +121,7 @@ constexpr std::array<float,9> kToolModelToHandRotation{
 constexpr runtime::VrAttachmentSocketProfile kFlashlightSocket{
     kToolModelToHandRotation,{0,-0.016669F,0}};
 std::uint8_t* g_image = nullptr;
-std::array<hooks::IatHook,8> g_hooks;
+std::array<hooks::IatHook,9> g_hooks;
 hooks::Rel32CallHook g_tool_hook;
 thread_local void* g_updating_hands = nullptr;
 std::atomic<std::uint64_t> g_tools_attached{0},g_tools_native{0},g_invalid_tool_pose{0},g_blocked_grabs{0};
@@ -150,6 +152,17 @@ struct InteractionTarget {
 };
 SRWLOCK g_interaction_target_lock = SRWLOCK_INIT;
 std::array<InteractionTarget,2> g_interaction_targets{};
+struct UseItemLaser {
+    Vec from{};
+    Vec to{};
+    std::uint64_t time=0;
+    bool usable=false;
+};
+SRWLOCK g_use_item_laser_lock=SRWLOCK_INIT;
+UseItemLaser g_use_item_laser{};
+thread_local bool g_use_item_ray_redirected=false;
+thread_local Vec g_use_item_ray_from{};
+thread_local Vec g_use_item_ray_to{};
 std::atomic<bool> g_enabled{false};
 std::atomic<unsigned> g_callbacks{0};
 struct CallbackScope {
@@ -384,6 +397,31 @@ struct RankedRayCallback final {
     return result;
 }
 
+[[nodiscard]] bool BuildUseItemHandRay(
+    const runtime::VrControllerFrame& frame,
+    float native_length,
+    Vec& from,
+    Vec& to) noexcept {
+    from={};
+    to={};
+    if (!frame.focused || !std::isfinite(native_length) ||
+        native_length<=0.0F || native_length>20.0F) return false;
+    const std::size_t hand_index=
+        frame.interact_source==runtime::VrHand::left ? 0U : 1U;
+    Matrix aim{};
+    Vec velocity{},angular{};
+    if (!ControllerWorldPose(
+            frame.hands[hand_index].aim,aim,velocity,angular)) return false;
+    from=TransformPoint(aim,{0.0F,0.0F,0.0F});
+    to=TransformPoint(aim,{0.0F,0.0F,-native_length});
+    return std::all_of(from.begin(),from.end(),[](float value) {
+            return std::isfinite(value);
+        }) &&
+        std::all_of(to.begin(),to.end(),[](float value) {
+            return std::isfinite(value);
+        });
+}
+
 [[nodiscard]] Vec InverseTransformPoint(const Matrix& matrix, const Vec& point) noexcept {
     const Vec delta{
         point[0]-matrix.values[3], point[1]-matrix.values[7], point[2]-matrix.values[11]};
@@ -428,6 +466,35 @@ template<class T> T Read(const void* object, std::uintptr_t offset) {
 }
 [[nodiscard]] bool FiniteVec(const Vec& value) noexcept {
     return std::isfinite(value[0]) && std::isfinite(value[1]) && std::isfinite(value[2]);
+}
+void ClearUseItemLaser() noexcept {
+    AcquireSRWLockExclusive(&g_use_item_laser_lock);
+    g_use_item_laser={};
+    ReleaseSRWLockExclusive(&g_use_item_laser_lock);
+}
+void PublishUseItemLaserFromNativeState(
+    void* state,
+    const Vec& from,
+    const Vec& fallback_to) noexcept {
+    UseItemLaser next{};
+    auto* const player=Read<void*>(state,0x10);
+    if (player && Read<int>(player,0x2BC)==4 &&
+        FiniteVec(from) && FiniteVec(fallback_to)) {
+        next.from=from;
+        next.to=fallback_to;
+        auto* const pick=Read<void*>(player,0x27C);
+        if (Read<void*>(pick,0x04)) {
+            const Vec picked=Read<Vec>(pick,0x1C);
+            if (FiniteVec(picked)) next.to=picked;
+        }
+        auto* const init=Read<void*>(state,0x0C);
+        auto* const effect=Read<void*>(init,0x15C);
+        next.usable=effect && Read<bool>(effect,0x30C);
+        next.time=GetTickCount64();
+    }
+    AcquireSRWLockExclusive(&g_use_item_laser_lock);
+    g_use_item_laser=next;
+    ReleaseSRWLockExclusive(&g_use_item_laser_lock);
 }
 bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + kPhysicsBodyVtable; }
 [[nodiscard]] float ReworkHingeLightness(float mass) noexcept {
@@ -1057,6 +1124,19 @@ bool HandPose(runtime::VrHand hand, bool aim, Matrix& pose, Vec& velocity, Vec& 
     }
     return true;
 }
+bool RefreshHeldHandPose(void* player, runtime::VrHand hand,
+    Matrix& pose, Vec& velocity, Vec& angular) {
+    if (!player) return false;
+    auto* const character_body=Read<void*>(player,kPlayerCharacterBodyOffset);
+    if (!character_body) return false;
+    // Rework consumes the collision-resolved palm synchronously when it drives
+    // a held body. Black Plague normally publishes that palm after the native
+    // character update, which can leave Grab/Move one sample behind. Refresh
+    // the existing game-thread resolver here after held-body exclusion has
+    // already been published, then consume that publication immediately.
+    ServiceGameplayPalmResolver(g_image,character_body);
+    return HandPose(hand,false,pose,velocity,angular);
+}
 bool ToolHandPose(runtime::VrHand hand, float grip_radius, Matrix& pose,
     Vec& velocity, Vec& angular) {
     if (!ResolvedControllerPose(hand,pose,velocity,angular)) return false;
@@ -1271,10 +1351,32 @@ void __fastcall HookedToolMatrix(void* entity, void*, const Matrix* native_matri
 void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin, const Vec* end,
     bool distance, bool normal, bool point, bool prefilter) {
     CallbackScope scope;
+    const auto return_address=reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    if (g_enabled.load(std::memory_order_acquire) &&
+        return_address==reinterpret_cast<std::uintptr_t>(g_image)+0xADFBD) {
+        Vec native_from{},native_to{};
+        if (Copy(origin,native_from.data(),sizeof(native_from)) &&
+            Copy(end,native_to.data(),sizeof(native_to))) {
+            const float native_length=std::hypot(
+                native_to[0]-native_from[0],native_to[1]-native_from[1],
+                native_to[2]-native_from[2]);
+            Vec use_from{},use_to{};
+            const auto frame=ReadNativeControllerFrame();
+            if (BuildUseItemHandRay(
+                    frame,native_length,use_from,use_to)) {
+                reinterpret_cast<Ray>(g_image+0x189E30)(world,callback,
+                    &use_from,&use_to,distance,normal,point,prefilter);
+                g_use_item_ray_redirected=true;
+                g_use_item_ray_from=use_from;
+                g_use_item_ray_to=use_to;
+                return;
+            }
+        }
+    }
     // Only the normal-player picking call is redirected. Sound, AI, collision,
     // shadows and all other raycasts keep their original origins and endpoints.
     if (g_enabled.load(std::memory_order_acquire) &&
-        reinterpret_cast<std::uintptr_t>(_ReturnAddress()) == reinterpret_cast<std::uintptr_t>(g_image)+0xAD852) {
+        return_address == reinterpret_cast<std::uintptr_t>(g_image)+0xAD852) {
         const auto frame = ReadNativeControllerFrame();
         Vec from{},to{};
         if (Copy(origin,from.data(),sizeof(from)) && Copy(end,to.data(),sizeof(to))) {
@@ -1369,6 +1471,17 @@ void __fastcall HookedRay(void* world, void*, void* callback, const Vec* origin,
     }
     reinterpret_cast<Ray>(g_image+0x189E30)(world,callback,origin,end,distance,normal,point,prefilter);
 }
+void __fastcall HookedUseItemUpdate(void* state,void*,float dt) {
+    CallbackScope scope;
+    g_use_item_ray_redirected=false;
+    reinterpret_cast<Update>(g_image+0xADE90)(state,dt);
+    if (g_use_item_ray_redirected) {
+        PublishUseItemLaserFromNativeState(
+            state,g_use_item_ray_from,g_use_item_ray_to);
+    } else {
+        ClearUseItemLaser();
+    }
+}
 void __fastcall HookedEnter(void* state, void*, void* previous) {
     CallbackScope scope;
     ++g_grab_enters;
@@ -1421,8 +1534,7 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
         return;
     }
     Matrix palm,interaction_pose,body_pose; Vec velocity{},angular{},interaction_velocity{},interaction_angular{};
-    if (!HandPose(pending_hand,false,palm,velocity,angular) ||
-        !InteractionHandPose(pending_hand,interaction_pose,interaction_velocity,interaction_angular) ||
+    if (!InteractionHandPose(pending_hand,interaction_pose,interaction_velocity,interaction_angular) ||
         !Copy(static_cast<std::uint8_t*>(body)+0x34,&body_pose,sizeof(body_pose))) return;
     const float max_linear=Read<float>(body,0x42C),max_angular=Read<float>(body,0x430);
     const float mass=Read<float>(body,0x434);
@@ -1457,8 +1569,6 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
     hold.local_body_contact=local_body_contact;
     // Rework Move preserves the initial hand-to-contact offset so entering a
     // force-driven drag cannot create an opening impulse.
-    hold.local_hand_contact=InverseTransformPoint(palm,world_contact);
-    hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
     hold.max_linear=max_linear; hold.max_angular=max_angular;
     if (hold.mode==MoveHold::Mode::hinge) {
         hold.hinge_lightness=ReworkHingeLightness(mass);
@@ -1467,9 +1577,16 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
             return;
         }
     }
-    g_move_hold=hold;
     PublishGameplayPalmHeldBody(
         hold.hand == runtime::VrHand::left ? 0U : 1U, hold.body);
+    if (!RefreshHeldHandPose(player,hold.hand,palm,velocity,angular)) {
+        PublishGameplayPalmHeldBody(
+            hold.hand == runtime::VrHand::left ? 0U : 1U, nullptr);
+        return;
+    }
+    hold.local_hand_contact=InverseTransformPoint(palm,world_contact);
+    hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
+    g_move_hold=hold;
     // Rework raises these caps while a Move body is hand-driven so the force
     // or joint servo is not strangled by map-authored carrying limits.
     if (hold.mode==MoveHold::Mode::free_body) {
@@ -1522,7 +1639,7 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) {
     Matrix palm,body_pose; Vec velocity{},angular{};
     bool valid=g_enabled.load(std::memory_order_acquire) && BodyMatches(g_move_hold.body) &&
         std::isfinite(dt) && dt>0 && dt<=0.25F &&
-        HandPose(g_move_hold.hand,false,palm,velocity,angular) &&
+        RefreshHeldHandPose(g_move_hold.player,g_move_hold.hand,palm,velocity,angular) &&
         Copy(static_cast<std::uint8_t*>(g_move_hold.body)+0x34,&body_pose,sizeof(body_pose));
     if (valid) {
         const float displacement=std::hypot(
@@ -1678,6 +1795,8 @@ void FinishPreparedGrab(void* player,std::uint64_t player_generation,bool ui) {
     }
     const std::size_t hand_index=
         hold.hand==runtime::VrHand::left ? 0U : 1U;
+    if (auto* const character_body=Read<void*>(player,kPlayerCharacterBodyOffset))
+        ServiceGameplayPalmResolver(g_image,character_body);
     if (GameplayPalmPoseGeneration(hand_index)<=prepared.palm_generation) {
         const std::uint64_t now=GetTickCount64();
         if (now>=prepared.started &&
@@ -1778,7 +1897,8 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     std::string error;
     if (dt == 0) return; // Paused/zero-time ticks must not eject a held object.
     bool valid=g_enabled.load(std::memory_order_acquire) && BodyMatches(g_hold.body) && std::isfinite(dt) && dt>0 && dt<=0.25F &&
-        HandPose(g_hold.hand,false,palm,velocity,angular) && g_hold.pose.Update(palm,destination,error);
+        RefreshHeldHandPose(g_hold.player,g_hold.hand,palm,velocity,angular) &&
+        g_hold.pose.Update(palm,destination,error);
     if (valid) {
         const float displacement=std::hypot(palm.values[3]-g_hold.previous_palm[0],
             palm.values[7]-g_hold.previous_palm[1],palm.values[11]-g_hold.previous_palm[2]);
@@ -1857,6 +1977,23 @@ bool ReadAttachedToolGrip(std::size_t hand_index,float& pose_weight) noexcept {
     return true;
 }
 
+bool ReadUseItemLaser(Vec& from,Vec& to,bool& usable) noexcept {
+    from={};
+    to={};
+    usable=false;
+    UseItemLaser laser{};
+    AcquireSRWLockShared(&g_use_item_laser_lock);
+    laser=g_use_item_laser;
+    ReleaseSRWLockShared(&g_use_item_laser_lock);
+    if (!laser.time || GetTickCount64()-laser.time>
+            kUseItemLaserMaximumAgeMilliseconds ||
+        !FiniteVec(laser.from) || !FiniteVec(laser.to)) return false;
+    from=laser.from;
+    to=laser.to;
+    usable=laser.usable;
+    return true;
+}
+
 bool ReadSpatialInteractionTarget(
     std::size_t hand_index,
     std::array<float,3>& world_point) noexcept {
@@ -1913,12 +2050,12 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         error="The Black Plague image base changed after spatial hook publication";
         return false;
     }
-    constexpr std::array<std::uintptr_t,8> slots{
+    constexpr std::array<std::uintptr_t,9> slots{
         0x291BE8,0x27D0D4,0x27D12C,0x27D130,0x27CB70,
-        0x27CF74,0x27CFCC,0x27CFD0};
-    constexpr std::array<std::uintptr_t,8> targets{
+        0x27CF74,0x27CFCC,0x27CFD0,0x27D1A4};
+    constexpr std::array<std::uintptr_t,9> targets{
         0x189E30,0xABA90,0xAC900,0xAA4C0,0xA3DE0,
-        0xAA690,0xAAC80,0xAAED0};
+        0xAA690,0xAAC80,0xAAED0,0xADE90};
     const auto crt=GetModuleHandleW(L"MSVCP71.dll");
     const auto compare=crt ? GetProcAddress(crt,"??$?8DU?$char_traits@D@std@@V?$allocator@D@1@@std@@YA_NABV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@0@PBD@Z") : nullptr;
     if (!compare || Read<void*>(g_image,0x272138)!=reinterpret_cast<void*>(compare)) {
@@ -1984,6 +2121,11 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
     if (!Copy(g_image+0xAD84F,actual_ray.data(),actual_ray.size()) || actual_ray!=ray_call) {
         error="Normal-state ray call mismatch"; return false;
     }
+    constexpr std::array<std::uint8_t,3> use_item_ray_call{0xFF,0x53,0x68};
+    if (!Copy(g_image+0xADFBA,actual_ray.data(),actual_ray.size()) ||
+        actual_ray!=use_item_ray_call) {
+        error="UseItem-state ray call mismatch"; return false;
+    }
     // iPhysicsBody defaults CollideCharacter (+3C8) to true. The same byte is
     // consulted by the character-aware world query and character-body ray.
     constexpr std::array<std::uint8_t,7> collision_default{0xC6,0x85,0xC8,0x03,0,0,1};
@@ -2004,11 +2146,12 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         std::memcmp(actual_collision.data(),collision_contact_b.data(),collision_contact_b.size())!=0) {
         error="CollideCharacter field mismatch"; return false;
     }
-    const std::array<void*,8> replacements{
+    const std::array<void*,9> replacements{
         reinterpret_cast<void*>(&HookedRay),reinterpret_cast<void*>(&HookedGrabUpdate),
         reinterpret_cast<void*>(&HookedEnter),reinterpret_cast<void*>(&HookedLeave),
         reinterpret_cast<void*>(&HookedHandsUpdate),reinterpret_cast<void*>(&HookedMoveUpdate),
-        reinterpret_cast<void*>(&HookedMoveEnter),reinterpret_cast<void*>(&HookedMoveLeave)};
+        reinterpret_cast<void*>(&HookedMoveEnter),reinterpret_cast<void*>(&HookedMoveLeave),
+        reinterpret_cast<void*>(&HookedUseItemUpdate)};
     for (std::size_t i=0;i<slots.size();++i) {
         if (!hooks::InstallPointerHook(reinterpret_cast<void**>(g_image+slots[i]),g_image+targets[i],replacements[i],g_hooks[i],error)) {
             const std::string install_error=error;

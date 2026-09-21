@@ -114,7 +114,10 @@ runtime::VrMatrix44 g_gameplay_head_pose{};
 bool g_gameplay_head_valid = false;
 std::uint64_t g_gameplay_tracking_time = 0;
 std::uint64_t g_gameplay_tracking_yaw_epoch = 0;
+std::uint64_t g_gameplay_tracking_generation = 0;
 std::uint64_t g_gameplay_resolver_yaw_epoch = 0;
+std::array<std::uint64_t, 2> g_gameplay_resolved_tracking_generation{};
+std::array<void*, 2> g_gameplay_resolved_skip_body{};
 SRWLOCK g_gameplay_pose_lock = SRWLOCK_INIT;
 std::array<runtime::VrMatrix44, 2> g_gameplay_resolved_poses{};
 std::array<bool, 2> g_gameplay_resolved_valid{};
@@ -560,6 +563,8 @@ void ResetGameplayPalmStates() noexcept {
     for (auto& state : g_gameplay_resolver_state) {
         runtime::ResetVrHandResolveState(state);
     }
+    g_gameplay_resolved_tracking_generation = {};
+    g_gameplay_resolved_skip_body = {};
     InvalidateGameplayPalmPoses();
 }
 
@@ -993,6 +998,7 @@ void PublishGameplayPalmTracking(
     g_gameplay_head_valid = head_valid;
     g_gameplay_tracking_yaw_epoch = yaw_epoch;
     g_gameplay_tracking_time = GetTickCount64();
+    ++g_gameplay_tracking_generation;
     ReleaseSRWLockExclusive(&g_gameplay_tracking_lock);
     // A world-yaw turn rotates the raw palms discontinuously in world space.
     // Do not render a still-valid resolved pose from the previous yaw epoch
@@ -1067,6 +1073,7 @@ void ServiceGameplayPalmResolver(
     bool head_valid = false;
     std::uint64_t tracking_time = 0;
     std::uint64_t tracking_yaw_epoch = 0;
+    std::uint64_t tracking_generation = 0;
     AcquireSRWLockShared(&g_gameplay_tracking_lock);
     raw_poses = g_gameplay_raw_poses;
     raw_valid = g_gameplay_raw_valid;
@@ -1074,6 +1081,7 @@ void ServiceGameplayPalmResolver(
     head_valid = g_gameplay_head_valid;
     tracking_time = g_gameplay_tracking_time;
     tracking_yaw_epoch = g_gameplay_tracking_yaw_epoch;
+    tracking_generation = g_gameplay_tracking_generation;
     ReleaseSRWLockShared(&g_gameplay_tracking_lock);
 
     const std::uint64_t now = GetTickCount64();
@@ -1136,6 +1144,15 @@ void ServiceGameplayPalmResolver(
 
     std::array<runtime::VrMatrix44, 2> resolved_poses{};
     std::array<bool, 2> resolved_valid{};
+    std::array<bool, 2> resolved_changed{};
+    std::array<runtime::VrMatrix44, 2> previous_resolved_poses{};
+    std::array<bool, 2> previous_resolved_valid{};
+    std::uint64_t previous_resolved_time = 0;
+    AcquireSRWLockShared(&g_gameplay_pose_lock);
+    previous_resolved_poses = g_gameplay_resolved_poses;
+    previous_resolved_valid = g_gameplay_resolved_valid;
+    previous_resolved_time = g_gameplay_resolved_time;
+    ReleaseSRWLockShared(&g_gameplay_pose_lock);
     std::uint64_t published = 0;
     std::uint64_t queries = 0;
     std::uint64_t contacts = 0;
@@ -1151,6 +1168,24 @@ void ServiceGameplayPalmResolver(
         if (!raw_valid[hand]) continue;
         void* const skip_body =
             g_gameplay_held_body[hand].load(std::memory_order_acquire);
+        if (tracking_generation != 0 &&
+            g_gameplay_resolved_tracking_generation[hand] == tracking_generation &&
+            g_gameplay_resolved_skip_body[hand] == skip_body &&
+            previous_resolved_valid[hand] && previous_resolved_time != 0 &&
+            now >= previous_resolved_time &&
+            now - previous_resolved_time <= kGameplayPalmSampleMaximumAgeMilliseconds) {
+            resolved_poses[hand] = previous_resolved_poses[hand];
+            resolved_valid[hand] = true;
+            continue;
+        }
+        if (g_gameplay_resolved_tracking_generation[hand] != 0 &&
+            g_gameplay_resolved_skip_body[hand] != skip_body) {
+            // The collision domain changed even if the controller pose did
+            // not. ResolveVrHandPose intentionally reuses an identical raw
+            // pose, so reset this hand's history to force a new overlap solve
+            // against the updated held-body exclusion.
+            runtime::ResetVrHandResolveState(g_gameplay_resolver_state[hand]);
+        }
         PalmResolverValidationTelemetry query_telemetry{};
         NativePalmQueryContext query_context{
             image, world, g_gameplay_palm_shape.shape, skip_body,
@@ -1172,6 +1207,9 @@ void ServiceGameplayPalmResolver(
         }
         resolved_poses[hand] = resolved;
         resolved_valid[hand] = true;
+        resolved_changed[hand] = true;
+        g_gameplay_resolved_tracking_generation[hand] = tracking_generation;
+        g_gameplay_resolved_skip_body[hand] = skip_body;
         ++published;
         const float dx = raw_poses[hand].values[3] - resolved.values[3];
         const float dy = raw_poses[hand].values[7] - resolved.values[7];
@@ -1195,9 +1233,11 @@ void ServiceGameplayPalmResolver(
     g_gameplay_resolved_poses = resolved_poses;
     g_gameplay_resolved_valid = resolved_valid;
     for (std::size_t hand = 0; hand < resolved_valid.size(); ++hand) {
-        if (resolved_valid[hand]) ++g_gameplay_resolved_generation[hand];
+        if (resolved_changed[hand]) ++g_gameplay_resolved_generation[hand];
     }
-    g_gameplay_resolved_time = published != 0 ? now : 0;
+    const bool any_resolved = resolved_valid[0] || resolved_valid[1];
+    g_gameplay_resolved_time = !any_resolved ? 0 :
+        (published != 0 ? now : previous_resolved_time);
     ReleaseSRWLockExclusive(&g_gameplay_pose_lock);
 
     AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);

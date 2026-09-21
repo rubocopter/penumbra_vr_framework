@@ -29,6 +29,11 @@ std::atomic<runtime::VrHandedness> g_dominant_handedness{
 using A = runtime::NativeVrAction;
 using Q = runtime::NativeVrQuery;
 struct Entry { std::uintptr_t site; A action; Q query = Q::pressed; };
+constexpr std::uintptr_t kInventoryLeftPressSite = 0x4CF2;
+constexpr std::uintptr_t kInventoryLeftConsumeSite = 0x4D22;
+constexpr std::uintptr_t kInventoryDoubleQuerySite = 0x4D43;
+constexpr std::uintptr_t kInventoryLeftReleaseSite = 0x4D73;
+constexpr std::uintptr_t kInventoryDoubleQueryRva = 0xDA650;
 // Exact initialized FD316F... image. Each entry is a decoded E8 instruction
 // inside cButtonHandler::Update; do not extend by scanning arbitrary byte hits.
 constexpr Entry kQueries[] = {
@@ -38,12 +43,12 @@ constexpr Entry kQueries[] = {
     {0x4CC4,A::pause},{0x500F,A::pause},
     {0x3E1A,A::select},{0x3ECE,A::select},{0x3F57,A::select},{0x3FF7,A::select},
     {0x40A5,A::select},{0x41C6,A::select},{0x43A3,A::select},{0x46B5,A::select},
-    {0x48C6,A::select},{0x4A5B,A::select},{0x4B7A,A::select},{0x4CF2,A::select},
+    {0x48C6,A::select},{0x4A5B,A::select},{0x4B7A,A::select},{kInventoryLeftPressSite,A::drag},
     {0x41F6,A::select},{0x43D3,A::select},{0x46DE,A::select},{0x48F6,A::select},
-    {0x4A8B,A::select},{0x4BAA,A::select},{0x4D22,A::select},
+    {0x4A8B,A::select},{0x4BAA,A::select},{kInventoryLeftConsumeSite,A::drag},
     {0x4212,A::select,Q::released},{0x43EF,A::select,Q::released},
     {0x46FA,A::select,Q::released},{0x4912,A::select,Q::released},
-    {0x4AA7,A::select,Q::released},{0x4D73,A::select,Q::released},
+    {0x4AA7,A::select,Q::released},{kInventoryLeftReleaseSite,A::drag,Q::released},
     {0x3E4A,A::back},{0x3EFE,A::back},{0x3F29,A::back},{0x3F87,A::back},
     {0x4027,A::back},{0x4085,A::back},{0x4115,A::back},{0x42F2,A::back},
     {0x4619,A::back},{0x487A,A::back},{0x4A2D,A::back},{0x4DA3,A::back},
@@ -69,6 +74,7 @@ std::array<std::uint8_t, 5> CallBytes(std::uintptr_t site, std::uintptr_t target
 // or destroy it with the framework's modern CRT: the original query owns it.
 using LegacyString = adapters::hpl1::LegacyInputString;
 using Query = adapters::hpl1::LegacyInputQuery;
+using DoubleQuery = bool(__thiscall*)(void*, LegacyString, float);
 using Update = void(__thiscall*)(void*, float);
 using Move = void(__thiscall*)(void*, float, float);
 using MoveStateGate = bool(__thiscall*)(void*, float, float);
@@ -98,6 +104,7 @@ constexpr std::int32_t kCrouchMoveState = 4;
 std::uint8_t* g_image = nullptr;
 hooks::IatHook g_update_hook;
 std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
+hooks::Rel32CallHook g_inventory_double_query_hook;
 std::array<hooks::Rel32CallHook, 2> g_move_hooks;
 std::array<hooks::Rel32CallHook, kPlayerDamageCallsites.size()> g_damage_hooks;
 struct PointerEntry { std::uintptr_t site, target, cursor; };
@@ -149,6 +156,7 @@ std::uint64_t g_native_crouch_stand_retries = 0;
 std::uint64_t g_native_crouch_mismatch_frames = 0;
 thread_local runtime::VrNativeIntents* g_intents = nullptr;
 thread_local void* g_input_player = nullptr;
+thread_local void* g_input_handler = nullptr;
 thread_local bool g_direct_locomotion = false;
 thread_local bool g_direct_native_axis_observed = false;
 thread_local bool g_direct_forward_allowed = false;
@@ -429,6 +437,16 @@ bool UiContext(void* handler) {
         Read<bool>(Read<void*>(init, 0x164), 0x5C);
 }
 
+bool InventoryContextActive(void* handler) noexcept {
+    if (!handler) return false;
+    auto* const init = Read<void*>(handler, 0x2C);
+    auto* const inventory = init ? Read<void*>(init, 0x164) : nullptr;
+    auto* const context = inventory ? Read<void*>(inventory, 0x28) : nullptr;
+    // Exact-build cInventory::OnMouseDown/OnDoubleClick both read the context
+    // object's active byte at +0x30 through the inventory pointer at +0x28.
+    return context && Read<bool>(context, 0x30);
+}
+
 std::uint64_t ObserveNativePlayerForUpdate(void* current_player) noexcept {
     void* const previous_published_player = g_player.exchange(
         current_player, std::memory_order_acq_rel);
@@ -486,7 +504,14 @@ bool HandleMappedQuery(const Entry& entry, void* input, LegacyString name) {
         // shared policy on the next game tick.
         return false;
     }
-    const bool vr = g_intents && g_intents->Query(entry.action, entry.query);
+    bool vr = g_intents && g_intents->Query(entry.action, entry.query);
+    if (g_intents && entry.site == kInventoryLeftPressSite &&
+        entry.query == Q::pressed && InventoryContextActive(g_input_handler)) {
+        // Rework activates the highlighted inventory-context row with the same
+        // uiSelect edge that otherwise performs a default action. Consume that
+        // edge here only while the native context is actually open.
+        vr = g_intents->Query(A::select, Q::pressed) || vr;
+    }
     if (vr && !native && entry.action == A::light && g_input_player) {
         auto* glow = Read<void*>(g_input_player,0x29C);
         auto* flashlight = Read<void*>(g_input_player,0x290);
@@ -502,6 +527,24 @@ bool HandleMappedQuery(const Entry& entry, void* input, LegacyString name) {
     if (vr && entry.action == A::interact && entry.query == Q::pressed)
         RefreshVrSelectionBeforeInteract(g_input_player);
     return native || vr;
+}
+
+bool HandleInventoryDoubleQuery(void* input, LegacyString name,
+    float window_seconds) {
+    // Keep legacy string destruction and native double-click timing owned by
+    // the exact game function, then add Rework's explicit uiSelect default
+    // action only while no context row is open.
+    const bool native = reinterpret_cast<DoubleQuery>(
+        g_image + kInventoryDoubleQueryRva)(input, name, window_seconds);
+    const bool vr = g_intents && !InventoryContextActive(g_input_handler) &&
+        g_intents->Query(A::select, Q::pressed);
+    return native || vr;
+}
+
+bool __fastcall HookedInventoryDoubleQuery(void* input, void*, LegacyString name,
+    float window_seconds) {
+    CallbackScope scope;
+    return HandleInventoryDoubleQuery(input, name, window_seconds);
 }
 bool __fastcall HookedQuery(void* input, void*, LegacyString name) {
     CallbackScope scope;
@@ -831,7 +874,10 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     // stacking a second hook over either game method.
     const auto light_before = session_connected && !ui && frame.focused
         ? ReadNativeLightState(g_input_player) : NativeLightState{};
+    auto* const previous_handler = g_input_handler;
+    g_input_handler = handler;
     reinterpret_cast<Update>(g_image + 0x3BF0)(handler, dt);
+    g_input_handler = previous_handler;
     const auto light_after = light_before.known
         ? ReadNativeLightState(g_input_player) : NativeLightState{};
     if (NativeLightStateChanged(light_before, light_after)) {
@@ -925,11 +971,13 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
     const bool complete = g_update_hook.installed() &&
         all_installed(g_query_hooks) && all_installed(g_move_hooks) &&
         all_installed(g_pointer_hooks) && all_installed(g_damage_hooks) &&
+        g_inventory_double_query_hook.installed() &&
         g_melee_enemy_damage_hook.installed() &&
         all_installed(g_melee_hit_body_hooks);
     const bool any = g_update_hook.installed() ||
         any_installed(g_query_hooks) || any_installed(g_move_hooks) ||
         any_installed(g_pointer_hooks) || any_installed(g_damage_hooks) ||
+        g_inventory_double_query_hook.installed() ||
         g_melee_enemy_damage_hook.installed() ||
         any_installed(g_melee_hit_body_hooks);
     if (g_installed.load(std::memory_order_acquire)) {
@@ -964,6 +1012,16 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         std::array<std::uint8_t, 5> actual{};
         if (!ReadBytes(g_image + entry.site, actual.data(), actual.size()) || actual != expected) {
             error = "Native input query mismatch at RVA " + std::to_string(entry.site); return false;
+        }
+    }
+    {
+        const auto expected = CallBytes(
+            kInventoryDoubleQuerySite, kInventoryDoubleQueryRva);
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + kInventoryDoubleQuerySite,
+                actual.data(), actual.size()) || actual != expected) {
+            error = "Native inventory double-trigger query mismatch";
+            return false;
         }
     }
     for (const auto& entry : kPointers) {
@@ -1036,6 +1094,13 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         const auto& entry = kQueries[i];
         ok = hooks::InstallRel32CallHook(g_image + entry.site, CallBytes(entry.site, Target(entry.query)),
                                         reinterpret_cast<void*>(&HookedQuery), g_query_hooks[i], error);
+    }
+    if (ok) {
+        ok = hooks::InstallRel32CallHook(
+            g_image + kInventoryDoubleQuerySite,
+            CallBytes(kInventoryDoubleQuerySite, kInventoryDoubleQueryRva),
+            reinterpret_cast<void*>(&HookedInventoryDoubleQuery),
+            g_inventory_double_query_hook, error);
     }
     const std::array<void*, 2> replacements{reinterpret_cast<void*>(&HookedForward), reinterpret_cast<void*>(&HookedSideways)};
     for (std::size_t i = 0; ok && i < sites.size(); ++i)
@@ -1115,6 +1180,11 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
         next.clear();
         if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
     }
+    next.clear();
+    if (!hooks::RemoveRel32CallHook(g_inventory_double_query_hook, next)) {
+        ok = false;
+        append_error(next);
+    }
     for (auto& hook : g_move_hooks) {
         next.clear();
         if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
@@ -1139,6 +1209,7 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
     const bool any_hook = g_update_hook.installed() ||
         std::any_of(g_query_hooks.begin(), g_query_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
+        g_inventory_double_query_hook.installed() ||
         std::any_of(g_move_hooks.begin(), g_move_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
         std::any_of(g_pointer_hooks.begin(), g_pointer_hooks.end(),
@@ -1265,6 +1336,11 @@ bool __fastcall ContractNativeQuery(void*, void*, LegacyString) noexcept {
     return g_contract_native_query_result;
 }
 
+bool __fastcall ContractNativeDoubleQuery(
+    void*, void*, LegacyString, float) noexcept {
+    return g_contract_native_query_result;
+}
+
 void __fastcall ContractChangeMoveState(
     void* player, void*, std::int32_t state, bool) noexcept {
     auto* const body = Read<void*>(player, kPlayerCharacterBodyOffset);
@@ -1328,6 +1404,9 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         ReleaseSRWLockExclusive(&g_crouch_lock);
         g_contract_native_query_result = false;
         g_contract_block_stand = false;
+        g_intents = nullptr;
+        g_input_player = nullptr;
+        g_input_handler = nullptr;
         g_ui.store(true, std::memory_order_release);
         AcquireSRWLockExclusive(&g_session_lock);
         g_haptic_diagnostics = {};
@@ -1350,6 +1429,22 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
                     entry.cursor == cursor;
             });
     };
+    const auto has_query_entry = [](std::uintptr_t site, A action,
+                                    Q query) noexcept {
+        return std::any_of(std::begin(kQueries), std::end(kQueries),
+            [=](const Entry& entry) noexcept {
+                return entry.site == site && entry.action == action &&
+                    entry.query == query;
+            });
+    };
+    if (!has_query_entry(0x4CF2, A::drag, Q::pressed) ||
+        !has_query_entry(0x4D73, A::drag, Q::released)) {
+        return fail("inventory left-button callsites do not preserve VR drag semantics");
+    }
+    if (!has_query_entry(0x4DA3, A::back, Q::pressed) ||
+        !has_query_entry(0x4DEF, A::back, Q::released)) {
+        return fail("inventory right-button callsites do not preserve VR context semantics");
+    }
     if (!has_pointer_entry(0x4965, 0x8AC0, 0x38)) {
         return fail("death-screen pointer call is not hooked");
     }
@@ -1366,18 +1461,21 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     std::array<std::uint8_t, 0x80> player_overlay{};
     std::array<std::uint8_t, 0x80> notebook{};
     std::array<std::uint8_t, 0x80> inventory{};
+    std::array<std::uint8_t, 0x80> inventory_context{};
     ContractWrite(handler.data(), 0x3C, std::int32_t{1});
     void* const init_pointer = init.data();
     void* const ui_player_pointer = ui_player.data();
     void* const overlay_pointer = player_overlay.data();
     void* const notebook_pointer = notebook.data();
     void* const inventory_pointer = inventory.data();
+    void* const inventory_context_pointer = inventory_context.data();
     ContractWrite(handler.data(), 0x2C, init_pointer);
     ContractWrite(handler.data(), 0x38, ui_player_pointer);
     ContractWrite(ui_player.data(), 0x1DC, true);
     ContractWrite(ui_player.data(), 0x28C, overlay_pointer);
     ContractWrite(init.data(), 0x178, notebook_pointer);
     ContractWrite(init.data(), 0x164, inventory_pointer);
+    ContractWrite(inventory.data(), 0x28, inventory_context_pointer);
     if (UiContext(handler.data())) {
         return fail("normal Black Plague gameplay was treated as a UI context");
     }
@@ -1555,13 +1653,56 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
             return fail("could not create a synthetic native query entry");
         }
     }
+    if (!ContractJump(image + kInventoryDoubleQueryRva,
+            reinterpret_cast<void*>(&ContractNativeDoubleQuery))) {
+        return fail("could not create a synthetic inventory double query entry");
+    }
     if (!ContractJump(image + kChangeMoveStateRva,
             reinterpret_cast<void*>(&ContractChangeMoveState))) {
         return fail("could not create synthetic ChangeMoveState");
     }
 
-    const Entry crouch_press{0, A::crouch, Q::pressed};
     LegacyString legacy_name{};
+    runtime::VrNativeIntents inventory_intents;
+    runtime::VrInputState inventory_input{};
+    g_contract_native_query_result = false;
+    g_intents = &inventory_intents;
+    g_input_handler = handler.data();
+
+    inventory_input.ui_drag = {true, true, true, false};
+    inventory_intents.Begin(inventory_input, runtime::VrInputContext::ui);
+    if (!HandleMappedQuery(
+            {kInventoryLeftPressSite, A::drag, Q::pressed},
+            nullptr, legacy_name) ||
+        HandleInventoryDoubleQuery(nullptr, legacy_name, 0.2F)) {
+        return fail("inventory drag edge leaked into the default-action path");
+    }
+
+    inventory_input = {};
+    inventory_input.ui_select = {true, true, true, false};
+    ContractWrite(inventory_context.data(), 0x30, false);
+    inventory_intents.Begin(inventory_input, runtime::VrInputContext::ui);
+    if (HandleMappedQuery(
+            {kInventoryLeftPressSite, A::drag, Q::pressed},
+            nullptr, legacy_name) ||
+        !HandleInventoryDoubleQuery(nullptr, legacy_name, 0.2F) ||
+        HandleInventoryDoubleQuery(nullptr, legacy_name, 0.2F)) {
+        return fail("inventory select did not produce one native default action");
+    }
+
+    ContractWrite(inventory_context.data(), 0x30, true);
+    inventory_intents.Begin(inventory_input, runtime::VrInputContext::ui);
+    if (!HandleMappedQuery(
+            {kInventoryLeftPressSite, A::drag, Q::pressed},
+            nullptr, legacy_name) ||
+        HandleInventoryDoubleQuery(nullptr, legacy_name, 0.2F)) {
+        return fail("inventory context select did not route through native left mouse-down");
+    }
+    ContractWrite(inventory_context.data(), 0x30, false);
+    g_intents = nullptr;
+    g_input_handler = nullptr;
+
+    const Entry crouch_press{0, A::crouch, Q::pressed};
     g_contract_native_query_result = true;
 
     g_vr_crouch_query_owner = false;

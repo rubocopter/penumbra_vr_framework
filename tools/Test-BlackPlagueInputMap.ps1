@@ -22,7 +22,7 @@ function Assert-Bytes([int]$At, [byte[]]$Expected) {
     }
 }
 $inputQueries = [regex]::Matches($inputSource, '\{0x([0-9A-Fa-f]+),A::[a-z_]+(?:,Q::(held|released))?\}')
-if ($inputQueries.Count -ne 76) { throw 'Review the verifier when changing the native query table.' }
+if ($inputQueries.Count -ne 73) { throw 'Review the verifier when changing the native query table.' }
 foreach ($inputMatch in $inputQueries) {
     $inputRva = [Convert]::ToInt32($inputMatch.Groups[1].Value, 16)
     $inputTarget = switch ($inputMatch.Groups[2].Value) {
@@ -30,6 +30,13 @@ foreach ($inputMatch in $inputQueries) {
     }
     Assert-Call $inputRva $inputTarget
 }
+# These three inventory entries use named constants so their role remains
+# reviewable beside the context/default-action adapter. They still belong to
+# the same 76-entry native query table verified above.
+Assert-Call 0x4CF2 0xDA5B0
+Assert-Call 0x4D22 0xDA5B0
+Assert-Call 0x4D73 0xDA510
+Assert-Call 0x4D43 0xDA650
 
 # Native VR settings reuse Black Plague's own cMainMenuWidget_Button objects.
 # Pin the two vtable methods we replace plus the constructor/state-list ABI the
@@ -244,7 +251,7 @@ if ($inputImage.Length -lt 0x292D44) { throw 'Capture is too short for spatial v
 $spatialSlots = @{
     0x27CB70 = 0xA3DE0
     0x291BB0 = 0x18AC10; 0x291BB4 = 0x18ACB0; 0x291BE8 = 0x189E30; 0x27D0D4 = 0xABA90; 0x27D12C = 0xAC900; 0x27D130 = 0xAA4C0
-    0x27D0E4 = 0xA9FD0; 0x27D13C = 0xAD6C0
+    0x27D0E4 = 0xA9FD0; 0x27D13C = 0xAD6C0; 0x27D1A4 = 0xADE90
     0x27CF74 = 0xAA690; 0x27CF84 = 0xAA030; 0x27CFCC = 0xAAC80; 0x27CFD0 = 0xAAED0
     0x292C3C = 0x19C2A0; 0x292C40 = 0x19C6D0; 0x292C44 = 0x19C2C0; 0x292C48 = 0x19C720
     0x292C5C = 0x19C360; 0x292C64 = 0x19C380; 0x292C84 = 0x19C9E0; 0x292C90 = 0x19C3D0
@@ -287,6 +294,9 @@ Assert-Bytes 0x9CAB1 @(0xFF,0x52,0x5C)
 Assert-Bytes 0xA8DE1 @(0xFF,0x15,0x38,0x21,0x67,0x00) # legacy string equality IAT
 Assert-Bytes 0xCCF00 @(0x8B,0x91,0x54,0x03,0,0,0x85,0xD2)
 Assert-Bytes 0xAD84F @(0xFF,0x57,0x68)
+Assert-Bytes 0xADFBA @(0xFF,0x53,0x68)
+Assert-Bytes 0xAD540 @(0xC7,0x40,0x04,0x04,0,0,0) # UseItem action-state 4
+Assert-Bytes 0xAD54E @(0xC7,0x00,0xA0,0xD1,0x67,0) # UseItem vtable 0x67D1A0
 Assert-Bytes 0xACBF0 @(0x89,0x4E,0x14) # native local contact x store
 Assert-Bytes 0xACBF6 @(0x89,0x56,0x18) # y
 Assert-Bytes 0xACBFF @(0x89,0x46,0x1C) # z
