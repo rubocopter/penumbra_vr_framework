@@ -38,8 +38,12 @@ At the current checkpoint:
   candidate contains later host-tested fixes for presentation pacing, hand asset
   deployment, physical-motion reconciliation, map-start yaw, particle refresh,
   native settings labels, same-sample held-palm refresh, inventory
-  drag/default/context routing and controller-aim `UseItem` targeting; those
-  fixes must be revalidated before their evidence level is promoted.
+  drag/default/context routing and controller-aim `UseItem` targeting. The
+  current host-tested candidate additionally rejects negative interaction-ray
+  distances seen in live acquisition logs, restores the context edge through
+  BP's existing native context/widget implementation despite its top-level
+  right-button discard, and reports live particle refresh counters; those fixes
+  must be revalidated before their evidence level is promoted.
 - **Requiem:** executable identity, LAA transform, localization and recommended
   game settings are prepared; there is no active gameplay VR backend.
 

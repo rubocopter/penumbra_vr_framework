@@ -154,6 +154,23 @@ bool QueryGameplayPalmOverlaps(std::size_t,
 }
 int RunSpatialTest() {
     {
+        // Newton can report a negative distance when a widened VR ray starts
+        // inside/behind geometry. Such a hit is not a forward acquisition and
+        // must never outrank a valid candidate or underflow telemetry.
+        RankedRayCallback ranked{};
+        struct Params { float t; float dist; Vec normal; Vec point; };
+        int behind_body=1,forward_body=2;
+        const auto candidates_before=g_selection_candidates.load();
+        Params behind{0.0F,-0.25F,{}, {9.0F,0,0}};
+        if (!RankedRayCallback::Intersect(&ranked,nullptr,&behind_body,&behind) ||
+            ranked.best_body!=nullptr ||
+            g_selection_candidates.load()!=candidates_before) return 153;
+        Params forward{0.0F,0.15F,{}, {0.15F,0,0}};
+        if (!RankedRayCallback::Intersect(&ranked,nullptr,&forward_body,&forward) ||
+            ranked.best_body!=&forward_body ||
+            std::abs(ranked.best_distance-0.15F)>0.00001F) return 154;
+    }
+    {
         std::array<std::uint8_t,16> protected_storage{};
         std::array<std::uint8_t,16> other_storage{};
         const auto now=GetTickCount64();
@@ -496,11 +513,16 @@ int RunSpatialTest() {
     test_palm_resolver_character_body=nullptr;
     test_palm_resolver_saw_held_body=false;
     hand.device_to_absolute.values[3]=0.2F;
+    // Rework calls inherited iEntity::SetActive(true) every grab frame. Force
+    // the exact BP field false here so the adapter must restore that state in
+    // addition to waking the Newton body.
+    Put(body.data(),kBodyActiveOffset,false);
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (test_palm_resolver_services!=1 ||
         test_palm_resolver_character_body!=character_body.data() ||
         !test_palm_resolver_saw_held_body) return 153;
-    if (Read<Matrix>(body.data(),0x34).values[3]!=0.2F || test_native_updates) return 4;
+    if (Read<Matrix>(body.data(),0x34).values[3]!=0.2F ||
+        !Read<bool>(body.data(),kBodyActiveOffset) || test_native_updates) return 4;
     if (test_active_calls!=1 || !test_active_value ||
         test_auto_freeze_calls!=1 || test_auto_freeze_value) return 132;
     HookedGrabUpdate(state.data(),nullptr,0.016F); // stable historical samples
@@ -686,6 +708,8 @@ int RunSpatialTest() {
     test_frame.interact_source=runtime::VrHand::right;
     test_frame.input.state.interact.pressed=true;
     test_frame.input.state.interact.just_pressed=true;
+    test_auto_freeze_calls=0;
+    test_auto_freeze_value=true;
     g_vr_selection_ready=true; g_vr_selection_player=player.data();
     HookedMoveEnter(move_state.data(),nullptr,nullptr);
     Put(player.data(),0x2BC,2);
@@ -694,7 +718,8 @@ int RunSpatialTest() {
     test_palm_resolver_saw_held_body=false;
     ServiceSpatialInteraction(player.data(),false);
     if (!g_move_held.load() || Read<float>(body.data(),0x42C)!=10 ||
-        Read<float>(body.data(),0x430)!=15 || test_palm_held[1]!=body.data()) return 32;
+        Read<float>(body.data(),0x430)!=15 || test_palm_held[1]!=body.data() ||
+        test_auto_freeze_calls!=1 || test_auto_freeze_value) return 32;
     if (test_palm_resolver_services!=1 ||
         test_palm_resolver_character_body!=character_body.data() ||
         !test_palm_resolver_saw_held_body) return 154;
@@ -710,7 +735,8 @@ int RunSpatialTest() {
     ServiceSpatialInteraction(player.data(),false);
     if (g_move_held.load() || test_move_leaves!=1 ||
         Read<float>(body.data(),0x42C)!=3 || Read<float>(body.data(),0x430)!=4 ||
-        test_palm_held[1]!=nullptr) return 34;
+        test_palm_held[1]!=nullptr || test_auto_freeze_calls!=2 ||
+        !test_auto_freeze_value) return 34;
 
     // Move acquisition uses the same Rework palm/finger interaction box as
     // Grab. A valid contact near a box corner must not be rejected by the old

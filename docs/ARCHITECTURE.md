@@ -131,9 +131,13 @@ is restored transactionally around eye work.
 
 Author-authored map-start yaw remains game-owned. The backend compensates only the
 mapped native spawn-yaw delta out of VR world yaw so door/map transitions do not
-silently redefine the user's tracked world. Camera-facing particles have a
-separate per-eye refresh boundary because geometry generated for one eye cannot
-be reused blindly for the other.
+silently redefine the user's tracked world. The per-eye camera transaction also
+publishes the eye-derived native camera position together with view/projection
+matrices. Black Plague billboards and beams use that position for camera-facing
+orientation, so it must describe the same eye as the matrices until the original
+camera state is restored. Camera-facing particles have a separate per-eye refresh
+boundary because geometry generated for one eye cannot be reused blindly for the
+other.
 
 ### Body and locomotion
 
@@ -165,7 +169,9 @@ Free bodies, native `Move` interactions and constrained mechanisms are distinct
 ownership families. Free-body placement can be Framework-owned after native
 selection, while doors/sliders/hinges preserve native lifecycle and joints and
 consume only demonstrated shared servo/contact behavior. Unknown mechanism
-families fail closed.
+families fail closed. While a Framework-owned `Grab=6` body is held, Black Plague
+reproduces Rework's active/enabled/non-autodisable lifecycle before publishing
+the tracked transform; release restores native ownership.
 
 Palm collision controls visible/resolved hand placement; raw controller aim
 remains available for pointing and bounded acquisition assistance. Tool sockets
@@ -183,6 +189,12 @@ Inventory/notebook activation reuses mapped native actions. The current candidat
 keeps drag, default-use and contextual item actions distinct at their verified
 native query boundaries, and redirects the native `UseItem=4` pick through the
 active controller aim while preserving the game's red/green usability result.
+Black Plague's top-level inventory dispatcher explicitly consumes right button
+`2` without forwarding it, even though the slot/context implementations still
+handle that button. The backend therefore adapts only that verified target
+boundary: the VR context-action edge is forwarded directly to the active native
+context or hovered inventory widget while all other inventory dispatch remains
+native.
 The gameplay HUD and subtitle queue is captured from the existing native draw
 owner and composited into both eyes; `SubtitleScale` remains below
 functional-support status until the surface is headset-validated.

@@ -11,6 +11,7 @@
 namespace {
 
 constexpr std::size_t kCameraSize = 0x8D3;
+constexpr std::size_t kPositionOffset = 0x04;
 constexpr std::size_t kFovOffset = 0x10;
 constexpr std::size_t kAspectOffset = 0x14;
 constexpr std::size_t kViewOffset = 0x44;
@@ -31,8 +32,13 @@ using penumbra_vr::runtime::VrMatrix44;
 }
 
 void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
+    constexpr std::array<float, 3> kPosition{1.0F, 2.0F, 3.0F};
     constexpr float kFov = 1.2F;
     constexpr float kAspect = 1.6F;
+    std::memcpy(
+        camera.data() + kPositionOffset,
+        kPosition.data(),
+        sizeof(kPosition));
     std::memcpy(camera.data() + kFovOffset, &kFov, sizeof(kFov));
     std::memcpy(camera.data() + kAspectOffset, &kAspect, sizeof(kAspect));
     const VrMatrix44 view = FilledMatrix(10.0F);
@@ -45,6 +51,19 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
     camera[kFlagsOffset] = 1;
     camera[kFlagsOffset + 1] = 1;
     camera[kFlagsOffset + 2] = 1;
+}
+
+[[nodiscard]] VrMatrix44 RotatedTranslatedView(float x, float y, float z) {
+    VrMatrix44 view{};
+    // 90-degree yaw with t=-R*p. This catches row/column mistakes in the
+    // camera-position recovery used by camera-facing billboards and beams.
+    view.values = {
+        0.0F, 0.0F, 1.0F, -z,
+        0.0F, 1.0F, 0.0F, -y,
+       -1.0F, 0.0F, 0.0F,  x,
+        0.0F, 0.0F, 0.0F, 1.0F,
+    };
+    return view;
 }
 
 [[nodiscard]] bool TestVisibilityOverride() {
@@ -97,7 +116,7 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
     std::array<std::uint8_t, kCameraSize> camera{};
     SetOriginalCamera(camera);
     const auto original = camera;
-    const VrMatrix44 view = FilledMatrix(100.0F);
+    const VrMatrix44 view = RotatedTranslatedView(10.0F, 20.0F, 30.0F);
     const VrMatrix44 projection = FilledMatrix(200.0F);
 
     penumbra_vr::backends::black_plague::CameraMatrixSnapshot snapshot;
@@ -115,6 +134,10 @@ void SetOriginalCamera(std::array<std::uint8_t, kCameraSize>& camera) {
         return false;
     }
     if (std::memcmp(
+            camera.data() + kPositionOffset,
+            std::array<float, 3>{10.0F, 20.0F, 30.0F}.data(),
+            sizeof(std::array<float, 3>)) != 0 ||
+        std::memcmp(
             camera.data() + kViewOffset,
             view.values.data(),
             sizeof(view.values)) != 0 ||

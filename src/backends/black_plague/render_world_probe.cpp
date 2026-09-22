@@ -59,6 +59,7 @@ constexpr std::uintptr_t kMapLoadSetStartPosCallSiteRva = 0x000916EC;
 constexpr std::uintptr_t kPlayerSetStartPosRva = 0x0009DFC0;
 constexpr std::uintptr_t kSpawnCameraSetYawCallSiteRva = 0x0009E1C0;
 constexpr std::uintptr_t kCameraSetYawRva = 0x001139F0;
+constexpr std::uintptr_t kCameraSetPositionRva = 0x00113BB0;
 constexpr std::uintptr_t kCameraYawOffset = 0x24;
 constexpr std::uintptr_t kParticleGetModelMatrixSlotRva = 0x002875B8;
 constexpr std::uintptr_t kParticleUpdateGraphicsSlotRva = 0x002875C0;
@@ -89,6 +90,11 @@ constexpr std::array<std::uint8_t, 5> kExpectedSpawnCameraSetYawCall{
 };
 constexpr std::array<std::uint8_t, 3> kExpectedCameraYawStore{
     0x89, 0x41, 0x24,
+};
+constexpr std::array<std::uint8_t, 24> kExpectedCameraPositionStore{
+    0x8B, 0x54, 0x24, 0x04, 0x56, 0x8B, 0x32, 0x8D,
+    0x41, 0x04, 0x89, 0x30, 0x8B, 0x72, 0x04, 0x89,
+    0x70, 0x04, 0x8B, 0x52, 0x08, 0x89, 0x50, 0x08,
 };
 constexpr float kGameplayOverlayLeft = -400.0F / 450.0F;
 constexpr float kGameplayOverlayRight = 400.0F / 450.0F;
@@ -333,6 +339,9 @@ std::atomic<void*> g_original_spawn_yaw_target{nullptr};
 std::atomic<void*> g_original_particle_get_model_matrix{nullptr};
 std::atomic<void*> g_original_particle_update_graphics{nullptr};
 ParticleStereoRefreshState g_particle_stereo_refresh;
+std::atomic<std::uint64_t> g_particle_update_calls{0};
+std::atomic<std::uint64_t> g_particle_eye_refreshes{0};
+std::atomic<std::uint64_t> g_particle_refresh_misses{0};
 std::atomic<std::uint32_t> g_active_calls{0};
 std::atomic<DuplicationState> g_duplication_state{DuplicationState::idle};
 std::atomic<std::uint32_t> g_duplication_requested_frames{0};
@@ -599,6 +608,7 @@ void __fastcall HookedParticleUpdateGraphics(
     float frame_time,
     void* render_list) noexcept {
     ActiveCall active_call;
+    g_particle_update_calls.fetch_add(1, std::memory_order_relaxed);
     g_particle_stereo_refresh.Capture(camera, frame_time, render_list);
     const auto original = reinterpret_cast<ParticleUpdateGraphics>(
         g_original_particle_update_graphics.load(std::memory_order_acquire));
@@ -614,10 +624,15 @@ void* __fastcall HookedParticleGetModelMatrix(
     ActiveCall active_call;
     const void* const update_target =
         g_original_particle_update_graphics.load(std::memory_order_acquire);
-    static_cast<void>(g_particle_stereo_refresh.Refresh(
+    const bool refreshed = g_particle_stereo_refresh.Refresh(
         emitter,
         camera,
-        const_cast<void*>(update_target)));
+        const_cast<void*>(update_target));
+    if (refreshed) {
+        g_particle_eye_refreshes.fetch_add(1, std::memory_order_relaxed);
+    } else {
+        g_particle_refresh_misses.fetch_add(1, std::memory_order_relaxed);
+    }
     const auto original = reinterpret_cast<ParticleGetModelMatrix>(
         g_original_particle_get_model_matrix.load(std::memory_order_acquire));
     return original != nullptr ? original(emitter, camera) : nullptr;
@@ -1879,6 +1894,13 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         error = "The Camera3D yaw field store does not match the exact build";
         return false;
     }
+    if (!std::equal(
+            kExpectedCameraPositionStore.begin(),
+            kExpectedCameraPositionStore.end(),
+            image + kCameraSetPositionRva)) {
+        error = "The Camera3D position field does not match the exact build";
+        return false;
+    }
     auto** const particle_get_model_matrix_slot = reinterpret_cast<void**>(
         image + kParticleGetModelMatrixSlotRva);
     auto** const particle_update_graphics_slot = reinterpret_cast<void**>(
@@ -1940,6 +1962,9 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_original_particle_update_graphics.store(
         expected_particle_update_graphics, std::memory_order_release);
     g_particle_stereo_refresh.Reset();
+    g_particle_update_calls.store(0, std::memory_order_release);
+    g_particle_eye_refreshes.store(0, std::memory_order_release);
+    g_particle_refresh_misses.store(0, std::memory_order_release);
 
     if (!hooks::InstallRel32CallHook(
             call_site,
@@ -2656,6 +2681,12 @@ RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {
     result.presentation_render_age_ms = timing.render_age_ms;
     result.presentation_submit_age_valid = timing.submit_age_valid;
     result.presentation_submit_age_ms = timing.submit_age_ms;
+    result.particle_update_calls =
+        g_particle_update_calls.exchange(0, std::memory_order_acq_rel);
+    result.particle_eye_refreshes =
+        g_particle_eye_refreshes.exchange(0, std::memory_order_acq_rel);
+    result.particle_refresh_misses =
+        g_particle_refresh_misses.exchange(0, std::memory_order_acq_rel);
     g_telemetry = {};
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     result.eye_targets = ConsumeEyeTargetProbeTelemetry();

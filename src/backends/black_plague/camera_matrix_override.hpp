@@ -5,6 +5,7 @@
 namespace penumbra_vr::backends::black_plague {
 
 inline constexpr adapters::hpl1::CameraLayout kCameraLayout{
+    .position_offset = 0x04,
     .fov_offset = 0x10,
     .aspect_offset = 0x14,
     .view_matrix_offset = 0x44,

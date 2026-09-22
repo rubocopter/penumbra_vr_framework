@@ -354,7 +354,12 @@ struct RankedRayCallback final {
     static bool __fastcall Intersect(void* self, void*, void* body, void* params) {
         auto* proxy = static_cast<RankedRayCallback*>(self);
         struct Params { float t; float dist; Vec normal; Vec point; } hit{};
-        if (!Copy(params, &hit, sizeof(hit)) || !std::isfinite(hit.dist)) return true;
+        // Rework rejects negative ray distances. Black Plague can report one
+        // when a widened hand ray begins inside or behind collision geometry;
+        // accepting it makes that hit outrank every valid forward candidate
+        // and underflows the unsigned distance diagnostic seen in live logs.
+        if (!Copy(params, &hit, sizeof(hit)) || !std::isfinite(hit.dist) ||
+            hit.dist < 0.0F) return true;
         ++g_selection_candidates;
         if (proxy->Better(hit.dist, proxy->ray_index)) {
             if (proxy->best_body) ++g_selection_discards;
@@ -1587,6 +1592,11 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
     hold.local_hand_contact=InverseTransformPoint(palm,world_contact);
     hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
     g_move_hold=hold;
+    // Rework 23c890f disables Newton auto-sleep for every body owned by the
+    // Move state. Without this, a free prop can remain acquired while Newton
+    // puts it to sleep, leaving it visually suspended until release wakes it.
+    reinterpret_cast<void(__thiscall*)(void*,bool)>(
+        g_image+kSetBodyAutoDisable)(body,false);
     // Rework raises these caps while a Move body is hand-driven so the force
     // or joint servo is not strangled by map-authored carrying limits.
     if (hold.mode==MoveHold::Mode::free_body) {
@@ -1607,6 +1617,10 @@ void RestoreMoveBody(const MoveHold& hold) noexcept {
     if (!BodyMatches(hold.body)) return;
     SetFloat(hold.body,0x19C360,hold.max_linear);
     SetFloat(hold.body,0x19C380,hold.max_angular);
+    // Match Rework's Move LeaveState lifecycle after the native state has
+    // finished owning the drag.
+    reinterpret_cast<void(__thiscall*)(void*,bool)>(
+        g_image+kSetBodyAutoDisable)(hold.body,true);
 }
 
 void __fastcall HookedMoveLeave(void* state, void*, void* next) {
@@ -1913,10 +1927,18 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     g_hold.previous_palm={palm.values[3],palm.values[7],palm.values[11]};
     g_hold.release_velocity.Add(velocity,angular);
     reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19C590)(g_hold.body,false);
-    // Rework keeps a kinematically held body awake on every frame. Newton can
-    // otherwise leave a sleeping body visually fixed while the tracked hand
-    // continues moving. These are Black Plague's independently verified
-    // cPhysicsBodyNewton SetEnabled/SetAutoDisable boundaries.
+    // Rework keeps both the inherited iEntity state and Newton body awake on
+    // every grab frame: SetActive(true), SetEnabled(true),
+    // SetAutoDisable(false). BP's iEntity active flag is the exact-build +31
+    // byte; SetEnabled/SetAutoDisable use the verified Newton boundaries.
+    const bool active=true;
+    if (!Store(static_cast<std::uint8_t*>(g_hold.body)+kBodyActiveOffset,
+            &active,sizeof(active))) {
+        g_hold.discard_momentum=true;
+        ++g_guarded_releases;
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xA9FD0)(state);
+        return;
+    }
     reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+kSetBodyEnabled)(g_hold.body,true);
     reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+kSetBodyAutoDisable)(g_hold.body,false);
     // SetMatrix not a raw write: native transform callbacks update Newton and
@@ -2111,6 +2133,13 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
     constexpr std::array<std::uint8_t,8> matrix_entry{0x56,0x8B,0x74,0x24,0x08,0x57,0x8B,0xC1};
     std::array<std::uint8_t,8> actual{};
     if (!Copy(g_image+0xCA120,actual.data(),actual.size()) || actual!=matrix_entry) { error="Entity SetMatrix entry mismatch"; return false; }
+    // iEntity's exact-build constructor defaults mbIsActive at +31 to true.
+    // Grab mirrors Rework's inherited SetActive(true) by writing this byte.
+    constexpr std::array<std::uint8_t,4> entity_active_default{0xC6,0x46,0x31,0x01};
+    if (!Copy(g_image+0xC9D42,actual.data(),entity_active_default.size()) ||
+        std::memcmp(actual.data(),entity_active_default.data(),entity_active_default.size())!=0) {
+        error="Entity active field mismatch"; return false;
+    }
     constexpr std::array<std::uint8_t,8> joints_entry{0x8B,0x91,0x54,0x03,0,0,0x85,0xD2};
     if (!Copy(g_image+0xCCF00,actual.data(),actual.size()) || actual!=joints_entry ||
         Read<void*>(g_image,0x27D0E4)!=g_image+0xA9FD0 ||

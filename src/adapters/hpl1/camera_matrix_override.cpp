@@ -24,12 +24,32 @@ namespace {
 }
 
 [[nodiscard]] bool IsUsable(const CameraLayout& layout) noexcept {
-    return layout.view_matrix_offset != layout.projection_matrix_offset &&
+    return layout.position_offset != layout.view_matrix_offset &&
+        layout.position_offset != layout.projection_matrix_offset &&
+        layout.position_offset != layout.flags_offset &&
+        layout.view_matrix_offset != layout.projection_matrix_offset &&
         layout.flags_offset != layout.view_matrix_offset &&
         layout.flags_offset != layout.projection_matrix_offset &&
         layout.view_updated_flag_index < 3 &&
         layout.projection_updated_flag_index < 3 &&
         layout.view_updated_flag_index != layout.projection_updated_flag_index;
+}
+
+[[nodiscard]] std::array<float, 3> PositionFromView(
+    const runtime::VrMatrix44& view) noexcept {
+    // HPL1/OpenVR use row-major storage with column vectors. For a rigid
+    // world-to-camera matrix [R|t], the camera world position is -R^T t.
+    return {
+        -(view.values[0] * view.values[3] +
+          view.values[4] * view.values[7] +
+          view.values[8] * view.values[11]),
+        -(view.values[1] * view.values[3] +
+          view.values[5] * view.values[7] +
+          view.values[9] * view.values[11]),
+        -(view.values[2] * view.values[3] +
+          view.values[6] * view.values[7] +
+          view.values[10] * view.values[11]),
+    };
 }
 
 [[nodiscard]] bool HasVisibilityScalars(const CameraLayout& layout) noexcept {
@@ -47,6 +67,10 @@ void Capture(
     const CameraLayout& layout,
     CameraMatrixSnapshot& snapshot) noexcept {
     const std::uint8_t* bytes = Bytes(camera);
+    std::memcpy(
+        snapshot.position.data(),
+        bytes + layout.position_offset,
+        sizeof(snapshot.position));
     std::memcpy(
         snapshot.view.values.data(),
         bytes + layout.view_matrix_offset,
@@ -66,6 +90,10 @@ void WriteSnapshot(
     const CameraLayout& layout,
     const CameraMatrixSnapshot& snapshot) noexcept {
     std::uint8_t* bytes = Bytes(camera);
+    std::memcpy(
+        bytes + layout.position_offset,
+        snapshot.position.data(),
+        sizeof(snapshot.position));
     std::memcpy(
         bytes + layout.view_matrix_offset,
         snapshot.view.values.data(),
@@ -119,6 +147,11 @@ bool CameraMatrixOverride::Apply(
     camera_ = camera;
 
     std::uint8_t* bytes = Bytes(camera_);
+    const std::array<float, 3> position = PositionFromView(view);
+    std::memcpy(
+        bytes + layout_.position_offset,
+        position.data(),
+        sizeof(position));
     std::memcpy(
         bytes + layout_.view_matrix_offset,
         view.values.data(),
@@ -252,9 +285,12 @@ bool CaptureCameraMatrices(
         return false;
     }
     Capture(camera, layout, snapshot);
-    if (!IsFinite(snapshot.view) || !IsFinite(snapshot.projection)) {
+    if (!IsFinite(snapshot.view) || !IsFinite(snapshot.projection) ||
+        !std::isfinite(snapshot.position[0]) ||
+        !std::isfinite(snapshot.position[1]) ||
+        !std::isfinite(snapshot.position[2])) {
         snapshot = {};
-        error = "The captured HPL1 camera contains a non-finite matrix";
+        error = "The captured HPL1 camera contains non-finite state";
         return false;
     }
     return true;
@@ -269,6 +305,10 @@ bool CameraMatchesSnapshot(
     }
     const std::uint8_t* bytes = Bytes(camera);
     return std::memcmp(
+               bytes + layout.position_offset,
+               snapshot.position.data(),
+               sizeof(snapshot.position)) == 0 &&
+        std::memcmp(
                bytes + layout.view_matrix_offset,
                snapshot.view.values.data(),
                sizeof(snapshot.view.values)) == 0 &&

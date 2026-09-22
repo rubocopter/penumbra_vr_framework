@@ -95,6 +95,11 @@ With production palm collision enabled:
 - press/slide palms against wall/table/locker geometry;
 - acquire several ordinary props naturally;
 - exercise free-body grab, move, release and throw;
+- specifically repeat with several `Grab=6` props of different shapes and hold
+  each for a few seconds while moving/turning the hand; confirm the body follows
+  continuously instead of flying to a fixed point until release;
+- repeat acquisition with the hand close to/partly inside prop collision and
+  confirm selection does not jump to a behind-ray candidate;
 - approach movable props without pressing Interact and confirm mere proximity
   does not launch them;
 - hold/release objects across turning and a representative transition where safe.
@@ -118,6 +123,11 @@ not be forced through free-body grab behavior.
 ## Gate 7 — UI and settings
 
 - open inventory and notebook in VR;
+- hover an inventory item, press the mapped context-action/Circle input and
+  confirm the native item-action popup appears; press it again while the popup
+  is active and confirm the native close path still works;
+- validate at least one contextual action and one `UseItem` target, including
+  the controller-aim red/green usability beam;
 - verify the captured gameplay HUD/subtitle surface appears in both eyes;
 - open the native `VR Settings` page;
 - test left/right value changes, Spanish/English labels as available, save and
@@ -136,7 +146,16 @@ When the scene provides suitable coverage:
 - mapped pickup/drop/UI/direct-contact haptics;
 - light toggle, damage and real-contact melee haptics where practical;
 - Enhanced Visuals on/off startup and representative image/performance behavior;
+- revisit the messhall window/light-ray scene and confirm the
+  `_bb_blue_lightray_halo` billboards no longer stretch into square cards or long
+  rays after the per-eye native camera-position transaction;
 - camera-facing particles such as tunnel vapor after the per-eye refresh change.
+
+For a scene that reproduces a smoke/vapor artifact, inspect the same log window
+for `particle_updates`, `particle_eye_refreshes` and `particle_refresh_misses`.
+Nonzero eye refreshes prove that effect activity reached the Rework-derived
+particle path; persistent artifacts with no matching refresh activity should be
+classified as another render family before changing particle policy again.
 
 The missing distance/occlusion low-pass consumer remains implementation work and
 is not part of a passing audio gate yet.

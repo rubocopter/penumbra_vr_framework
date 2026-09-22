@@ -675,6 +675,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
             "enhanced_visuals_requested=%u enhanced_visuals_available=%u "
             "stereo_frames=%lu menu_frames=%lu stereo_eye_passes=%lu stereo_lifetime_frames=%llu "
+            "particle_updates=%llu particle_eye_refreshes=%llu particle_refresh_misses=%llu "
             "stereo_cpu_ms=%.3f eye_world_cpu_ms=%.3f hand_draw_cpu_ms=%.3f compositor_submit_cpu_ms=%.3f "
             "gameplay_overlay_frames=%lu gameplay_overlay_failures=%lu deferred_submits=%lu "
             "gameplay_overlay_cpu_ms=%.3f gameplay_overlay_error=%s "
@@ -736,6 +737,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             static_cast<unsigned long>(render_world.menu_frames),
             static_cast<unsigned long>(render_world.stereo_eye_passes),
             render_world.stereo_lifetime_frames,
+            static_cast<unsigned long long>(render_world.particle_update_calls),
+            static_cast<unsigned long long>(render_world.particle_eye_refreshes),
+            static_cast<unsigned long long>(render_world.particle_refresh_misses),
             static_cast<double>(render_world.stereo_cpu_ns) / 1000000.0,
             static_cast<double>(render_world.eye_world_cpu_ns) / 1000000.0,
             static_cast<double>(render_world.hand_draw_cpu_ns) / 1000000.0,

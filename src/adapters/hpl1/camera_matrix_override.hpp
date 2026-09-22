@@ -10,6 +10,7 @@
 namespace penumbra_vr::adapters::hpl1 {
 
 struct CameraLayout {
+    std::size_t position_offset = 0;
     std::size_t fov_offset = 0;
     std::size_t aspect_offset = 0;
     std::size_t view_matrix_offset = 0;
@@ -20,6 +21,7 @@ struct CameraLayout {
 };
 
 struct CameraMatrixSnapshot {
+    std::array<float, 3> position{};
     runtime::VrMatrix44 view;
     runtime::VrMatrix44 projection;
     std::array<std::uint8_t, 3> flags{};

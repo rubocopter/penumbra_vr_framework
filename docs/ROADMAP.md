@@ -46,8 +46,14 @@ deferred as release tooling.
 - [ ] Headset-revalidate continuous presentation after the current per-loop pose
   acquisition fix; no alternating stale-pose/native frames.
 - [ ] Validate map/door transitions after authored spawn-yaw compensation.
+- [ ] Revalidate the messhall `_bb_blue_lightray_halo` family after the current
+  host-tested camera transaction began publishing an eye-derived native camera
+  position together with each eye's view/projection matrices. These effects are
+  billboards/beams rather than evidence of a particle-only regression.
 - [ ] Validate per-eye particle refresh on camera-facing effects such as tunnel
-  vapor.
+  vapor. Probe telemetry now exposes `particle_updates`,
+  `particle_eye_refreshes` and `particle_refresh_misses` so a remaining artifact
+  can be classified before changing another render family.
 - [ ] Complete focus/Alt+Tab and monitor-mirror regression coverage.
 
 ### Body, locomotion and comfort
@@ -71,7 +77,10 @@ deferred as release tooling.
 - [ ] Revalidate palm blocking/sliding and yaw-turn continuity with production
   palm collision enabled.
 - [ ] Confirm reliable natural acquisition and stable `Grab=6` / free-body
-  `Move=2` placement without proximity launching or stale contact ownership.
+  `Move=2` placement without proximity launching or stale contact ownership;
+  the current host-tested candidate rejects negative native ray distances
+  observed corrupting winner selection in live logs and keeps held `Grab=6`
+  bodies active/enabled/non-autodisable as Rework does.
 - [ ] Validate recognized sliders, hinges, swing doors, drawers and other mapped
   native mechanisms; keep unknown joint families fail-closed.
 - [ ] Validate final flashlight/glowstick geometry, sockets and held-tool pose.
@@ -82,8 +91,10 @@ deferred as release tooling.
 
 - [ ] Headset-validate inventory/notebook, including drag, default-use,
   contextual item actions and the controller-aim `UseItem` red/green beam needed
-  for progression, plus the captured native HUD/subtitle surface before enabling
-  `SubtitleScale` as a Black Plague control.
+  for progression. The context-action candidate now bypasses only BP's verified
+  top-level right-button discard and forwards button `2` to the existing native
+  context/widget route. Also validate the captured native HUD/subtitle surface
+  before enabling `SubtitleScale` as a Black Plague control.
 - [ ] Headset-validate the native `VR Settings` page, persistence and
   restart-required labels.
 - [ ] Headset/audio-device validate HRTF and environmental reverb/bus trim.

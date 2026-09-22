@@ -34,6 +34,10 @@ constexpr std::uintptr_t kInventoryLeftConsumeSite = 0x4D22;
 constexpr std::uintptr_t kInventoryDoubleQuerySite = 0x4D43;
 constexpr std::uintptr_t kInventoryLeftReleaseSite = 0x4D73;
 constexpr std::uintptr_t kInventoryDoubleQueryRva = 0xDA650;
+constexpr std::uintptr_t kInventoryRightPressSite = 0x4DA3;
+constexpr std::uintptr_t kInventoryRightGuardRva = 0x6EEC8;
+constexpr std::array<std::uint8_t, 2> kInventoryRightGuardStock{0x74, 0x7B};
+constexpr std::array<std::uint8_t, 2> kInventoryRightGuardEnabled{0x90, 0x90};
 // Exact initialized FD316F... image. Each entry is a decoded E8 instruction
 // inside cButtonHandler::Update; do not extend by scanning arbitrary byte hits.
 constexpr Entry kQueries[] = {
@@ -102,6 +106,7 @@ constexpr std::int32_t kWalkMoveState = 0;
 constexpr std::int32_t kJumpMoveState = 3;
 constexpr std::int32_t kCrouchMoveState = 4;
 std::uint8_t* g_image = nullptr;
+bool g_inventory_right_guard_patched = false;
 hooks::IatHook g_update_hook;
 std::array<hooks::Rel32CallHook, std::size(kQueries)> g_query_hooks;
 hooks::Rel32CallHook g_inventory_double_query_hook;
@@ -178,6 +183,46 @@ bool ReadBytes(const void* source, void* dest, std::size_t size) noexcept {
     if (!source) return false;
     __try { std::memcpy(dest, source, size); return true; }
     __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+bool PatchInventoryRightClickGuard(
+    std::uint8_t* image,
+    bool enable,
+    std::string& error) noexcept {
+    error.clear();
+    if (image == nullptr) {
+        error = "The Black Plague image is unavailable";
+        return false;
+    }
+    auto* const address = image + kInventoryRightGuardRva;
+    const auto& expected = enable
+        ? kInventoryRightGuardStock : kInventoryRightGuardEnabled;
+    const auto& replacement = enable
+        ? kInventoryRightGuardEnabled : kInventoryRightGuardStock;
+    std::array<std::uint8_t, 2> actual{};
+    if (!ReadBytes(address, actual.data(), actual.size()) || actual != expected) {
+        error = enable
+            ? "Native inventory RightClick guard does not match the exact build"
+            : "Native inventory RightClick guard was modified before restoration";
+        return false;
+    }
+    DWORD old_protect = 0;
+    if (!VirtualProtect(address, replacement.size(), PAGE_EXECUTE_READWRITE,
+            &old_protect)) {
+        error = "Could not make the native inventory RightClick guard writable";
+        return false;
+    }
+    std::memcpy(address, replacement.data(), replacement.size());
+    const bool flushed = FlushInstructionCache(
+        GetCurrentProcess(), address, replacement.size()) != FALSE;
+    DWORD ignored = 0;
+    const bool restored = VirtualProtect(
+        address, replacement.size(), old_protect, &ignored) != FALSE;
+    if (!flushed || !restored) {
+        error = "Could not finalize the native inventory RightClick guard patch";
+        return false;
+    }
+    return true;
 }
 template<class T> T Read(const void* object, std::uintptr_t offset) noexcept {
     T result{};
@@ -968,13 +1013,15 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         return std::any_of(hooks.begin(), hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); });
     };
-    const bool complete = g_update_hook.installed() &&
+    const bool complete = g_inventory_right_guard_patched &&
+        g_update_hook.installed() &&
         all_installed(g_query_hooks) && all_installed(g_move_hooks) &&
         all_installed(g_pointer_hooks) && all_installed(g_damage_hooks) &&
         g_inventory_double_query_hook.installed() &&
         g_melee_enemy_damage_hook.installed() &&
         all_installed(g_melee_hit_body_hooks);
-    const bool any = g_update_hook.installed() ||
+    const bool any = g_inventory_right_guard_patched ||
+        g_update_hook.installed() ||
         any_installed(g_query_hooks) || any_installed(g_move_hooks) ||
         any_installed(g_pointer_hooks) || any_installed(g_damage_hooks) ||
         g_inventory_double_query_hook.installed() ||
@@ -1089,6 +1136,10 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         error = "Native crouch move-state mapping mismatch";
         return false;
     }
+    if (!PatchInventoryRightClickGuard(g_image, true, error)) {
+        return false;
+    }
+    g_inventory_right_guard_patched = true;
     bool ok = true;
     for (std::size_t i = 0; ok && i < std::size(kQueries); ++i) {
         const auto& entry = kQueries[i];
@@ -1206,6 +1257,15 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
         next.clear();
         if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
     }
+    if (g_inventory_right_guard_patched) {
+        next.clear();
+        if (!PatchInventoryRightClickGuard(g_image, false, next)) {
+            ok = false;
+            append_error(next);
+        } else {
+            g_inventory_right_guard_patched = false;
+        }
+    }
     const bool any_hook = g_update_hook.installed() ||
         std::any_of(g_query_hooks.begin(), g_query_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
@@ -1218,7 +1278,8 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
             [](const auto& hook) noexcept { return hook.installed(); }) ||
         g_melee_enemy_damage_hook.installed() ||
         std::any_of(g_melee_hit_body_hooks.begin(), g_melee_hit_body_hooks.end(),
-            [](const auto& hook) noexcept { return hook.installed(); });
+            [](const auto& hook) noexcept { return hook.installed(); }) ||
+        g_inventory_right_guard_patched;
     if (any_hook) {
         append_error("Native input bridge remains partially installed");
         return false;
@@ -1460,7 +1521,7 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     std::array<std::uint8_t, 0x300> ui_player{};
     std::array<std::uint8_t, 0x80> player_overlay{};
     std::array<std::uint8_t, 0x80> notebook{};
-    std::array<std::uint8_t, 0x80> inventory{};
+    std::array<std::uint8_t, 0x120> inventory{};
     std::array<std::uint8_t, 0x80> inventory_context{};
     ContractWrite(handler.data(), 0x3C, std::int32_t{1});
     void* const init_pointer = init.data();
@@ -1668,6 +1729,35 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     g_contract_native_query_result = false;
     g_intents = &inventory_intents;
     g_input_handler = handler.data();
+
+    // The exact Black Plague cInventory::OnMouseDown entry has a single
+    // `cmp button, 2 / je return` guard at 0x46EEC5/0x46EEC8. Rework routes
+    // uiBack through this inventory-level method, so the framework only removes
+    // that guard and leaves the native context/widget dispatch untouched.
+    std::memcpy(image + kInventoryRightGuardRva,
+        kInventoryRightGuardStock.data(), kInventoryRightGuardStock.size());
+    std::string guard_error;
+    if (!PatchInventoryRightClickGuard(image, true, guard_error) ||
+        std::memcmp(image + kInventoryRightGuardRva,
+            kInventoryRightGuardEnabled.data(),
+            kInventoryRightGuardEnabled.size()) != 0) {
+        return fail("inventory RightClick guard was not enabled exactly");
+    }
+    if (!PatchInventoryRightClickGuard(image, false, guard_error) ||
+        std::memcmp(image + kInventoryRightGuardRva,
+            kInventoryRightGuardStock.data(),
+            kInventoryRightGuardStock.size()) != 0) {
+        return fail("inventory RightClick guard was not restored exactly");
+    }
+
+    inventory_input.ui_back = {true, true, true, false};
+    ContractWrite(inventory_context.data(), 0x30, false);
+    inventory_intents.Begin(inventory_input, runtime::VrInputContext::ui);
+    if (!HandleMappedQuery(
+            {kInventoryRightPressSite, A::back, Q::pressed},
+            nullptr, legacy_name)) {
+        return fail("inventory VR RightClick did not reach the native query branch");
+    }
 
     inventory_input.ui_drag = {true, true, true, false};
     inventory_intents.Begin(inventory_input, runtime::VrInputContext::ui);
