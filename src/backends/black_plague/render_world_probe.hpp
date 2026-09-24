@@ -18,6 +18,7 @@ enum class FramebufferApi : std::uint8_t {
 };
 
 struct RenderWorldFrameTelemetry {
+    std::uint64_t dropped_updates = 0;
     std::uint32_t calls = 0;
     std::uintptr_t renderer = 0;
     std::uintptr_t world = 0;

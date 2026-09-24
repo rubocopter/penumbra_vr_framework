@@ -539,6 +539,23 @@ int main() {
             1.5F, 2.4F, uv)) {
         std::cerr << "Menu controller-ray intersection failed\n"; return 2;
     }
+    if (!penumbra_vr::runtime::ProjectAimOnMenu(
+            menu_anchor, menu_anchor, 4.0F / 3.0F,
+            1.1F, 800.0F / 750.0F, uv, -100.0F / 750.0F) ||
+        std::abs(uv[1] - 1.0F / 3.0F) > 0.00001F) {
+        std::cerr << "Offset inventory panel pointer intersection failed\n";
+        return 2;
+    }
+    if (!penumbra_vr::runtime::ProjectAimOnWorldPanel(
+            penumbra_vr::runtime::IdentityMatrix(),
+            penumbra_vr::runtime::ExpandMatrix(menu_anchor), menu_anchor,
+            4.0F / 3.0F, 1.1F, 800.0F / 750.0F, uv,
+            -100.0F / 750.0F) ||
+        std::abs(uv[0] - 0.5F) > 0.00001F ||
+        std::abs(uv[1] - 1.0F / 3.0F) > 0.00001F) {
+        std::cerr << "World inventory panel pointer intersection failed\n";
+        return 2;
+    }
     std::array<float, 2> smoothed{};
     if (!penumbra_vr::runtime::SmoothMenuPointerUv(
             {0.25F, 0.75F}, {0.75F, 0.25F}, 0.40F, smoothed) ||

@@ -39,6 +39,12 @@ deferred as release tooling.
 
 ### Presentation and tracking
 
+- [ ] Audit the integrated Overture product against the framework-wide rule that
+  optional render-thread diagnostics must never stall VR presentation. Overture
+  does not consume Black Plague's telemetry probe, so this is a targeted review
+  of any equivalent Overture diagnostics rather than a direct code port. Carry
+  the same invariant into Requiem as its renderer/backend instrumentation is
+  implemented.
 - [ ] Capture a full stack and eliminate the recurring Black Plague SDL mutex
   lifetime crash (`SDL_mutexP`/`SDL_DestroyMutex`, retail SDL RVAs `0x28C09`
   and `0x28BD6`). The existing stable-window and completed-swap bootstrap gates
@@ -46,10 +52,15 @@ deferred as release tooling.
 - [ ] Headset-revalidate continuous presentation after the current per-loop pose
   acquisition fix; no alternating stale-pose/native frames.
 - [ ] Validate map/door transitions after authored spawn-yaw compensation.
-- [ ] Revalidate the messhall `_bb_blue_lightray_halo` family after the current
-  host-tested camera transaction began publishing an eye-derived native camera
-  position together with each eye's view/projection matrices. These effects are
-  billboards/beams rather than evidence of a particle-only regression.
+- [ ] Diagnose the messhall `_bb_blue_lightray_halo` family at its exact BP
+  billboard/beam render boundary. The latest headset clip still shows rays
+  crossing the view after eye-derived native camera position was published with
+  each eye's view/projection matrices and the nested `UpdateRenderList` camera
+  composition was corrected. The 2026-09-24 headset clip disproves that as a
+  complete fix: both blue axis billboards and red laser beams still glitch.
+  Probe the exact native transparent draw for per-eye camera/model-matrix and
+  GL blend/depth state before changing the renderer. These effects are distinct
+  from the particle refresh path.
 - [ ] Validate per-eye particle refresh on camera-facing effects such as tunnel
   vapor. Probe telemetry now exposes `particle_updates`,
   `particle_eye_refreshes` and `particle_refresh_misses` so a remaining artifact
@@ -80,9 +91,24 @@ deferred as release tooling.
   `Move=2` placement without proximity launching or stale contact ownership;
   the current host-tested candidate rejects negative native ray distances
   observed corrupting winner selection in live logs and keeps held `Grab=6`
-  bodies active/enabled/non-autodisable as Rework does.
+  bodies active/enabled/non-autodisable as Rework does. Recheck after the
+  host-tested guard that exits failed VR-origin acquisitions instead of letting
+  native mouse-relative Grab/Move take over. The latest host-tested BP
+  `Grab=6` candidate accepts a fresh VR winner within shared interaction reach
+  and always anchors the body's local origin in the palm, independent of hit
+  point; compare repeated contacts in headset. Verify that free-body `Grab=6`
+  and `Move=2` stay held across snap turns, and that jointed mechanisms do not
+  receive a force/servo impulse on the yaw epoch change.
+- [ ] Headset-check recovery from a frozen controller action sample. The latest
+  log held the same nonzero move axis and both finger-curl summaries for 33
+  seconds; grip matrices were not logged. The host-tested 1.5-second guard
+  releases actions if both tracked grip poses also remain bit-identical. The
+  next probe reports unchanged-sample age and guard activation.
 - [ ] Validate recognized sliders, hinges, swing doors, drawers and other mapped
-  native mechanisms; keep unknown joint families fail-closed.
+  native mechanisms; keep unknown joint families fail-closed. The latest
+  host-tested Move acquisition accepts a fresh selected contact within 0.40 m;
+  check the electricity-room lever, door hinge behavior and reported player
+  repulsion in the headset before adjusting joint servo or collision policy.
 - [ ] Validate final flashlight/glowstick geometry, sockets and held-tool pose.
 - [ ] Validate mapped LightToggle, Damage and real-contact MeleeImpact haptics in
   headset/controller hardware.
@@ -93,10 +119,21 @@ deferred as release tooling.
   contextual item actions and the controller-aim `UseItem` red/green beam needed
   for progression. The context-action candidate now bypasses only BP's verified
   top-level right-button discard and forwards button `2` to the existing native
-  context/widget route. Also validate the captured native HUD/subtitle surface
-  before enabling `SubtitleScale` as a Black Plague control.
+  context/widget route. The latest host-tested UI candidate keeps stereo world
+  rendering under a transparent native inventory/notebook draw queue, places
+  inventory at Rework's fixed world-panel scale and notebook at the off hand,
+  and projects the pointer onto those same panels. The next candidate rotates
+  the notebook as Rework does, shows the hand, and retains the panel pose on
+  its first closing frame to prevent the inventory flash. Check the reported
+  yellow context square and native action text with the new panel. Recheck
+  door/environment messages on Rework's centered plane at UI distance;
+  `SubtitleScale` remains adjustable and headset legibility is unverified.
 - [ ] Headset-validate the native `VR Settings` page, persistence and
-  restart-required labels.
+  restart-required labels. Enhanced Visuals is hidden and disabled for BP while
+  its uncalibrated lighting stage produces dark/saturated headset output;
+  the other 17 consumed Rework settings remain exposed.
+- [ ] Reproduce death → main menu after the null-character-body native crouch
+  guard; the 2026-09-24 dump located the dereference in native MoveState OnEnter.
 - [ ] Headset/audio-device validate HRTF and environmental reverb/bus trim.
 - [ ] Map a safe target boundary for the remaining distance/occlusion low-pass
   behavior.

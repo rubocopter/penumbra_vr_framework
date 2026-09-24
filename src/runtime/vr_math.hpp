@@ -22,7 +22,17 @@ struct VrCullFrustum {
 // UV origin is top-left. Rays crossing the panel plane outside the rectangle
 // pin to the nearest edge, matching the proven Rework pointer behavior.
 [[nodiscard]] bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
-    float aspect, float distance, float width, std::array<float, 2>& uv) noexcept;
+    float aspect, float distance, float width, std::array<float, 2>& uv,
+    float center_y = 0.0F) noexcept;
+// Intersects a tracked controller with a panel fixed in world space or carried
+// by the off hand. Both tracking and panel transforms are rigid.
+[[nodiscard]] bool ProjectAimOnWorldPanel(
+    const VrMatrix44& world_from_tracking,
+    const VrMatrix44& panel_world_pose,
+    const VrMatrix34& aim,
+    float aspect, float distance, float width,
+    std::array<float, 2>& uv,
+    float center_y = 0.0F) noexcept;
 [[nodiscard]] bool SmoothMenuPointerUv(
     const std::array<float, 2>& current,
     const std::array<float, 2>& target,

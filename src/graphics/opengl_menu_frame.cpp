@@ -345,14 +345,16 @@ bool OpenGlMenuFrame::Capture(std::string& error) noexcept {
 bool OpenGlMenuFrame::Draw(const runtime::VrMatrix44& view,
                           const runtime::VrMatrix44& projection,
                           float distance,
-                          float scale,
+                          float width,
+                          float center_y,
                           std::string& error) const noexcept {
     error.clear();
     if (!texture_ || context_ != wglGetCurrentContext()) {
         error = "Menu draw requires a captured texture in its owning context"; return false;
     }
     if (!std::isfinite(distance) || distance <= 0.0F ||
-        !std::isfinite(scale) || scale <= 0.0F) {
+        !std::isfinite(width) || width <= 0.0F ||
+        !std::isfinite(center_y)) {
         error = "Menu draw requires positive finite geometry"; return false;
     }
     State state;
@@ -363,12 +365,12 @@ bool OpenGlMenuFrame::Draw(const runtime::VrMatrix44& view,
     glMatrixMode(GL_PROJECTION); glLoadMatrixf(gl_projection.data());
     glMatrixMode(GL_MODELVIEW); glLoadMatrixf(gl_view.data());
     glEnable(GL_TEXTURE_2D); glBindTexture(GL_TEXTURE_2D, texture_);
-    const float half_width = 1.2F * scale, half_height = half_width / aspect_;
+    const float half_width = width * 0.5F, half_height = half_width / aspect_;
     glBegin(GL_QUADS);
-    glTexCoord2f(0, 0); glVertex3f(-half_width, -half_height, -distance);
-    glTexCoord2f(1, 0); glVertex3f( half_width, -half_height, -distance);
-    glTexCoord2f(1, 1); glVertex3f( half_width,  half_height, -distance);
-    glTexCoord2f(0, 1); glVertex3f(-half_width,  half_height, -distance);
+    glTexCoord2f(0, 0); glVertex3f(-half_width, center_y - half_height, -distance);
+    glTexCoord2f(1, 0); glVertex3f( half_width, center_y - half_height, -distance);
+    glTexCoord2f(1, 1); glVertex3f( half_width, center_y + half_height, -distance);
+    glTexCoord2f(0, 1); glVertex3f(-half_width, center_y + half_height, -distance);
     glEnd();
     return true;
 }

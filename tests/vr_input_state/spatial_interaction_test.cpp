@@ -18,6 +18,7 @@ std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
 runtime::VrMatrix44 test_resolved_palm{};
 std::uint64_t test_resolved_palm_generation=0;
+std::uint64_t test_palm_yaw_epoch=1;
 int test_palm_resolver_services=0;
 void* test_palm_resolver_character_body=nullptr;
 bool test_palm_resolver_saw_held_body=false;
@@ -135,6 +136,9 @@ bool ReadGameplayPalmPose(std::size_t, runtime::VrMatrix44& pose) noexcept {
 }
 std::uint64_t GameplayPalmPoseGeneration(std::size_t) noexcept {
     return test_resolved_palm_generation;
+}
+std::uint64_t GameplayPalmYawEpoch() noexcept {
+    return test_palm_yaw_epoch;
 }
 void ServiceGameplayPalmResolver(std::uint8_t*,void* character_body) noexcept {
     ++test_palm_resolver_services;
@@ -466,8 +470,10 @@ int RunSpatialTest() {
     Put(player.data(),0x2BC,6);
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load() || g_pending_state) return 24;
+    test_leaves=0;
     begin();
-    if (g_held.load() || Read<float>(body.data(),0x42C)!=3) return 15;
+    if (g_held.load() || Read<float>(body.data(),0x42C)!=3 ||
+        Read<int>(player.data(),0x2BC)!=0 || test_leaves!=1) return 15;
     // Exercise acquisition after the exact-build installation gate has proved
     // the native collision field and all of its required consumers.
     g_player_collision_filter_ready.store(true);
@@ -525,6 +531,16 @@ int RunSpatialTest() {
         !Read<bool>(body.data(),kBodyActiveOffset) || test_native_updates) return 4;
     if (test_active_calls!=1 || !test_active_value ||
         test_auto_freeze_calls!=1 || test_auto_freeze_value) return 132;
+    // Snap yaw changes world-space hand coordinates without a physical hand
+    // teleport. A >35 cm palm displacement on a new yaw epoch keeps Grab.
+    test_resolved_palm=runtime::IdentityMatrix();
+    test_resolved_palm.values[3]=0.62F;
+    test_resolved_palm_valid=true;
+    ++test_palm_yaw_epoch;
+    HookedGrabUpdate(state.data(),nullptr,0.016F);
+    if (!g_held.load() ||
+        std::abs(Read<Matrix>(body.data(),0x34).values[3]-0.62F)>0.001F)
+        return 161;
     HookedGrabUpdate(state.data(),nullptr,0.016F); // stable historical samples
     // Rework samples the controller velocity at the release boundary. A quick
     // final throw gesture must not be replaced by the older hold-history median.
@@ -535,6 +551,7 @@ int RunSpatialTest() {
         Read<float>(body.data(),0x430)!=4 || Read<float>(body.data(),0x434)!=10 ||
         !Read<bool>(body.data(),0x428) || !Read<bool>(body.data(),0x3C8) ||
         Read<Vec>(body.data(),0x450)!=Vec{5.0F,0,0} || test_palm_held[1]!=nullptr) return 5;
+    test_resolved_palm_valid=false;
     hand.velocity={2,0,0};
     // Bodies authored not to collide with characters must retain that policy.
     Put(body.data(),0x3C8,false); begin();
@@ -569,16 +586,17 @@ int RunSpatialTest() {
     hand.pose_valid=true; begin(); ServiceSpatialInteraction(player.data(),true);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 7;
     test_joints=1; begin();
-    if (g_held.load() || Read<float>(body.data(),0x42C)!=3) return 8;
-    HookedGrabUpdate(state.data(),nullptr,0.016F);
-    if (test_native_updates!=1) return 9;
+    if (g_held.load() || Read<float>(body.data(),0x42C)!=3 ||
+        Read<int>(player.data(),0x2BC)!=0) return 8;
+    if (test_native_updates!=0) return 9;
     test_joints=0; begin();
     hand.device_to_absolute.values[3]+=2;
+    ++test_palm_yaw_epoch;
     HookedGrabUpdate(state.data(),nullptr,0.016F);
     if (g_held.load() || Read<Vec>(body.data(),0x450)!=Vec{}) return 10;
 
-    // Grab must consume the same VR-selected surface point as Move. The native
-    // screen/camera contact can be stale or on the wrong side of a large prop.
+    // Grab must accept the VR-selected body even if the native screen/camera
+    // contact is stale or on the wrong side of the prop.
     Put(body.data(),0x34,runtime::IdentityMatrix());
     hand.device_to_absolute.values[3]=0.0F;
     Put(state.data(),0x14,Vec{10.0F,0,0});
@@ -604,6 +622,25 @@ int RunSpatialTest() {
     Put(state.data(),0x14,Vec{});
     Put(state.data(),0xE1,false);
 
+    // A fresh nearby VR winner is enough to acquire even when its exact
+    // surface contact lies outside the palm box.
+    Put(body.data(),0x34,runtime::IdentityMatrix());
+    hand.device_to_absolute.values[3]=0.0F;
+    Matrix broad_selected_pose{}; Vec broad_velocity{},broad_angular{};
+    if (!InteractionHandPose(runtime::VrHand::right,broad_selected_pose,
+            broad_velocity,broad_angular)) return 162;
+    const Vec broad_world_contact=TransformPoint(broad_selected_pose,{0.28F,0,0});
+    AcquireSRWLockExclusive(&g_interaction_target_lock);
+    g_interaction_targets[1]={broad_world_contact,body.data(),GetTickCount64(),true};
+    ReleaseSRWLockExclusive(&g_interaction_target_lock);
+    begin();
+    if (!g_held.load()) return 163;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    AcquireSRWLockExclusive(&g_interaction_target_lock);
+    g_interaction_targets[1]={};
+    ReleaseSRWLockExclusive(&g_interaction_target_lock);
+
     // Rework's acquisition volume is a box around the palm/fingers, not the
     // old 18 cm radial guard. A contact near a valid box corner can be farther
     // than 18 cm from the palm origin and must still enter the kinematic hold.
@@ -626,14 +663,22 @@ int RunSpatialTest() {
         InverseTransformPoint(current_body_pose,interaction_world_contact));
     begin();
     if (!g_held.load()) return 138;
+    HookedGrabUpdate(state.data(),nullptr,0.016F);
+    Matrix volume_palm{};
+    if (!HandPose(runtime::VrHand::right,false,volume_palm,
+            volume_velocity,volume_angular)) return 142;
+    const auto held_body_origin=TransformPoint(
+        Read<Matrix>(body.data(),0x34),Vec{});
+    if (!VecNearlyEqual(held_body_origin,
+            {volume_palm.values[3],volume_palm.values[7],volume_palm.values[11]},
+            0.001F)) return 143;
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_held.load()) return 139;
     Put(state.data(),0x14,Vec{});
 
-    // Grab=6 must consume the exact VR winner just as Rework mirrors its hand
-    // target into the legacy picked point before entering Grab. A stale native
-    // contact must neither reject the grab nor become the rigid palm anchor.
+    // Grab=6 must consume the VR winner for eligibility, while the final grip
+    // pose uses the same deterministic body origin for either entry angle.
     Put(body.data(),0x34,runtime::IdentityMatrix());
     Put(state.data(),0x14,Vec{2.0F,0,0});
     Put(state.data(),0xE1,true);
@@ -650,9 +695,9 @@ int RunSpatialTest() {
     Matrix selected_palm{};
     if (!HandPose(runtime::VrHand::right,false,selected_palm,
             anchored_selected_velocity,anchored_selected_angular)) return 150;
-    const auto anchored_contact=TransformPoint(
-        Read<Matrix>(body.data(),0x34),selected_contact);
-    if (!VecNearlyEqual(anchored_contact,
+    const auto anchored_origin=TransformPoint(
+        Read<Matrix>(body.data(),0x34),Vec{});
+    if (!VecNearlyEqual(anchored_origin,
             {selected_palm.values[3],selected_palm.values[7],
                 selected_palm.values[11]},0.001F)) return 151;
     test_frame.input.state.interact.pressed=false;
@@ -731,6 +776,17 @@ int RunSpatialTest() {
     if (std::abs(test_move_force[0]-250.0F)>0.001F ||
         test_move_force[1]!=0 || test_move_force[2]!=0 ||
         test_move_force_position!=Vec{} || test_native_move_updates) return 33;
+    // A snap turn is a world-yaw rebase, not a physical throw. Free Move
+    // should carry the body through that rebase without an impulse or release.
+    test_resolved_palm=runtime::IdentityMatrix();
+    test_resolved_palm.values[3]=0.52F;
+    test_resolved_palm_valid=true;
+    ++test_palm_yaw_epoch;
+    HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+    if (!g_move_held.load() ||
+        std::abs(Read<Matrix>(body.data(),0x34).values[3]-0.42F)>0.001F ||
+        std::abs(test_move_force[0])>0.001F) return 164;
+    test_resolved_palm_valid=false;
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_move_held.load() || test_move_leaves!=1 ||
@@ -783,6 +839,24 @@ int RunSpatialTest() {
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_move_held.load()) return 144;
+    g_interaction_targets[1]={};
+    Put(move_state.data(),0x38,Vec{});
+
+    // A selected VR ray hit can be reachable without falling inside the
+    // small palm contact box. Move must accept that same fresh 40 cm winner
+    // after the native state has authorized the mechanism.
+    g_interaction_targets[1]={Vec{0.30F,0,0},body.data(),GetTickCount64(),true};
+    Put(move_state.data(),0x38,Vec{2.0F,0,0});
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load()) return 165;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load()) return 166;
     g_interaction_targets[1]={};
     Put(move_state.data(),0x38,Vec{});
 

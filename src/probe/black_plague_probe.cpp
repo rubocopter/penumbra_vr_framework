@@ -486,8 +486,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         ReadBlackPlagueRoomScaleStatus();
     const auto room_scale_camera = penumbra_vr::backends::black_plague::
         ReadBlackPlagueRoomScaleCameraSample();
-    penumbra_vr::backends::black_plague::PresentTrackedMenuOnRenderThread(render_world.calls != 0 &&
-        !penumbra_vr::backends::black_plague::NativeInputUiActive());
+    penumbra_vr::backends::black_plague::PresentTrackedMenuOnRenderThread(
+        render_world.stereo_eye_passes != 0);
     const penumbra_vr::hooks::OpenGlFrameTelemetry telemetry =
         penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
     const bool bounded_stereo_activity =
@@ -662,6 +662,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         render_world.presentation_pose_acquisitions != 0 ||
         render_world.presentation_pose_reuses != 0 ||
         render_world.presentation_pose_stale_rejects != 0 ||
+        render_world.dropped_updates != 0 ||
         render_world.gameplay_overlay_failures != 0 ||
         render_world.eye_targets.event !=
             penumbra_vr::backends::black_plague::EyeTargetProbeEvent::none) {
@@ -669,7 +670,7 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         const bool movement_yaw_valid =
             penumbra_vr::backends::black_plague::TrackedMovementYaw(movement_yaw);
         penumbra_vr::probe::WriteLog(
-            "frame=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
+            "frame=%llu telemetry_dropped_updates=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
             "framebuffer=%ld max_texture=%ld max_renderbuffer=%ld max_viewport=[%ld,%ld] "
             "persistent_eye_targets=%u persistent_size=%lux%lu persistent_frames=%llu "
@@ -704,12 +705,14 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
             "controller_grips=%u controller_aims=%u controller_move=[%.3f,%.3f] controller_turn=%.3f "
+            "controller_moving_sample_unchanged_ms=%llu controller_frozen_release=%u "
             "controller_skeletons=%u left_curls=[%.3f,%.3f,%.3f,%.3f,%.3f] "
             "right_curls=[%.3f,%.3f,%.3f,%.3f,%.3f] "
             "movement_yaw_valid=%u movement_yaw_rad=%.5f controller_error=%s "
             "matrix_modes=%lu projection_loads=%lu model_view_loads=%lu "
             "model_view_unique=%lu model_view_dropped=%lu texture_loads=%lu ortho_calls=%lu",
             frame_number,
+            static_cast<unsigned long long>(render_world.dropped_updates),
             static_cast<unsigned long>(render_world.calls),
             reinterpret_cast<void*>(render_world.renderer),
             reinterpret_cast<void*>(render_world.world),
@@ -818,6 +821,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.controller_frame.input.state.move.x,
             render_world.controller_frame.input.state.move.y,
             render_world.controller_frame.input.state.turn.x,
+            static_cast<unsigned long long>(
+                render_world.controller_frame.moving_sample_unchanged_ms),
+            render_world.controller_frame.frozen_sample_released ? 1U : 0U,
             (render_world.controller_frame.hands[0].skeleton_valid ? 1U : 0U) |
                 (render_world.controller_frame.hands[1].skeleton_valid ? 2U : 0U),
             render_world.controller_frame.hands[0].finger_curl[0],

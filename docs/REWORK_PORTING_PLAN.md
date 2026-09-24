@@ -84,6 +84,21 @@ Some Rework behavior is intentionally product-specific unless future evidence
 proves otherwise, including exact HPL material/light response, model/weapon
 statistics, authored rig/socket data and source-game UI/gameplay mechanics.
 
+Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform but
+anchors the body's local origin, independent of the selected surface point.
+Rework's variable surface contact and conditional `mbPickAtPoint` mode produced
+different grip placements for the same Black Plague prop. In the 2026-09-24
+headset clip, repeated native selections still needed many attempts despite a
+valid nearby VR target: the extra palm-box contact test rejected them. A fresh
+VR winner now uses the shared 0.40 m reach bound, while stale/native-only picks
+retain the tighter box guard. The fixed socket is a BP-specific exception to
+Rework's contact anchor, requested to make repeated pickups predictable; its
+placement still needs headset validation. Native-origin grabs and jointed
+`Move=2` mechanisms retain their native behavior. A published world-yaw epoch
+also distinguishes snap turning from physical palm jumps: free bodies follow
+that rebase without a one-frame force impulse, while mechanisms rebase their
+hand offset without teleporting the joint.
+
 ## Validation rule
 
 Extraction, target implementation and target validation are different facts.

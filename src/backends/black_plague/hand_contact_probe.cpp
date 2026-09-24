@@ -1280,6 +1280,13 @@ std::uint64_t GameplayPalmPoseGeneration(std::size_t hand_index) noexcept {
     return generation;
 }
 
+std::uint64_t GameplayPalmYawEpoch() noexcept {
+    AcquireSRWLockShared(&g_gameplay_tracking_lock);
+    const std::uint64_t epoch=g_gameplay_tracking_yaw_epoch;
+    ReleaseSRWLockShared(&g_gameplay_tracking_lock);
+    return epoch;
+}
+
 bool QueryGameplayPalmOverlaps(
     std::size_t hand_index,
     const runtime::VrMatrix44& pose,

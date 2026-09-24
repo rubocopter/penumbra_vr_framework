@@ -23,6 +23,8 @@ struct VrControllerFrame {
     std::array<VrHandSample, 2> hands{};
     VrHand interact_source = VrHand::right;
     bool focused = false;
+    std::uint64_t moving_sample_unchanged_ms = 0;
+    bool frozen_sample_released = false;
 };
 
 struct VrUiPointerPose {
@@ -76,5 +78,9 @@ private:
     VrInputRouter router_;
     bool initialized_ = false;
     bool focused_ = false;
+    bool moving_sample_seen_ = false;
+    std::uint64_t moving_sample_since_ms_ = 0;
+    VrAnalogState previous_move_{};
+    std::array<std::array<float, 12>, 2> previous_grips_{};
 };
 } // namespace penumbra_vr::runtime

@@ -129,6 +129,18 @@ without a fresh visibility-owned sequence, the renderer can acquire a fresh pose
 for that outer loop instead of alternating a native-only frame. Camera/GL state
 is restored transactionally around eye work.
 
+Diagnostics are observational and must not become a presentation dependency.
+Render-thread telemetry uses non-blocking publication: if its diagnostic lock is
+busy, that sample is dropped and counted instead of stalling the VR frame. Locks
+that protect functional tracking, camera, gameplay or lifecycle state remain
+blocking where correctness requires serialization.
+
+This is a framework-wide invariant. Black Plague is the first consumer where the
+rule is enforced explicitly because its probe publishes render-thread telemetry.
+Overture does not currently use that probe path, so its existing diagnostic and
+profiling paths remain subject to a later audit against the same invariant.
+Requiem must follow the rule as equivalent instrumentation is introduced.
+
 Author-authored map-start yaw remains game-owned. The backend compensates only the
 mapped native spawn-yaw delta out of VR world yaw so door/map transitions do not
 silently redefine the user's tracked world. The per-eye camera transaction also
@@ -195,9 +207,15 @@ handle that button. The backend therefore adapts only that verified target
 boundary: the VR context-action edge is forwarded directly to the active native
 context or hovered inventory widget while all other inventory dispatch remains
 native.
-The gameplay HUD and subtitle queue is captured from the existing native draw
-owner and composited into both eyes; `SubtitleScale` remains below
-functional-support status until the surface is headset-validated.
+The native 800x600 draw queue is captured once into a transparent surface and
+composited into both eyes. During gameplay it carries HUD/messages at the lower
+center with configurable `SubtitleScale`; this scales the whole captured queue,
+not the native font alone. Inventory keeps the stereo world visible and places
+that queue on a world-anchored panel at Rework's 1.1 m / 1:750 geometry.
+Notebook follows the off hand at Rework's 1:1450 geometry. Full-screen menus
+retain their separate captured-panel route. Panel projection and pointer use
+the same world transform. These BP UI paths are host-tested, not yet validated
+in the headset.
 
 ### Audio and visuals
 

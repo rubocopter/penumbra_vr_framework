@@ -21,8 +21,8 @@ constexpr std::array<runtime::VrSettingId, kBlackPlagueVrMenuSettingCount>
         runtime::VrSettingId::height_offset,
         runtime::VrSettingId::ui_distance,
         runtime::VrSettingId::ui_scale,
+        runtime::VrSettingId::subtitle_scale,
         runtime::VrSettingId::render_scale,
-        runtime::VrSettingId::enhanced_visuals,
         runtime::VrSettingId::hrtf,
     }};
 

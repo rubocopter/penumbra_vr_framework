@@ -204,6 +204,7 @@ void ForEachStateWidget(void* menu, int state, Callback&& callback) noexcept {
         case I::height_offset: return L"Ajuste de altura";
         case I::ui_distance: return L"Distancia de interfaz";
         case I::ui_scale: return L"Escala de interfaz";
+        case I::subtitle_scale: return L"Tamaño de subtítulos";
         case I::render_scale: return L"Escala de renderizado (reinicio)";
         case I::enhanced_visuals: return L"Mejoras visuales";
         case I::hrtf: return L"HRTF (reinicio)";
@@ -225,6 +226,7 @@ void ForEachStateWidget(void* menu, int state, Callback&& callback) noexcept {
     case I::height_offset: return L"Height offset";
     case I::ui_distance: return L"UI distance";
     case I::ui_scale: return L"UI scale";
+    case I::subtitle_scale: return L"Subtitle size";
     case I::render_scale: return L"Render scale (restart)";
     case I::enhanced_visuals: return L"Enhanced visuals";
     case I::hrtf: return L"HRTF (restart)";

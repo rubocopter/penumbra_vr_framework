@@ -43,7 +43,18 @@ At the current checkpoint:
   distances seen in live acquisition logs, restores the context edge through
   BP's existing native context/widget implementation despite its top-level
   right-button discard, and reports live particle refresh counters; those fixes
-  must be revalidated before their evidence level is promoted.
+  must be revalidated before their evidence level is promoted. The development
+  DLL used in the 2026-09-24 headset pass also uses a deterministic
+  free-prop grip, preserves held objects through snap yaw, presents inventory
+  and notebook in the stereo world. That pass showed an inventory closing flash,
+  misplaced notebook, subtitles visible in recording but not in the headset,
+  difficult mechanism pickup and a death-to-menu crash. A later host-tested
+  candidate, now installed for the next headset pass, corrects the null-body
+  crouch transition, broadens selected Move
+  pickup to the proven 0.40 m reach, restores Rework notebook/subtitle placement,
+  retains the closing UI panel for one frame, and disables BP Enhanced Visuals.
+  It has no headset validation yet. Mechanism motion, player repulsion, held-hand
+  penetration, context text and blue/red effects remain open live observations.
 - **Requiem:** executable identity, LAA transform, localization and recommended
   game settings are prepared; there is no active gameplay VR backend.
 

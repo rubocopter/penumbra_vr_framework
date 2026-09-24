@@ -119,9 +119,11 @@ recommended per-eye dimensions before allocation fallback.
 
 The Black Plague backend currently consumes handedness, play mode/height, turn
 settings, movement/dead zones, height offset, crouch settings, UI distance/scale,
-render scale, Enhanced Visuals and HRTF. `MonitorMirror` remains a separate
-presentation setting. `SubtitleScale` is persisted for schema continuity but is
-not yet a validated Black Plague control.
+subtitle scale, render scale and HRTF. `MonitorMirror` remains a separate
+presentation setting. `EnhancedVisuals` stays in saved profiles but its eye
+stage and menu row are disabled until Black Plague's pre-tone lighting response
+is calibrated. `SubtitleScale` enlarges the captured native HUD/message surface
+and is awaiting headset validation at the Rework-centered UI distance.
 
 The native Black Plague `VR Settings` page and offline editor use this shared
 schema. Edit the profile offline with:

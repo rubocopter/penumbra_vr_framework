@@ -103,9 +103,11 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
     if (!initialized_ || !ValidHand(handedness) ||
         (context != VrInputContext::gameplay && context != VrInputContext::ui)) {
         error = "Controller input is unavailable or context/hand is invalid";
+        moving_sample_seen_ = false;
         release(); return false;
     }
-    if (!focused) { release(); return true; }
+    if (!focused) { moving_sample_seen_ = false; release(); return true; }
+    if (context != VrInputContext::gameplay) moving_sample_seen_ = false;
     const std::size_t dominant = handedness == VrHand::left ? 0U : 1U;
     const auto& handles = contexts_[dominant];
     // One interaction owner for the selected handedness. Activating the shared
@@ -114,6 +116,7 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
     const std::array<VrActiveSet, 2> sets{{{global_, 0},
         {context == VrInputContext::gameplay ? handles.set : handles.ui_set, 0}}};
     if (!backend.Activate(sets, error)) {
+        moving_sample_seen_ = false;
         release(); return false;
     }
     for (std::size_t i = 0; i < 2; ++i) {
@@ -142,16 +145,49 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
         for (std::size_t j = 0; ok && j < kUiMembers.size(); ++j)
             ok = backend.Digital(handles.ui[j], raw.*kUiMembers[j], error);
     }
-    if (!ok) { frame = {}; release(); return false; }
+    if (!ok) { frame = {}; moving_sample_seen_ = false; release(); return false; }
     if (!std::isfinite(raw.move.x) || !std::isfinite(raw.move.y) ||
         !std::isfinite(raw.turn.x) || !std::isfinite(raw.turn.y)) {
-        error = "Non-finite controller axis"; frame = {}; release(); return false;
+        error = "Non-finite controller axis"; frame = {}; moving_sample_seen_ = false;
+        release(); return false;
     }
     raw.move.x = std::clamp(raw.move.x, -1.0F, 1.0F);
     raw.move.y = std::clamp(raw.move.y, -1.0F, 1.0F);
     raw.turn.x = std::clamp(raw.turn.x, -1.0F, 1.0F);
     raw.turn.y = std::clamp(raw.turn.y, -1.0F, 1.0F);
     if (!raw.turn.active) raw.turn = {};
+    bool frozen_controller_sample = false;
+    const bool moving = context == VrInputContext::gameplay && raw.move.active &&
+        std::hypot(raw.move.x, raw.move.y) >= 0.3F &&
+        ValidPose(frame.hands[0].grip) && ValidPose(frame.hands[1].grip);
+    if (moving) {
+        const bool unchanged = moving_sample_seen_ &&
+            raw.move.x == previous_move_.x && raw.move.y == previous_move_.y &&
+            frame.hands[0].grip.device_to_absolute.values == previous_grips_[0] &&
+            frame.hands[1].grip.device_to_absolute.values == previous_grips_[1];
+        if (!unchanged || now_ms < moving_sample_since_ms_) {
+            moving_sample_since_ms_ = now_ms;
+        }
+        previous_move_ = raw.move;
+        for (std::size_t i = 0; i < 2; ++i) {
+            previous_grips_[i] = frame.hands[i].grip.device_to_absolute.values;
+        }
+        moving_sample_seen_ = true;
+        if (unchanged) {
+            frame.moving_sample_unchanged_ms = now_ms - moving_sample_since_ms_;
+        }
+        // The captured failure held one identical locomotion value and both
+        // controller samples for 33 seconds. A live tracked controller moves
+        // between samples; fail closed before a frozen input can walk away.
+        frozen_controller_sample = frame.moving_sample_unchanged_ms >= 1500;
+        if (frozen_controller_sample) {
+            frame.frozen_sample_released = true;
+            raw = {};
+            frame.hands = {};
+        }
+    } else {
+        moving_sample_seen_ = false;
+    }
     // Inactive bindings must not retain a walking/held command for the legacy
     // router's 500 ms grace period. There is no raw-poll fallback in this port.
     if (!AnyActionActive(raw)) { release(); return true; }

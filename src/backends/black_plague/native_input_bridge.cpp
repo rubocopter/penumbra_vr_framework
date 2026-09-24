@@ -126,6 +126,7 @@ hooks::Rel32CallHook g_melee_enemy_damage_hook;
 std::array<hooks::Rel32CallHook, kMeleeHitBodyCallsites.size()>
     g_melee_hit_body_hooks;
 std::atomic<bool> g_ui{true};
+std::atomic<NativeUiSurface> g_ui_surface{NativeUiSurface::fullscreen};
 std::atomic<bool> g_installed{false};
 std::atomic<unsigned> g_active_callbacks{0};
 struct CallbackScope {
@@ -305,6 +306,7 @@ struct NativeLightState {
     void* player, bool& crouched) noexcept {
     crouched = false;
     auto* const body = Read<void*>(player, kPlayerCharacterBodyOffset);
+    if (body == nullptr) return false;
     const float height = Read<float>(body, kCharacterSizeYOffset);
     if (!std::isfinite(height)) return false;
     if (std::abs(height - 0.95F) <= 0.05F) {
@@ -329,7 +331,14 @@ void ServiceNativeVrCrouch(void* player, bool desired,
     }
     bool crouched = false;
     bool known = ReadNativeCrouchShape(player, crouched);
-    const bool move_state_known = player != nullptr;
+    // A surviving cPlayer can outlive its character body during death/menu
+    // teardown. Native crouch OnEnter unconditionally dereferences that body.
+    const bool move_state_known =
+        player != nullptr && Read<void*>(player, kPlayerCharacterBodyOffset) != nullptr;
+    if (!move_state_known) {
+        g_vr_crouch_owned = false;
+        g_vr_crouch_owner_player = nullptr;
+    }
     std::int32_t move_state = move_state_known
         ? Read<std::int32_t>(player, kPlayerMoveStateIndexOffset) : -1;
 
@@ -356,7 +365,7 @@ void ServiceNativeVrCrouch(void* player, bool desired,
             known = ReadNativeCrouchShape(player, crouched);
         }
     } else if (g_vr_crouch_owned) {
-        if (move_state == kCrouchMoveState && player != nullptr && g_image != nullptr) {
+        if (move_state_known && move_state == kCrouchMoveState && g_image != nullptr) {
             reinterpret_cast<ChangeMoveState>(g_image + kChangeMoveStateRva)(
                 player, kWalkMoveState, false);
             move_state = Read<std::int32_t>(player, kPlayerMoveStateIndexOffset);
@@ -480,6 +489,22 @@ bool UiContext(void* handler) {
         Read<bool>(Read<void*>(init, 0x17C), 0x31) ||
         Read<bool>(Read<void*>(init, 0x178), 0x44) ||
         Read<bool>(Read<void*>(init, 0x164), 0x5C);
+}
+NativeUiSurface UiSurface(void* handler) noexcept {
+    if (Read<int>(handler,0x3C)!=1) return NativeUiSurface::fullscreen;
+    auto* const init = Read<void*>(handler, 0x2C);
+    auto* const player=Read<void*>(handler,0x38);
+    if (!init || !player || !Read<bool>(player,0x1DC) ||
+        Read<bool>(Read<void*>(player,0x28C),0) ||
+        Read<int>(Read<void*>(init,0x1AC),0x30)!=0 ||
+        Read<bool>(Read<void*>(init,0x180),0x2D) ||
+        Read<bool>(Read<void*>(init,0x17C),0x31))
+        return NativeUiSurface::fullscreen;
+    if (Read<bool>(Read<void*>(init, 0x164), 0x5C))
+        return NativeUiSurface::inventory;
+    if (Read<bool>(Read<void*>(init, 0x178), 0x44))
+        return NativeUiSurface::notebook;
+    return NativeUiSurface::fullscreen;
 }
 
 bool InventoryContextActive(void* handler) noexcept {
@@ -738,6 +763,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     const bool ui = UiContext(handler);
     const auto context = ui ? runtime::VrInputContext::ui : runtime::VrInputContext::gameplay;
     g_ui.store(ui, std::memory_order_release);
+    g_ui_surface.store(UiSurface(handler), std::memory_order_release);
     void* const current_player = Read<void*>(handler, 0x38);
     const std::uint64_t player_generation =
         ObserveNativePlayerForUpdate(current_player);
@@ -952,6 +978,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     // A button can open an inventory/menu during this update. Publish the new
     // context before rendering so its desktop UI is visible in the headset.
     g_ui.store(UiContext(handler), std::memory_order_release);
+    g_ui_surface.store(UiSurface(handler), std::memory_order_release);
 }
 }
 
@@ -1320,6 +1347,11 @@ void ConnectNativeInput(runtime::OpenVrSession* session) noexcept {
 bool NativeInputUiActive() noexcept {
     return g_installed.load(std::memory_order_acquire) && g_ui.load(std::memory_order_acquire);
 }
+NativeUiSurface NativeInputUiSurface() noexcept {
+    return g_installed.load(std::memory_order_acquire)
+        ? g_ui_surface.load(std::memory_order_acquire)
+        : NativeUiSurface::fullscreen;
+}
 runtime::VrControllerFrame ReadNativeControllerFrame() noexcept {
     AcquireSRWLockShared(&g_session_lock);
     const auto frame = g_frame;
@@ -1541,18 +1573,26 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         return fail("normal Black Plague gameplay was treated as a UI context");
     }
     ContractWrite(notebook.data(), 0x44, true);
-    if (!UiContext(handler.data())) {
+    if (!UiContext(handler.data()) ||
+        UiSurface(handler.data())!=NativeUiSurface::notebook) {
         return fail("notebook active byte did not enter the tracked UI context");
     }
     ContractWrite(notebook.data(), 0x44, false);
     ContractWrite(inventory.data(), 0x5C, true);
-    if (!UiContext(handler.data())) {
+    if (!UiContext(handler.data()) ||
+        UiSurface(handler.data())!=NativeUiSurface::inventory) {
         return fail("inventory active byte did not enter the tracked UI context");
     }
     g_ui.store(UiContext(handler.data()), std::memory_order_release);
     if (!g_ui.load(std::memory_order_acquire)) {
         return fail("published Black Plague UI context lost active inventory state");
     }
+    std::array<std::uint8_t,0x40> full_menu{};
+    ContractWrite(init.data(),0x1AC,static_cast<void*>(full_menu.data()));
+    ContractWrite(full_menu.data(),0x30,std::int32_t{1});
+    if (UiSurface(handler.data())!=NativeUiSurface::fullscreen)
+        return fail("full-screen menu failed to supersede inventory world panel");
+    ContractWrite(full_menu.data(),0x30,std::int32_t{0});
 
     runtime::VrControllerFrame haptic_frame;
     haptic_frame.focused = true;
@@ -1891,6 +1931,17 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         status.native_move_state != kWalkMoveState ||
         !status.native_shape_known || status.native_crouched) {
         return fail("stand retry did not reach ChangeMoveState(0)");
+    }
+
+    // The death/menu transition can retain cPlayer while destroying its
+    // character body. Entering native crouch then dereferences body +0x23C.
+    ContractWrite(player_b.data(), kPlayerCharacterBodyOffset,
+        static_cast<void*>(nullptr));
+    ServiceNativeVrCrouch(player_b.data(), true, status);
+    if (Read<std::int32_t>(player_b.data(), kPlayerMoveStateIndexOffset) !=
+            kWalkMoveState || status.vr_stance_owned ||
+        status.native_move_state_known) {
+        return fail("bodyless player entered native crouch");
     }
 
     cleanup();

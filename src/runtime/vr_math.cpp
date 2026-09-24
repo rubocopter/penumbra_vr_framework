@@ -535,11 +535,12 @@ bool HorizontalTrackingYawDelta(
 
 bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
                       float aspect, float distance, float width,
-                      std::array<float, 2>& uv) noexcept {
+                      std::array<float, 2>& uv, float center_y) noexcept {
     uv = {};
     if (!std::isfinite(aspect) || aspect <= 0 ||
         !std::isfinite(distance) || distance <= 0 ||
-        !std::isfinite(width) || width <= 0) return false;
+        !std::isfinite(width) || width <= 0 ||
+        !std::isfinite(center_y)) return false;
     VrMatrix44 view, pose;
     std::string error;
     if (!ComposeYawRecenteredTrackedHeadView(IdentityMatrix(), anchor, aim, 1, view, error) ||
@@ -550,10 +551,44 @@ bool ProjectAimOnMenu(const VrMatrix34& anchor, const VrMatrix34& aim,
     const float t = (-distance - m[11]) / dz;
     if (t <= 0 || t > 10) return false;
     const float x = m[3] - t * m[2], y = m[7] - t * m[6];
-    const std::array<float, 2> candidate{x / width + 0.5F, 0.5F - y * aspect / width};
+    const std::array<float, 2> candidate{
+        x / width + 0.5F, 0.5F - (y - center_y) * aspect / width};
     if (!std::isfinite(candidate[0]) || !std::isfinite(candidate[1])) return false;
     uv = {std::clamp(candidate[0], 0.0F, 1.0F),
           std::clamp(candidate[1], 0.0F, 1.0F)};
+    return true;
+}
+
+bool ProjectAimOnWorldPanel(
+    const VrMatrix44& world_from_tracking,
+    const VrMatrix44& panel_world_pose,
+    const VrMatrix34& aim,
+    float aspect, float distance, float width,
+    std::array<float, 2>& uv, float center_y) noexcept {
+    uv = {};
+    if (!IsFinite(world_from_tracking) || !IsFinite(panel_world_pose) ||
+        !IsFinite(aim) || !std::isfinite(aspect) || aspect <= 0 ||
+        !std::isfinite(distance) || distance <= 0 ||
+        !std::isfinite(width) || width <= 0 ||
+        !std::isfinite(center_y)) return false;
+    VrMatrix44 inverse_panel{};
+    std::string error;
+    if (!InvertRigidTransform(
+            CollapseRigidMatrix(panel_world_pose),inverse_panel,error))
+        return false;
+    const auto local=Multiply(
+        inverse_panel,Multiply(world_from_tracking,ExpandMatrix(aim)));
+    const float dz=-local.values[10];
+    if (dz>=-0.0001F) return false;
+    const float t=(-distance-local.values[11])/dz;
+    if (t<=0 || t>10) return false;
+    const float x=local.values[3]-t*local.values[2];
+    const float y=local.values[7]-t*local.values[6];
+    const std::array<float,2> candidate{
+        x/width+0.5F,0.5F-(y-center_y)*aspect/width};
+    if (!std::isfinite(candidate[0]) || !std::isfinite(candidate[1])) return false;
+    uv={std::clamp(candidate[0],0.0F,1.0F),
+        std::clamp(candidate[1],0.0F,1.0F)};
     return true;
 }
 

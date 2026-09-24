@@ -533,6 +533,16 @@ if(BUILD_TESTING)
         NAME black_plague_presentation_timing
         COMMAND pvr_black_plague_presentation_timing_test)
 
+    add_executable(pvr_black_plague_telemetry_try_lock_test
+        tests/black_plague_telemetry/telemetry_try_lock_test.cpp)
+    target_include_directories(
+        pvr_black_plague_telemetry_try_lock_test PRIVATE
+        src/backends/black_plague)
+    pvr_enable_warnings(pvr_black_plague_telemetry_try_lock_test)
+    add_test(
+        NAME black_plague_telemetry_try_lock
+        COMMAND pvr_black_plague_telemetry_try_lock_test)
+
     add_executable(pvr_black_plague_spawn_yaw_rebase_test
         tests/black_plague_tracking/spawn_yaw_rebase_test.cpp)
     target_include_directories(

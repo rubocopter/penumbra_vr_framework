@@ -34,7 +34,8 @@ public:
     [[nodiscard]] bool Draw(const runtime::VrMatrix44& view,
                             const runtime::VrMatrix44& projection,
                             float distance,
-                            float scale,
+                          float width,
+                          float center_y,
                             std::string& error) const noexcept;
 private:
     unsigned int texture_ = 0;

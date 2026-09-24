@@ -16,6 +16,7 @@ public:
     std::vector<VrActiveSet> active;
     std::string fail_resolve;
     bool fail_update = false, inactive = false, pose_valid = true, skeleton = false;
+    float pose_offset = 0.0F;
     bool fail_read = false;
     VrActionHandle last_haptic = 0;
     bool Manifest(const char*, std::string&) override { return true; }
@@ -38,7 +39,7 @@ public:
     }
     bool Pose(VrActionHandle, VrHmdPose& result) override {
         result.device_connected = result.pose_valid = pose_valid;
-        result.device_to_absolute.values = {1,0,0,0, 0,1,0,1, 0,0,1,0}; return true;
+        result.device_to_absolute.values = {1,0,0,pose_offset, 0,1,0,1, 0,0,1,0}; return true;
     }
     bool Skeleton(VrActionHandle, std::array<float, 5>& curl) override {
         curl = {-1,0,0.5F,1,2}; return skeleton;
@@ -141,6 +142,26 @@ int main() {
     if (!update()) return 15;
     fake.fail_read = true;
     if (update() || frame.hands[0].grip.pose_valid || frame.input.state.interact.pressed) return 16;
+    VrActionInput freshness_reader;
+    FakeBackend freshness_backend;
+    if (!freshness_reader.Initialize(freshness_backend, "C:/vr/actions.json", error)) return 29;
+    freshness_backend.axes[freshness_backend.handles.at("/actions/gameplay/in/move")] = {true,0,-0.75F};
+    freshness_backend.axes[freshness_backend.handles.at("/actions/gameplay/in/turn")] = {true,0.5F,0};
+    freshness_backend.Press("/actions/gameplay/in/interact");
+    if (!freshness_reader.Update(freshness_backend,VrInputContext::gameplay,VrHand::right,
+            true,100,frame,error) || frame.input.state.move.y==0 ||
+        !frame.input.state.interact.pressed || frame.frozen_sample_released ||
+        frame.moving_sample_unchanged_ms!=0) return 29;
+    if (!freshness_reader.Update(freshness_backend,VrInputContext::gameplay,VrHand::right,
+            true,1700,frame,error) || frame.input.state.move.y!=0 ||
+        frame.input.state.interact.pressed || frame.input.state.turn.x!=0 ||
+        frame.hands[0].grip.pose_valid || !frame.frozen_sample_released ||
+        frame.moving_sample_unchanged_ms<1500) return 30;
+    freshness_backend.pose_offset=0.01F;
+    if (!freshness_reader.Update(freshness_backend,VrInputContext::gameplay,VrHand::right,
+            true,1701,frame,error) || frame.input.state.move.y==0 ||
+        !frame.input.state.interact.pressed || frame.frozen_sample_released ||
+        frame.moving_sample_unchanged_ms!=0) return 31;
     reader.Reset();
     if (reader.initialized() || update()) return 17;
     std::cout << "Action registration, contexts, offhand, poses, skeleton, focus, failure and haptics passed\n";

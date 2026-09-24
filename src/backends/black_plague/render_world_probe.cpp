@@ -11,6 +11,8 @@
 #include "presentation_timing.hpp"
 #include "spatial_interaction.hpp"
 #include "spawn_yaw_rebase.hpp"
+#include "telemetry_try_lock.hpp"
+#include "ui_presentation.hpp"
 #include "vr_grab_pose.hpp"
 #include "rel32_call_hook.hpp"
 #include "stereo_render_policy.hpp"
@@ -96,11 +98,6 @@ constexpr std::array<std::uint8_t, 24> kExpectedCameraPositionStore{
     0x41, 0x04, 0x89, 0x30, 0x8B, 0x72, 0x04, 0x89,
     0x70, 0x04, 0x8B, 0x52, 0x08, 0x89, 0x50, 0x08,
 };
-constexpr float kGameplayOverlayLeft = -400.0F / 450.0F;
-constexpr float kGameplayOverlayRight = 400.0F / 450.0F;
-constexpr float kGameplayOverlayBottom = -350.0F / 450.0F;
-constexpr float kGameplayOverlayTop = 250.0F / 450.0F;
-constexpr float kGameplayOverlayDistance = 0.75F;
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F; // 5 degrees.
 constexpr float kRotationOnlyTranslationScale = 0.0F;
 constexpr float kNativeYawRebaseEpsilonRadians = 0.0001F;
@@ -369,6 +366,8 @@ struct PendingGameplayOverlaySubmission {
     bool active = false;
     runtime::OpenVrSession* session = nullptr;
     runtime::VrMatrix44 head_view{};
+    NativeUiSurface ui_surface = NativeUiSurface::fullscreen;
+    runtime::VrMatrix44 ui_panel_world_pose{};
     std::uint64_t presentation_sequence = 0;
     std::uint64_t presentation_timestamp_ms = 0;
     bool presentation_from_visibility = false;
@@ -394,13 +393,21 @@ float g_pending_spawn_native_yaw_delta = 0.0F;
 bool g_pending_spawn_yaw_rebase = false;
 bool g_menu_anchor_valid = false;
 runtime::VrMatrix34 g_menu_anchor{};
+bool g_world_ui_panel_valid = false;
+NativeUiSurface g_world_ui_surface = NativeUiSurface::fullscreen;
+runtime::VrMatrix44 g_world_ui_panel_pose{};
 SRWLOCK g_menu_pointer_lock = SRWLOCK_INIT;
 runtime::VrMatrix34 g_menu_pointer_anchor{};
+bool g_menu_pointer_world_panel = false;
+runtime::VrMatrix44 g_menu_pointer_world_from_tracking{};
+runtime::VrMatrix44 g_menu_pointer_world_panel_pose{};
 float g_menu_pointer_aspect = 0;
 float g_menu_pointer_distance = runtime::vr_setting_limits::kUiDistance.default_value;
 float g_menu_pointer_width = 2.4F * runtime::vr_setting_limits::kUiScale.default_value;
+float g_menu_pointer_center_y = 0.0F;
 std::atomic<float> g_menu_distance{runtime::vr_setting_limits::kUiDistance.default_value};
 std::atomic<float> g_menu_scale{runtime::vr_setting_limits::kUiScale.default_value};
+std::atomic<float> g_subtitle_scale{runtime::vr_setting_limits::kSubtitleScale.default_value};
 std::atomic<bool> g_recenter_requested{false};
 SRWLOCK g_world_tracking_lock = SRWLOCK_INIT;
 runtime::VrMatrix44 g_world_game_view;
@@ -507,12 +514,23 @@ void InvalidateWorldTracking() {
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 RenderWorldFrameTelemetry g_telemetry;
 PresentationTimingTracker g_presentation_timing;
+std::atomic<std::uint64_t> g_telemetry_dropped_updates{0};
 std::atomic<bool> g_capabilities_initialized{false};
 FramebufferApi g_framebuffer_api = FramebufferApi::unavailable;
 std::array<char, 64> g_open_gl_version{};
 std::array<GLint, 2> g_max_viewport_dimensions{};
 GLint g_max_texture_size = 0;
 GLint g_max_renderbuffer_size = 0;
+
+template <typename Callback>
+void TryRecordTelemetry(Callback&& callback) noexcept {
+    TelemetryTryLock lock(g_telemetry_lock);
+    if (!lock.acquired()) {
+        g_telemetry_dropped_updates.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    callback();
+}
 
 [[nodiscard]] bool HasOpenGlProcedure(const char* name) noexcept {
     const PROC procedure = wglGetProcAddress(name);
@@ -682,14 +700,14 @@ public:
 };
 
 void RecordGameplayOverlayFailure(const std::string& error) noexcept {
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.gameplay_overlay_failures;
-    strncpy_s(
-        g_telemetry.gameplay_overlay_error.data(),
-        g_telemetry.gameplay_overlay_error.size(),
-        error.c_str(),
-        _TRUNCATE);
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        ++g_telemetry.gameplay_overlay_failures;
+        strncpy_s(
+            g_telemetry.gameplay_overlay_error.data(),
+            g_telemetry.gameplay_overlay_error.size(),
+            error.c_str(),
+            _TRUNCATE);
+    });
 }
 
 void FailStereoMatrixValidation(const std::string& error) noexcept;
@@ -717,8 +735,10 @@ void FailStereoMatrixValidation(const std::string& error) noexcept;
                 error)) {
             return false;
         }
-        const runtime::VrMatrix44 eye_from_head =
-            runtime::Multiply(eye_view, head_pose);
+        const bool world_ui=pending.ui_surface==NativeUiSurface::inventory ||
+            pending.ui_surface==NativeUiSurface::notebook;
+        const runtime::VrMatrix44 model_view=runtime::Multiply(
+            eye_view,world_ui ? pending.ui_panel_world_pose : head_pose);
         graphics::OpenGlEyeBinding eye_binding;
         if (!BeginPersistentEyeTarget(
                 eye_index == 0 ? graphics::Eye::left : graphics::Eye::right,
@@ -726,15 +746,22 @@ void FailStereoMatrixValidation(const std::string& error) noexcept;
                 error)) {
             return false;
         }
+        const auto overlay = BlackPlagueGameplayOverlay(
+            g_subtitle_scale.load(std::memory_order_acquire),
+            g_menu_distance.load(std::memory_order_acquire));
+        const auto panel=pending.ui_surface==NativeUiSurface::notebook
+            ? BlackPlagueNotebookPanel(g_menu_scale.load(std::memory_order_acquire))
+            : BlackPlagueInventoryPanel(g_menu_scale.load(std::memory_order_acquire));
+        const float left=world_ui ? -panel.width*0.5F : overlay.left;
+        const float right=world_ui ? panel.width*0.5F : overlay.right;
+        const float bottom=world_ui ? panel.center_y-panel.width*0.375F : overlay.bottom;
+        const float top=world_ui ? panel.center_y+panel.width*0.375F : overlay.top;
+        const float distance=world_ui ? panel.distance : overlay.distance;
         const bool drawn = graphics::DrawTransparentOverlay(
             overlay_texture,
-            eye_from_head,
+            model_view,
             g_stereo_projections[eye_index],
-            kGameplayOverlayLeft,
-            kGameplayOverlayRight,
-            kGameplayOverlayBottom,
-            kGameplayOverlayTop,
-            kGameplayOverlayDistance,
+            left,right,bottom,top,distance,
             error);
         const std::string draw_error = error;
         std::string restore_error;
@@ -838,21 +865,21 @@ void __fastcall HookedGraphicsDrawerDrawAll(void* drawer, void*) noexcept {
         }
     }
 
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    g_telemetry.gameplay_overlay_cpu_ns += ElapsedNanoseconds(overlay_start);
-    if (captured && overlay_composited) {
-        ++g_telemetry.gameplay_overlay_frames;
-        g_telemetry.gameplay_overlay_error = {};
-    }
-    if (submitted) {
-        g_presentation_timing.RecordSubmitAge(
-            pending.presentation_timestamp_ms, GetTickCount64());
-        ++g_telemetry.deferred_compositor_submits;
-        ++g_telemetry.compositor_submitted_frames;
-        g_telemetry.compositor_hmd_pose_valid = true;
-        g_telemetry.compositor_submit_cpu_ns += submit_cpu_ns;
-    }
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        g_telemetry.gameplay_overlay_cpu_ns += ElapsedNanoseconds(overlay_start);
+        if (captured && overlay_composited) {
+            ++g_telemetry.gameplay_overlay_frames;
+            g_telemetry.gameplay_overlay_error = {};
+        }
+        if (submitted) {
+            g_presentation_timing.RecordSubmitAge(
+                pending.presentation_timestamp_ms, GetTickCount64());
+            ++g_telemetry.deferred_compositor_submits;
+            ++g_telemetry.compositor_submitted_frames;
+            g_telemetry.compositor_hmd_pose_valid = true;
+            g_telemetry.compositor_submit_cpu_ns += submit_cpu_ns;
+        }
+    });
 
     if (!capture_binding_failed && pending.session != nullptr &&
         !g_stereo_cancel.load(std::memory_order_acquire) && !submitted) {
@@ -891,9 +918,9 @@ void FailDuplication(const std::string& error) noexcept {
 }
 
 void RecordStereoCameraRestorationFailure() noexcept {
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    g_telemetry.stereo_camera_restored = false;
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([]() noexcept {
+        g_telemetry.stereo_camera_restored = false;
+    });
 }
 
 [[nodiscard]] bool LooksLikeMappedGameplayCamera(
@@ -919,14 +946,14 @@ void FailStereoMatrixValidation(const std::string& error) noexcept {
         g_stereo_error.size(),
         error.c_str(),
         _TRUNCATE);
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    g_telemetry.stereo_failed = true;
-    strncpy_s(
-        g_telemetry.stereo_error.data(),
-        g_telemetry.stereo_error.size(),
-        error.c_str(),
-        _TRUNCATE);
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        g_telemetry.stereo_failed = true;
+        strncpy_s(
+            g_telemetry.stereo_error.data(),
+            g_telemetry.stereo_error.size(),
+            error.c_str(),
+            _TRUNCATE);
+    });
     g_stereo_state.store(StereoMatrixState::failed, std::memory_order_release);
 }
 
@@ -945,15 +972,15 @@ public:
 void RecordHmdVisibilityFailure(
     const std::string& error,
     bool camera_restored) noexcept {
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.hmd_visibility_failures;
-    g_telemetry.hmd_visibility_camera_restored = camera_restored;
-    strncpy_s(
-        g_telemetry.hmd_visibility_error.data(),
-        g_telemetry.hmd_visibility_error.size(),
-        error.c_str(),
-        _TRUNCATE);
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        ++g_telemetry.hmd_visibility_failures;
+        g_telemetry.hmd_visibility_camera_restored = camera_restored;
+        strncpy_s(
+            g_telemetry.hmd_visibility_error.data(),
+            g_telemetry.hmd_visibility_error.size(),
+            error.c_str(),
+            _TRUNCATE);
+    });
 }
 
 [[nodiscard]] bool AcquirePresentationSnapshot(
@@ -983,10 +1010,10 @@ void RecordHmdVisibilityFailure(
     snapshot.pose.identity.sequence =
         g_presentation_sequence.fetch_add(1, std::memory_order_acq_rel) + 1;
     snapshot.pose.identity.timestamp_ms = GetTickCount64();
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    g_presentation_timing.RecordAcquisition(
-        snapshot.pose.identity.timestamp_ms);
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        g_presentation_timing.RecordAcquisition(
+            snapshot.pose.identity.timestamp_ms);
+    });
     snapshot.pose.identity.pose_epoch =
         g_presentation_pose_epoch.load(std::memory_order_acquire);
     snapshot.pose.identity.yaw_epoch =
@@ -1016,9 +1043,12 @@ void __fastcall HookedUpdateRenderList(
     }
 
     const auto visibility_active = []() noexcept {
+        const auto ui_surface=NativeInputUiSurface();
+        const bool world_ui=ui_surface==NativeUiSurface::inventory ||
+            ui_surface==NativeUiSurface::notebook;
         return g_stereo_persistent.load(std::memory_order_acquire) &&
             g_stereo_track_head_rotation &&
-            !NativeInputUiActive() &&
+            (!NativeInputUiActive() || world_ui) &&
             (g_stereo_state.load(std::memory_order_acquire) ==
                 StereoMatrixState::pending ||
              g_stereo_state.load(std::memory_order_acquire) ==
@@ -1070,9 +1100,9 @@ void __fastcall HookedUpdateRenderList(
             original(renderer, world, camera, frame_time);
             return;
         }
-        AcquireSRWLockExclusive(&g_telemetry_lock);
-        ++g_telemetry.presentation_pose_reuses;
-        ReleaseSRWLockExclusive(&g_telemetry_lock);
+        TryRecordTelemetry([]() noexcept {
+            ++g_telemetry.presentation_pose_reuses;
+        });
     } else {
         if (!AcquirePresentationSnapshot(presentation, recentered, error)) {
             RecordHmdVisibilityFailure(
@@ -1081,9 +1111,9 @@ void __fastcall HookedUpdateRenderList(
             original(renderer, world, camera, frame_time);
             return;
         }
-        AcquireSRWLockExclusive(&g_telemetry_lock);
-        ++g_telemetry.presentation_pose_acquisitions;
-        ReleaseSRWLockExclusive(&g_telemetry_lock);
+        TryRecordTelemetry([]() noexcept {
+            ++g_telemetry.presentation_pose_acquisitions;
+        });
         if (!ResolvePresentationTrackingYaw(
                 camera_snapshot.view, presentation, error)) {
             RecordHmdVisibilityFailure(error, true);
@@ -1092,28 +1122,35 @@ void __fastcall HookedUpdateRenderList(
         }
     }
 
-    runtime::VrMatrix44 tracked_head_view;
-    bool positional_translation_applied = false;
-    std::array<float, 3> world_translation{};
-    std::array<float, 3> render_prediction{};
-    std::array<float, 3> render_head_anchor{};
-    if (!ComposeBlackPlagueTrackedHeadView(
-            camera_snapshot.view,
-            presentation.effective_tracking_anchor,
-            presentation.pose.device_to_absolute,
-            presentation.pose.identity,
-            presentation.room_scale,
-            tracked_head_view,
-            positional_translation_applied,
-            world_translation,
-            render_prediction,
-            render_head_anchor,
-            error)) {
-        RecordHmdVisibilityFailure(
-            "Could not compose the HMD visibility view: " + error, true);
-        original(renderer, world, camera, frame_time);
-        return;
+    runtime::VrMatrix44 tracked_head_view = camera_snapshot.view;
+    if (!reuse_presentation) {
+        bool positional_translation_applied = false;
+        std::array<float, 3> world_translation{};
+        std::array<float, 3> render_prediction{};
+        std::array<float, 3> render_head_anchor{};
+        if (!ComposeBlackPlagueTrackedHeadView(
+                camera_snapshot.view,
+                presentation.effective_tracking_anchor,
+                presentation.pose.device_to_absolute,
+                presentation.pose.identity,
+                presentation.room_scale,
+                tracked_head_view,
+                positional_translation_applied,
+                world_translation,
+                render_prediction,
+                render_head_anchor,
+                error)) {
+            RecordHmdVisibilityFailure(
+                "Could not compose the HMD visibility view: " + error, true);
+            original(renderer, world, camera, frame_time);
+            return;
+        }
     }
+    // Inside RenderStereoEye the camera already contains this eye's tracked
+    // view. Composing HMD tracking again here moved the render-list camera a
+    // second time, so camera-facing billboards were prepared for a different
+    // position from the eye that drew them. Only the standalone pre-eye
+    // visibility pass needs to compose tracking from the native game camera.
 
     runtime::VrCullFrustum cull_frustum;
     if (!runtime::BuildConservativeStereoCullFrustum(
@@ -1153,11 +1190,11 @@ void __fastcall HookedUpdateRenderList(
         return;
     }
 
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.hmd_visibility_updates;
-    g_telemetry.hmd_visibility_camera_restored = true;
-    g_telemetry.hmd_visibility_error = {};
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([]() noexcept {
+        ++g_telemetry.hmd_visibility_updates;
+        g_telemetry.hmd_visibility_camera_restored = true;
+        g_telemetry.hmd_visibility_error = {};
+    });
 }
 
 [[nodiscard]] bool RenderStereoEye(
@@ -1224,10 +1261,10 @@ void __fastcall HookedUpdateRenderList(
         original(renderer, world, camera, frame_time);
         world_render_cpu_ns += ElapsedNanoseconds(world_render_start);
         world_rendered = true;
-        AcquireSRWLockExclusive(&g_telemetry_lock);
-        g_telemetry.eye_scissor_remapped += scissor.remapped();
-        g_telemetry.eye_scissor_bypassed += scissor.bypassed();
-        ReleaseSRWLockExclusive(&g_telemetry_lock);
+        TryRecordTelemetry([&]() noexcept {
+            g_telemetry.eye_scissor_remapped += scissor.remapped();
+            g_telemetry.eye_scissor_bypassed += scissor.bypassed();
+        });
     }
 
     if (g_stereo_persistent.load(std::memory_order_acquire)) {
@@ -1269,7 +1306,8 @@ void __fastcall HookedUpdateRenderList(
             g_presentation_yaw_epoch.load(std::memory_order_acquire));
         for (std::size_t i=0;i<hands.size();++i) {
             runtime::VrMatrix44 resolved{};
-            if (hands[i].visible && ReadGameplayPalmPose(i,resolved)) {
+            if (hands[i].visible && !NativeInputUiActive() &&
+                ReadGameplayPalmPose(i,resolved)) {
                 hands[i].palm=resolved;
             }
         }
@@ -1317,10 +1355,21 @@ void __fastcall HookedUpdateRenderList(
     void* camera,
     float frame_time) noexcept {
     StereoProcessingResult result;
-    // Let the game draw its UI over one desktop world pass, then present that
-    // complete menu as a tracked panel at SwapBuffers (inventory/pause included).
-    if (g_stereo_persistent.load(std::memory_order_acquire) && NativeInputUiActive()) {
+    // Full-screen menus still use the desktop capture at SwapBuffers.
+    // Inventory/notebook keep the stereoscopic world and their native 800x600
+    // DrawAll queue is composited as an alpha surface after the eye passes.
+    const auto ui_surface=NativeInputUiSurface();
+    const bool world_ui=NativeInputUiActive() &&
+        (ui_surface==NativeUiSurface::inventory ||
+         ui_surface==NativeUiSurface::notebook);
+    const bool closing_world_ui=BlackPlaguePreserveWorldPanelOnExit(
+        world_ui,NativeInputUiActive(),g_world_ui_panel_valid);
+    const auto closing_panel_surface=g_world_ui_surface;
+    const auto closing_panel_pose=g_world_ui_panel_pose;
+    if (g_stereo_persistent.load(std::memory_order_acquire) &&
+        NativeInputUiActive() && !world_ui) {
         InvalidateWorldTracking();
+        g_world_ui_panel_valid=false;
         return result;
     }
     StereoMatrixState state = g_stereo_state.load(std::memory_order_acquire);
@@ -1380,10 +1429,10 @@ void __fastcall HookedUpdateRenderList(
         presentation = g_presentation_snapshot;
         ReleaseSRWLockShared(&g_presentation_lock);
         const auto now = GetTickCount64();
-        AcquireSRWLockExclusive(&g_telemetry_lock);
-        g_presentation_timing.RecordRenderAge(
-            presentation.pose.identity.timestamp_ms, now);
-        ReleaseSRWLockExclusive(&g_telemetry_lock);
+        TryRecordTelemetry([&]() noexcept {
+            g_presentation_timing.RecordRenderAge(
+                presentation.pose.identity.timestamp_ms, now);
+        });
         if (!presentation.valid || presentation.pose.identity.timestamp_ms == 0 ||
             now < presentation.pose.identity.timestamp_ms ||
             now - presentation.pose.identity.timestamp_ms > 250) {
@@ -1396,9 +1445,9 @@ void __fastcall HookedUpdateRenderList(
                 presentation.pose.identity.sequence, last_submitted)) {
             if (!runtime::ShouldRefreshPresentationSequence(
                     presentation.pose.identity.sequence, last_submitted)) {
-                AcquireSRWLockExclusive(&g_telemetry_lock);
-                ++g_telemetry.presentation_pose_stale_rejects;
-                ReleaseSRWLockExclusive(&g_telemetry_lock);
+                TryRecordTelemetry([]() noexcept {
+                    ++g_telemetry.presentation_pose_stale_rejects;
+                });
                 return result;
             }
             if (!AcquirePresentationSnapshot(
@@ -1408,9 +1457,9 @@ void __fastcall HookedUpdateRenderList(
                 InvalidateWorldTracking();
                 return result;
             }
-            AcquireSRWLockExclusive(&g_telemetry_lock);
-            ++g_telemetry.presentation_pose_acquisitions;
-            ReleaseSRWLockExclusive(&g_telemetry_lock);
+            TryRecordTelemetry([]() noexcept {
+                ++g_telemetry.presentation_pose_acquisitions;
+            });
         }
         pose = presentation.pose;
         presentation_from_visibility = true;
@@ -1520,16 +1569,79 @@ void __fastcall HookedUpdateRenderList(
             shadow_yaw, presentation_recentered, pose.identity);
     }
 
+    if (world_ui) {
+        runtime::VrMatrix44 head_world_pose{},tracking_from_head{};
+        std::string panel_error;
+        if (!runtime::InvertRigidTransform(
+                CollapseMatrix(head_view),head_world_pose,panel_error) ||
+            !runtime::InvertRigidTransform(
+                pose.device_to_absolute,tracking_from_head,panel_error)) {
+            FailStereoMatrixValidation(
+                "Could not place the native UI in the VR world: "+panel_error);
+            return result;
+        }
+        const auto world_from_tracking=runtime::Multiply(
+            head_world_pose,tracking_from_head);
+        if (ui_surface==NativeUiSurface::inventory) {
+            if (!g_world_ui_panel_valid ||
+                g_world_ui_surface!=NativeUiSurface::inventory ||
+                presentation_recentered)
+                g_world_ui_panel_pose=head_world_pose;
+        } else {
+            const auto frame=ReadNativeControllerFrame();
+            const std::size_t off_hand=frame.interact_source==runtime::VrHand::left
+                ? 1U : 0U;
+            const auto& grip=frame.hands[off_hand].grip;
+            if (frame.focused && grip.device_connected && grip.pose_valid) {
+                const float scale=g_menu_scale.load(std::memory_order_acquire);
+                runtime::VrMatrix44 book_offset=runtime::IdentityMatrix();
+                book_offset.values[3]=
+                    (off_hand==0U ? 175.0F : -175.0F)/1450.0F*scale;
+                // Rework Notebook.cpp rotates the 800x600 book plane down
+                // ninety degrees about the off hand before centering it.
+                runtime::VrMatrix44 book_pitch=runtime::IdentityMatrix();
+                book_pitch.values[5]=0.0F;
+                book_pitch.values[6]=1.0F;
+                book_pitch.values[9]=-1.0F;
+                book_pitch.values[10]=0.0F;
+                g_world_ui_panel_pose=runtime::Multiply(
+                    runtime::Multiply(world_from_tracking,
+                        runtime::Multiply(
+                            runtime::ExpandMatrix(grip.device_to_absolute),book_pitch)),
+                    book_offset);
+            } else if (!g_world_ui_panel_valid ||
+                       g_world_ui_surface!=NativeUiSurface::notebook) {
+                g_world_ui_panel_pose=head_world_pose;
+            }
+        }
+        g_world_ui_panel_valid=true;
+        g_world_ui_surface=ui_surface;
+        const auto panel=ui_surface==NativeUiSurface::notebook
+            ? BlackPlagueNotebookPanel(g_menu_scale.load(std::memory_order_acquire))
+            : BlackPlagueInventoryPanel(g_menu_scale.load(std::memory_order_acquire));
+        AcquireSRWLockExclusive(&g_menu_pointer_lock);
+        g_menu_pointer_world_panel=true;
+        g_menu_pointer_world_from_tracking=world_from_tracking;
+        g_menu_pointer_world_panel_pose=g_world_ui_panel_pose;
+        g_menu_pointer_aspect=4.0F/3.0F;
+        g_menu_pointer_distance=panel.distance;
+        g_menu_pointer_width=panel.width;
+        g_menu_pointer_center_y=panel.center_y;
+        ReleaseSRWLockExclusive(&g_menu_pointer_lock);
+    } else {
+        g_world_ui_panel_valid=false;
+    }
+
     // Read the snapshot sampled once by ButtonHandler::Update. Never consume
     // OpenVR button edges a second time from rendering or from another eye.
     if (session != nullptr && session->controller_input_initialized() &&
         g_stereo_persistent.load(std::memory_order_acquire)) {
         const auto controllers = ReadNativeControllerFrame();
-        AcquireSRWLockExclusive(&g_telemetry_lock);
-        ++g_telemetry.controller_samples;
-        g_telemetry.controller_frame = controllers;
-        g_telemetry.controller_error = {};
-        ReleaseSRWLockExclusive(&g_telemetry_lock);
+        TryRecordTelemetry([&]() noexcept {
+            ++g_telemetry.controller_samples;
+            g_telemetry.controller_frame = controllers;
+            g_telemetry.controller_error = {};
+        });
     }
     const bool persistent_stereo =
         g_stereo_persistent.load(std::memory_order_acquire);
@@ -1589,6 +1701,12 @@ void __fastcall HookedUpdateRenderList(
             g_pending_gameplay_overlay_submission.active = true;
             g_pending_gameplay_overlay_submission.session = session;
             g_pending_gameplay_overlay_submission.head_view = head_view;
+            g_pending_gameplay_overlay_submission.ui_surface =
+                world_ui ? ui_surface :
+                (closing_world_ui ? closing_panel_surface : NativeUiSurface::fullscreen);
+            if (world_ui || closing_world_ui)
+                g_pending_gameplay_overlay_submission.ui_panel_world_pose =
+                    world_ui ? g_world_ui_panel_pose : closing_panel_pose;
             g_pending_gameplay_overlay_submission.presentation_sequence =
                 presentation.pose.identity.sequence;
             g_pending_gameplay_overlay_submission.presentation_timestamp_ms =
@@ -1623,59 +1741,59 @@ void __fastcall HookedUpdateRenderList(
 
     const std::uint64_t stereo_cpu_ns = ElapsedNanoseconds(stereo_start);
 
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.stereo_frames;
-    g_telemetry.stereo_eye_passes += completed_eye_passes;
-    g_telemetry.stereo_cpu_ns += stereo_cpu_ns;
-    g_telemetry.eye_world_cpu_ns += eye_world_cpu_ns;
-    g_telemetry.hand_draw_cpu_ns += hand_draw_cpu_ns;
-    g_telemetry.compositor_submit_cpu_ns += compositor_submit_cpu_ns;
-    if (session != nullptr && !compositor_submit_deferred) {
-        g_presentation_timing.RecordSubmitAge(
-            presentation.pose.identity.timestamp_ms, GetTickCount64());
-        ++g_telemetry.compositor_submitted_frames;
-        g_telemetry.compositor_hmd_pose_valid = true;
-    }
-    if (g_stereo_track_head_rotation) {
-        ++g_telemetry.tracked_head_frames;
-        g_telemetry.tracking_anchor_captured = g_stereo_tracking_anchor_valid;
-        g_telemetry.hmd_tracking_anchor_m = {
-            g_stereo_tracking_anchor.values[3],
-            g_stereo_tracking_anchor.values[7],
-            g_stereo_tracking_anchor.values[11],
-        };
-        g_telemetry.hmd_tracking_position_m = {
-            pose.device_to_absolute.values[3],
-            pose.device_to_absolute.values[7],
-            pose.device_to_absolute.values[11],
-        };
-        g_telemetry.hmd_horizontal_delta_m = std::hypot(
-            pose.device_to_absolute.values[3] -
+    TryRecordTelemetry([&]() noexcept {
+        ++g_telemetry.stereo_frames;
+        g_telemetry.stereo_eye_passes += completed_eye_passes;
+        g_telemetry.stereo_cpu_ns += stereo_cpu_ns;
+        g_telemetry.eye_world_cpu_ns += eye_world_cpu_ns;
+        g_telemetry.hand_draw_cpu_ns += hand_draw_cpu_ns;
+        g_telemetry.compositor_submit_cpu_ns += compositor_submit_cpu_ns;
+        if (session != nullptr && !compositor_submit_deferred) {
+            g_presentation_timing.RecordSubmitAge(
+                presentation.pose.identity.timestamp_ms, GetTickCount64());
+            ++g_telemetry.compositor_submitted_frames;
+            g_telemetry.compositor_hmd_pose_valid = true;
+        }
+        if (g_stereo_track_head_rotation) {
+            ++g_telemetry.tracked_head_frames;
+            g_telemetry.tracking_anchor_captured = g_stereo_tracking_anchor_valid;
+            g_telemetry.hmd_tracking_anchor_m = {
                 g_stereo_tracking_anchor.values[3],
-            pose.device_to_absolute.values[11] -
-                g_stereo_tracking_anchor.values[11]);
-        g_telemetry.positional_world_units_per_meter =
-            positional_translation_applied
-                ? runtime::vr_locomotion_policy::kWorldUnitsPerMeter
-                : 0.0F;
-        g_telemetry.room_scale_enabled = room_scale.enabled;
-        g_telemetry.room_scale_sample_valid = room_scale.valid;
-        g_telemetry.positional_translation_applied =
-            positional_translation_applied;
-        g_telemetry.room_scale_body_generation =
-            room_scale.body_generation;
-        g_telemetry.room_scale_camera_offset_m =
-            room_scale_world_translation;
-        g_telemetry.room_scale_reconciled_offset_m =
-            room_scale.horizontal_world_offset;
-        g_telemetry.room_scale_render_prediction_m =
-            room_scale_render_prediction;
-        g_telemetry.room_scale_head_anchor_m =
-            room_scale_render_head_anchor;
-    }
-    g_telemetry.stereo_camera_restored = true;
-    g_telemetry.persistent_stereo_active = persistent_stereo;
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+                g_stereo_tracking_anchor.values[7],
+                g_stereo_tracking_anchor.values[11],
+            };
+            g_telemetry.hmd_tracking_position_m = {
+                pose.device_to_absolute.values[3],
+                pose.device_to_absolute.values[7],
+                pose.device_to_absolute.values[11],
+            };
+            g_telemetry.hmd_horizontal_delta_m = std::hypot(
+                pose.device_to_absolute.values[3] -
+                    g_stereo_tracking_anchor.values[3],
+                pose.device_to_absolute.values[11] -
+                    g_stereo_tracking_anchor.values[11]);
+            g_telemetry.positional_world_units_per_meter =
+                positional_translation_applied
+                    ? runtime::vr_locomotion_policy::kWorldUnitsPerMeter
+                    : 0.0F;
+            g_telemetry.room_scale_enabled = room_scale.enabled;
+            g_telemetry.room_scale_sample_valid = room_scale.valid;
+            g_telemetry.positional_translation_applied =
+                positional_translation_applied;
+            g_telemetry.room_scale_body_generation =
+                room_scale.body_generation;
+            g_telemetry.room_scale_camera_offset_m =
+                room_scale_world_translation;
+            g_telemetry.room_scale_reconciled_offset_m =
+                room_scale.horizontal_world_offset;
+            g_telemetry.room_scale_render_prediction_m =
+                room_scale_render_prediction;
+            g_telemetry.room_scale_head_anchor_m =
+                room_scale_render_head_anchor;
+        }
+        g_telemetry.stereo_camera_restored = true;
+        g_telemetry.persistent_stereo_active = persistent_stereo;
+    });
 
     const std::uint32_t completed =
         g_stereo_completed_frames.fetch_add(1, std::memory_order_acq_rel) + 1;
@@ -1756,25 +1874,25 @@ void __fastcall HookedRenderWorld(
         glGetIntegerv(kGlFramebufferBinding, &framebuffer_binding);
     }
 
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.calls;
-    g_telemetry.renderer = reinterpret_cast<std::uintptr_t>(renderer);
-    g_telemetry.world = reinterpret_cast<std::uintptr_t>(world);
-    g_telemetry.camera = reinterpret_cast<std::uintptr_t>(camera);
-    g_telemetry.frame_time = frame_time;
-    g_telemetry.has_current_gl_context = has_current_gl_context;
-    g_telemetry.framebuffer_api = g_framebuffer_api;
-    g_telemetry.viewport = {
-        viewport[0], viewport[1], viewport[2], viewport[3],
-    };
-    g_telemetry.max_viewport_dimensions = {
-        g_max_viewport_dimensions[0], g_max_viewport_dimensions[1],
-    };
-    g_telemetry.framebuffer_binding = framebuffer_binding;
-    g_telemetry.max_texture_size = g_max_texture_size;
-    g_telemetry.max_renderbuffer_size = g_max_renderbuffer_size;
-    g_telemetry.open_gl_version = g_open_gl_version;
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        ++g_telemetry.calls;
+        g_telemetry.renderer = reinterpret_cast<std::uintptr_t>(renderer);
+        g_telemetry.world = reinterpret_cast<std::uintptr_t>(world);
+        g_telemetry.camera = reinterpret_cast<std::uintptr_t>(camera);
+        g_telemetry.frame_time = frame_time;
+        g_telemetry.has_current_gl_context = has_current_gl_context;
+        g_telemetry.framebuffer_api = g_framebuffer_api;
+        g_telemetry.viewport = {
+            viewport[0], viewport[1], viewport[2], viewport[3],
+        };
+        g_telemetry.max_viewport_dimensions = {
+            g_max_viewport_dimensions[0], g_max_viewport_dimensions[1],
+        };
+        g_telemetry.framebuffer_binding = framebuffer_binding;
+        g_telemetry.max_texture_size = g_max_texture_size;
+        g_telemetry.max_renderbuffer_size = g_max_renderbuffer_size;
+        g_telemetry.open_gl_version = g_open_gl_version;
+    });
 
     const auto original = reinterpret_cast<RenderWorld>(
         g_original_target.load(std::memory_order_acquire));
@@ -1784,20 +1902,20 @@ void __fastcall HookedRenderWorld(
         ProcessControlledWorldDuplication(
             original, renderer, world, camera);
         if (stereo.completed && stereo.suppress_original_world) {
-            AcquireSRWLockExclusive(&g_telemetry_lock);
-            ++g_telemetry.suppressed_monitor_world_passes;
-            ++g_telemetry.eye_owned_frame_time_frames;
-            ReleaseSRWLockExclusive(&g_telemetry_lock);
+            TryRecordTelemetry([]() noexcept {
+                ++g_telemetry.suppressed_monitor_world_passes;
+                ++g_telemetry.eye_owned_frame_time_frames;
+            });
         } else {
             const float original_frame_time =
                 stereo.frame_time_consumed_by_eye ? 0.0F : frame_time;
             original(renderer, world, camera, original_frame_time);
-            AcquireSRWLockExclusive(&g_telemetry_lock);
-            ++g_telemetry.monitor_world_passes;
-            if (stereo.frame_time_consumed_by_eye) {
-                ++g_telemetry.eye_owned_frame_time_frames;
-            }
-            ReleaseSRWLockExclusive(&g_telemetry_lock);
+            TryRecordTelemetry([&]() noexcept {
+                ++g_telemetry.monitor_world_passes;
+                if (stereo.frame_time_consumed_by_eye) {
+                    ++g_telemetry.eye_owned_frame_time_frames;
+                }
+            });
         }
     }
 }
@@ -1919,6 +2037,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_telemetry = {};
     g_presentation_timing.Reset();
     ReleaseSRWLockExclusive(&g_telemetry_lock);
+    g_telemetry_dropped_updates.store(0, std::memory_order_release);
     g_capabilities_initialized.store(false, std::memory_order_release);
     g_framebuffer_api = FramebufferApi::unavailable;
     g_open_gl_version = {};
@@ -2496,12 +2615,15 @@ void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
     runtime::NormalizeVrSettings(settings);
     g_menu_distance.store(settings.ui_distance, std::memory_order_release);
     g_menu_scale.store(settings.ui_scale, std::memory_order_release);
+    g_subtitle_scale.store(settings.subtitle_scale, std::memory_order_release);
     g_tracking_height_offset.store(
         settings.height_offset, std::memory_order_release);
     g_tracking_crouch_depth.store(
         settings.physical_crouch_depth, std::memory_order_release);
     g_tracking_play_mode.store(settings.play_mode, std::memory_order_release);
-    ConfigurePersistentEyeEnhancedVisuals(settings.enhanced_visuals);
+    // Black Plague has no validated pre-tone lighting preparation yet. Its
+    // Rework final pass alone makes live scenes too dark and saturated.
+    ConfigurePersistentEyeEnhancedVisuals(false);
     g_tracking_player_height.store(
         settings.player_height, std::memory_order_release);
     AcquireSRWLockExclusive(&g_play_mode_lock);
@@ -2524,15 +2646,22 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
             monitor_ok = graphics::ClearMonitorBackbuffer(error);
         }
         if (!monitor_ok) {
-            AcquireSRWLockExclusive(&g_telemetry_lock);
-            strncpy_s(g_telemetry.stereo_error.data(),g_telemetry.stereo_error.size(),error.c_str(),_TRUNCATE);
-            ReleaseSRWLockExclusive(&g_telemetry_lock);
+            TryRecordTelemetry([&]() noexcept {
+                strncpy_s(
+                    g_telemetry.stereo_error.data(),
+                    g_telemetry.stereo_error.size(),
+                    error.c_str(),
+                    _TRUNCATE);
+            });
         }
         g_menu_anchor_valid = runtime::PlanStablePanelAnchor(
             false, false, g_menu_anchor_valid).anchor_valid_after;
-        AcquireSRWLockExclusive(&g_menu_pointer_lock);
-        g_menu_pointer_aspect = 0;
-        ReleaseSRWLockExclusive(&g_menu_pointer_lock);
+        if (!NativeInputUiActive()) {
+            AcquireSRWLockExclusive(&g_menu_pointer_lock);
+            g_menu_pointer_aspect = 0;
+            g_menu_pointer_world_panel=false;
+            ReleaseSRWLockExclusive(&g_menu_pointer_lock);
+        }
         return;
     }
     InvalidateWorldTracking();
@@ -2549,15 +2678,20 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
         g_menu_anchor = pose.device_to_absolute;
     }
     g_menu_anchor_valid = anchor_plan.anchor_valid_after;
-    const float menu_distance = g_menu_distance.load(std::memory_order_acquire);
     const float menu_scale = g_menu_scale.load(std::memory_order_acquire);
+    const auto panel = NativeInputUiSurface() == NativeUiSurface::inventory
+        ? BlackPlagueInventoryPanel(menu_scale)
+        : BlackPlagueFullscreenPanel(
+            menu_scale, g_menu_distance.load(std::memory_order_acquire));
     std::array<GLint, 4> viewport{};
     glGetIntegerv(GL_VIEWPORT, viewport.data());
     AcquireSRWLockExclusive(&g_menu_pointer_lock);
     g_menu_pointer_anchor = g_menu_anchor;
+    g_menu_pointer_world_panel=false;
     g_menu_pointer_aspect = viewport[3] > 0 ? static_cast<float>(viewport[2]) / viewport[3] : 0;
-    g_menu_pointer_distance = menu_distance;
-    g_menu_pointer_width = 2.4F * menu_scale;
+    g_menu_pointer_distance = panel.distance;
+    g_menu_pointer_width = panel.width;
+    g_menu_pointer_center_y = panel.center_y;
     ReleaseSRWLockExclusive(&g_menu_pointer_lock);
     runtime::VrMatrix44 head_view;
     bool success = runtime::ComposeYawRecenteredTrackedHeadView(runtime::IdentityMatrix(),
@@ -2571,7 +2705,8 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
         if (success) success = BeginPersistentEyeTarget(i == 0 ? graphics::Eye::left : graphics::Eye::right,
                                                        binding, error);
         if (success) success = menu.Draw(
-            view, g_stereo_projections[i], menu_distance, menu_scale, error);
+            view, g_stereo_projections[i], panel.distance,
+            panel.width, panel.center_y, error);
         if (binding.active) {
             std::string restore_error;
             if (!EndPersistentEyeTarget(binding, restore_error)) { success = false; error += restore_error; }
@@ -2580,16 +2715,20 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     std::array<std::uint32_t, 2> textures{};
     if (success) success = GetPersistentEyeColorTextures(textures, error) &&
                            session->SubmitOpenGlEyeTextures(textures, error);
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    if (success) {
-        ++g_telemetry.menu_frames;
-        ++g_telemetry.compositor_submitted_frames;
-        g_telemetry.compositor_hmd_pose_valid = true;
-    } else {
-        g_telemetry.stereo_failed = true;
-        strncpy_s(g_telemetry.stereo_error.data(), g_telemetry.stereo_error.size(), error.c_str(), _TRUNCATE);
-    }
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([&]() noexcept {
+        if (success) {
+            ++g_telemetry.menu_frames;
+            ++g_telemetry.compositor_submitted_frames;
+            g_telemetry.compositor_hmd_pose_valid = true;
+        } else {
+            g_telemetry.stereo_failed = true;
+            strncpy_s(
+                g_telemetry.stereo_error.data(),
+                g_telemetry.stereo_error.size(),
+                error.c_str(),
+                _TRUNCATE);
+        }
+    });
 }
 
 bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose, std::array<float, 2>& uv) noexcept {
@@ -2600,9 +2739,18 @@ bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose, std::array<float
     const float aspect = g_menu_pointer_aspect;
     const float distance = g_menu_pointer_distance;
     const float width = g_menu_pointer_width;
+    const float center_y = g_menu_pointer_center_y;
+    const bool world_panel=g_menu_pointer_world_panel;
+    const auto world_from_tracking=g_menu_pointer_world_from_tracking;
+    const auto panel_world_pose=g_menu_pointer_world_panel_pose;
     ReleaseSRWLockShared(&g_menu_pointer_lock);
+    if (world_panel)
+        return runtime::ProjectAimOnWorldPanel(
+            world_from_tracking,panel_world_pose,pointer_pose.device_to_absolute,
+            aspect,distance,width,uv,center_y);
     return runtime::ProjectAimOnMenu(
-        anchor, pointer_pose.device_to_absolute, aspect, distance, width, uv);
+        anchor, pointer_pose.device_to_absolute, aspect, distance, width, uv,
+        center_y);
 }
 void RequestTrackedRecenter() noexcept { g_recenter_requested.store(true, std::memory_order_release); }
 
@@ -2649,7 +2797,9 @@ bool TrackedHeadTrackingHeight(float& height) noexcept {
 bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
     std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {
     pose = {}; velocity = {}; angular = {};
-    if (!TrackedStereoPresentationActive() || NativeInputUiActive()) return false;
+    if (!TrackedStereoPresentationActive() ||
+        (NativeInputUiActive() && NativeInputUiSurface()!=NativeUiSurface::notebook))
+        return false;
     AcquireSRWLockShared(&g_world_tracking_lock);
     const auto view = g_world_game_view;
     const auto anchor = g_world_anchor;
@@ -2687,6 +2837,8 @@ RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {
         g_particle_eye_refreshes.exchange(0, std::memory_order_acq_rel);
     result.particle_refresh_misses =
         g_particle_refresh_misses.exchange(0, std::memory_order_acq_rel);
+    result.dropped_updates =
+        g_telemetry_dropped_updates.exchange(0, std::memory_order_acq_rel);
     g_telemetry = {};
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     result.eye_targets = ConsumeEyeTargetProbeTelemetry();

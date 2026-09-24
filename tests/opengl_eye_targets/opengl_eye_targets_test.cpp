@@ -406,7 +406,7 @@ int main() {
             glScissor(1, 2, 3, 4); glEnable(GL_SCISSOR_TEST);
             if (!menu.Draw(
                     penumbra_vr::runtime::IdentityMatrix(), projection,
-                    2.0F, 1.0F, error) ||
+                    2.0F, 2.4F, 0.0F, error) ||
                 !ScissorEquals({1, 2, 3, 4}, true)) return 30;
             std::array<GLubyte, 4> bottom{}, top{};
             glReadPixels(160, 100, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE, bottom.data());

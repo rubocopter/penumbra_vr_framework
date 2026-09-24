@@ -172,6 +172,10 @@ void ServiceGameplayPalmResolver(
 [[nodiscard]] std::uint64_t GameplayPalmPoseGeneration(
     std::size_t hand_index) noexcept;
 
+// World-yaw revision published with tracked palms. A snap turn changes world
+// coordinates without an actual controller teleport.
+[[nodiscard]] std::uint64_t GameplayPalmYawEpoch() noexcept;
+
 // Reuses the gameplay resolver's exact box shape and world on the game thread.
 // This is a read-only overlap query used by spatial interaction so physical palm
 // contact can own target acquisition without creating a second collision shape.
