@@ -14,7 +14,7 @@
 
 The project turns the proven Overture VR Rework into a shared runtime, keeping reusable VR systems common while renderer, physics, gameplay and exact-build behavior remain inside each game's backend.
 
-> **Pre-alpha — no public Framework release yet.** Overture is integrated as the proven baseline. Black Plague is the active second backend and already runs in tracked stereo from Steam's normal **Play** path on the allowlisted build. Requiem is the next planned gameplay backend.
+> **Pre-alpha — no public Framework release yet.** Overture is integrated as the proven baseline. Black Plague is the active second backend and is playable in VR on the allowlisted build through Steam's normal **Play** path. The current milestone focuses on gameplay refinement and headset validation. Requiem's integration groundwork is prepared; gameplay work is deferred until Black Plague reaches the framework-readiness gate.
 
 <p align="center">
   <img src="docs/images/landing/overture-vr.png" alt="Penumbra: Overture VR" width="31%">
@@ -27,8 +27,10 @@ The project turns the proven Overture VR Rework into a shared runtime, keeping r
 | Game | Framework state |
 | --- | --- |
 | **Overture** | Integrated Framework-owned source product. The proven VR Rework remains the behavioral reference and has an initial Framework headset regression pass. |
-| **Black Plague** | Active backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, hands, physical interaction, tracked inventory/notebook input, native VR settings and reusable audio integration. Current work is focused on remaining interaction, comfort, presentation and headset-validation gaps. |
-| **Requiem** | Build identity, LAA transform metadata, localization and shared configuration data are prepared. Gameplay VR implementation has not started. |
+| **Black Plague** | Playable development backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, tracked hands, physical interaction, VR inventory/notebook input, native VR settings and shared audio integration. Current work focuses on interaction reliability, mechanisms, comfort, presentation and headset validation. |
+| **Requiem** | Build identity, LAA transform metadata, localization and shared configuration data are prepared. Gameplay VR work is deferred while Black Plague is brought to a solid playable baseline; no Requiem gameplay backend yet. |
+
+**Latest Black Plague headset test:** [September 2026 development preview](https://youtu.be/NQWUBmgOjEw).
 
 The shared runtime provides the common tracking, locomotion, input, interaction, haptics, rendering policy and calibration systems. Each backend owns the game-specific integration needed to make those systems behave correctly in that title.
 
