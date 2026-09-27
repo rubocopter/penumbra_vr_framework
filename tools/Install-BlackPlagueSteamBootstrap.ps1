@@ -3,10 +3,16 @@ param(
     [string]$GamePath,
     [string]$SteamRoot,
     [string]$BuildRoot,
-    [switch]$Restore
+    [switch]$LargeAddressAware,
+    [switch]$Restore,
+    [switch]$Recover,
+    [switch]$Repair
 )
 
 $ErrorActionPreference = 'Stop'
+if ($Repair -and ($Restore -or $Recover -or $LargeAddressAware)) {
+    throw 'Black Plague repair cannot be combined with restore, recovery or a new LAA transform.'
+}
 if (-not $BuildRoot) {
     $BuildRoot = Join-Path (Split-Path -Parent $PSScriptRoot) 'build'
 }
@@ -16,8 +22,13 @@ $ExpectedGameHashes = @(
     'DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196'
 )
 $ExpectedOriginalAlutHash = 'D81DEA8E88E35C319F7F2D8AAEB14C63A4986131492D3DF860D1F2C18B844590'
+$GeneratedAudioConfigText = "[general]`nhrtf = auto`n"
+$GeneratedAudioConfigHash = 'DEE6201AFD49898B403A322A595841DA9325FDBDE4A88461822172C9C9151553'
 
 $RepoRoot = Split-Path -Parent $PSScriptRoot
+if ($Recover -and -not $GamePath) {
+    throw 'Pass -GamePath explicitly when recovering an interrupted Black Plague deployment.'
+}
 if (-not $GamePath) {
     $discovery = Join-Path $PSScriptRoot 'Get-PenumbraInstallations.ps1'
     if (-not (Test-Path -LiteralPath $discovery -PathType Leaf)) {
@@ -59,6 +70,7 @@ $GamePath = [System.IO.Path]::GetFullPath($GamePath)
 $GameRoot = Split-Path -Parent $GamePath
 $AlutPath = Get-DeploymentDestination 'bootstrap_proxy' $GameRoot
 $OriginalAlutPath = Join-Path $GameRoot 'PenumbraVR_alut_original.dll'
+$OriginalGamePath = Join-Path $GameRoot 'PenumbraVR_Penumbra_original.exe'
 $ProbePath = Get-DeploymentDestination 'probe' $GameRoot
 $OpenVrPath = Get-DeploymentDestination 'openvr_loader' $GameRoot
 $VrAssetsPath = Get-DeploymentDestination 'openvr_actions' $GameRoot
@@ -111,6 +123,25 @@ function Assert-ManagedDirectory([string]$Root, $Expected) {
     }
 }
 
+function Assert-RepairableManagedDirectory([string]$Root, $Expected) {
+    if (-not (Test-Path -LiteralPath $Root)) { return }
+    $actual = Get-DirectorySnapshot $Root
+    $expectedFiles = @{}
+    $expectedDirectories = @{}
+    foreach ($file in @($Expected.files)) { $expectedFiles[[string]$file.path] = $true }
+    foreach ($directory in @($Expected.directories)) { $expectedDirectories[[string]$directory] = $true }
+    foreach ($file in @($actual.files)) {
+        if (-not $expectedFiles.ContainsKey([string]$file.path)) {
+            throw "Repair refused an unrecorded OpenVR file: $($file.path)"
+        }
+    }
+    foreach ($directory in @($actual.directories)) {
+        if (-not $expectedDirectories.ContainsKey([string]$directory)) {
+            throw "Repair refused an unrecorded OpenVR directory: $directory"
+        }
+    }
+}
+
 function Get-ExpectedVrSnapshot($State) {
     $recorded = Get-OptionalProperty $State 'vrAssetsSnapshot'
     if ($recorded) { return $recorded }
@@ -136,65 +167,145 @@ function Assert-SupportedGame {
 }
 
 $ManagedTransactionPaths = @(
-    $AlutPath, $OriginalAlutPath, $ProbePath, $OpenVrPath, $VrAssetsPath,
+    $GamePath, $OriginalGamePath, $AlutPath, $OriginalAlutPath,
+    $ProbePath, $OpenVrPath, $VrAssetsPath,
     $HandTexturePath, $LocalizationPath, $LocalizationBackupPath,
     $AudioConfigPath, $InstallStatePath
 )
 
+function Assert-ManagedTransactionPath([string]$path) {
+    $target = [System.IO.Path]::GetFullPath($path)
+    $game = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd('\')
+    $prefix = $game + '\'
+    if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Managed deployment path escapes game root: $target"
+    }
+    $rootItem = Get-Item -LiteralPath $game -Force -ErrorAction SilentlyContinue
+    if ($rootItem -and ($rootItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "Black Plague game root is a reparse point: $game"
+    }
+    $cursor = $target
+    while ($cursor -and $cursor -ine $game) {
+        $item = Get-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
+        if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            throw "Managed deployment path is a reparse point: $cursor"
+        }
+        $cursor = Split-Path -Parent $cursor
+    }
+    return $target
+}
+
 function New-DeploymentSnapshot {
-    $snapshotName = 'PenumbraVrDeploy-' + [guid]::NewGuid().ToString('N')
-    $root = [System.IO.Path]::GetFullPath((Join-Path ([System.IO.Path]::GetTempPath()) $snapshotName))
-    $tempPrefix = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
-    if (-not $root.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-        throw "Unsafe deployment snapshot path: $root"
+    $root = Assert-ManagedTransactionPath (Join-Path $GameRoot '.penumbravr-bp-journal')
+    $staging = Assert-ManagedTransactionPath (Join-Path $GameRoot ('.penumbravr-bp-journal-staging-' + [guid]::NewGuid().ToString('N')))
+    if (Test-Path -LiteralPath $root) {
+        throw "An interrupted Black Plague deployment needs recovery before another write: $root"
     }
     $entries = [System.Collections.Generic.List[object]]::new()
     try {
-        New-Item -ItemType Directory -Path $root | Out-Null
+        New-Item -ItemType Directory -Path $staging | Out-Null
         for ($i = 0; $i -lt $ManagedTransactionPaths.Count; $i++) {
-            $target = [System.IO.Path]::GetFullPath($ManagedTransactionPaths[$i])
-            $gamePrefix = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd('\') + '\'
-            if (-not $target.StartsWith($gamePrefix, [StringComparison]::OrdinalIgnoreCase)) {
-                throw "Managed deployment path escapes game root: $target"
-            }
-            $parent = Split-Path -Parent $target
-            while ($parent -and $parent -ine [System.IO.Path]::GetFullPath($GameRoot)) {
-                $parentItem = Get-Item -LiteralPath $parent -Force -ErrorAction SilentlyContinue
-                if ($parentItem -and ($parentItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
-                    throw "Managed deployment parent is a reparse point: $parent"
-                }
-                $parent = Split-Path -Parent $parent
-            }
+            $target = Assert-ManagedTransactionPath $ManagedTransactionPaths[$i]
             $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
             $kind = if ($null -eq $item) { 'absent' } elseif ($item.PSIsContainer) { 'directory' } else { 'file' }
-            if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
-                throw "Managed deployment path is a reparse point: $target"
-            }
-            $copy = Join-Path $root ("item-$i")
+            $copy = Join-Path $staging ("item-$i")
+            $snapshotHash = $null
+            $snapshotDirectory = $null
             if ($kind -ne 'absent') {
                 Copy-Item -LiteralPath $target -Destination $copy -Recurse -Force
-                if ($kind -eq 'file' -and (Get-Sha256 $target) -ne (Get-Sha256 $copy)) {
+                if ($kind -eq 'file') { $snapshotHash = Get-Sha256 $copy }
+                if ($kind -eq 'file' -and (Get-Sha256 $target) -ne $snapshotHash) {
                     throw "Deployment snapshot failed hash verification: $target"
                 }
-                if ($kind -eq 'directory' -and
-                    ((Get-DirectorySnapshot $target | ConvertTo-Json -Depth 5 -Compress) -cne
-                     (Get-DirectorySnapshot $copy | ConvertTo-Json -Depth 5 -Compress))) {
-                    throw "Deployment snapshot failed directory verification: $target"
+                if ($kind -eq 'directory') {
+                    $snapshotDirectory = Get-DirectorySnapshot $copy
+                    if ((Get-DirectorySnapshot $target | ConvertTo-Json -Depth 5 -Compress) -cne
+                        ($snapshotDirectory | ConvertTo-Json -Depth 5 -Compress)) {
+                        throw "Deployment snapshot failed directory verification: $target"
+                    }
                 }
             }
-            $entries.Add([PSCustomObject]@{ Target = $target; Copy = $copy; Kind = $kind })
+            $entries.Add([PSCustomObject]@{
+                Target = $target
+                Copy = Join-Path $root ("item-$i")
+                Kind = $kind
+                SnapshotHash = $snapshotHash
+                SnapshotDirectory = $snapshotDirectory
+            })
         }
+        [ordered]@{
+            Version = 1
+            GameRoot = [System.IO.Path]::GetFullPath($GameRoot)
+            Entries = $entries.ToArray()
+        } | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $staging 'journal.json') -Encoding UTF8
+        [System.IO.Directory]::Move($staging, $root)
         return [PSCustomObject]@{ Root = $root; Entries = $entries.ToArray() }
     } catch {
-        if (Test-Path -LiteralPath $root -PathType Container) {
-            Remove-Item -LiteralPath $root -Recurse -Force
+        if (Test-Path -LiteralPath $staging -PathType Container) {
+            Remove-Item -LiteralPath $staging -Recurse -Force
         }
         throw
     }
 }
 
+function Read-DeploymentSnapshot {
+    $root = Assert-ManagedTransactionPath (Join-Path $GameRoot '.penumbravr-bp-journal')
+    $manifest = Join-Path $root 'journal.json'
+    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
+        throw "Black Plague recovery journal is missing or incomplete: $manifest"
+    }
+    $record = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+    if ([int]$record.Version -ne 1 -or
+        [System.IO.Path]::GetFullPath([string]$record.GameRoot).TrimEnd('\') -ine
+            [System.IO.Path]::GetFullPath($GameRoot).TrimEnd('\')) {
+        throw "Black Plague recovery journal belongs to a different game or version: $manifest"
+    }
+    $entries = @($record.Entries)
+    if ($entries.Count -ne $ManagedTransactionPaths.Count) {
+        throw "Black Plague recovery journal has the wrong managed set: $manifest"
+    }
+    for ($i = 0; $i -lt $entries.Count; $i++) {
+        $entry = $entries[$i]
+        $target = Assert-ManagedTransactionPath ([string]$entry.Target)
+        $copy = Assert-ManagedTransactionPath ([string]$entry.Copy)
+        if ($target -ine [System.IO.Path]::GetFullPath($ManagedTransactionPaths[$i]) -or
+            $copy -ine (Join-Path $root ("item-$i")) -or
+            $entry.Kind -notin @('absent', 'file', 'directory')) {
+            throw "Invalid Black Plague recovery journal entry: $target"
+        }
+        if ($entry.Kind -eq 'file' -and
+            ([string]$entry.SnapshotHash -notmatch '^[0-9A-Fa-f]{64}$' -or
+             (Get-Sha256 $copy) -ne [string]$entry.SnapshotHash)) {
+            throw "Black Plague recovery copy failed hash verification: $copy"
+        }
+        if ($entry.Kind -eq 'directory' -and
+            (-not (Test-Path -LiteralPath $copy -PathType Container) -or
+             (Get-DirectorySnapshot $copy | ConvertTo-Json -Depth 5 -Compress) -cne
+                ($entry.SnapshotDirectory | ConvertTo-Json -Depth 5 -Compress))) {
+            throw "Black Plague recovery directory failed verification: $copy"
+        }
+        if ($entry.Kind -eq 'absent' -and (Test-Path -LiteralPath $copy)) {
+            throw "Unexpected Black Plague recovery copy: $copy"
+        }
+    }
+    return [PSCustomObject]@{ Root = $root; Entries = $entries }
+}
+
+function Complete-DeploymentSnapshot($Snapshot) {
+    $root = Assert-ManagedTransactionPath $Snapshot.Root
+    if ($root -ine (Join-Path ([System.IO.Path]::GetFullPath($GameRoot).TrimEnd('\')) '.penumbravr-bp-journal')) {
+        throw "Unsafe Black Plague journal completion path: $root"
+    }
+    $resolved = Assert-ManagedTransactionPath (Join-Path $GameRoot ('.penumbravr-bp-journal-resolved-' + [guid]::NewGuid().ToString('N')))
+    [System.IO.Directory]::Move($root, $resolved)
+    try { Remove-Item -LiteralPath $resolved -Recurse -Force }
+    catch { Write-Warning "Completed Black Plague journal retained for cleanup: $resolved" }
+}
+
 function Restore-DeploymentSnapshot($Snapshot) {
     foreach ($entry in @($Snapshot.Entries)) {
+        $entry.Target = Assert-ManagedTransactionPath ([string]$entry.Target)
+        $entry.Copy = Assert-ManagedTransactionPath ([string]$entry.Copy)
         $current = Get-Item -LiteralPath $entry.Target -Force -ErrorAction SilentlyContinue
         if ($current -and ($current.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
             throw "Rollback target became a reparse point: $($entry.Target)"
@@ -206,6 +317,9 @@ function Restore-DeploymentSnapshot($Snapshot) {
              (Get-DirectorySnapshot $entry.Copy | ConvertTo-Json -Depth 5 -Compress))) { continue }
         if ($current) {
             if ($current.PSIsContainer) {
+                if ($entry.Kind -ne 'directory' -and $entry.Target -ine $VrAssetsPath) {
+                    throw "Rollback target became an unexpected directory: $($entry.Target)"
+                }
                 $gamePrefix = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd('\') + '\'
                 if (-not $entry.Target.StartsWith($gamePrefix, [StringComparison]::OrdinalIgnoreCase)) {
                     throw "Unsafe rollback directory: $($entry.Target)"
@@ -232,15 +346,39 @@ function Restore-DeploymentSnapshot($Snapshot) {
 
 function Invoke-DeploymentRollback($Snapshot, [string]$Failure) {
     try {
-        Restore-DeploymentSnapshot $Snapshot
+        $verifiedSnapshot = Read-DeploymentSnapshot
+        Restore-DeploymentSnapshot $verifiedSnapshot
+        Complete-DeploymentSnapshot $verifiedSnapshot
     } catch {
         throw "Deployment failed: $Failure. Rollback also failed: $($_.Exception.Message). Snapshot retained: $($Snapshot.Root)"
     }
-    Remove-Item -LiteralPath $Snapshot.Root -Recurse -Force
     throw "Deployment failed and original managed files were restored: $Failure"
 }
 
-Assert-SupportedGame
+if ($Recover) {
+    if (-not (Test-Path -LiteralPath $GameRoot -PathType Container)) {
+        throw "Black Plague recovery game folder is missing: $GameRoot"
+    }
+    $recoverySnapshot = Read-DeploymentSnapshot
+    Restore-DeploymentSnapshot $recoverySnapshot
+    Complete-DeploymentSnapshot $recoverySnapshot
+    Write-Host "Interrupted Black Plague deployment recovered at $GameRoot"
+    return
+}
+if (Test-Path -LiteralPath (Join-Path $GameRoot '.penumbravr-bp-journal')) {
+    throw "An interrupted Black Plague deployment needs -Recover -GamePath '$GamePath' before another write."
+}
+$PreviousState = $null
+if (Test-Path -LiteralPath $InstallStatePath -PathType Leaf) {
+    $PreviousState = Get-Content -LiteralPath $InstallStatePath -Raw | ConvertFrom-Json
+}
+$RepairLaaExecutable = $Repair -and $PreviousState -and
+    [bool](Get-OptionalProperty $PreviousState 'laaApplied') -and
+    (Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1] -and
+    (Get-OptionalProperty $PreviousState 'gameExeSha256') -eq $ExpectedGameHashes[1] -and
+    (Get-OptionalProperty $PreviousState 'originalGameExeSha256') -eq $ExpectedGameHashes[0] -and
+    (Get-Sha256 $OriginalGamePath) -eq $ExpectedGameHashes[0]
+if (-not $RepairLaaExecutable) { Assert-SupportedGame }
 
 if ($Restore) {
     if (-not (Test-Path -LiteralPath $OriginalAlutPath -PathType Leaf)) {
@@ -291,6 +429,14 @@ if ($Restore) {
             (Get-Sha256 $AudioConfigPath) -ne [string](Get-OptionalProperty $state 'audioConfigSha256')) {
             throw 'The managed OpenAL configuration changed after installation; restore aborted.'
         }
+        if ([bool](Get-OptionalProperty $state 'laaApplied')) {
+            if ((Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1] -or
+                (Get-Sha256 $OriginalGamePath) -ne $ExpectedGameHashes[0]) {
+                throw 'The managed LAA executable or canonical backup changed; restore aborted.'
+            }
+        } elseif (Test-Path -LiteralPath $OriginalGamePath) {
+            throw 'An unowned executable backup exists; restore aborted.'
+        }
     } else {
         throw 'No installation record exists; restore aborted.'
     }
@@ -327,17 +473,23 @@ if ($Restore) {
     if (Test-Path -LiteralPath $VrAssetsPath -PathType Container) {
         Remove-Item -LiteralPath $VrAssetsPath -Recurse -Force
     }
+    if ([bool](Get-OptionalProperty $state 'laaApplied')) {
+        Copy-Item -LiteralPath $OriginalGamePath -Destination $GamePath -Force
+        if ((Get-Sha256 $GamePath) -ne $ExpectedGameHashes[0]) {
+            throw 'Canonical executable restore failed hash verification.'
+        }
+        Remove-Item -LiteralPath $OriginalGamePath -Force
+    }
     Write-Host 'Black Plague normal Steam launch bootstrap restored cleanly.'
     } catch {
         Invoke-DeploymentRollback $deploymentSnapshot $_.Exception.Message
     }
-    Remove-Item -LiteralPath $deploymentSnapshot.Root -Recurse -Force
+    Complete-DeploymentSnapshot $deploymentSnapshot
     return
 }
 
-$PreviousState = $null
-if (Test-Path -LiteralPath $InstallStatePath -PathType Leaf) {
-    $PreviousState = Get-Content -LiteralPath $InstallStatePath -Raw | ConvertFrom-Json
+if ($Repair -and -not $PreviousState) {
+    throw 'Black Plague repair requires an existing managed installation record.'
 }
 
 $ReleaseRoot = Join-Path $BuildRoot 'bin\Release'
@@ -381,7 +533,19 @@ if ($PreviousState) {
     if ((Get-OptionalProperty $PreviousState 'schema') -ne 1) {
         throw 'Unsupported Black Plague installation record schema.'
     }
-    if ((Get-OptionalProperty $PreviousState 'gameExeSha256') -ne (Get-Sha256 $GamePath)) {
+    if ($Repair) {
+        foreach ($name in @('installedProxySha256', 'probeSha256', 'openVrSha256',
+                            'handTextureSha256', 'spanishLocalizationSha256')) {
+            if ([string](Get-OptionalProperty $PreviousState $name) -notmatch '^[0-9A-Fa-f]{64}$') {
+                throw "Black Plague repair requires a recorded hash for $name."
+            }
+        }
+        if (-not (Get-OptionalProperty $PreviousState 'vrAssetsSnapshot')) {
+            throw 'Black Plague repair requires a recorded OpenVR directory snapshot.'
+        }
+    }
+    if (-not $RepairLaaExecutable -and
+        (Get-OptionalProperty $PreviousState 'gameExeSha256') -ne (Get-Sha256 $GamePath)) {
         throw 'The game executable changed after the prior installation; redeploy aborted.'
     }
     foreach ($managed in @(
@@ -391,19 +555,45 @@ if ($PreviousState) {
         @($LocalizationPath, 'spanishLocalizationSha256')
     )) {
         $recordedHash = Get-OptionalProperty $PreviousState $managed[1]
-        if ($recordedHash -and (Get-Sha256 $managed[0]) -ne [string]$recordedHash) {
+        if (-not $Repair -and $recordedHash -and (Get-Sha256 $managed[0]) -ne [string]$recordedHash) {
             throw "Managed file changed after installation: $($managed[0])"
         }
     }
-    if ((Get-Sha256 $OpenVrPath) -ne (Get-ExpectedOpenVrHash $PreviousState)) {
+    if (-not $Repair -and (Get-Sha256 $OpenVrPath) -ne (Get-ExpectedOpenVrHash $PreviousState)) {
         throw 'The managed OpenVR loader changed after installation; redeploy aborted.'
     }
-    Assert-ManagedDirectory $VrAssetsPath (Get-ExpectedVrSnapshot $PreviousState)
-    if ([bool](Get-OptionalProperty $PreviousState 'audioConfigCreated') -and
-        (Get-Sha256 $AudioConfigPath) -ne [string](Get-OptionalProperty $PreviousState 'audioConfigSha256')) {
-        throw 'The managed OpenAL configuration changed after installation; redeploy aborted.'
+    if ($Repair) {
+        Assert-RepairableManagedDirectory $VrAssetsPath (Get-ExpectedVrSnapshot $PreviousState)
+    } else {
+        Assert-ManagedDirectory $VrAssetsPath (Get-ExpectedVrSnapshot $PreviousState)
+    }
+    $previousAudioCreated = [bool](Get-OptionalProperty $PreviousState 'audioConfigCreated')
+    $currentAudioHash = Get-Sha256 $AudioConfigPath
+    if ($previousAudioCreated -and
+        $currentAudioHash -ne [string](Get-OptionalProperty $PreviousState 'audioConfigSha256')) {
+        if (-not ($Repair -and -not $currentAudioHash -and
+            [string](Get-OptionalProperty $PreviousState 'audioConfigSha256') -eq $GeneratedAudioConfigHash)) {
+            throw 'The managed OpenAL configuration changed after installation; redeploy aborted.'
+        }
+    }
+    if ($Repair -and -not $previousAudioCreated -and -not $currentAudioHash) {
+        throw 'Black Plague repair will not replace a missing user-owned OpenAL configuration.'
+    }
+    if ([bool](Get-OptionalProperty $PreviousState 'laaApplied')) {
+        if ((-not $RepairLaaExecutable -and (Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1]) -or
+            (Get-Sha256 $OriginalGamePath) -ne $ExpectedGameHashes[0]) {
+            throw 'The managed LAA executable or canonical backup changed; redeploy aborted.'
+        }
+    } elseif (Test-Path -LiteralPath $OriginalGamePath) {
+        throw 'An unowned executable backup exists; redeploy aborted.'
+    }
+    if ($Repair -and (Get-Sha256 $OriginalAlutPath) -ne $ExpectedOriginalAlutHash) {
+        throw 'Black Plague repair requires the verified original ALUT backup.'
     }
 } else {
+    if (Test-Path -LiteralPath $OriginalGamePath) {
+        throw 'An executable backup exists without install state; redeploy aborted.'
+    }
     foreach ($target in @($ProbePath, $OpenVrPath, $HandTexturePath)) {
         if (Test-Path -LiteralPath $target) {
             throw "Unmanaged payload already exists: $target"
@@ -439,8 +629,41 @@ if ($previousLocalizationSha256) {
     }
 }
 
+$PreviousLaaApplied = [bool](Get-OptionalProperty $PreviousState 'laaApplied')
+$ApplyLaa = $LargeAddressAware -and -not $PreviousLaaApplied -and
+    (Get-Sha256 $GamePath) -eq $ExpectedGameHashes[0]
+$LaaTool = Join-Path $BuildRoot 'bin/Release/PenumbraVR.LaaTransform.exe'
+if (($ApplyLaa -or $RepairLaaExecutable) -and -not (Test-Path -LiteralPath $LaaTool -PathType Leaf)) {
+    throw "LAA transform tool not found: $LaaTool"
+}
 $deploymentSnapshot = New-DeploymentSnapshot
 try {
+if ($RepairLaaExecutable) {
+    $preparedLaa = Join-Path $deploymentSnapshot.Root 'prepared-laa.exe'
+    & $LaaTool $OriginalGamePath $preparedLaa | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-Sha256 $preparedLaa) -ne $ExpectedGameHashes[1]) {
+        throw 'The canonical backup did not reproduce the recorded LAA executable.'
+    }
+    Copy-Item -LiteralPath $preparedLaa -Destination $GamePath -Force
+    if ((Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1]) {
+        throw 'Repaired LAA executable failed hash verification.'
+    }
+}
+if ($ApplyLaa) {
+    $preparedLaa = Join-Path $deploymentSnapshot.Root 'prepared-laa.exe'
+    & $LaaTool $GamePath $preparedLaa | Out-Null
+    if ($LASTEXITCODE -ne 0 -or (Get-Sha256 $preparedLaa) -ne $ExpectedGameHashes[1]) {
+        throw 'The exact-build LAA transform did not produce the recorded variant.'
+    }
+    Copy-Item -LiteralPath $GamePath -Destination $OriginalGamePath
+    if ((Get-Sha256 $OriginalGamePath) -ne $ExpectedGameHashes[0]) {
+        throw 'The canonical executable backup failed hash verification.'
+    }
+    Copy-Item -LiteralPath $preparedLaa -Destination $GamePath -Force
+    if ((Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1]) {
+        throw 'Installed LAA executable failed hash verification.'
+    }
+}
 if (-not (Test-Path -LiteralPath $OriginalAlutPath -PathType Leaf)) {
     if ($PreviousState) {
         throw 'The managed ALUT backup is missing; redeploy aborted.'
@@ -477,8 +700,11 @@ $AudioConfigCreated = [bool](Get-OptionalProperty $PreviousState 'audioConfigCre
 if (-not (Test-Path -LiteralPath $AudioConfigPath -PathType Leaf)) {
     [System.IO.File]::WriteAllText(
         $AudioConfigPath,
-        "[general]`nhrtf = auto`n",
+        $GeneratedAudioConfigText,
         [System.Text.Encoding]::ASCII)
+    if ((Get-Sha256 $AudioConfigPath) -ne $GeneratedAudioConfigHash) {
+        throw 'Generated OpenAL configuration failed hash verification.'
+    }
     $AudioConfigCreated = $true
 }
 
@@ -511,6 +737,10 @@ foreach ($sourceVrFile in $sourceVrFiles) {
 $state = [ordered]@{
     schema = 1
     gameExeSha256 = Get-Sha256 $GamePath
+    laaApplied = ($PreviousLaaApplied -or $ApplyLaa)
+    originalGameExeSha256 = if ($PreviousLaaApplied -or $ApplyLaa) {
+        Get-Sha256 $OriginalGamePath
+    } else { $null }
     originalAlutSha256 = Get-Sha256 $OriginalAlutPath
     installedProxySha256 = Get-Sha256 $AlutPath
     probeSha256 = Get-Sha256 $ProbePath
@@ -531,4 +761,4 @@ Write-Host 'Validation scripts and Start-Black-Plague-VR.cmd remain available fo
 } catch {
     Invoke-DeploymentRollback $deploymentSnapshot $_.Exception.Message
 }
-Remove-Item -LiteralPath $deploymentSnapshot.Root -Recurse -Force
+Complete-DeploymentSnapshot $deploymentSnapshot

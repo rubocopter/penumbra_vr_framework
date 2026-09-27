@@ -7,9 +7,16 @@ param(
 
     [string]$InstallRoot,
 
+    [ValidatePattern('^[0-9A-Fa-f]{64}$')]
+    [string]$ExpectedExecutableSha256,
+
     [bool]$SteamLauncher = $true,
 
     [switch]$Restore,
+
+    [switch]$Recover,
+
+    [switch]$Repair,
 
     # Also restores these textures from deployment backups when already installed.
     [switch]$SkipTexturePack
@@ -17,6 +24,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if ($Repair -and ($Restore -or $Recover)) {
+    throw 'Overture repair cannot be combined with restore or interrupted-deployment recovery.'
+}
 
 function Get-NormalizedRoot([string]$path) {
     return [System.IO.Path]::GetFullPath($path).TrimEnd(
@@ -126,8 +136,10 @@ function Resolve-GamePaths([string]$requestedRoot) {
             $redistRoot = Join-Path $gameRoot 'redist'
         }
 
-        if ((Test-Path -LiteralPath (Join-Path $redistRoot 'Penumbra.exe') -PathType Leaf) -and
-            (Test-Path -LiteralPath (Join-Path $redistRoot 'config\English.lang') -PathType Leaf)) {
+        $hasManagedState = $Repair -and
+            (Test-Path -LiteralPath (Join-Path $gameRoot '.penumbravr/deploy-state.json') -PathType Leaf)
+        if (((Test-Path -LiteralPath (Join-Path $redistRoot 'Penumbra.exe') -PathType Leaf) -or $hasManagedState) -and
+            ((Test-Path -LiteralPath (Join-Path $redistRoot 'config\English.lang') -PathType Leaf) -or $hasManagedState)) {
             return [pscustomobject]@{
                 GameRoot = Get-NormalizedRoot $gameRoot
                 RedistRoot = Get-NormalizedRoot $redistRoot
@@ -196,9 +208,255 @@ function Remove-EmptyManagedParents([string]$filePath, [string]$managedRoot) {
     }
 }
 
+function Assert-ManagedTarget([string]$target, [string]$gameRoot) {
+    $normalizedGame = Get-NormalizedRoot $gameRoot
+    $gameItem = Get-Item -LiteralPath $normalizedGame -Force -ErrorAction SilentlyContinue
+    if ($gameItem -and ($gameItem.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "Deployment game root is a reparse point: $normalizedGame"
+    }
+    $normalizedTarget = [System.IO.Path]::GetFullPath($target)
+    $prefix = $normalizedGame + [System.IO.Path]::DirectorySeparatorChar
+    if (-not $normalizedTarget.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Deployment path escapes the game root: $normalizedTarget"
+    }
+    $cursor = $normalizedTarget
+    while ($cursor -and $cursor -ine $normalizedGame) {
+        $item = Get-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
+        if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+            throw "Deployment path is a reparse point: $cursor"
+        }
+        $cursor = Split-Path -Parent $cursor
+    }
+    return $normalizedTarget
+}
+
+function Get-SnapshotFiles([string]$root) {
+    if (-not (Test-Path -LiteralPath $root -PathType Container)) { return @() }
+    $files = New-Object System.Collections.Generic.List[string]
+    foreach ($item in @(Get-ChildItem -LiteralPath $root -Recurse -Force)) {
+        if ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+            throw "Deployment state contains a reparse point: $($item.FullName)"
+        }
+        if (-not $item.PSIsContainer) {
+            $relative = (Get-RelativePath $root $item.FullName).Replace('\', '/')
+            $files.Add($relative + ':' + (Get-FileHashValue $item.FullName))
+        }
+    }
+    return @($files | Sort-Object)
+}
+
+function New-DeploymentSnapshot([string[]]$targetPaths, [string]$gameRoot) {
+    $root = Assert-ManagedTarget (Join-Path $gameRoot '.penumbravr-journal') $gameRoot
+    $staging = Assert-ManagedTarget (Join-Path $gameRoot ('.penumbravr-journal-staging-' + [guid]::NewGuid().ToString('N'))) $gameRoot
+    if (Test-Path -LiteralPath $root) {
+        throw "An interrupted Overture deployment needs recovery before another write: $root"
+    }
+    $entries = New-Object System.Collections.Generic.List[object]
+    try {
+        New-Item -ItemType Directory -Path $staging | Out-Null
+        $index = 0
+        foreach ($candidate in @($targetPaths | Select-Object -Unique)) {
+            $target = Assert-ManagedTarget $candidate $gameRoot
+            $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+            $kind = if ($null -eq $item) { 'absent' } elseif ($item.PSIsContainer) { 'directory' } else { 'file' }
+            $missingParents = New-Object System.Collections.Generic.List[string]
+            $parent = Split-Path -Parent $target
+            while ($parent -and $parent -ine (Get-NormalizedRoot $gameRoot) -and
+                -not (Test-Path -LiteralPath $parent -PathType Container)) {
+                $missingParents.Add($parent)
+                $parent = Split-Path -Parent $parent
+            }
+            $copy = Join-Path $staging ('item-' + $index)
+            $snapshotHash = $null
+            $snapshotFiles = @()
+            if ($kind -ne 'absent') {
+                if ($kind -eq 'directory') { $before = @(Get-SnapshotFiles $target) }
+                Copy-Item -LiteralPath $target -Destination $copy -Recurse -Force
+                if ($kind -eq 'file') { $snapshotHash = Get-FileHashValue $copy }
+                if ($kind -eq 'file' -and (Get-FileHashValue $target) -ne $snapshotHash) {
+                    throw "Deployment snapshot failed hash verification: $target"
+                }
+                if ($kind -eq 'directory') {
+                    $snapshotFiles = @(Get-SnapshotFiles $copy)
+                    if (($snapshotFiles -join '|') -cne ($before -join '|')) {
+                        throw "Deployment snapshot failed directory verification: $target"
+                    }
+                }
+            }
+            $entries.Add([pscustomobject]@{
+                Target = $target; Copy = (Join-Path $root ('item-' + $index)); Kind = $kind
+                MissingParents = $missingParents.ToArray()
+                SnapshotHash = $snapshotHash; SnapshotFiles = $snapshotFiles
+            })
+            $index++
+        }
+        [ordered]@{
+            Version = 1
+            GameRoot = Get-NormalizedRoot $gameRoot
+            Entries = $entries.ToArray()
+        } | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $staging 'journal.json') -Encoding utf8
+        [System.IO.Directory]::Move($staging, $root)
+        return [pscustomobject]@{ Root = $root; Entries = $entries.ToArray() }
+    }
+    catch {
+        if (Test-Path -LiteralPath $staging -PathType Container) {
+            Remove-Item -LiteralPath $staging -Recurse -Force
+        }
+        throw
+    }
+}
+
+function Read-DeploymentSnapshot([string]$gameRoot) {
+    $root = Assert-ManagedTarget (Join-Path $gameRoot '.penumbravr-journal') $gameRoot
+    $manifest = Join-Path $root 'journal.json'
+    if (-not (Test-Path -LiteralPath $manifest -PathType Leaf)) {
+        throw "Overture recovery journal is missing or incomplete: $manifest"
+    }
+    $record = Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+    if ([int]$record.Version -ne 1 -or
+        (Get-NormalizedRoot ([string]$record.GameRoot)) -ine (Get-NormalizedRoot $gameRoot)) {
+        throw "Overture recovery journal belongs to a different game or version: $manifest"
+    }
+    $entries = @($record.Entries)
+    if (-not $entries.Count) { throw "Overture recovery journal is empty: $manifest" }
+    $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+    $stateRoot = Join-Path (Get-NormalizedRoot $gameRoot) '.penumbravr'
+    $redistPrefix = (Join-Path (Get-NormalizedRoot $gameRoot) 'redist') + [System.IO.Path]::DirectorySeparatorChar
+    for ($i = 0; $i -lt $entries.Count; $i++) {
+        $entry = $entries[$i]
+        $target = Assert-ManagedTarget ([string]$entry.Target) $gameRoot
+        $copy = Assert-ManagedTarget ([string]$entry.Copy) $gameRoot
+        if (($target -ine $stateRoot -and
+             -not $target.StartsWith($redistPrefix, [System.StringComparison]::OrdinalIgnoreCase)) -or
+            $target -ieq $root -or
+            $target.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar,
+                [System.StringComparison]::OrdinalIgnoreCase) -or
+            -not $seen.Add($target) -or
+            $copy -ine (Join-Path $root ('item-' + $i)) -or
+            $entry.Kind -notin @('absent', 'file', 'directory')) {
+            throw "Invalid Overture recovery journal entry: $target"
+        }
+        foreach ($prior in $seen) {
+            if ($prior -ieq $target) { continue }
+            if ($target.StartsWith($prior + [System.IO.Path]::DirectorySeparatorChar,
+                    [System.StringComparison]::OrdinalIgnoreCase) -or
+                $prior.StartsWith($target + [System.IO.Path]::DirectorySeparatorChar,
+                    [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "Overlapping Overture recovery targets: $target and $prior"
+            }
+        }
+        foreach ($candidate in @($entry.MissingParents)) {
+            if (-not $candidate) { continue }
+            $parent = Assert-ManagedTarget ([string]$candidate) $gameRoot
+            if (-not $target.StartsWith($parent + [System.IO.Path]::DirectorySeparatorChar,
+                    [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "Invalid Overture recovery parent: $parent"
+            }
+        }
+        if ($entry.Kind -eq 'file' -and
+            ((Get-FileHashValue $copy) -ne [string]$entry.SnapshotHash)) {
+            throw "Overture recovery copy failed hash verification: $copy"
+        }
+        if ($entry.Kind -eq 'directory' -and
+            (-not (Test-Path -LiteralPath $copy -PathType Container) -or
+             (@(Get-SnapshotFiles $copy) -join '|') -cne (@($entry.SnapshotFiles) -join '|'))) {
+            throw "Overture recovery directory failed verification: $copy"
+        }
+        if ($entry.Kind -eq 'absent' -and (Test-Path -LiteralPath $copy)) {
+            throw "Unexpected Overture recovery copy: $copy"
+        }
+    }
+    return [pscustomobject]@{ Root = $root; Entries = $entries }
+}
+
+function Complete-DeploymentSnapshot($snapshot, [string]$gameRoot) {
+    $root = Assert-ManagedTarget $snapshot.Root $gameRoot
+    if ($root -ine (Join-Path (Get-NormalizedRoot $gameRoot) '.penumbravr-journal')) {
+        throw "Unsafe Overture journal completion path: $root"
+    }
+    $resolved = Assert-ManagedTarget (Join-Path $gameRoot ('.penumbravr-journal-resolved-' + [guid]::NewGuid().ToString('N'))) $gameRoot
+    [System.IO.Directory]::Move($root, $resolved)
+    try { Remove-Item -LiteralPath $resolved -Recurse -Force }
+    catch { Write-Warning "Completed Overture journal retained for cleanup: $resolved" }
+}
+
+function Restore-DeploymentSnapshot($snapshot, [string]$gameRoot) {
+    foreach ($entry in @($snapshot.Entries)) {
+        $target = Assert-ManagedTarget $entry.Target $gameRoot
+        $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+        if ($entry.Kind -eq 'file' -and $item -and -not $item.PSIsContainer -and
+            (Get-FileHashValue $target) -eq (Get-FileHashValue $entry.Copy)) { continue }
+        if ($entry.Kind -eq 'directory' -and $item -and $item.PSIsContainer -and
+            (@(Get-SnapshotFiles $target) -join '|') -ceq (@(Get-SnapshotFiles $entry.Copy) -join '|')) { continue }
+        if ($item) {
+            if ($item.PSIsContainer -and $entry.Kind -ne 'directory' -and
+                $target -ine (Join-Path $gameRoot '.penumbravr')) {
+                throw "Rollback target became an unexpected directory: $target"
+            }
+            if ($item.PSIsContainer) { Remove-Item -LiteralPath $target -Recurse -Force }
+            else { Remove-Item -LiteralPath $target -Force }
+        }
+        if ($entry.Kind -eq 'absent') {
+            foreach ($candidate in @($entry.MissingParents)) {
+                if (-not $candidate) { continue }
+                $directory = Assert-ManagedTarget $candidate $gameRoot
+                if (-not (Test-Path -LiteralPath $directory -PathType Container)) { continue }
+                if (@(Get-ChildItem -LiteralPath $directory -Force).Count -ne 0) { break }
+                Remove-Item -LiteralPath $directory -Force
+            }
+        }
+        if ($entry.Kind -ne 'absent') {
+            New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+            Copy-Item -LiteralPath $entry.Copy -Destination $target -Recurse -Force
+            if ($entry.Kind -eq 'file' -and (Get-FileHashValue $target) -ne (Get-FileHashValue $entry.Copy)) {
+                throw "Rollback failed hash verification: $target"
+            }
+            if ($entry.Kind -eq 'directory' -and
+                (@(Get-SnapshotFiles $target) -join '|') -cne (@(Get-SnapshotFiles $entry.Copy) -join '|')) {
+                throw "Rollback failed directory verification: $target"
+            }
+        }
+    }
+}
+
+function Invoke-DeploymentRollback($snapshot, [string]$gameRoot, [string]$failure) {
+    try {
+        $verifiedSnapshot = Read-DeploymentSnapshot $gameRoot
+        Restore-DeploymentSnapshot $verifiedSnapshot $gameRoot
+        Complete-DeploymentSnapshot $verifiedSnapshot $gameRoot
+    }
+    catch { throw "Deployment failed: $failure. Rollback also failed: $($_.Exception.Message). Snapshot retained: $($snapshot.Root)" }
+    throw "Deployment failed and managed files were restored: $failure"
+}
+
+if ($Recover) {
+    if (-not $InstallRoot) { throw 'Pass -InstallRoot explicitly when recovering an interrupted Overture deployment.' }
+    $recoveryRoot = Get-NormalizedRoot $InstallRoot
+    if ((Split-Path -Leaf $recoveryRoot) -ieq 'redist') {
+        $recoveryRoot = Get-NormalizedRoot (Split-Path -Parent $recoveryRoot)
+    }
+    if (-not (Test-Path -LiteralPath $recoveryRoot -PathType Container)) {
+        throw "Overture recovery game folder is missing: $recoveryRoot"
+    }
+    $recoverySnapshot = Read-DeploymentSnapshot $recoveryRoot
+    Restore-DeploymentSnapshot $recoverySnapshot $recoveryRoot
+    Complete-DeploymentSnapshot $recoverySnapshot $recoveryRoot
+    Write-Host "Interrupted Overture deployment recovered at $recoveryRoot" -ForegroundColor Green
+    return
+}
+
 $paths = Resolve-GamePaths $InstallRoot
 $gameRoot = $paths.GameRoot
 $redistRoot = $paths.RedistRoot
+if (Test-Path -LiteralPath (Join-Path $gameRoot '.penumbravr-journal')) {
+    throw "An interrupted Overture deployment needs -Recover -InstallRoot '$gameRoot' before another write."
+}
+if ($ExpectedExecutableSha256) {
+    $executablePath = Join-Path $redistRoot 'Penumbra.exe'
+    if ((Get-FileHashValue $executablePath) -ine $ExpectedExecutableSha256) {
+        throw "Overture executable changed after build selection: $executablePath"
+    }
+}
 $stateRoot = Join-Path $gameRoot '.penumbravr'
 $statePath = Join-Path $stateRoot 'deploy-state.json'
 $backupRoot = Join-Path $stateRoot 'backup'
@@ -214,11 +472,42 @@ if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     }
 }
 
+if ($Repair -and $null -eq $previousState) {
+    throw 'Overture repair requires an existing managed deployment state.'
+}
+
 if ($Restore) {
     if ($null -eq $previousState) {
         throw "No Penumbra VR deployment state was found under $stateRoot"
     }
 
+    # Validate the whole managed set before the first restore write. A later
+    # external edit must not leave earlier files already restored.
+    foreach ($entry in $previousState.Files) {
+        $relativePath = [string]$entry.Path
+        $targetPath = Get-PathUnderRoot $redistRoot $relativePath
+        $targetHash = Get-FileHashValue $targetPath
+        $deployedHash = [string]$entry.DeployedHash
+        if ([bool]$entry.HadOriginal) {
+            $backupPath = Get-PathUnderRoot $backupRoot $relativePath
+            if ((Get-FileHashValue $backupPath) -ne [string]$entry.OriginalHash) {
+                throw "Cannot restore '$relativePath'; its original backup is missing or changed."
+            }
+            if ($targetHash -and $targetHash -ne $deployedHash -and
+                $targetHash -ne [string]$entry.OriginalHash) {
+                throw "Refusing to overwrite externally modified managed file '$targetPath'."
+            }
+        }
+        elseif ($targetHash -and $targetHash -ne $deployedHash) {
+            throw "Refusing to delete externally modified managed file '$targetPath'."
+        }
+    }
+
+    $restoreTargets = @($previousState.Files | ForEach-Object {
+        Get-PathUnderRoot $redistRoot ([string]$_.Path)
+    }) + @($stateRoot)
+    $deploymentSnapshot = New-DeploymentSnapshot $restoreTargets $gameRoot
+    try {
     foreach ($entry in $previousState.Files) {
         $relativePath = [string]$entry.Path
         $targetPath = Get-PathUnderRoot $redistRoot $relativePath
@@ -240,6 +529,9 @@ if ($Restore) {
             $targetDirectory = Split-Path -Parent $targetPath
             New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
             Copy-Item -LiteralPath $backupPath -Destination $targetPath -Force
+            if ((Get-FileHashValue $targetPath) -ne $originalHash) {
+                throw "Restored original failed hash verification: $relativePath"
+            }
             Write-Host "Restored original: $relativePath"
         }
         elseif ($targetHash) {
@@ -258,6 +550,10 @@ if ($Restore) {
         throw "Refusing to remove deployment state outside the game root: $resolvedStateRoot"
     }
     Remove-Item -LiteralPath $resolvedStateRoot -Recurse -Force
+    } catch {
+        Invoke-DeploymentRollback $deploymentSnapshot $gameRoot $_.Exception.Message
+    }
+    Complete-DeploymentSnapshot $deploymentSnapshot $gameRoot
     Write-Host "Penumbra VR restored to its pre-deployment state at $redistRoot" -ForegroundColor Green
     return
 }
@@ -300,8 +596,53 @@ if ($null -ne $previousState) {
     }
 }
 
+# Validate the complete previous deployment before retiring or replacing any
+# file. Steam/user edits are not silently adopted as new originals.
+if ($Repair) {
+    if ($mappings.Count -ne $previousEntries.Count) {
+        throw 'Overture repair requires the same managed file set as the recorded deployment.'
+    }
+    foreach ($entry in $previousEntries.Values) {
+        if ([string]$entry.DeployedHash -notmatch '^[0-9A-Fa-f]{64}$' -or
+            ([bool]$entry.HadOriginal -and [string]$entry.OriginalHash -notmatch '^[0-9A-Fa-f]{64}$')) {
+            throw "Overture repair requires recorded hashes for '$($entry.Path)'."
+        }
+    }
+    foreach ($relativePath in $mappings.Keys) {
+        if (-not $previousEntries.ContainsKey($relativePath)) {
+            throw "Overture repair cannot introduce an unrecorded managed path: $relativePath"
+        }
+    }
+}
+foreach ($entry in $previousEntries.Values) {
+    $relativePath = [string]$entry.Path
+    $targetPath = Get-PathUnderRoot $redistRoot $relativePath
+    $targetHash = Get-FileHashValue $targetPath
+    $deployedHash = [string]$entry.DeployedHash
+    if ([bool]$entry.HadOriginal) {
+        $backupPath = Get-PathUnderRoot $backupRoot $relativePath
+        if ((Get-FileHashValue $backupPath) -ne [string]$entry.OriginalHash) {
+            throw "Cannot upgrade '$relativePath'; its original backup is missing or changed."
+        }
+        if (-not $Repair -and $targetHash -and $targetHash -ne $deployedHash -and
+            $targetHash -ne [string]$entry.OriginalHash) {
+            throw "Refusing to overwrite externally modified managed file '$targetPath'."
+        }
+    }
+    elseif (-not $Repair -and $targetHash -and $targetHash -ne $deployedHash) {
+        throw "Refusing to overwrite externally modified managed file '$targetPath'."
+    }
+}
+
 # Restore or remove only files recorded by the previous deployment. Never mirror
 # the whole redist directory: nearly all files there belong to the commercial game.
+$installTargets = New-Object System.Collections.Generic.List[string]
+foreach ($relativePath in @($previousEntries.Keys) + @($mappings.Keys)) {
+    $installTargets.Add((Get-PathUnderRoot $redistRoot ([string]$relativePath)))
+}
+$installTargets.Add($stateRoot)
+$deploymentSnapshot = New-DeploymentSnapshot $installTargets.ToArray() $gameRoot
+try {
 foreach ($previousPath in @($previousEntries.Keys)) {
     if ($mappings.ContainsKey($previousPath)) {
         continue
@@ -327,6 +668,9 @@ foreach ($previousPath in @($previousEntries.Keys)) {
         $targetDirectory = Split-Path -Parent $targetPath
         New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
         Copy-Item -LiteralPath $backupPath -Destination $targetPath -Force
+        if ((Get-FileHashValue $targetPath) -ne $originalHash) {
+            throw "Retired original failed hash verification: $previousPath"
+        }
         Write-Host "Restored retired original: $previousPath"
     }
     elseif ($targetHash) {
@@ -351,21 +695,6 @@ foreach ($mapping in @($mappings.Values | Sort-Object Path)) {
     if ($null -ne $previousEntry) {
         $hadOriginal = [bool]$previousEntry.HadOriginal
         $originalHash = if ($hadOriginal) { [string]$previousEntry.OriginalHash } else { $null }
-
-        # Steam verification, a game update, or a deliberate local edit may have
-        # replaced a managed target since the last deployment. Preserve that new
-        # external version before synchronizing the current mod build over it.
-        $currentTargetHash = Get-FileHashValue $targetPath
-        $previousDeployedHash = [string]$previousEntry.DeployedHash
-        if ($currentTargetHash -and $currentTargetHash -ne $previousDeployedHash) {
-            $backupPath = Get-PathUnderRoot $backupRoot $relativePath
-            $backupDirectory = Split-Path -Parent $backupPath
-            New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
-            Copy-Item -LiteralPath $targetPath -Destination $backupPath -Force
-            $hadOriginal = $true
-            $originalHash = $currentTargetHash
-            Write-Host "Refreshed external backup: $relativePath"
-        }
     }
     else {
         $hadOriginal = Test-Path -LiteralPath $targetPath -PathType Leaf
@@ -375,6 +704,9 @@ foreach ($mapping in @($mappings.Values | Sort-Object Path)) {
             $backupDirectory = Split-Path -Parent $backupPath
             New-Item -ItemType Directory -Path $backupDirectory -Force | Out-Null
             Copy-Item -LiteralPath $targetPath -Destination $backupPath -Force
+            if ((Get-FileHashValue $backupPath) -ne $originalHash) {
+                throw "Original backup failed hash verification: $relativePath"
+            }
             Write-Host "Backed up original: $relativePath"
         }
     }
@@ -382,6 +714,9 @@ foreach ($mapping in @($mappings.Values | Sort-Object Path)) {
     New-Item -ItemType Directory -Path $targetDirectory -Force | Out-Null
     Copy-Item -LiteralPath $sourcePath -Destination $targetPath -Force
     $deployedHash = Get-FileHashValue $targetPath
+    if ($deployedHash -ne (Get-FileHashValue $sourcePath)) {
+        throw "Deployed file failed hash verification: $relativePath"
+    }
     $newEntries.Add([pscustomobject]@{
         Path = $relativePath
         HadOriginal = $hadOriginal
@@ -402,6 +737,10 @@ $newState = [ordered]@{
 $temporaryStatePath = Join-Path $stateRoot 'deploy-state.json.tmp'
 $newState | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $temporaryStatePath -Encoding utf8
 Move-Item -LiteralPath $temporaryStatePath -Destination $statePath -Force
+} catch {
+    Invoke-DeploymentRollback $deploymentSnapshot $gameRoot $_.Exception.Message
+}
+Complete-DeploymentSnapshot $deploymentSnapshot $gameRoot
 
 Write-Host "Penumbra VR synchronized to $redistRoot" -ForegroundColor Green
 if ($SteamLauncher) {

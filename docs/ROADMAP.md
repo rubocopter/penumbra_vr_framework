@@ -39,12 +39,11 @@ deferred as release tooling.
 
 ### Presentation and tracking
 
-- [ ] Audit the integrated Overture product against the framework-wide rule that
-  optional render-thread diagnostics must never stall VR presentation. Overture
-  does not consume Black Plague's telemetry probe, so this is a targeted review
-  of any equivalent Overture diagnostics rather than a direct code port. Carry
-  the same invariant into Requiem as its renderer/backend instrumentation is
-  implemented.
+- [x] Audit Overture's optional render diagnostics: the legacy `PrintLog`
+  command enabled synchronous per-draw `hpl.log` flushes. It is now gated off
+  while VR is enabled; normal desktop diagnostics remain available. Compile-time
+  update timing is disabled in the Release build. Carry the same invariant into
+  Requiem as its renderer/backend instrumentation is implemented.
 - [ ] Capture a full stack and eliminate the recurring Black Plague SDL mutex
   lifetime crash (`SDL_mutexP`/`SDL_DestroyMutex`, retail SDL RVAs `0x28C09`
   and `0x28BD6`). The existing stable-window and completed-swap bootstrap gates

@@ -46,19 +46,23 @@ try {
     Copy-Item -LiteralPath $RetailAlut -Destination (Join-Path $gameRoot 'alut.dll')
     $originalHash = (Get-FileHash -LiteralPath (Join-Path $gameRoot 'alut.dll') -Algorithm SHA256).Hash
 
-    & $installer -SteamRoot $steamRoot | Out-Null
+    & $installer -SteamRoot $steamRoot -LargeAddressAware | Out-Null
     $state = Join-Path $gameRoot 'PenumbraVR.BlackPlague.install.json'
     $proxy = Join-Path $gameRoot 'alut.dll'
     $expectedProxy = Join-Path $unpacked 'build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll'
     if (-not (Test-Path -LiteralPath $state -PathType Leaf) -or
         (Get-FileHash -LiteralPath $proxy -Algorithm SHA256).Hash -ne
-            (Get-FileHash -LiteralPath $expectedProxy -Algorithm SHA256).Hash) {
+            (Get-FileHash -LiteralPath $expectedProxy -Algorithm SHA256).Hash -or
+        (Get-FileHash -LiteralPath $gameExe -Algorithm SHA256).Hash -ne
+            'DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196') {
         throw 'Package installation did not deploy its own build.'
     }
 
     & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -SteamRoot $steamRoot -Restore | Out-Null
     if ($LASTEXITCODE -ne 0 -or
         (Get-FileHash -LiteralPath $proxy -Algorithm SHA256).Hash -ne $originalHash -or
+        (Get-FileHash -LiteralPath $gameExe -Algorithm SHA256).Hash -ne
+            'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF' -or
         (Test-Path -LiteralPath $state)) {
         throw 'Package uninstall did not restore the game fixture.'
     }

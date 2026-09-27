@@ -448,7 +448,9 @@ if(actionInputActive && vrUIContext && vrInput.uiSelect.justPressed)
 				mpInit->mpSaveHandler->AutoLoad(_W("auto"));
 			}
 		}
-		if(mpInput->BecameTriggerd("PrintLog"))
+		// HPL's render log flushes synchronously for every draw. Keep this
+		// diagnostic off the headset presentation path.
+		if(mpInput->BecameTriggerd("PrintLog") && !mpLowLevelGraphics->GetVREnabled())
 		{
 			Log("-------------- START RENDERING LOG ------------------------\n");
 			mpInit->mpGame->GetGraphics()->GetRenderer3D()->SetDebugFlags(eRendererDebugFlag_LogRendering);

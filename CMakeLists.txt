@@ -179,6 +179,11 @@ add_library(pvr_pe_large_address STATIC
 target_include_directories(pvr_pe_large_address PUBLIC src/deployment)
 pvr_enable_warnings(pvr_pe_large_address)
 
+add_executable(pvr_laa_transform src/deployment/laa_transform_main.cpp)
+target_link_libraries(pvr_laa_transform PRIVATE pvr_pe_large_address pvr_build_catalog)
+set_target_properties(pvr_laa_transform PROPERTIES OUTPUT_NAME "PenumbraVR.LaaTransform")
+pvr_enable_warnings(pvr_laa_transform)
+
 set(PVR_OPENVR_LOADER "")
 if(PENUMBRA_VR_OPENVR_SDK)
     set(PVR_OPENVR_HEADER "${PENUMBRA_VR_OPENVR_SDK}/headers/openvr.h")

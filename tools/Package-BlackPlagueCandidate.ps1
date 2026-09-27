@@ -86,6 +86,8 @@ try {
     foreach ($relative in $supportFiles) {
         Copy-PackageItem (Join-Path $repoRoot $relative) $relative
     }
+    Copy-PackageItem (Join-Path $buildRoot 'bin/Release/PenumbraVR.LaaTransform.exe') `
+        'build/bin/Release/PenumbraVR.LaaTransform.exe'
     $licenseLoader = Join-Path $stage 'products/overture/dependencies/openvr-2.15.6/bin/win32/openvr_api.dll'
     $builtLoader = Join-Path $stage 'build/bin/Release/openvr_api.dll'
     if ((Get-FileHash -LiteralPath $licenseLoader -Algorithm SHA256).Hash -ne
@@ -105,6 +107,14 @@ supported copies are found, pass `-GamePath "C:\path\to\redist\Penumbra.exe"`.
 The installer checks the executable hash before changing the game. Use the same
 command with `-Restore` to uninstall. It refuses unexpected changes to managed
 files and reports the path that needs attention. SteamVR is required to play.
+After an interrupted install or uninstall, pass `-Recover` with an explicit
+`-GamePath` before another operation; the executable may be missing at recovery.
+For a damaged installed payload, run `-Repair -GamePath <executable>`.
+Repair requires its install record and verified original backups; unexpected
+files in the managed OpenVR directory and changed audio settings are rejected.
+A damaged managed LAA executable can be rebuilt from its canonical backup.
+`-LargeAddressAware` optionally applies the recorded exact-build PE transform
+inside the managed installation and restores the canonical executable on uninstall.
 
 See `COPYING` and `docs/THIRD_PARTY.md` for licenses.
 '@ | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8

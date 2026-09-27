@@ -59,11 +59,19 @@ ctest --preset release --output-on-failure
 ```
 
 The Framework-owned Overture product can be built and packaged with
-`tools/Build-OvertureProduct.ps1 -Package`. A standalone Black Plague candidate
-ZIP can be produced with `tools/Package-BlackPlagueCandidate.ps1 -OutputPath
-build/release/PenumbraVR.BlackPlague.Candidate.zip`. Neither package is the
-unified release; the [installer design](docs/INSTALLER_DESIGN.md) tracks that
-remaining work.
+`tools/Build-OvertureProduct.ps1 -Package`, then zipped with
+`tools/Package-OvertureCandidate.ps1 -OutputPath
+build/release/PenumbraVR.Overture.Candidate.zip`. A standalone Black Plague
+candidate ZIP can be produced with `tools/Package-BlackPlagueCandidate.ps1
+-OutputPath build/release/PenumbraVR.BlackPlague.Candidate.zip`. Neither package
+is the unified release; the [installer design](docs/INSTALLER_DESIGN.md) tracks
+that remaining work.
+`tools/Package-FrameworkCandidate.ps1 -OutputPath
+build/release/PenumbraVR.Framework.Candidate.zip` combines both host-tested
+candidates with one selector. It lists Requiem but refuses to install it until
+its gameplay backend exists. The selector accepts `-LargeAddressAware` for an
+optional exact-build Black Plague transform with a reversible executable
+backup; this path has host tests only.
 `tools/Get-PenumbraInstallations.ps1` lists recognized Steam installations;
 pass `-ManualPaths` for installations outside the discovered libraries. The
 Black Plague candidate installer auto-detects one compatible Steam copy, with

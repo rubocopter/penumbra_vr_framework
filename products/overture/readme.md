@@ -49,6 +49,8 @@ resources and launch context are absent.
 
 Requires Windows 10/11, SteamVR, and a PCVR headset — the Visual C++ runtime ships inside the package since alpha.6.1. To remove the mod, run `Install-PenumbraVR.bat -Restore`; only files owned by the mod are removed, and backed-up originals are restored.
 
+If an installed mod file is damaged, run `Install-PenumbraVR.bat -Repair -InstallRoot "<game folder>"` from the extracted package. Repair requires the recorded deployment state and intact original backups. After an interrupted install, repair or restore, run `Install-PenumbraVR.bat -Recover -InstallRoot "<game folder>"` before another write.
+
 The release includes 231 reviewed model/scenery diffuse
 textures. They affect both visual modes and
 the monitor. New entries use bounded resizing and high-quality JPEG; the nine

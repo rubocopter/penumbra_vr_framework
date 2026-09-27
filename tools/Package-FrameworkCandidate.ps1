@@ -1,0 +1,98 @@
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory = $true)][string]$OutputPath
+)
+
+$ErrorActionPreference = 'Stop'
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$outputPath = [System.IO.Path]::GetFullPath($OutputPath)
+if (Test-Path -LiteralPath $outputPath) {
+    throw "Output archive already exists: $outputPath"
+}
+$stageName = 'PenumbraVrFrameworkPackage-' + [guid]::NewGuid().ToString('N')
+$tempRoot = [System.IO.Path]::GetFullPath((Join-Path ([System.IO.Path]::GetTempPath()) $stageName))
+$tempPrefix = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
+if (-not $tempRoot.StartsWith($tempPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+    throw "Unsafe package staging path: $tempRoot"
+}
+$stage = Join-Path $tempRoot 'stage'
+$inputs = Join-Path $tempRoot 'inputs'
+try {
+    New-Item -ItemType Directory -Path $stage, $inputs -Force | Out-Null
+    $overtureZip = Join-Path $inputs 'Overture.zip'
+    $blackPlagueZip = Join-Path $inputs 'BlackPlague.zip'
+    & (Join-Path $PSScriptRoot 'Package-OvertureCandidate.ps1') -OutputPath $overtureZip 6>$null
+    & (Join-Path $PSScriptRoot 'Package-BlackPlagueCandidate.ps1') -OutputPath $blackPlagueZip 6>$null
+    Expand-Archive -LiteralPath $overtureZip -DestinationPath (Join-Path $stage 'products/overture')
+    Expand-Archive -LiteralPath $blackPlagueZip -DestinationPath (Join-Path $stage 'products/black_plague')
+    $toolsRoot = Join-Path $stage 'tools'
+    New-Item -ItemType Directory -Path $toolsRoot | Out-Null
+    foreach ($name in @('Install-PenumbraFrameworkCandidate.ps1',
+                        'Install-PenumbraFrameworkCandidate.cmd',
+                        'Get-PenumbraInstallations.ps1', 'Get-PenumbraBuildInfo.ps1')) {
+        Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $toolsRoot
+    }
+    @'
+# Penumbra VR Framework candidate
+
+This archive contains host-tested Overture and Black Plague candidate builds.
+Requiem is identified by the installer but has no gameplay VR backend yet.
+This is not a public three-game release or proof of headset validation.
+
+Run `tools\Install-PenumbraFrameworkCandidate.cmd` to list installations and
+select a compatible game. Use `-List` for read-only discovery, `-GamePath`
+for a specific executable, `-ManualPaths` for a non-Steam folder and `-Restore`
+to undo one selected installation. Exit the game before installing or restoring.
+If a deployment was interrupted, run the selector with `-Recover -Game
+Overture` or `-Recover -Game BlackPlague` and `-GamePath <game folder or
+executable>` before another install. Recovery works when the executable is
+missing.
+Use `-Repair -Game Overture` or `-Repair -Game BlackPlague` with an explicit
+`-GamePath <game folder or executable>` to replace damaged recorded mod files
+from this verified package. Repair requires the recorded original backups;
+Black Plague can reconstruct its managed LAA executable from the verified
+canonical backup. User audio settings remain under strict checks.
+For Black Plague only, `-LargeAddressAware` applies the verified exact-build
+PE transform with a managed canonical backup. It remains a host-tested option.
+
+The Overture and Black Plague subfolders retain their own installer and license
+notices. SteamVR is required for gameplay.
+'@ | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
+
+    $checksums = @(
+        foreach ($file in @(Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName)) {
+            $relative = $file.FullName.Substring($stage.Length).TrimStart('\').Replace('\', '/')
+            '{0}  {1}' -f (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash, $relative
+        }
+    )
+    [System.IO.File]::WriteAllLines((Join-Path $stage 'SHA256SUMS.txt'),
+        [string[]]$checksums, [System.Text.UTF8Encoding]::new($false))
+
+    Add-Type -AssemblyName System.IO.Compression
+    New-Item -ItemType Directory -Path (Split-Path -Parent $outputPath) -Force | Out-Null
+    $stream = [System.IO.File]::Open($outputPath, [System.IO.FileMode]::CreateNew)
+    try {
+        $zip = [System.IO.Compression.ZipArchive]::new(
+            $stream, [System.IO.Compression.ZipArchiveMode]::Create, $false)
+        try {
+            $fixedTimestamp = [datetimeoffset]::new(2000, 1, 1, 0, 0, 0, [timespan]::Zero)
+            foreach ($file in @(Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName)) {
+                $name = $file.FullName.Substring($stage.Length).TrimStart('\').Replace('\', '/')
+                $entry = $zip.CreateEntry($name, [System.IO.Compression.CompressionLevel]::Optimal)
+                $entry.LastWriteTime = $fixedTimestamp
+                $entryStream = $entry.Open()
+                $sourceStream = [System.IO.File]::OpenRead($file.FullName)
+                try { $sourceStream.CopyTo($entryStream) }
+                finally {
+                    $sourceStream.Dispose()
+                    $entryStream.Dispose()
+                }
+            }
+        } finally { $zip.Dispose() }
+    } finally { $stream.Dispose() }
+    Write-Host "Created Framework candidate package: $outputPath"
+} finally {
+    if (Test-Path -LiteralPath $tempRoot -PathType Container) {
+        Remove-Item -LiteralPath $tempRoot -Recurse -Force
+    }
+}

@@ -12,7 +12,7 @@ supported public release.
 | Overture VR Rework v0.1.0 | x86, LAA | `A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71` | Proven historical/public Rework reference |
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
-| Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Recognized transformed variant; offline/host verified only |
+| Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Optional candidate install/upgrade/repair/recovery/rollback/restore host-tested; no live/headset validation |
 | Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Static research/configuration preparation only |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
@@ -30,8 +30,11 @@ At the current checkpoint:
 
 - **Overture:** the original Rework v0.1.0 is the proven public product baseline.
   The Framework-owned Overture product builds/deploys autonomously and has an
-  initial functional headset/controller regression pass, but the Framework has
-  no public release yet.
+  initial functional headset/controller regression pass. Its current candidate
+  ZIP has host-tested install/restore on a disposable exact-executable fixture;
+  the combined two-game candidate has host-tested install/repair/recovery/restore
+  evidence. Neither has a new headset pass and the Framework has no public
+  release yet.
 - **Black Plague:** tracked stereo, camera/head tracking and multiple body/input
   paths have real headset evidence. The normal-Steam bootstrap has also reached
   gameplay VR from the standard Steam **Play** button. The current development

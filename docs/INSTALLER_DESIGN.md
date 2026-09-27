@@ -1,8 +1,9 @@
 # Unified installer design
 
 Penumbra VR should install as one product while preserving the different
-integration model required by each game. The installer is not implemented yet;
-this document defines the durable contract it must consume.
+integration model required by each game. A two-game host-tested candidate now
+combines Overture and Black Plague, but the production three-game installer is
+not implemented yet. This document defines the durable contract it must consume.
 
 ## User-facing flow
 
@@ -72,7 +73,14 @@ The production installer may apply that transform only when:
 - the transformed hash matches the recorded variant;
 - rollback restores the exact canonical executable.
 
-The filesystem transaction that performs this safely is still open work.
+The Black Plague candidate now offers `-LargeAddressAware` as an opt-in,
+host-tested path. Its packaged tool calls the existing PE transformation,
+accepts only the recorded canonical Black Plague/Requiem hashes and verifies
+the exact transformed hash. The Black Plague installer owns a hash-verified
+canonical backup, restores it on uninstall, preserves a pre-existing LAA
+executable, and includes both executable paths in its in-process rollback.
+Requiem gameplay/deployment and complete production repair remain open; the optional
+transform alone is not evidence of runtime support.
 
 ## Payload contract
 
@@ -104,9 +112,24 @@ upgrade, rejected external edits, clean restore and preservation of unrelated
 files. It also snapshots each managed target before writes and restores that
 snapshot when install, upgrade or restore raises an ordinary filesystem error.
 A locked-file fixture exercises interrupted install, upgrade and restore. The
-snapshot is removed on success and retained
-if rollback itself fails. This is in-process rollback, not yet a crash-durable
-production journal or the unified installer transaction described above.
+snapshot is removed on success and retained if rollback itself fails. The
+Black Plague candidate now also publishes `.penumbravr-bp-journal` before
+managed writes. `-Recover -GamePath <executable>` validates every saved file
+and OpenVR directory before restoring them, including when the executable is
+missing. A separate process is terminated during install, LAA upgrade and
+restore in a fixture; recovery preserves the prior exact executable and
+deployment record. A corrupted journal copy is rejected without writes.
+Explicit `-Repair` now replaces damaged recorded mod payloads, including
+missing OpenVR binding files, from the candidate package. It requires the
+verified retail ALUT and any Spanish localization backup. Foreign files or
+directories inside the managed OpenVR tree block repair. A damaged or missing
+managed LAA executable is reconstructed only from its hash-verified canonical
+backup with the exact-build transform, then checked against the known LAA hash.
+The installer regenerates a missing mod-created OpenAL configuration only when
+the recorded hash matches its known default. It rejects changed personal audio
+settings and a missing user-owned configuration. A damaged canonical executable
+without a verified LAA backup cannot be repaired from the mod package.
+The final three-game transaction remains open.
 
 `tools/Package-BlackPlagueCandidate.ps1` assembles a candidate ZIP from the
 Release build and `assets/deployment/manifest.json`. It includes the installer,
@@ -115,6 +138,46 @@ entry ordering and timestamps make identical inputs byte-identical. The package
 test extracts it away from the source checkout and installs/restores a disposable
 copy of the exact retail build. This is a Black Plague development candidate,
 not the unified three-game release or evidence of headset validation.
+
+The Framework-owned Overture source product also builds a standalone package.
+`tools/Package-OvertureCandidate.ps1` checks every file against its
+`SHA256SUMS.txt` and creates a deterministic ZIP. A disposable exact-executable
+fixture extracts that ZIP and verifies install/restore without the source tree.
+Its existing Overture installer still needs the unified transaction and
+known-build selection policy before a final release.
+Upgrade and restore validate every previously managed file and original backup
+before writing. Overture deployment now also snapshots and verifies the managed
+file set and deployment state before its first write, verifies copied backups,
+payloads and restored originals, and rolls back ordinary install, upgrade and
+restore failures. An isolated fixture injects a late copy failure in each phase
+after earlier files changed and checks that the previous hashes/state return.
+The Overture candidate also stages that verified snapshot inside the game root
+and publishes `.penumbravr-journal` before changing managed files. An explicit
+`-Recover -InstallRoot <game folder>` verifies every journal copy before writes
+and restores the prior files/state, including when `Penumbra.exe` disappeared.
+A fixture terminates a separate installer process during install, upgrade and
+restore, then exercises recovery; it also confirms that a damaged journal copy
+is rejected without modifying the game. A resolved journal is renamed before
+cleanup so a crash during cleanup cannot undo a committed operation.
+Explicit `-Repair` requires existing deployment state and the same managed
+file set in the package. It verifies every original backup, then replaces
+damaged or missing recorded paths, including `Penumbra.exe`; unrelated files
+are untouched. Its ordinary failure and interruption handling use the same
+verified snapshot and recovery journal as install and restore.
+
+`tools/Package-FrameworkCandidate.ps1` combines the two verified ZIP inputs
+into one deterministic candidate archive. Its selector lists detected paths,
+allows an explicit game/executable or manual folder, installs or restores one
+chosen game, and rejects Requiem before writes. A disposable fixture exercises
+both games from the extracted archive. Its selector exposes recovery for both
+games with an explicit game path even when the executable is absent. Both paths
+expose repair with explicit game and path after verifying the complete package;
+the two-game candidate does not satisfy the final three-game release gate.
+For Overture, the selector passes its detected SHA-256 to the product installer,
+which rechecks the executable before any deployment write.
+The combined ZIP records every packaged file in `SHA256SUMS.txt`; its selector
+verifies the complete extracted payload before discovery or writes. A fixture
+alters a packaged file and checks that the selector rejects it.
 
 Black Plague deploy preserves/restores a pre-existing Spanish language file and
 creates the default HRTF config only when no prior `alsoft.ini` exists. Runtime
