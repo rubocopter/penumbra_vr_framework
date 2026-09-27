@@ -36,6 +36,10 @@ void ConnectGameplayInput(runtime::OpenVrSession* session) noexcept;
 void PublishGameplayHeadTracking(const runtime::VrHmdPose& pose,
     float world_yaw) noexcept;
 [[nodiscard]] bool NativeUiActive() noexcept;
+enum class NativeUiSurface : unsigned char {
+    none, fullscreen, inventory, notebook,
+};
+[[nodiscard]] NativeUiSurface CurrentNativeUiSurface() noexcept;
 [[nodiscard]] runtime::VrControllerFrame ReadNativeControllerFrame() noexcept;
 
 } // namespace penumbra_vr::backends::requiem

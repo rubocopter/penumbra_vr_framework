@@ -13,7 +13,7 @@ supported public release.
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Optional candidate install/upgrade/repair/recovery/rollback/restore host-tested; no live/headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | RQ-08 headset-validated room-scale, mixed stick movement, crouch and wall response in the tested scene; invisible R1 UI, no observed R2 interaction and short-feeling jump. RQ-09 UI, pointer, recenter and visible hands are host/static-tested only; spatial grab and turn remain incomplete. Not supported. |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | RQ-10 headset: R2 and selection refresh worked, but no Grab/Move entry; flare floated, flashlight slid and inventory/standing crouch stuck. RQ-11 ranked rays, tool profiles, spatial UI and stance update are host-tested only. Not supported. |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
 Canonical Black Plague and Requiem evidence lives in the corresponding files
@@ -98,8 +98,11 @@ At the current checkpoint:
   mixed stick movement and crouch worked, while R1 opened invisible UI and R2
   had no observed interaction. A subsequent Release probe has host/static-tested
   native UI queries, pointer, captured panels, recenter and visible controller
-  hands; these need RQ-09 headset evidence. Spatial grabbing and interaction
-  selection remain pending. Three
+  hands; RQ-09 headset confirmed their visibility and the UI, but not object
+  acquisition. RQ-10 headset evidence reached the native selection refresh but
+  no Grab/Move state; a new RQ-11 probe adds ranked ray selection and separates
+  ray hits, winner and state entry, while tool pose, spatial UI and stance
+  corrections await headset evidence. Three
   startup dumps hit the SDL mutex fault also seen in BP; cause is unknown.
   Requiem is not supported.
 

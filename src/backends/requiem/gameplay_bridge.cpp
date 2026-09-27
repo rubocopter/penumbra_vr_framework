@@ -174,13 +174,16 @@ std::atomic<bool> g_installed{false};
 std::atomic<unsigned> g_active_callbacks{0};
 std::atomic<bool> g_crouch_reset_requested{false};
 std::atomic<bool> g_native_ui_active{false};
+std::atomic<NativeUiSurface> g_native_ui_surface{NativeUiSurface::none};
 std::atomic<bool> g_recenter_body_requested{false};
 std::atomic<std::uint64_t> g_vr_interact_presses{0};
 std::atomic<std::uint64_t> g_vr_inventory_presses{0};
 std::atomic<std::uint64_t> g_vr_jump_presses{0};
 std::atomic<std::uint64_t> g_vr_jump_held_queries{0};
 std::atomic<std::uint64_t> g_ui_updates{0};
+std::atomic<std::uint64_t> g_native_move_enters{0};
 runtime::VrPhysicalCrouchPolicy g_crouch_policy; // ButtonHandler update thread.
+runtime::VrSnapTurn g_turn; // ButtonHandler update thread.
 void* g_crouch_player = nullptr;
 void* g_crouch_body = nullptr;
 void* g_crouch_owner_player = nullptr;
@@ -205,6 +208,7 @@ PendingLocomotion g_pending;
 
 thread_local bool g_direct_locomotion = false;
 thread_local runtime::VrNativeIntents* g_intents = nullptr;
+thread_local void* g_current_player = nullptr;
 thread_local bool g_pointer_valid = false;
 thread_local std::array<float, 2> g_pointer_uv{};
 thread_local std::uint64_t g_mouse_override_until = 0;
@@ -763,8 +767,10 @@ bool __fastcall HookedQuery(
         bool vr = g_intents != nullptr &&
             g_intents->Query(entry.action, entry.query);
         if (vr && entry.action == NativeAction::interact &&
-            entry.query == NativeQuery::pressed)
+            entry.query == NativeQuery::pressed) {
             g_vr_interact_presses.fetch_add(1, std::memory_order_relaxed);
+            RefreshVrSelectionBeforeInteract(g_current_player);
+        }
         if (vr && entry.action == NativeAction::inventory)
             g_vr_inventory_presses.fetch_add(1, std::memory_order_relaxed);
         if (vr && entry.action == NativeAction::jump) {
@@ -873,8 +879,13 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     const bool notebook_active =
         Read<bool>(Read<void*>(init, 0x178), 0x44);
     const bool ui = !in_game || inventory_active || notebook_active;
+    const auto surface = !in_game ? NativeUiSurface::fullscreen
+        : inventory_active ? NativeUiSurface::inventory
+        : notebook_active ? NativeUiSurface::notebook
+        : NativeUiSurface::none;
     if (ui) g_ui_updates.fetch_add(1, std::memory_order_relaxed);
     g_native_ui_active.store(ui, std::memory_order_release);
+    g_native_ui_surface.store(surface, std::memory_order_release);
     AcquireSRWLockExclusive(&g_session_lock);
     if (g_session != nullptr) {
         std::string input_error;
@@ -906,6 +917,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     const bool body_present = current_body != nullptr;
     const bool gameplay_active = input_ready && frame.focused &&
         !ui && body_present;
+    const float turn = g_turn.Update(frame.input.state.turn,
+        gameplay_active, runtime::VrTurnMode::snap, dt,
+        runtime::vr_setting_limits::kSnapTurnAngle.default_value,
+        runtime::vr_setting_limits::kSmoothTurnSpeed.default_value,
+        runtime::vr_setting_limits::kTurnDeadZone.default_value);
+    if (turn != 0.0F) AddTrackedWorldYaw(-turn);
     const auto pointer = runtime::SelectUiPointerPose(
         frame, frame.interact_source);
     g_pointer_valid = ui && input_ready && frame.focused &&
@@ -919,17 +936,37 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         RequestTrackedRecenter();
         g_recenter_body_requested.store(true, std::memory_order_release);
     }
-    const bool tracking_valid = gameplay_active &&
+    // Inventory/notebook freeze gameplay actions, but a player can stand up
+    // physically while either panel is open. Keep the Rework stance policy
+    // informed by fresh HMD height and apply its native transition on exit.
+    const bool stance_tracking_active = input_ready && frame.focused &&
+        in_game && body_present;
+    const bool tracking_valid = stance_tracking_active &&
         TrackedHeadTrackingHeight(head_height);
+    const auto crouch_button = ui ? runtime::VrButtonState{} :
+        frame.input.state.crouch;
     static_cast<void>(g_crouch_policy.Update(
-        frame.input.state.crouch,
+        crouch_button,
         runtime::VrCrouchMode::hybrid,
         runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value,
-        gameplay_active,
+        stance_tracking_active,
         tracking_valid,
         head_height,
         g_stand_blocked));
-    ServiceNativeVrCrouch(player, g_crouch_policy.status().desired_crouch);
+    if (!ui) ServiceNativeVrCrouch(
+        player, g_crouch_policy.status().desired_crouch);
+    thread_local bool previous_ui = false;
+    if (ui != previous_ui) {
+        probe::WriteLog(
+            "Requiem VR UI stance ui=%u tracked=%u head_y=%.3f physical=%u desired=%u native_state=%ld",
+            ui ? 1U : 0U, tracking_valid ? 1U : 0U,
+            head_height,
+            g_crouch_policy.status().physical_crouch ? 1U : 0U,
+            g_crouch_policy.status().desired_crouch ? 1U : 0U,
+            static_cast<long>(Read<std::int32_t>(player,
+                contract.move_state_index_offset)));
+    }
+    previous_ui = ui;
     AcquireSRWLockExclusive(&g_tracking_state_lock);
     if (g_tracking_state.character_body !=
             (gameplay_active ? current_body : nullptr)) {
@@ -967,12 +1004,24 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         ui ? runtime::VrInputContext::ui
            : runtime::VrInputContext::gameplay);
     auto* const previous_intents = g_intents;
+    auto* const previous_player = g_current_player;
     g_intents = &intents;
+    g_current_player = player;
     LARGE_INTEGER update_started{}, update_finished{};
     QueryPerformanceCounter(&update_started);
     if (original != nullptr) original(handler, dt);
     QueryPerformanceCounter(&update_finished);
+    thread_local void* observed_player = nullptr;
+    thread_local int observed_state = -1;
+    const int current_state = Read<int>(player,
+        contract.primary_state_index_offset);
+    if (player != observed_player) observed_state = -1;
+    if (current_state == 2 && observed_state != 2)
+        g_native_move_enters.fetch_add(1, std::memory_order_relaxed);
+    observed_player = player;
+    observed_state = current_state;
     g_intents = previous_intents;
+    g_current_player = previous_player;
     static std::uint64_t last_timing_log_ms = 0; // Game update thread only.
     static std::uint64_t update_ticks = 0;
     static std::uint64_t update_count = 0;
@@ -986,12 +1035,18 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     if (now_ms >= last_timing_log_ms + 5000) {
         const auto timing = ConsumePresentationTiming();
         if (timing.world_frames > 0 && timing.ticks_per_second > 0) {
+            const auto interaction = ConsumeInteractionCounters();
             const double elapsed_seconds =
                 static_cast<double>(now_ms - last_timing_log_ms) / 1000.0;
             const double mean_render_ms =
                 static_cast<double>(timing.world_render_ticks) * 1000.0 /
                 static_cast<double>(timing.ticks_per_second) /
                 static_cast<double>(timing.world_frames);
+            const auto phase_ms = [&](std::uint64_t ticks) {
+                return static_cast<double>(ticks) * 1000.0 /
+                    static_cast<double>(timing.ticks_per_second) /
+                    static_cast<double>(timing.world_frames);
+            };
             LARGE_INTEGER frequency{};
             QueryPerformanceFrequency(&frequency);
             const double mean_update_ms = update_count > 0 &&
@@ -1001,11 +1056,28 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                     static_cast<double>(update_count)
                 : 0.0;
             probe::WriteLog(
-                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f update_mean_ms=%.1f interact=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
+                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
                 static_cast<double>(timing.world_frames) / elapsed_seconds,
-                mean_render_ms, mean_update_ms,
+                mean_render_ms, phase_ms(timing.left_eye_ticks),
+                phase_ms(timing.right_eye_ticks),
+                phase_ms(timing.overlay_ticks),
+                phase_ms(timing.submit_ticks), mean_update_ms,
                 static_cast<unsigned long long>(g_vr_interact_presses.exchange(
                     0, std::memory_order_relaxed)),
+                static_cast<unsigned long long>(interaction.selection_refreshes),
+                static_cast<unsigned long long>(interaction.redirected_rays),
+                static_cast<unsigned long long>(interaction.ray_hits),
+                static_cast<unsigned long long>(interaction.ray_winners),
+                static_cast<unsigned long long>(interaction.grab_enters),
+                static_cast<unsigned long long>(interaction.grabs_acquired),
+                static_cast<unsigned long long>(interaction.grabs_released),
+                static_cast<unsigned long long>(g_native_move_enters.exchange(
+                    0, std::memory_order_relaxed)),
+                static_cast<unsigned long long>(interaction.moves_acquired),
+                static_cast<unsigned long long>(interaction.moves_released),
+                static_cast<unsigned long long>(interaction.mechanisms_acquired),
+                static_cast<unsigned long long>(interaction.tools_attached),
+                static_cast<unsigned long long>(interaction.tools_native),
                 static_cast<unsigned long long>(g_vr_inventory_presses.exchange(
                     0, std::memory_order_relaxed)),
                 static_cast<unsigned long long>(g_vr_jump_presses.exchange(
@@ -1277,7 +1349,10 @@ void ConnectGameplayInput(runtime::OpenVrSession* session) noexcept {
     g_session = session;
     ReleaseSRWLockExclusive(&g_session_lock);
     if (session == nullptr) {
+        g_turn = {};
         g_native_ui_active.store(false, std::memory_order_release);
+        g_native_ui_surface.store(NativeUiSurface::none,
+            std::memory_order_release);
         AcquireSRWLockExclusive(&g_frame_lock);
         g_frame = {};
         ReleaseSRWLockExclusive(&g_frame_lock);
@@ -1296,6 +1371,10 @@ void ConnectGameplayInput(runtime::OpenVrSession* session) noexcept {
 
 bool NativeUiActive() noexcept {
     return g_native_ui_active.load(std::memory_order_acquire);
+}
+
+NativeUiSurface CurrentNativeUiSurface() noexcept {
+    return g_native_ui_surface.load(std::memory_order_acquire);
 }
 
 runtime::VrControllerFrame ReadNativeControllerFrame() noexcept {

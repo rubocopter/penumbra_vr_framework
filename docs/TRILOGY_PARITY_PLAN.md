@@ -156,11 +156,35 @@ changes native input mode to 5 while the earlier compositor submit omitted the
 later 2D draw. The next host-tested probe defers that submit to desktop capture
 for active inventory/notebook, maps 59 exact native queries and five menu
 pointer calls, requests recenter, and draws controller-anchored Rework hand
-meshes. RQ-09 must validate these paths; visible hands do not prove spatial
-selection or grabbing. Right-stick turning and the perceived jump height remain
-unresolved. The next log records mean native button-update time and Sense
+meshes. RQ-09 was the next validation gate; visible hands did not prove spatial
+selection or grabbing. Right-stick turning and the perceived jump height were
+still unresolved. That probe recorded mean native button-update time and Sense
 button counters. Three startup dumps show
 the same SDL mutex fault signature as BP, with no established cause.
+
+RQ-09 headset evidence confirmed visible hands and usable native UI, while R2
+reached the native input query without acquiring an object; the flashlight and
+glowstick floated, and frame time worsened in the stereo-render phase late in
+the session. The next Requiem adapter consumes the existing shared grab pose,
+interaction reach, mechanism servo and snap policy through Requiem's own
+verified ray, Grab/Move state, body and hinge/slider boundaries. The native
+state retains pickup, release and joint lifecycle. Tool sockets are reused
+only because the installed HUD model assets are physically shared with BP.
+Gameplay messages/subtitles are captured once from Requiem's native DrawAll
+queue and drawn on the Rework message plane in both eyes. RQ-10 headset
+evidence confirmed R2 input and selection refreshes but no Grab/Move state
+entry; the clip showed a floating flare at ~0:55, flashlight slide at ~1:08
+and crouch stuck after physically standing with inventory open. The log showed
+no repeat of the severe RQ-09 slowdown. RQ-11 host code ports BP's ranked
+five-ray hand selection, preserves the Requiem native eligibility callback,
+and separates ray hits, selected winners and native state entries in telemetry.
+Rework HUD grip profiles now cover flashlight, glowstick and flare; inventory
+and notebook use BP/Rework spatial panel geometry, and stance tracking
+continues during these UIs. These changes are **host-tested, not live/headset
+validated**. Palm-volume and magnetic acquisition remain absent; the RQ-11
+log will discriminate whether they are needed. A local Requiem-only
+`JumpStartForce` trial changes 350 to 495, hypothesizing roughly twice the
+ballistic height; actual jump height is unmeasured and frog mode is unchanged.
 
 ## Requiem implementation contract
 

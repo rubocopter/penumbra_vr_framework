@@ -190,11 +190,22 @@ actions were host/static-tested before RQ-08; its result and RQ-09 gate are belo
   loss or crash was reported.
 - [x] Prepare one RQ-09 probe: exact Requiem UI queries/pointer, deferred native
   panel presentation, recenter and controller-anchored Rework hand visuals.
-- [ ] RQ-09: one headset session for menu/panel visibility and close, pointer,
-  hands, recenter, R2 on a known target and tap/held jump. Inspect the new
-  input counters before changing native selection or jump behavior.
-- [ ] Map Requiem hand rig, entity selection and contact boundary before
-  porting spatial hand grab; button-driven native interaction is only a bridge.
+- [x] RQ-09: the headset session showed visible hands, usable menu/inventory/
+  notebook and working physical crouch; R2 arrived at the native query but
+  could not acquire an object. Tools floated and world render time rose sharply.
+- [x] Map Requiem's exact native selection ray, Grab and Move states, free-body
+  methods and hinge/slider joint families; host-test the shared hand grab,
+  mechanism policy, snap-held continuity, tool sockets and gameplay 2D overlay.
+- [x] RQ-10: headset trial reached R2 and refreshed selection but entered no
+  Grab/Move state. Flare floated, flashlight slid, and standing with inventory
+  open left crouch active. No severe late pacing loss recurred in this session.
+- [x] Prepare one RQ-11 probe: BP-ranked palm rays with selection diagnostics,
+  Rework tool profiles including flare, spatial inventory/notebook and stance
+  updates during UI. Stage a reversible Requiem-only jump-force trial.
+- [ ] RQ-11: discriminate contact/selection/native entry on one free object;
+  then test hold, release, snap while held, one mechanism, tool attachment,
+  inventory stance, spatial panels and one known platform jump. Use the same
+  log for pacing; stop if interaction still cannot be acquired.
 - [ ] Complete representative headset validation while keeping Overture and
   Black Plague regression gates green.
 
