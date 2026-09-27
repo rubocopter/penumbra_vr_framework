@@ -13,7 +13,7 @@ supported public release.
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Optional candidate install/upgrade/repair/recovery/rollback/restore host-tested; no live/headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Static research/configuration preparation only |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | RQ-03: boot/menu→gameplay presentation headset-validated; gameplay input/locomotion/hands/interaction incomplete |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
 Canonical Black Plague and Requiem evidence lives in the corresponding files
@@ -59,10 +59,23 @@ At the current checkpoint:
   It has no headset validation yet. Mechanism motion, player repulsion, held-hand
   penetration, context text and blue/red effects remain open live observations.
 - **Requiem:** executable identity, LAA transform, localization and recommended
-  game settings are prepared; there is no active gameplay VR backend. Its exact
-  canonical PE imports the same three `alut.dll` functions as Black Plague, at
-  its own IAT RVAs recorded in the Requiem manifest. This is an on-disk loading
-  seam only; runtime proxy compatibility has not been tested.
+  game settings are prepared. The exact canonical PE imports the same three
+  `alut.dll` functions as Black Plague; both executables share one physical
+  proxy path. The Requiem probe uses exact `RenderWorld` hooking, rotational
+  head tracking and per-eye compositor submission through common runtime and
+  graphics components. Its host hash gate and 19 initialized-image assertions
+  pass. RQ-01 confirmed ALUT/probe startup, first compositor submit and a world
+  visible in the headset. Head rotation exposed missing geometry until native
+  mouse yaw changed. RQ-02 then confirmed that the Requiem-specific HMD
+  visibility boundary removes that defect during head-only turning. Boot/menu
+  remained monitor-only because `RenderWorld` is absent before gameplay; a new
+  host-tested path now captures the framebuffer from the existing pre-swap SDL
+  callback and submits it as a stable tracked panel only on frames without a
+  stereo-world submit. The full Release host suite passes 42/42. RQ-03 then
+  confirmed on PSVR2 that boot/menu and the transition into gameplay can be
+  completed with the headset on. VR input, HMD-relative movement, hands and
+  interaction remain unimplemented. Three startup dumps hit the SDL mutex
+  fault also seen in BP; cause is unknown. Requiem is not supported.
 
 Capability-level state is maintained in `TRILOGY_PARITY_PLAN.md` rather than
 expanded here into session chronology.

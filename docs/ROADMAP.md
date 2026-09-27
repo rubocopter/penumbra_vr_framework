@@ -30,12 +30,12 @@ levels in `docs/SUPPORTED_BUILDS.md`.
 - [x] Deployment payload metadata and maintainer-recommended settings metadata
   established as future unified-installer inputs.
 
-## Current milestone — Black Plague framework readiness
+## Deferred validation backlog — Black Plague framework readiness
 
-Black Plague remains the active target. The milestone closes when every
-applicable Overture capability is either consumed, implemented through a
-documented target-specific equivalent, classified not applicable, or explicitly
-deferred as release tooling.
+The closure execution has delimited the remaining Black Plague items that need
+headset/runtime evidence. `CLOSURE_STATUS.md` owns that decision. These items
+remain release gates, but they do not displace the active Requiem integration
+milestone while no new discriminating offline Black Plague work exists.
 
 ### Presentation and tracking
 
@@ -150,16 +150,22 @@ deferred as release tooling.
 
 ## Requiem
 
-Gameplay work starts after the Black Plague framework-readiness gate closes.
-Non-invasive exact-build reconnaissance may continue without displacing the
-active milestone.
+**Current milestone.** RQ-01 established live stereo gameplay presentation,
+RQ-02 headset-validated the HMD visibility/culling boundary, and RQ-03
+headset-validated boot/menu presentation plus handoff into gameplay.
 
-- [ ] Map Requiem renderer, body, input, UI, interaction and audio boundaries
-  from its own exact executable evidence.
+- [x] Map Requiem renderer and initial player/body movement boundaries from its
+  own exact executable evidence.
+- [ ] Map the Requiem `cButtonHandler::Update`, player access, movement
+  permission/state and native body-tick ownership required for VR locomotion.
 - [ ] Consume applicable shared capability families through Requiem-specific
   adapters/profiles.
-- [ ] Implement tracked stereo, input, body/interaction and presentation without
-  copying Black Plague RVAs/layouts.
+- [x] Implement and headset-validate tracked stereo plus boot/menu presentation
+  without copying Black Plague RVAs/layouts.
+- [ ] Implement VR input and HMD-relative body locomotion through Requiem's own
+  exact boundaries, reusing the proven Black Plague/shared policy where valid.
+- [ ] Port applicable crouch, hands and interaction paths after locomotion is
+  validated or concretely blocked.
 - [ ] Complete representative headset validation while keeping Overture and
   Black Plague regression gates green.
 

@@ -284,6 +284,36 @@ set_target_properties(pvr_black_plague_probe PROPERTIES
 )
 pvr_enable_warnings(pvr_black_plague_probe)
 
+add_library(pvr_requiem_backend STATIC
+    src/backends/requiem/render_world.cpp
+)
+target_include_directories(pvr_requiem_backend PUBLIC
+    src/backends/requiem src/runtime)
+target_include_directories(pvr_requiem_backend PRIVATE src/probe)
+target_link_libraries(pvr_requiem_backend PUBLIC
+    pvr_rel32_call_hook
+    pvr_opengl_eye_targets
+    pvr_opengl_eye_scissor
+    pvr_hpl1_camera_adapter
+    pvr_openvr_session
+    pvr_stereo_render_policy
+    opengl32)
+pvr_enable_warnings(pvr_requiem_backend)
+
+add_library(pvr_requiem_probe SHARED
+    src/probe/requiem_probe.cpp
+    src/probe/requiem_probe.def
+    src/probe/log.cpp
+)
+target_include_directories(pvr_requiem_probe PRIVATE
+    include src/probe src/backends/requiem src/runtime src/hooks)
+target_link_libraries(pvr_requiem_probe PRIVATE
+    pvr_requiem_backend pvr_build_catalog pvr_sdl_frame_hook)
+set_target_properties(pvr_requiem_probe PROPERTIES
+    OUTPUT_NAME "PenumbraVR.Requiem.Probe"
+)
+pvr_enable_warnings(pvr_requiem_probe)
+
 add_library(pvr_black_plague_bootstrap SHARED
     src/bootstrap/black_plague_alut_proxy.cpp
 )
@@ -525,6 +555,14 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_stereo_render_policy_test)
 
     add_test(NAME stereo_render_policy COMMAND pvr_stereo_render_policy_test)
+
+    add_executable(pvr_requiem_frame_presentation_test
+        tests/requiem_frame_presentation/frame_presentation_gate_test.cpp)
+    target_include_directories(pvr_requiem_frame_presentation_test PRIVATE
+        src/backends/requiem)
+    pvr_enable_warnings(pvr_requiem_frame_presentation_test)
+    add_test(NAME requiem_frame_presentation
+        COMMAND pvr_requiem_frame_presentation_test)
 
     add_executable(pvr_black_plague_presentation_timing_test
         tests/black_plague_presentation_timing/presentation_timing_test.cpp

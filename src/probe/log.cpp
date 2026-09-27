@@ -15,7 +15,8 @@ SRWLOCK g_log_lock = SRWLOCK_INIT;
 
 } // namespace
 
-bool OpenLog(std::wstring& path, std::wstring& error) noexcept {
+bool OpenLog(std::wstring& path, std::wstring& error,
+    std::wstring_view game) noexcept {
     path.clear();
     error.clear();
 
@@ -37,7 +38,8 @@ bool OpenLog(std::wstring& path, std::wstring& error) noexcept {
         return false;
     }
 
-    path = logs + L"\\black-plague-probe-" + std::to_wstring(GetCurrentProcessId()) + L".log";
+    path = logs + L"\\" + std::wstring(game) + L"-probe-" +
+        std::to_wstring(GetCurrentProcessId()) + L".log";
     g_log = CreateFileW(
         path.c_str(),
         FILE_APPEND_DATA,

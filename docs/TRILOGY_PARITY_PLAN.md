@@ -91,6 +91,38 @@ few missing consumers, not by the absence of a VR foundation:
 The detailed current work order is in `../ROADMAP.md`; the repeatable hardware
 procedure is in `VR_HEADSET_TEST_CHECKLIST.md`.
 
+## Requiem integration state (2026-09-26)
+
+The canonical Requiem image has its own verified static `RenderWorld`,
+`UpdateRenderList`, `DrawAll`, native body update/move and player movement
+boundaries in the Requiem manifest. The shared ALUT path now dispatches by
+exact host hash to a Requiem probe. That probe consumes common OpenVR session,
+camera/eye math, HPL camera adapter, GL eye targets, scissor mapping and stereo
+render policy for an initial rotational stereo path. RQ-01 confirmed ALUT/probe
+startup, a submitted stereo world and a scene visible in PSVR2. Turning the
+head exposed missing geometry until native mouse yaw changed: the native
+render-list pass still used the game camera before the VR eye pass. The proven
+Black Plague HMD visibility/frustum boundary is now adapted to Requiem's own
+exact callsite and reuses one compositor pose for visibility and both eyes.
+RQ-02 confirmed on PSVR2 that head-only turning no longer exposes missing
+geometry, so this specific visibility path is headset-validated. Requiem's
+pre-gameplay UI does not traverse `RenderWorld`; the existing SDL swap callback
+now captures that 2D framebuffer into the shared `OpenGlMenuFrame`, holds a
+stable tracked panel anchor, and submits it only when no stereo world was
+submitted in the current frame. A Requiem-local frame gate prevents duplicate
+compositor submission. The full Release build and all 42 host tests pass; the
+menu path passed RQ-03 on PSVR2: boot, menu navigation and the transition into
+gameplay can be completed with the headset on, and the 2D panel hands off to the
+stereo world. This presentation path is now headset-validated. This is **partial
+live renderer integration**, not gameplay parity.
+
+The next technical gate is Requiem gameplay input/locomotion. Native keyboard
+movement remains body-directed, and Requiem VR input, hands and interaction
+have no verified consumer. Before adapting Black Plague behavior, the Requiem
+backend must prove its own `cButtonHandler::Update`, player access, movement
+permission/state and body-update boundaries. Three startup dumps show the same
+SDL mutex fault signature as BP, with no established cause.
+
 ## Requiem implementation contract
 
 When the gate closes:

@@ -1,5 +1,6 @@
 #include "penumbra_vr/black_plague_probe_capabilities.hpp"
 #include "penumbra_vr/build_catalog.hpp"
+#include "penumbra_vr/requiem_probe_capabilities.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -37,9 +38,32 @@ namespace {
 
 HINSTANCE g_instance = nullptr;
 
-constexpr std::uintptr_t kRenderWorldCallRva = 0x000EE010;
-constexpr std::array<std::uint8_t, 5> kRenderWorldCall{
-    0xE8, 0xFB, 0xEA, 0x03, 0x00};
+// Black Plague and Requiem share one redist/alut.dll path. Dispatch only after
+// hashing the actual host; all internal callsites remain exact-build data.
+struct HostRoute {
+    const char* name;
+    const wchar_t* probe_file;
+    const wchar_t* log_file;
+    std::uintptr_t render_world_call_rva;
+    std::array<std::uint8_t, 5> render_world_call;
+    std::uint32_t required_capabilities;
+};
+
+constexpr HostRoute kBlackPlagueRoute{
+    "Black Plague",
+    L"PenumbraVR.BlackPlague.Probe.dll",
+    L"black_plague_bootstrap.log",
+    0x000EE010,
+    {0xE8, 0xFB, 0xEA, 0x03, 0x00},
+    penumbra_vr::kBlackPlagueProbeRequiredCapabilities};
+constexpr HostRoute kRequiemRoute{
+    "Requiem",
+    L"PenumbraVR.Requiem.Probe.dll",
+    L"requiem_bootstrap.log",
+    0x000EDE90,
+    {0xE8, 0x7B, 0xF2, 0x03, 0x00},
+    penumbra_vr::kRequiemProbeRequiredCapabilities};
+const wchar_t* g_log_file = kBlackPlagueRoute.log_file;
 constexpr DWORD kStartupTimeoutMs = 15'000;
 constexpr std::uint32_t kRequiredStableWindowSamples = 20;
 
@@ -84,7 +108,7 @@ std::filesystem::path BootstrapLogPath() {
     std::error_code ec;
     std::filesystem::create_directories(directory, ec);
     if (ec) return {};
-    return directory / L"black_plague_bootstrap.log";
+    return directory / g_log_file;
 }
 
 void Log(const char* format, ...) noexcept {
@@ -157,26 +181,26 @@ GameWindowReadiness ReadGameWindow() {
     return readiness;
 }
 
-bool InitializedRenderWorldCallPresent() noexcept {
+bool InitializedRenderWorldCallPresent(const HostRoute& route) noexcept {
     const auto base = reinterpret_cast<std::uintptr_t>(GetModuleHandleW(nullptr));
     if (base == 0) return false;
-    std::array<std::uint8_t, kRenderWorldCall.size()> bytes{};
+    std::array<std::uint8_t, 5> bytes{};
     SIZE_T bytes_read = 0;
     return ReadProcessMemory(
                GetCurrentProcess(),
-               reinterpret_cast<const void*>(base + kRenderWorldCallRva),
+               reinterpret_cast<const void*>(base + route.render_world_call_rva),
                bytes.data(), bytes.size(), &bytes_read) != FALSE &&
-        bytes_read == bytes.size() && bytes == kRenderWorldCall;
+        bytes_read == bytes.size() && bytes == route.render_world_call;
 }
 
-bool WaitForSafeInitialization() noexcept {
+bool WaitForSafeInitialization(const HostRoute& route) noexcept {
     const ULONGLONG deadline = GetTickCount64() + kStartupTimeoutMs;
     bool initialized_code = false;
     GameWindowReadiness previous{};
     std::uint32_t stable_samples = 0;
 
     do {
-        initialized_code = initialized_code || InitializedRenderWorldCallPresent();
+        initialized_code = initialized_code || InitializedRenderWorldCallPresent(route);
         const auto current = ReadGameWindow();
         if (current.window != nullptr) {
             if (current.window == previous.window &&
@@ -222,32 +246,40 @@ DWORD WINAPI BootstrapThread(void*) noexcept {
         return 0;
     }
     const auto* build = penumbra_vr::FindKnownBuild(sha256);
-    if (build == nullptr || build->game != penumbra_vr::GameId::black_plague ||
-        !build->black_plague_probe_allowed) {
-        Log("Black Plague bootstrap ignored unsupported host sha256=%s", sha256.c_str());
+    const HostRoute* route = nullptr;
+    if (build != nullptr && build->game == penumbra_vr::GameId::black_plague &&
+        build->black_plague_probe_allowed) {
+        route = &kBlackPlagueRoute;
+    } else if (build != nullptr && build->game == penumbra_vr::GameId::requiem &&
+               build->id == "requiem-steam-observed") {
+        route = &kRequiemRoute;
+    }
+    if (route == nullptr) {
+        Log("ALUT bootstrap ignored unsupported host sha256=%s", sha256.c_str());
         return 0;
     }
+    g_log_file = route->log_file;
 
-    Log("Black Plague bootstrap accepted host build=%.*s sha256=%s",
+    Log("%s bootstrap accepted host build=%.*s sha256=%s", route->name,
         static_cast<int>(build->id.size()), build->id.data(), sha256.c_str());
-    if (!WaitForSafeInitialization()) {
-        Log("Black Plague bootstrap timed out waiting for initialized code and stable SDL_app window");
+    if (!WaitForSafeInitialization(*route)) {
+        Log("%s bootstrap timed out waiting for initialized code and stable SDL_app window",
+            route->name);
         return 0;
     }
 
     const auto bootstrap_path = ModulePath(g_instance);
     if (bootstrap_path.empty()) {
-        Log("Black Plague bootstrap could not resolve its module directory");
+        Log("%s bootstrap could not resolve its module directory", route->name);
         return 0;
     }
-    const auto probe_path =
-        bootstrap_path.parent_path() / L"PenumbraVR.BlackPlague.Probe.dll";
+    const auto probe_path = bootstrap_path.parent_path() / route->probe_file;
 
-    HMODULE probe = GetModuleHandleW(L"PenumbraVR.BlackPlague.Probe.dll");
+    HMODULE probe = GetModuleHandleW(route->probe_file);
     const bool owns_probe_reference = probe == nullptr;
     if (probe == nullptr) probe = LoadLibraryW(probe_path.c_str());
     if (probe == nullptr) {
-        Log("Black Plague bootstrap failed to load probe path=%s error=%lu",
+        Log("%s bootstrap failed to load probe path=%s error=%lu", route->name,
             WideToUtf8(probe_path.wstring()).c_str(),
             static_cast<unsigned long>(GetLastError()));
         return 0;
@@ -258,35 +290,46 @@ DWORD WINAPI BootstrapThread(void*) noexcept {
     const auto start = ResolveEntry(probe, "PenumbraVR_StartPresentation");
     const auto shutdown = ResolveEntry(probe, "PenumbraVR_Shutdown");
     if (initialize == nullptr || query == nullptr || start == nullptr || shutdown == nullptr) {
-        Log("Black Plague bootstrap found an incomplete probe export surface");
+        Log("%s bootstrap found an incomplete probe export surface", route->name);
         if (owns_probe_reference) FreeLibrary(probe);
         return 0;
     }
 
+    const auto release_after_shutdown = [&]() noexcept {
+        if (shutdown(nullptr) == 1) {
+            if (owns_probe_reference) FreeLibrary(probe);
+        } else {
+            // A failed teardown may leave a native callback installed. Keep
+            // its module resident until process exit rather than unloading code
+            // that an HPL/SDL callsite could still enter.
+            Log("%s bootstrap retained probe after partial shutdown", route->name);
+        }
+    };
+
     if (initialize(nullptr) != 1) {
-        Log("Black Plague bootstrap: probe initialization failed");
-        if (owns_probe_reference) FreeLibrary(probe);
+        Log("%s bootstrap: probe initialization failed", route->name);
+        release_after_shutdown();
         return 0;
     }
 
     const std::uint32_t capabilities = query(nullptr);
-    if ((capabilities & penumbra_vr::kBlackPlagueProbeRequiredCapabilities) !=
-        penumbra_vr::kBlackPlagueProbeRequiredCapabilities) {
-        Log("Black Plague bootstrap: required capabilities missing mask=0x%08lX",
+    if ((capabilities & route->required_capabilities) !=
+        route->required_capabilities) {
+        Log("%s bootstrap: required capabilities missing mask=0x%08lX",
+            route->name,
             static_cast<unsigned long>(capabilities));
-        shutdown(nullptr);
-        if (owns_probe_reference) FreeLibrary(probe);
+        release_after_shutdown();
         return 0;
     }
 
     if (start(nullptr) != 1) {
-        Log("Black Plague bootstrap: persistent VR presentation failed to start");
-        shutdown(nullptr);
-        if (owns_probe_reference) FreeLibrary(probe);
+        Log("%s bootstrap: persistent VR presentation failed to start", route->name);
+        release_after_shutdown();
         return 0;
     }
 
-    Log("Black Plague bootstrap started persistent VR presentation capabilities=0x%08lX",
+    Log("%s bootstrap started persistent VR presentation capabilities=0x%08lX",
+        route->name,
         static_cast<unsigned long>(capabilities));
     return 1;
 }
