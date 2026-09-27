@@ -220,6 +220,32 @@
           "matches": 1
         }
       },
+      "hpl.iCharacterBody.GetSize": {
+        "status": "confirmed-static-mapping",
+        "rva": "0x000D59D0",
+        "preferredVirtualAddress": "0x004D59D0",
+        "objectOffsets": {
+          "activeCapsuleHeightY": "0xC8"
+        },
+        "signature": {
+          "region": "initialized-memory:.text",
+          "rva": "0x000D59DC",
+          "bytes": "8B 91 C8 00 00 00 89 50 04 8B 89 CC 00 00 00 89 48 08",
+          "matches": 1
+        },
+        "evidence": "GetSize copies iCharacterBody+0xC8 into the Y component of its result in the observed Requiem image."
+      },
+      "hpl.iCharacterBody.SetActiveSize.heightWrite": {
+        "status": "confirmed-static-mapping",
+        "rva": "0x000D6044",
+        "preferredVirtualAddress": "0x004D6044",
+        "signature": {
+          "region": "initialized-memory:.text",
+          "bytes": "8B 8E 3C 02 00 00 89 86 C8 00 00 00",
+          "matches": 1
+        },
+        "evidence": "Within SetActiveSize, a shape-height result is written into iCharacterBody+0xC8 after selecting the active body; this RVA names the evidence window, not the function entry."
+      },
       "hpl.iCharacterBody.Move": {
         "status": "confirmed-static-mapping",
         "rva": "0x000D58E0",
@@ -235,13 +261,16 @@
         "status": "confirmed-static-mapping",
         "rva": "0x000D77A0",
         "preferredVirtualAddress": "0x004D77A0",
+        "objectOffsets": {
+          "positionVector": "0x48"
+        },
         "signature": {
           "region": "initialized-memory:.text",
           "rva": "0x000D77B5",
           "bytes": "81 EC D4 05 00 00 53 55 56 8B F1 8A 46 30 33 DB 84 C0 57 0F 84 95 12 00",
           "matches": 1
         },
-        "evidence": "Native physics-loop body update; adapter must not call it."
+        "evidence": "Native physics-loop body update; +0x48 is copied to +0x54 at RVA 0xD77EF before movement, and the adapter must not call Update itself."
       },
       "hpl.iPhysicsWorld.Update": {
         "status": "confirmed-static-mapping",
@@ -259,6 +288,29 @@
             "bytes": "E8 31 28 00 00"
           }
         ]
+      },
+      "requiem.cButtonHandler.vrActionQueries": {
+        "status": "confirmed-static-mapping",
+        "ownerRva": "0x00003C30",
+        "inputQueryTargets": {
+          "pressed": "0x000DAFB0",
+          "held": "0x000DAE70",
+          "released": "0x000DAF10"
+        },
+        "mappedCallSites": {
+          "Inventory.pressed": "0x507F",
+          "NoteBook.pressed": "0x50A7",
+          "Jump.pressed": "0x526F",
+          "Jump.held": "0x5297",
+          "Run.pressed": "0x52C1",
+          "Run.released": "0x52E9",
+          "Interact.pressed": "0x5400",
+          "Interact.released": "0x5444",
+          "Examine.pressed": "0x546C",
+          "Examine.released": "0x5494",
+          "Holster.pressed": "0x54BC"
+        },
+        "evidence": "Each decoded initialized-image callsite follows construction of its literal legacy action string and calls the matching native pressed/held/released query. The bridge calls the native query first and adds focused Sense intent only at these owned callsites; runtime game behavior remains unverified."
       },
       "requiem.cPlayer.MoveForward": {
         "status": "confirmed-static-mapping",

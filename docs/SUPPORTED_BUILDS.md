@@ -13,7 +13,7 @@ supported public release.
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Optional candidate install/upgrade/repair/recovery/rollback/restore host-tested; no live/headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | RQ-03: boot/menu→gameplay presentation headset-validated; gameplay input/locomotion/hands/interaction incomplete |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | RQ-08 headset-validated room-scale, mixed stick movement, crouch and wall response in the tested scene; invisible R1 UI, no observed R2 interaction and short-feeling jump. RQ-09 UI, pointer, recenter and visible hands are host/static-tested only; spatial grab and turn remain incomplete. Not supported. |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
 Canonical Black Plague and Requiem evidence lives in the corresponding files
@@ -71,11 +71,37 @@ At the current checkpoint:
   remained monitor-only because `RenderWorld` is absent before gameplay; a new
   host-tested path now captures the framebuffer from the existing pre-swap SDL
   callback and submits it as a stable tracked panel only on frames without a
-  stereo-world submit. The full Release host suite passes 42/42. RQ-03 then
-  confirmed on PSVR2 that boot/menu and the transition into gameplay can be
-  completed with the headset on. VR input, HMD-relative movement, hands and
-  interaction remain unimplemented. Three startup dumps hit the SDL mutex
-  fault also seen in BP; cause is unknown. Requiem is not supported.
+  stereo-world submit. RQ-03 then confirmed on PSVR2 that boot/menu and the
+  transition into gameplay can be completed with the headset on. The exact
+  Requiem `ButtonHandler::Update`, player/state gates, native move calls and
+  physical body owner are now mapped and consumed by a gameplay bridge. It
+  initializes the shared OpenVR actions, gives native keyboard/controller axes
+  priority, and queues HMD-relative X/Z movement through the native physical
+  owner while leaving vertical motion to the game. Release builds succeed and
+  the full host suite passes **43/43**. RQ-04 confirmed basic Sense-left movement and a clean gameplay mirror on
+  PSVR2/monitor, without an isolated HMD-versus-body heading check. Requiem's
+  own `ChangeMoveState` entry, move-state index and crouch state were then
+  verified in the initialized executable; the shared Hybrid crouch policy now
+  drives that native boundary with a null-body guard. This crouch path is
+  live-tested by RQ-05 for state transitions only; physical crouch showed a
+  native camera jump. Requiem now anchors shared `VrTrackingSpace` height to
+  its observed body Y at the physical move owner and applies the BP/Rework
+  physical-versus-button posture rule. RQ-06 showed this view still falls too
+  far: the first port used the native capsule centre instead of the Rework
+  feet anchor. The Requiem exact image proves the active capsule height field
+  at `+0xC8`; the backend now subtracts half that height from the centre Y.
+  RQ-07 reports that physical crouch appeared correct in the headset. Lateral
+  movement still feels faster than forward/backward, without measurement. Its
+  final log interval fell to 55.6 world FPS at 5.9 ms mean render duration;
+  the cause remains unknown. The subsequent room-scale body reconciliation and
+  native Sense button queries were partially exercised in RQ-08: room-scale,
+  mixed stick movement and crouch worked, while R1 opened invisible UI and R2
+  had no observed interaction. A subsequent Release probe has host/static-tested
+  native UI queries, pointer, captured panels, recenter and visible controller
+  hands; these need RQ-09 headset evidence. Spatial grabbing and interaction
+  selection remain pending. Three
+  startup dumps hit the SDL mutex fault also seen in BP; cause is unknown.
+  Requiem is not supported.
 
 Capability-level state is maintained in `TRILOGY_PARITY_PLAN.md` rather than
 expanded here into session chronology.

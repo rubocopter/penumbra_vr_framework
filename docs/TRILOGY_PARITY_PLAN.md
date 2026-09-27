@@ -110,18 +110,57 @@ pre-gameplay UI does not traverse `RenderWorld`; the existing SDL swap callback
 now captures that 2D framebuffer into the shared `OpenGlMenuFrame`, holds a
 stable tracked panel anchor, and submits it only when no stereo world was
 submitted in the current frame. A Requiem-local frame gate prevents duplicate
-compositor submission. The full Release build and all 42 host tests pass; the
+compositor submission. The full Release build and all 43 host tests pass; the
 menu path passed RQ-03 on PSVR2: boot, menu navigation and the transition into
 gameplay can be completed with the headset on, and the 2D panel hands off to the
-stereo world. This presentation path is now headset-validated. This is **partial
-live renderer integration**, not gameplay parity.
+stereo world. This presentation path is now headset-validated. Exact Requiem
+gameplay evidence now maps `ButtonHandler::Update`, player access, both native
+move callsites/state gates and the physical body owner. A Requiem gameplay
+bridge consumes shared controller actions and HMD-relative locomotion policy,
+preserves native keyboard/controller priority, injects only X/Z at the native
+physical owner and leaves Y/gravity/jump native-owned. The exact-build
+contract is host-tested. RQ-04 exercised basic Sense movement in the running
+game; precise HMD heading, each axis and long-term stability remain
+unverified. This remains **partial live integration**, not gameplay parity.
 
-The next technical gate is Requiem gameplay input/locomotion. Native keyboard
-movement remains body-directed, and Requiem VR input, hands and interaction
-have no verified consumer. Before adapting Black Plague behavior, the Requiem
-backend must prove its own `cButtonHandler::Update`, player access, movement
-permission/state and body-update boundaries. Three startup dumps show the same
-SDL mutex fault signature as BP, with no established cause.
+RQ-04 confirmed basic Sense-left movement in the headset and a clean gameplay
+mirror on the monitor. Exact HMD-versus-body heading and individual axes were
+not isolated by that report. Requiem's own `ChangeMoveState` entry (`0x9CBA0`),
+move-state index (`+0x2D4`) and state 4 crouch handler (`0xAF364`) were verified
+offline in the initialized executable. The shared Hybrid crouch policy now
+drives the native state on the game thread with a null-body guard and retains
+native keyboard ownership. RQ-05 observed repeated native crouch/stand
+transitions without a crash or blocked stand, but physical crouch exposed a
+native camera-height jump. Requiem's rotation-only world view had retained
+native camera Y; the backend now reads body Y at its existing physical owner
+and consumes shared `VrTrackingSpace` for HMD height and button-only posture
+offset, as BP does. RQ-06 showed this first vertical correction still dropped
+the eye too far: it had used the native capsule **centre** as the tracking
+feet anchor. Rework `23c890f` anchors to `GetFeetPosition()`. The exact
+Requiem image proves active capsule height at `iCharacterBody+0xC8` via
+`GetSize`/`SetActiveSize`; the backend now uses centre minus half that height.
+RQ-07 reports physical crouch now appeared correct in the headset; the stick
+speed impression remains, and its final log block fell to 55.6 world FPS with
+5.9 ms mean RenderStereo time. The exact Requiem physics-world callsite now
+brackets native body Update for accepted X/Z motion, while the existing
+physical owner injects combined room-scale and stick requests. Shared Rework
+reconciliation and filtered render prediction are consumed through Requiem's
+own boundary. Eleven exact native gameplay queries now receive Sense actions
+after executing their original queries. These additions are host/static-tested
+and awaited RQ-08; button interaction does not prove hand grab or spatial
+selection. RQ-08 subsequently validated mixed room-scale/stick movement,
+physical crouch, wall response and flat floor objects in the headset; it also
+exposed an invisible R1 inventory that stopped stick movement, no observed R2
+interaction, and a short-feeling jump. The exact Requiem inventory activation
+changes native input mode to 5 while the earlier compositor submit omitted the
+later 2D draw. The next host-tested probe defers that submit to desktop capture
+for active inventory/notebook, maps 59 exact native queries and five menu
+pointer calls, requests recenter, and draws controller-anchored Rework hand
+meshes. RQ-09 must validate these paths; visible hands do not prove spatial
+selection or grabbing. Right-stick turning and the perceived jump height remain
+unresolved. The next log records mean native button-update time and Sense
+button counters. Three startup dumps show
+the same SDL mutex fault signature as BP, with no established cause.
 
 ## Requiem implementation contract
 

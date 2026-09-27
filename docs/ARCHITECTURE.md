@@ -11,7 +11,7 @@ binary data behind a backend or product adapter.
 | --- | --- | --- |
 | Overture | Framework-owned source product built from the imported HPL1/game host | Proven behavioral reference and first shared-runtime consumer |
 | Black Plague | Exact-build binary backend loaded through a managed bootstrap | Active second-backend integration and portability proof |
-| Requiem | Exact-build metadata/research only | Planned third consumer after the Black Plague readiness gate |
+| Requiem | Exact-build binary backend sharing the ALUT bootstrap path with Black Plague | Active third consumer; gameplay and interaction validation pending |
 
 Rework `23c890f` is the proven Overture baseline. It is reference evidence, not a
 runtime or build dependency of the Framework-owned Overture product.

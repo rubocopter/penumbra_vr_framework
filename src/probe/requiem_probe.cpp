@@ -1,6 +1,7 @@
 #include "log.hpp"
 #include "penumbra_vr/build_catalog.hpp"
 #include "penumbra_vr/requiem_probe_capabilities.hpp"
+#include "gameplay_bridge.hpp"
 #include "render_world.hpp"
 #include "openvr_session.hpp"
 #include "opengl_eye_scissor.hpp"
@@ -18,6 +19,7 @@ HINSTANCE g_instance = nullptr;
 penumbra_vr::runtime::OpenVrSession g_session;
 volatile LONG g_state = 0; // 0 clean, 1 initializing, 2 ready, 3 active, 4 partial.
 bool g_render_hook_installed = false;
+bool g_gameplay_bridge_owned = false;
 bool g_scissor_hook_installed = false;
 bool g_swap_hook_installed = false;
 
@@ -33,6 +35,14 @@ bool g_swap_hook_installed = false;
 [[nodiscard]] bool Cleanup(std::string& error) noexcept {
     error.clear();
     std::string next;
+    penumbra_vr::backends::requiem::ConnectGameplayInput(nullptr);
+    if (g_gameplay_bridge_owned) {
+        if (!penumbra_vr::backends::requiem::RemoveGameplayBridge(next)) {
+            error = "Gameplay bridge: " + next;
+            return false;
+        }
+        g_gameplay_bridge_owned = false;
+    }
     if (g_render_hook_installed) {
         if (!penumbra_vr::backends::requiem::StopPresentation(next)) {
             error = "Presentation: " + next;
@@ -98,10 +108,26 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
 
     const auto probe_path = ModulePath(g_instance);
     std::string error;
+    const auto probe_directory = std::filesystem::path(probe_path).parent_path();
     if (probe_path.empty() || !g_session.Initialize(
-            std::filesystem::path(probe_path).parent_path().append(
-                L"openvr_api.dll").wstring(), error)) {
+            (probe_directory / L"openvr_api.dll").wstring(), error)) {
         penumbra_vr::probe::WriteLog("Requiem OpenVR init failed: %s", error.c_str());
+        std::string cleanup_error;
+        const bool clean = Cleanup(cleanup_error);
+        InterlockedExchange(&g_state, clean ? 0 : 4);
+        return 0;
+    }
+    std::string input_error;
+    const bool input_ready = g_session.InitializeControllerInput(
+        (probe_directory / L"vr" / L"actions.json").wstring(), input_error);
+    penumbra_vr::probe::WriteLog(
+        "Requiem controller actions initialized=%u error=%s",
+        input_ready ? 1U : 0U, input_error.c_str());
+
+    g_gameplay_bridge_owned = true;
+    if (!penumbra_vr::backends::requiem::InstallGameplayBridge(error)) {
+        penumbra_vr::probe::WriteLog(
+            "Requiem gameplay bridge install failed: %s", error.c_str());
         std::string cleanup_error;
         const bool clean = Cleanup(cleanup_error);
         InterlockedExchange(&g_state, clean ? 0 : 4);
@@ -135,7 +161,7 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
     }
     g_swap_hook_installed = true;
     penumbra_vr::probe::WriteLog(
-        "Requiem host accepted; exact RenderWorld, GL scissor and SDL swap hooks installed");
+        "Requiem host accepted; exact gameplay, RenderWorld, GL scissor and SDL swap hooks installed");
     InterlockedExchange(&g_state, 2);
     return 1;
 }
@@ -153,7 +179,11 @@ extern "C" DWORD WINAPI PenumbraVR_StartPresentation(void*) noexcept {
         penumbra_vr::probe::WriteLog("Requiem presentation start failed: %s", error.c_str());
         return 0;
     }
-    penumbra_vr::probe::WriteLog("Requiem rotational stereo presentation armed");
+    penumbra_vr::backends::requiem::ConnectGameplayInput(
+        g_session.controller_input_initialized() ? &g_session : nullptr);
+    penumbra_vr::probe::WriteLog(
+        "Requiem tracked stereo presentation armed; controller locomotion=%u",
+        g_session.controller_input_initialized() ? 1U : 0U);
     InterlockedExchange(&g_state, 3);
     return 1;
 }
@@ -163,6 +193,7 @@ extern "C" DWORD WINAPI PenumbraVR_StopPresentation(void*) noexcept {
     if (state == 2) return 1;
     if (state != 3 && state != 4) return 0;
     std::string error;
+    penumbra_vr::backends::requiem::ConnectGameplayInput(nullptr);
     if (!penumbra_vr::backends::requiem::StopPresentation(error)) {
         penumbra_vr::probe::WriteLog("Requiem presentation stop partial: %s", error.c_str());
         InterlockedExchange(&g_state, 4);

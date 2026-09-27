@@ -285,17 +285,23 @@ set_target_properties(pvr_black_plague_probe PROPERTIES
 pvr_enable_warnings(pvr_black_plague_probe)
 
 add_library(pvr_requiem_backend STATIC
+    src/backends/requiem/gameplay_bridge.cpp
+    src/backends/requiem/gameplay_contract.cpp
     src/backends/requiem/render_world.cpp
 )
 target_include_directories(pvr_requiem_backend PUBLIC
     src/backends/requiem src/runtime)
-target_include_directories(pvr_requiem_backend PRIVATE src/probe)
+target_include_directories(pvr_requiem_backend PRIVATE
+    src/probe src/adapters/hpl1)
 target_link_libraries(pvr_requiem_backend PUBLIC
+    pvr_iat_hook
     pvr_rel32_call_hook
+    pvr_vr_math
     pvr_opengl_eye_targets
     pvr_opengl_eye_scissor
     pvr_hpl1_camera_adapter
     pvr_openvr_session
+    pvr_vr_native_intents
     pvr_stereo_render_policy
     opengl32)
 pvr_enable_warnings(pvr_requiem_backend)
@@ -563,6 +569,16 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_requiem_frame_presentation_test)
     add_test(NAME requiem_frame_presentation
         COMMAND pvr_requiem_frame_presentation_test)
+
+    add_executable(pvr_requiem_gameplay_contract_test
+        tests/requiem_gameplay/gameplay_contract_test.cpp)
+    target_include_directories(pvr_requiem_gameplay_contract_test PRIVATE
+        src/backends/requiem src/runtime src/hooks)
+    target_link_libraries(pvr_requiem_gameplay_contract_test PRIVATE
+        pvr_requiem_backend)
+    pvr_enable_warnings(pvr_requiem_gameplay_contract_test)
+    add_test(NAME requiem_gameplay_contract
+        COMMAND pvr_requiem_gameplay_contract_test)
 
     add_executable(pvr_black_plague_presentation_timing_test
         tests/black_plague_presentation_timing/presentation_timing_test.cpp

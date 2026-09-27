@@ -152,20 +152,49 @@ milestone while no new discriminating offline Black Plague work exists.
 
 **Current milestone.** RQ-01 established live stereo gameplay presentation,
 RQ-02 headset-validated the HMD visibility/culling boundary, and RQ-03
-headset-validated boot/menu presentation plus handoff into gameplay.
+headset-validated boot/menu presentation plus handoff into gameplay. RQ-04
+confirmed basic Sense movement and the gameplay monitor mirror. RQ-05 confirmed
+native crouch transitions but exposed a physical-crouch camera jump. The
+first Rework/BP tracked-height correction was tested in RQ-06: it still lowered
+the view too far because it used the capsule centre. RQ-07 reports the feet
+anchor now appeared correct, while lateral-speed perception and a late
+cadence drop remain unresolved. Room-scale body motion and native button
+actions were host/static-tested before RQ-08; its result and RQ-09 gate are below.
 
 - [x] Map Requiem renderer and initial player/body movement boundaries from its
   own exact executable evidence.
-- [ ] Map the Requiem `cButtonHandler::Update`, player access, movement
+- [x] Map the Requiem `cButtonHandler::Update`, player access, movement
   permission/state and native body-tick ownership required for VR locomotion.
-- [ ] Consume applicable shared capability families through Requiem-specific
+- [x] Consume shared controller-input and locomotion capability families through Requiem-specific
   adapters/profiles.
 - [x] Implement and headset-validate tracked stereo plus boot/menu presentation
   without copying Black Plague RVAs/layouts.
-- [ ] Implement VR input and HMD-relative body locomotion through Requiem's own
+- [x] Implement and host-test VR input and HMD-relative body locomotion through Requiem's own
   exact boundaries, reusing the proven Black Plague/shared policy where valid.
-- [ ] Port applicable crouch, hands and interaction paths after locomotion is
-  validated or concretely blocked.
+- [x] RQ-04: validate basic Sense-left movement and gameplay monitor mirror in
+  the headset/desktop. A separate HMD-versus-body heading check remains.
+- [x] Map and host-test native Requiem crouch through its own move-state
+  boundary and the shared physical/button policy.
+- [x] RQ-05: capture native crouch/stand transitions and identify the camera
+  height defect; speed and HMD heading reports remain inconclusive.
+- [x] RQ-06: confirm over-deep physical crouch, stable lateral-versus-forward
+  speed perception independent of crouch, and late capture-frame slowdown.
+- [x] RQ-07: the user reports physical crouch seemed correct; stick-speed
+  asymmetry remains subjective. The last five-second log block fell to 55.6
+  world FPS while render duration stayed at 5.9 ms; cause remains open.
+- [x] Host-test Requiem physical room-scale through its own body update and
+  collision owner; map eleven native gameplay button queries for Sense.
+- [x] RQ-08: room-scale/wall, mixed stick motion and crouch worked in the
+  reported headset session; R1 opened invisible native UI and blocked movement,
+  R2 had no observed interaction, and jump felt short. No persistent new pacing
+  loss or crash was reported.
+- [x] Prepare one RQ-09 probe: exact Requiem UI queries/pointer, deferred native
+  panel presentation, recenter and controller-anchored Rework hand visuals.
+- [ ] RQ-09: one headset session for menu/panel visibility and close, pointer,
+  hands, recenter, R2 on a known target and tap/held jump. Inspect the new
+  input counters before changing native selection or jump behavior.
+- [ ] Map Requiem hand rig, entity selection and contact boundary before
+  porting spatial hand grab; button-driven native interaction is only a bridge.
 - [ ] Complete representative headset validation while keeping Overture and
   Black Plague regression gates green.
 
