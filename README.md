@@ -28,7 +28,7 @@ The project turns the proven Overture VR Rework into a shared runtime, keeping r
 | --- | --- |
 | **Overture** | Integrated Framework-owned source product. The proven VR Rework remains the behavioral reference and has an initial Framework headset regression pass. |
 | **Black Plague** | Active backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, hands, physical interaction, tracked inventory/notebook input, native VR settings and reusable audio integration. Current work is focused on remaining interaction, comfort, presentation and headset-validation gaps. |
-| **Requiem** | Active exact-build backend. Headset tests reached boot, menu, stereo gameplay, Sense locomotion, physical movement/crouch, visible hands and inventory/notebook. The user pushed and tipped a cube to solve a puzzle after the latest Push fix. Other physical interactions, transitions and stability remain validation gates. |
+| **Requiem** | Active exact-build backend. Headset tests reached boot, menu, stereo gameplay, Sense locomotion, physical movement/crouch, visible hands and inventory/notebook. A representative Push puzzle has been completed successfully in-headset after the latest interaction fix. Other physical interactions, transitions and stability remain validation gates. |
 
 **Latest Black Plague headset test:** [September 2026 development preview](https://youtu.be/NQWUBmgOjEw).
 
