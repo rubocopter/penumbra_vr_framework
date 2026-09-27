@@ -248,8 +248,10 @@ User calibration must not be silently overwritten.
 
 ## Current implementation boundary
 
-Overture is integrated, Black Plague has a substantial playable development
-backend and Requiem gameplay remains gated. The immediate architectural work is
-therefore validation and completion of the existing Black Plague consumers, not
-creation of another abstraction layer. A shared subsystem is considered proven
-only when a real second consumer uses it successfully.
+Overture is integrated, Black Plague has a substantial development backend,
+and Requiem has an active exact-build VR backend. Requiem's physical puzzle
+interaction remains the gameplay gate. The latest Push acquisition fix has
+been exercised in the headset and a cube puzzle was completed without problems.
+Other physical interactions and transitions still need validation. Black Plague
+regression items remain documented release gates. A shared subsystem is
+considered proven only when a real second consumer uses it successfully.

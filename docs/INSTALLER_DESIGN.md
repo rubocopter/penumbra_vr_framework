@@ -79,8 +79,9 @@ accepts only the recorded canonical Black Plague/Requiem hashes and verifies
 the exact transformed hash. The Black Plague installer owns a hash-verified
 canonical backup, restores it on uninstall, preserves a pre-existing LAA
 executable, and includes both executable paths in its in-process rollback.
-Requiem gameplay/deployment and complete production repair remain open; the optional
-transform alone is not evidence of runtime support.
+Requiem now has an active development backend, but its puzzle interaction gate,
+unified deployment transaction and complete production repair remain open. The
+optional transform alone is not evidence of runtime support.
 
 ## Payload contract
 

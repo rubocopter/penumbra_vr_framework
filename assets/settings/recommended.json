@@ -117,7 +117,7 @@
     },
     {
       "game": "requiem",
-      "status": "configuration-ready-no-vr-backend",
+      "status": "backend-active-vr-settings-unvalidated",
       "gameConfig": {
         "Game": {
           "LanguageFile": "Espanol_exp.lang"
@@ -149,7 +149,7 @@
         }
       },
       "vr": null,
-      "vrProvenance": "No Requiem VR recommendation is declared until a functional backend consumes and validates the shared settings schema."
+      "vrProvenance": "The Requiem VR backend is active but currently uses development defaults; it does not consume a persisted Requiem VR settings block. No user-facing VR preset is validated."
     }
   ]
 }

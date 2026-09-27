@@ -42,6 +42,18 @@ Product-specific Overture release history is retained under
   body-lifecycle guards from current exact-build evidence; these remain at their
   documented validation levels until headset retest.
 
+### Requiem
+
+- Added an exact-build development backend using the shared OpenVR session,
+  tracked stereo, Sense input, physical locomotion/crouch, hands and spatial UI.
+- Reused the common hand/contact behavior through Requiem-owned native Grab,
+  Move and Push boundaries. Headset tests reached gameplay and improved diary
+  pickup; puzzle-block manipulation remains the current gate.
+- Corrected a Push acquisition check that ran before Requiem published its new
+  player state. In the subsequent headset test, the user moved and tipped a
+  cube to solve a puzzle without problems; the log confirmed VR acquisition
+  and hand force. Other interactions and transitions remain open.
+
 ### Deployment and data
 
 - Added exact canonical/LAA fingerprints for Black Plague and Requiem.

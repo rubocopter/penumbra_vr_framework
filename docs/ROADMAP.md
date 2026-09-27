@@ -168,6 +168,19 @@ milestone while no new discriminating offline Black Plague work exists.
   collision-resolved palm, palm-overlap acquisition with native eligibility,
   held-body exclusion, fresh-generation refresh, shared yaw epoch and surface
   anchor for both Grab and Move. Release build and 44/44 host tests pass.
+- [x] Diagnose the next cube-puzzle clip/log: Requiem accepts the 26 kg body,
+  then enters native Push=1. Port Rework's hand anchor and constrained Push
+  travel through a Requiem-owned exact-build adapter; project the HMD stick
+  vector into native Push force axes. Host-tested only.
+- [x] Diagnose the following headset log: stick direction and palm collision
+  contact work, but intermittent acceleration/jumps remain and Push VR hold
+  never acquires. Verify native ChangeState publishes the state index after
+  Push::Enter, remove the premature Enter check, and retain Update validation.
+  Host-tested only.
+- [x] Headset test after the Push Enter fix: the user reported that the cube
+  moved much better. The log confirms VR Push acquisition and applied hand force.
+- [x] Confirm the complete cube-puzzle result: the user pushed the cube to the
+  switch, tipped it and solved the puzzle without a problem. Do not repeat Push.
 - [ ] One interaction-only headset session: stone plus diary/item pickup from a
   surface/edge/floor, short stick movement while held, one snap turn, release/
   throw, and one representative door/drawer/lever when available. Confirm hand

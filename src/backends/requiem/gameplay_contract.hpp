@@ -58,11 +58,27 @@ struct DirectLocomotionPublication final {
     bool publish{};
 };
 
+struct RequiemPushAxes final {
+    float forward{};
+    float sideways{};
+    bool valid{};
+};
+
+[[nodiscard]] RequiemPushAxes RequiemPushAxisProjection(
+    const std::array<float,3>& desired_world_direction,
+    const std::array<float,3>& native_forward,
+    const std::array<float,3>& native_right) noexcept;
+[[nodiscard]] std::array<float,3> RequiemPushHandForce(
+    const std::array<float,3>& palm_position,
+    const std::array<float,3>& body_position,
+    const std::array<float,3>& body_relative_contact) noexcept;
+
 [[nodiscard]] const RequiemGameplayContract& GameplayContract() noexcept;
 [[nodiscard]] std::array<float, 3> RequiemLocomotionDisplacement(
     const std::array<float, 3>& world_direction,
     float delta_seconds,
-    bool sprinting) noexcept;
+    bool sprinting,
+    bool pushing = false) noexcept;
 [[nodiscard]] DirectLocomotionPublication PlanDirectLocomotionPublication(
     bool native_axis_observed,
     float requested_x,

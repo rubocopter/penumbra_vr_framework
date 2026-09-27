@@ -28,7 +28,9 @@ The project turns the proven Overture VR Rework into a shared runtime, keeping r
 | --- | --- |
 | **Overture** | Integrated Framework-owned source product. The proven VR Rework remains the behavioral reference and has an initial Framework headset regression pass. |
 | **Black Plague** | Active backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, hands, physical interaction, tracked inventory/notebook input, native VR settings and reusable audio integration. Current work is focused on remaining interaction, comfort, presentation and headset-validation gaps. |
-| **Requiem** | Active exact-build backend. Headset tests reached boot, menu, stereo gameplay, Sense locomotion, physical movement/crouch, visible hands and inventory/notebook. Grabbing and manipulating objects is not yet reliably playable; the current probe awaits one focused headset test. |
+| **Requiem** | Active exact-build backend. Headset tests reached boot, menu, stereo gameplay, Sense locomotion, physical movement/crouch, visible hands and inventory/notebook. The user pushed and tipped a cube to solve a puzzle after the latest Push fix. Other physical interactions, transitions and stability remain validation gates. |
+
+**Latest Black Plague headset test:** [September 2026 development preview](https://youtu.be/NQWUBmgOjEw).
 
 The shared runtime provides the common tracking, locomotion, input, interaction, haptics, rendering policy and calibration systems. Each backend owns the game-specific integration needed to make those systems behave correctly in that title.
 
@@ -42,7 +44,7 @@ For a finished Overture package today, use [Penumbra: Overture VR Rework](https:
 [Trilogy parity](docs/TRILOGY_PARITY_PLAN.md) ·
 [Supported builds](docs/SUPPORTED_BUILDS.md) ·
 [VR configuration](docs/VR_CONFIGURATION.md) ·
-[Headset validation](docs/VR_HEADSET_TEST_CHECKLIST.md) ·
+[Black Plague headset regression](docs/VR_HEADSET_TEST_CHECKLIST.md) ·
 [Installer design](docs/INSTALLER_DESIGN.md)
 
 The README is intentionally a Framework landing page. Detailed contracts, validation evidence and engineering decisions live in the versioned documentation; temporary captures, disassemblies, debugging notes and agent handoffs remain outside the public-facing project overview.
@@ -76,9 +78,11 @@ Studio runtime differs, provide the pinned CRT directory to
 `products/overture/scripts/package.ps1 -RuntimeDirectory <directory>`.
 `tools/Package-FrameworkCandidate.ps1 -OutputPath
 build/release/PenumbraVR.Framework.Candidate.zip` combines both host-tested
-candidates with one selector. It lists Requiem but refuses to install it until
-its gameplay backend exists. The selector accepts multiple displayed game
-numbers in one run; each game keeps its own install/restore transaction.
+candidates with one selector. It lists Requiem but refuses to install it because
+the current prototype has no verified Requiem deployment transaction. The
+active development backend is not a supported release. The selector accepts
+multiple displayed game numbers in one run; each game keeps its own
+install/restore transaction.
 It accepts `-LargeAddressAware` for an optional exact-build Black Plague
 transform with a reversible executable backup; this path has host tests only.
 The selector records install, repair, recovery and restore results at

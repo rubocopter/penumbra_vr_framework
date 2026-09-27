@@ -13,6 +13,32 @@ int main() {
         return std::fabs(actual - expected) < 0.0001F;
     };
     using penumbra_vr::backends::requiem::RequiemLocomotionDisplacement;
+    using penumbra_vr::backends::requiem::RequiemPushAxisProjection;
+    using penumbra_vr::backends::requiem::RequiemPushHandForce;
+    const auto sideways_push = RequiemPushAxisProjection(
+        {1.0F, 0.0F, 0.0F},
+        {0.0F, 0.0F, -1.0F}, {1.0F, 0.0F, 0.0F});
+    const auto pull = RequiemPushAxisProjection(
+        {0.0F, 0.0F, 1.0F},
+        {0.0F, 0.0F, -1.0F}, {1.0F, 0.0F, 0.0F});
+    const auto force = RequiemPushHandForce(
+        {1.0F, 1.0F, 0.5F}, {0.0F, 0.0F, 0.0F},
+        {0.0F, 0.0F, 0.5F});
+    if (!sideways_push.valid || !near(sideways_push.forward, 0.0F) ||
+        !near(sideways_push.sideways, 1.0F) ||
+        !pull.valid || !near(pull.forward, -1.0F) ||
+        !near(pull.sideways, 0.0F) ||
+        !near(force[0], 300.0F / std::sqrt(2.0F)) ||
+        !near(force[1], 0.0F) || !near(force[2], 0.0F)) {
+        std::cerr << "Requiem Push direction/hand force drifted\n";
+        return 1;
+    }
+    const auto push_step = RequiemLocomotionDisplacement(
+        {0.0F, 0.0F, -1.0F}, 0.1F, true, true);
+    if (!near(push_step[2], -0.05F)) {
+        std::cerr << "Requiem Push did not use constrained speed\n";
+        return 1;
+    }
     // Integrate one second of requested travel through the production helper.
     // 120 Hz keeps each request below the native queue's 5 cm step cap.
     for (const bool sprinting : {false, true}) {

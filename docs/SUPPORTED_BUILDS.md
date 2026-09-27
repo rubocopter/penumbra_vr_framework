@@ -13,7 +13,7 @@ supported public release.
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Optional candidate install/upgrade/repair/recovery/rollback/restore host-tested; no live/headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | RQ-13 headset: difficult stone/item pickup. Current host-tested batch adds exact-build palm collision/overlap, held-body exclusion, fresh resolved-palm Grab/Move ownership and surface anchors; 44/44 host tests. Headset interaction gate pending; not supported. |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | After the Push Enter fix, the user pushed a cube to the switch, tipped it and solved the puzzle without a problem. The log confirms VR Push acquisition and palm force. Other interaction families and progression still need validation. Not supported. |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
 Canonical Black Plague and Requiem evidence lives in the corresponding files
@@ -67,13 +67,24 @@ At the current checkpoint:
   found, but unconditional native Grab/Move entries were zero. The observed
   stone impulse cannot be assigned to the VR hold path. Exact-image inspection
   subsequently mapped native pick acceptance plus the Requiem palm collision
-  ABI. The current batch uses a backend-owned collision-resolved palm, native-
+  ABI. The later batch uses a backend-owned collision-resolved palm, native-
   eligible palm-overlap acquisition, held-body exclusion, fresh palm generation
   and the gameplay yaw epoch for both Grab and Move; it also preserves fresh
-  surface contact for hand-relative anchors. These changes are host-tested only.
-  Late pacing loss and SDL mutex crashes have unknown causes. Release
-  compilation and **44/44** host tests passed; Requiem remains unsupported
-  pending the interaction headset gate and representative progression.
+  surface contact for hand-relative anchors. The next headset session improved
+  diary pickup but confirmed that 26 kg puzzle blocks enter Push=1. An earlier
+  headset report confirmed stick direction and palm collision contact, with
+  intermittent acceleration/jumps; its telemetry showed that the Rework-derived
+  palm force did not engage. After correction of the premature Enter-time check,
+  the user tested the cube again and reported a clear improvement. The latest
+  log (`requiem-probe-24356.log`) confirms five VR Push acquisitions and 1927
+  applied palm-force ticks. The user confirmed that this cube reached its
+  switch, tipped and solved the puzzle without a problem. This specific Push
+  sequence is headset-validated; other interactions are not.
+  Late pacing loss and SDL mutex crashes have unknown causes.
+  The earlier interaction batch passed **44/44** host tests; the latest Push
+  acquisition fix compiled in Release and passed its three relevant host tests.
+  Requiem remains unsupported pending representative Grab/Move, mechanism,
+  transition and stability validation.
 
 Capability-level state is maintained in `TRILOGY_PARITY_PLAN.md` rather than
 expanded here into session chronology.

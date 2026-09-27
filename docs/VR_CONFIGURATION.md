@@ -138,9 +138,12 @@ preflight and out-of-range numeric values are clamped.
 ## Requiem
 
 Requiem's recommended game-level profile is versioned in
-`assets/settings/recommended.json`, but there is no Requiem VR backend yet. The
-profile therefore contains no active Requiem VR settings block. Shared VR values
-will be adopted only when the backend actually consumes them.
+`assets/settings/recommended.json`. The active Requiem backend consumes common
+VR input, tracking and locomotion policy, using backend defaults for the current
+development probe. It does not yet consume a persisted Requiem VR settings block
+or expose a native VR settings page. The profile's `vr` value remains `null`:
+there is no validated user-facing Requiem VR preset to install. The exact
+current capability and headset gate are recorded in `CLOSURE_STATUS.md`.
 
 ## Installer policy
 

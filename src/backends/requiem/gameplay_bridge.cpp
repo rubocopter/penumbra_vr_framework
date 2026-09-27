@@ -376,10 +376,41 @@ void InvalidatePendingLocomotion() noexcept {
     auto* const primary = CurrentMoveState(
         player, contract.primary_state_vector_offset,
         contract.primary_state_index_offset);
-    if (!CallMoveStateGate(primary,
-            sideways ? contract.primary_sideways_gate_slot
-                     : contract.primary_forward_gate_slot,
-            amount, delta_seconds)) {
+    if (Read<std::int32_t>(player,
+            contract.primary_state_index_offset) == 1) {
+        // Native Push applies force in the camera axes captured on entry.
+        // Direct VR locomotion moves in HMD axes, so feed those same world
+        // directions to the native Push gates before the body step.
+        if (Read<void*>(primary, 0) != g_image + 0x27E178) return false;
+        runtime::VrAnalogState axis{};
+        axis.active = true;
+        if (sideways) axis.x = amount;
+        else axis.y = amount;
+        const auto desired = runtime::HeadRelativeMoveDirection(
+            g_direct_head_world_pose, axis);
+        const auto forward = Read<std::array<float,3>>(primary, 0x14);
+        const auto right = Read<std::array<float,3>>(primary, 0x20);
+        const auto projection = RequiemPushAxisProjection(
+            desired, forward, right);
+        if (!projection.valid) return false;
+        bool accepted = false;
+        if (std::abs(projection.forward) > 0.00001F) {
+            const bool forward_accepted = CallMoveStateGate(primary,
+                contract.primary_forward_gate_slot,
+                projection.forward, delta_seconds);
+            accepted = accepted || forward_accepted;
+        }
+        if (std::abs(projection.sideways) > 0.00001F) {
+            const bool sideways_accepted = CallMoveStateGate(primary,
+                contract.primary_sideways_gate_slot,
+                projection.sideways, delta_seconds);
+            accepted = accepted || sideways_accepted;
+        }
+        if (!accepted) return false;
+    } else if (!CallMoveStateGate(primary,
+                   sideways ? contract.primary_sideways_gate_slot
+                            : contract.primary_forward_gate_slot,
+                   amount, delta_seconds)) {
         return false;
     }
 
@@ -753,8 +784,10 @@ void PublishDirectLocomotion(void* player, float dt) noexcept {
     move.y = plan.move_y;
     const auto direction = runtime::HeadRelativeMoveDirection(
         g_direct_head_world_pose, move);
+    const bool pushing = Read<std::int32_t>(
+        player, GameplayContract().primary_state_index_offset) == 1;
     const auto displacement = RequiemLocomotionDisplacement(
-        direction, dt, g_direct_sprinting);
+        direction, dt, g_direct_sprinting, pushing);
     const bool published = QueueLocomotionDisplacement(player, displacement);
     if (ShouldMarkDirectLocomotionAccepted(plan, published)) {
         MarkDirectLocomotionAccepted(player);
@@ -1071,7 +1104,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                     static_cast<double>(update_count)
                 : 0.0;
             probe::WriteLog(
-                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu native_grab_enter=%llu native_move_enter=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu tool_render_aligned=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
+                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu native_grab_enter=%llu native_move_enter=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu tool_render_aligned=%llu native_push_enter=%llu push_acquire=%llu push_force_ticks=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
                 static_cast<double>(timing.world_frames) / elapsed_seconds,
                 mean_render_ms, phase_ms(timing.left_eye_ticks),
                 phase_ms(timing.right_eye_ticks),
@@ -1096,6 +1129,9 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                 static_cast<unsigned long long>(interaction.tools_attached),
                 static_cast<unsigned long long>(interaction.tools_native),
                 static_cast<unsigned long long>(interaction.tools_render_aligned),
+                static_cast<unsigned long long>(interaction.native_push_enters),
+                static_cast<unsigned long long>(interaction.pushes_acquired),
+                static_cast<unsigned long long>(interaction.push_force_ticks),
                 static_cast<unsigned long long>(g_vr_inventory_presses.exchange(
                     0, std::memory_order_relaxed)),
                 static_cast<unsigned long long>(g_vr_jump_presses.exchange(

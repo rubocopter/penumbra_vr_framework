@@ -59,15 +59,59 @@ const RequiemGameplayContract& GameplayContract() noexcept {
     return kContract;
 }
 
+RequiemPushAxes RequiemPushAxisProjection(
+    const std::array<float,3>& desired_world_direction,
+    const std::array<float,3>& native_forward,
+    const std::array<float,3>& native_right) noexcept {
+    const auto finite = [](const std::array<float,3>& value) {
+        return std::all_of(value.begin(), value.end(),
+            [](float axis) { return std::isfinite(axis); });
+    };
+    if (!finite(desired_world_direction) || !finite(native_forward) ||
+        !finite(native_right)) return {};
+    const float forward_length = std::hypot(
+        native_forward[0], native_forward[2]);
+    const float right_length = std::hypot(
+        native_right[0], native_right[2]);
+    if (forward_length < 0.95F || forward_length > 1.05F ||
+        right_length < 0.95F || right_length > 1.05F) return {};
+    return {
+        (desired_world_direction[0] * native_forward[0] +
+         desired_world_direction[2] * native_forward[2]) / forward_length,
+        (desired_world_direction[0] * native_right[0] +
+         desired_world_direction[2] * native_right[2]) / right_length,
+        true};
+}
+
+std::array<float,3> RequiemPushHandForce(
+    const std::array<float,3>& palm_position,
+    const std::array<float,3>& body_position,
+    const std::array<float,3>& body_relative_contact) noexcept {
+    std::array<float,3> delta{};
+    for (std::size_t axis = 0; axis < delta.size(); ++axis) {
+        delta[axis] = palm_position[axis] -
+            body_position[axis] - body_relative_contact[axis];
+        if (!std::isfinite(delta[axis])) return {};
+    }
+    const float length = std::hypot(
+        std::hypot(delta[0], delta[1]), delta[2]);
+    if (!std::isfinite(length) || length <= 1.0e-5F) return {};
+    // Rework Push::OnUpdate normalizes in 3D, then removes the vertical force.
+    return {delta[0] / length * 300.0F, 0.0F,
+        delta[2] / length * 300.0F};
+}
+
 std::array<float, 3> RequiemLocomotionDisplacement(
     const std::array<float, 3>& world_direction,
     float delta_seconds,
-    bool sprinting) noexcept {
+    bool sprinting,
+    bool pushing) noexcept {
     // Requiem requests twice the standard 2.25 m/s sprint; walking stays 1.5 m/s.
     constexpr float kRequiemSprintMultiplier = 2.0F;
     return runtime::LocomotionDisplacement(
         world_direction, delta_seconds,
-        sprinting ? kRequiemSprintMultiplier : 1.0F, false, sprinting);
+        pushing ? 1.0F : sprinting ? kRequiemSprintMultiplier : 1.0F,
+        pushing, sprinting);
 }
 
 DirectLocomotionPublication PlanDirectLocomotionPublication(

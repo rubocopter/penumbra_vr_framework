@@ -108,14 +108,14 @@ after the Requiem-local adjustment. Tool alignment can still drift during stick
 motion; lateral speed feels different without a measurement. Some sessions
 showed a late cadence drop of unknown ownership.
 
-**Current blocker: headset validation of physical interaction parity.** RQ-13
+**Current gate: representative free-body Grab/Move and mechanism interaction.** RQ-13
 reported difficult stone/note pickup and an apparent forward stone impulse when
 stepping back. Its log had nearby VR ray candidates, including mass-26 entities,
 but zero unconditional native Grab/Move entries, so that impulse did not come
 from the VR hold path. Exact-image inspection then mapped native accepted-pick
 ownership and the Requiem palm collision ABI.
 
-The current host-tested batch ports Black Plague's stronger reusable hand
+The previous host-tested batch ports Black Plague's stronger reusable hand
 ownership pattern into the Requiem backend. A backend-owned palm box is resolved
 against the exact Requiem physics world on the existing character-body update
 owner; palm overlap is attempted before ranked ray fallback while preserving
@@ -124,7 +124,26 @@ fresh palm generation, use the resolved palm and gameplay yaw epoch while held,
 and clear ownership on failed acquisition/leave. Move also reuses a fresh
 selected surface point instead of forcing a centre anchor. Release compilation
 and **44/44** host tests pass for this batch. It remains unvalidated in the
-headset, so no support claim follows from it.
+headset, so no support claim follows from it. The next headset clip/log confirmed
+improved diary pickup but exposed that the 26 kg puzzle cubes enter native
+`Push=1`, outside Grab/Move ownership. Their accepted selection is followed by
+reversed or oscillating movement when using the stick. The new Requiem-local
+Push adapter follows Rework's palm-relative 300 N horizontal force and
+constrained 0.5 m/s body travel; it projects HMD-relative stick direction onto
+the native Push axes while retaining the native state transition and force
+methods. The next headset report confirmed correct stick direction and palm
+collision contact, with intermittent acceleration/jumps. Its log showed
+`native_push_enter>0` but `push_acquire=push_force_ticks=0`: the palm-force path
+was not active. Exact-image inspection found that Requiem publishes the new
+state index only after `Push::Enter` returns, while the adapter checked it
+inside `Enter`. That premature check is removed, with validation retained in
+`Push::Update`. The user subsequently tested the cube and reported that it
+worked much better. The session log confirms five VR Push acquisitions and
+1927 applied palm-force ticks, where the prior session recorded zero. Push
+acquisition and force are now live/headset exercised. The user then confirmed
+the cube reached the switch, tipped and solved the puzzle without a problem.
+This representative Push puzzle is headset-validated; free-body Grab/Move and
+other mechanisms still need independent evidence.
 
 The inventory-item magnetic acquisition boundary remains unported. Rework and
 BP apply magnetic range only to items, with subtype-specific reach and hand/head

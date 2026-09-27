@@ -112,6 +112,17 @@ constexpr std::array<std::array<std::uint8_t,8>,3> kMoveEntries{{
     {0x83,0xEC,0x24,0x56,0x8B,0xF1,0x8B,0x46},
     {0x83,0xEC,0x4C,0x55,0x56,0x8B,0xF1,0x8B},
     {0x56,0x8B,0xF1,0x8B,0x4E,0x54,0x8B,0x81}}};
+constexpr std::uintptr_t kPushVtableRva = 0x0027E178;
+constexpr std::array<std::uintptr_t,3> kPushSlots{
+    0x0027E17C, 0x0027E1D4, 0x0027E1D8};
+constexpr std::array<std::uintptr_t,3> kPushTargets{
+    0x000AB480, 0x000AB7F0, 0x000ABB70};
+constexpr std::array<std::array<std::uint8_t,8>,3> kPushEntries{{
+    {0x83,0xEC,0x68,0x53,0x55,0x56,0x57,0x8B},
+    {0x81,0xEC,0x94,0x00,0x00,0x00,0x53,0x56},
+    {0x56,0x8B,0xF1,0x8B,0x46,0x50,0x8A,0x4E}}};
+constexpr std::uintptr_t kPushExitRva = 0x000AB670;
+constexpr std::uintptr_t kBodyAddForceRva = 0x0019D100;
 constexpr std::array<std::uint8_t, 8> kHandsUpdateEntry{
     0x81, 0xEC, 0xA0, 0x02, 0x00, 0x00, 0x53, 0x55};
 constexpr std::array<std::uint8_t, 5> kToolMatrixCall{
@@ -153,6 +164,7 @@ hooks::IatHook g_hands_update_hook;
 hooks::IatHook g_ray_hook;
 std::array<hooks::IatHook, 3> g_grab_hooks{};
 std::array<hooks::IatHook, 3> g_move_state_hooks{};
+std::array<hooks::IatHook, 3> g_push_state_hooks{};
 std::atomic<RenderWorld> g_original{nullptr};
 std::atomic<UpdateRenderList> g_original_visibility{nullptr};
 std::atomic<DrawAll> g_original_draw_all{nullptr};
@@ -187,6 +199,9 @@ std::atomic<std::uint64_t> g_grabs_released{0};
 std::atomic<std::uint64_t> g_moves_acquired{0};
 std::atomic<std::uint64_t> g_moves_released{0};
 std::atomic<std::uint64_t> g_mechanism_acquired{0};
+std::atomic<std::uint64_t> g_native_push_enters{0};
+std::atomic<std::uint64_t> g_pushes_acquired{0};
+std::atomic<std::uint64_t> g_push_force_ticks{0};
 std::atomic<std::uint64_t> g_tools_attached{0};
 std::atomic<std::uint64_t> g_tools_native{0};
 std::atomic<std::uint64_t> g_tools_render_aligned{0};
@@ -258,6 +273,17 @@ struct MoveHold final {
 thread_local void* g_pending_move_state = nullptr;
 thread_local runtime::VrHand g_pending_move_hand = runtime::VrHand::right;
 thread_local MoveHold g_move_hold;
+struct PushHold final {
+    void* state = nullptr;
+    void* player = nullptr;
+    void* body = nullptr;
+    runtime::VrHand hand = runtime::VrHand::right;
+    std::array<float,3> body_relative_contact{};
+    std::uint64_t yaw_epoch = 0;
+};
+thread_local void* g_pending_push_state = nullptr;
+thread_local runtime::VrHand g_pending_push_hand = runtime::VrHand::right;
+thread_local PushHold g_push_hold;
 std::array<runtime::VrEyeConfiguration, 2> g_eyes{};
 std::array<runtime::VrMatrix44, 2> g_projections{};
 runtime::VrMatrix34 g_tracking_anchor{};
@@ -1655,6 +1681,134 @@ void __fastcall HookedMoveEnter(void* state, void*, void* previous) noexcept {
     }
 }
 
+void __fastcall HookedPushEnter(void* state, void*, void* previous) noexcept {
+    ActiveCall active_call;
+    auto* player = ReadNative<void*>(state, 0x10);
+    const auto frame = ReadNativeControllerFrame();
+    const bool vr_origin = player != nullptr && frame.focused &&
+        frame.input.state.interact.just_pressed;
+    g_vr_selection_ready = false;
+    g_vr_selection_player = nullptr;
+    reinterpret_cast<Transition>(g_image + kPushTargets[1])(
+        state, previous);
+    g_native_push_enters.fetch_add(1, std::memory_order_relaxed);
+    // cPlayer::ChangeState (0x9CEE0) publishes player+0x2C0 at 0x9CF1B,
+    // after the virtual Enter call at 0x9CF11. Validate the committed state
+    // in HookedPushUpdate instead of rejecting every VR-origin Push here.
+    if (vr_origin) {
+        g_pending_push_state = state;
+        g_pending_push_hand = frame.interact_source;
+    }
+}
+
+void __fastcall HookedPushLeave(void* state, void*, void* next) noexcept {
+    ActiveCall active_call;
+    if (g_pending_push_state == state) g_pending_push_state = nullptr;
+    if (g_push_hold.state == state) {
+        PublishGameplayPalmHeldBody(HandIndex(g_push_hold.hand), nullptr);
+        g_push_hold = {};
+    }
+    reinterpret_cast<Transition>(g_image + kPushTargets[2])(state, next);
+}
+
+void __fastcall HookedPushUpdate(void* state, void*, float dt) noexcept {
+    ActiveCall active_call;
+    const auto original = reinterpret_cast<HandsUpdate>(
+        g_image + kPushTargets[0]);
+    if (state == g_pending_push_state) {
+        auto* player = ReadNative<void*>(state, 0x10);
+        auto* body = ReadNative<void*>(state, 0x50);
+        const auto frame = ReadNativeControllerFrame();
+        bool valid = player != nullptr && RequiemBodyMatches(body) &&
+            ReadNative<int>(player, 0x2C0) == 1 &&
+            ReadNative<void*>(ReadNative<void*>(player, 0x2C8),
+                sizeof(void*)) == state &&
+            frame.focused && frame.input.state.interact.pressed &&
+            frame.interact_source == g_pending_push_hand;
+        runtime::VrMatrix44 palm{};
+        bool held_body_published = false;
+        if (valid) {
+            const std::size_t hand_index = HandIndex(g_pending_push_hand);
+            const auto previous_generation = GameplayPalmPoseGeneration(
+                hand_index);
+            PublishGameplayPalmHeldBody(hand_index, body);
+            held_body_published = true;
+            valid = RefreshHeldPalm(player, g_pending_push_hand, palm,
+                previous_generation, true);
+        }
+        if (valid) {
+            const auto body_pose = ReadNative<runtime::VrMatrix44>(
+                body, 0x34);
+            const Vec3 palm_position{
+                palm.values[3], palm.values[7], palm.values[11]};
+            const Vec3 body_position{
+                body_pose.values[3], body_pose.values[7],
+                body_pose.values[11]};
+            if (runtime::vr_mechanism_policy::Finite(palm_position) &&
+                runtime::vr_mechanism_policy::Finite(body_position)) {
+                g_push_hold = {state, player, body, g_pending_push_hand,
+                    runtime::vr_mechanism_policy::Subtract(
+                        palm_position, body_position),
+                    GameplayPalmYawEpoch()};
+                g_pushes_acquired.fetch_add(1, std::memory_order_relaxed);
+                probe::WriteLog("Requiem VR push acquired");
+            }
+        }
+        g_pending_push_state = nullptr;
+        if (g_push_hold.state != state) {
+            probe::WriteLog("Requiem VR push acquisition rejected state=%ld body=%u focus=%u hold=%u palm=%u",
+                static_cast<long>(ReadNative<int>(player, 0x2C0)),
+                RequiemBodyMatches(body) ? 1U : 0U,
+                frame.focused ? 1U : 0U,
+                frame.input.state.interact.pressed ? 1U : 0U,
+                valid ? 1U : 0U);
+            if (held_body_published)
+                PublishGameplayPalmHeldBody(
+                    HandIndex(g_pending_push_hand), nullptr);
+            reinterpret_cast<void(__thiscall*)(void*)>(
+                g_image + kPushExitRva)(state);
+            return;
+        }
+    }
+    if (g_push_hold.state != state) {
+        original(state, dt);
+        return;
+    }
+    const auto frame = ReadNativeControllerFrame();
+    if (!frame.focused || !frame.input.state.interact.pressed ||
+        frame.interact_source != g_push_hold.hand ||
+        !RequiemBodyMatches(g_push_hold.body) ||
+        ReadNative<void*>(state, 0x10) != g_push_hold.player ||
+        ReadNative<void*>(state, 0x50) != g_push_hold.body ||
+        ReadNative<int>(g_push_hold.player, 0x2C0) != 1) {
+        reinterpret_cast<void(__thiscall*)(void*)>(
+            g_image + kPushExitRva)(state);
+        return;
+    }
+    runtime::VrMatrix44 palm{};
+    if (!RefreshHeldPalm(g_push_hold.player,
+            g_push_hold.hand, palm)) return;
+    const auto body_pose = ReadNative<runtime::VrMatrix44>(
+        g_push_hold.body, 0x34);
+    if (g_push_hold.yaw_epoch != GameplayPalmYawEpoch()) {
+        g_push_hold.body_relative_contact =
+            runtime::vr_mechanism_policy::Subtract(
+                Vec3{palm.values[3], palm.values[7], palm.values[11]},
+                Vec3{body_pose.values[3], body_pose.values[7],
+                    body_pose.values[11]});
+        g_push_hold.yaw_epoch = GameplayPalmYawEpoch();
+        return;
+    }
+    const Vec3 force = RequiemPushHandForce(
+        {palm.values[3], palm.values[7], palm.values[11]},
+        {body_pose.values[3], body_pose.values[7], body_pose.values[11]},
+        g_push_hold.body_relative_contact);
+    if (force[0] == 0.0F && force[2] == 0.0F) return;
+    reinterpret_cast<void(__thiscall*)(void*,const Vec3*)>(
+        g_image + kBodyAddForceRva)(g_push_hold.body, &force);
+    g_push_force_ticks.fetch_add(1, std::memory_order_relaxed);
+}
+
 void __fastcall HookedMoveLeave(void* state, void*, void* next) noexcept {
     ActiveCall active_call;
     if (g_pending_move_state == state) g_pending_move_state = nullptr;
@@ -2290,6 +2444,27 @@ bool InstallRenderWorld(std::string& error) noexcept {
             return false;
         }
     }
+    if (ReadNative<void*>(image + kPhysicsBodyVtableRva, 0x78) !=
+            image + kBodyAddForceRva ||
+        image[kPushExitRva] != 0x83 ||
+        image[kPushExitRva + 1] != 0xEC ||
+        ReadNative<void*>(image, kPushVtableRva + 0x4C) !=
+            image + 0xAD190 ||
+        ReadNative<void*>(image, kPushVtableRva + 0x50) !=
+            image + 0xAB710) {
+        error = "Requiem native Push force/movement boundary mismatch";
+        return false;
+    }
+    for (std::size_t index = 0; index < kPushSlots.size(); ++index) {
+        if (ReadNative<void*>(image, kPushSlots[index]) !=
+                image + kPushTargets[index] ||
+            !std::equal(kPushEntries[index].begin(),
+                kPushEntries[index].end(),
+                image + kPushTargets[index])) {
+            error = "Requiem native Push state boundary mismatch";
+            return false;
+        }
+    }
     const auto crt = GetModuleHandleW(L"MSVCP71.dll");
     const auto compare = crt ? GetProcAddress(crt,
         "??$?8DU?$char_traits@D@std@@V?$allocator@D@1@@std@@YA_NABV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@0@PBD@Z")
@@ -2399,6 +2574,22 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if (!rolled_back) error += "; rollback failed: " + rollback_error;
         return false;
     }
+    const std::array<void*,3> push_replacements{
+        reinterpret_cast<void*>(&HookedPushUpdate),
+        reinterpret_cast<void*>(&HookedPushEnter),
+        reinterpret_cast<void*>(&HookedPushLeave)};
+    for (std::size_t index = 0; index < kPushSlots.size(); ++index) {
+        if (hooks::InstallPointerHook(
+                reinterpret_cast<void**>(image + kPushSlots[index]),
+                image + kPushTargets[index], push_replacements[index],
+                g_push_state_hooks[index], error)) continue;
+        const std::string install_error = error;
+        std::string rollback_error;
+        const bool rolled_back = RemoveRenderWorld(rollback_error);
+        error = install_error;
+        if (!rolled_back) error += "; rollback failed: " + rollback_error;
+        return false;
+    }
     return true;
 }
 
@@ -2409,6 +2600,8 @@ bool RenderHooksInstalled() noexcept {
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
         std::any_of(g_move_state_hooks.begin(), g_move_state_hooks.end(),
+            [](const auto& hook) { return hook.installed(); }) ||
+        std::any_of(g_push_state_hooks.begin(), g_push_state_hooks.end(),
             [](const auto& hook) { return hook.installed(); });
 }
 
@@ -2425,6 +2618,9 @@ bool RemoveRenderWorld(std::string& error) noexcept {
         if (hook.installed() && !hooks::RemoveIatHook(hook, error))
             return false;
     for (auto& hook : g_move_state_hooks)
+        if (hook.installed() && !hooks::RemoveIatHook(hook, error))
+            return false;
+    for (auto& hook : g_push_state_hooks)
         if (hook.installed() && !hooks::RemoveIatHook(hook, error))
             return false;
     if (!hooks::RemoveRel32CallHook(g_tool_matrix_hook, error)) return false;
@@ -2457,6 +2653,9 @@ bool StartPresentation(runtime::OpenVrSession& session,
             [](const auto& hook) { return hook.installed(); }) ||
         !std::all_of(g_move_state_hooks.begin(),
             g_move_state_hooks.end(),
+            [](const auto& hook) { return hook.installed(); }) ||
+        !std::all_of(g_push_state_hooks.begin(),
+            g_push_state_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
         !session.initialized()) {
         error = "Requiem render hooks or OpenVR session are unavailable";
@@ -2586,6 +2785,9 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
         g_tools_attached.exchange(0, std::memory_order_relaxed),
         g_tools_native.exchange(0, std::memory_order_relaxed),
         g_tools_render_aligned.exchange(0, std::memory_order_relaxed),
+        g_native_push_enters.exchange(0, std::memory_order_relaxed),
+        g_pushes_acquired.exchange(0, std::memory_order_relaxed),
+        g_push_force_ticks.exchange(0, std::memory_order_relaxed),
     };
 }
 

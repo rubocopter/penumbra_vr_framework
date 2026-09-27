@@ -1,8 +1,10 @@
 # Black Plague headset validation checklist
 
-This is the current repeatable hardware checklist for the active Black Plague
-candidate. Historical session chronology is intentionally omitted. Do not repeat
-a closed reverse-engineering milestone unless new evidence contradicts it.
+This is the Black Plague release-regression checklist. The active Requiem Hito 2
+gate is recorded in `CLOSURE_STATUS.md`; the improved puzzle-block test has
+already taken place. Historical session chronology is
+intentionally omitted. Do not repeat a closed reverse-engineering milestone
+unless new evidence contradicts it.
 
 ## Before the headset session
 
