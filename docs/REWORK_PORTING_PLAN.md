@@ -26,7 +26,7 @@ or incorrect. Record the reason in durable architecture/parity documentation.
 
 ## Bidirectional reuse
 
-Rework is the baseline, not the ceiling. When Black Plague or a future Requiem
+Rework is the baseline, not the ceiling. When Black Plague or the Requiem
 backend demonstrates stronger game-neutral behavior, that behavior may become the
 shared implementation after a real cross-consumer boundary is proven. The
 Framework-owned Overture product should then consume the shared improvement too.

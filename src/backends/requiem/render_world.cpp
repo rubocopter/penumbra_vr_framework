@@ -4,6 +4,7 @@
 #include "frame_presentation_gate.hpp"
 #include "gameplay_contract.hpp"
 #include "gameplay_bridge.hpp"
+#include "hand_contact_probe.hpp"
 #include "iat_hook.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
@@ -61,6 +62,13 @@ constexpr std::uintptr_t kCastRayRva = 0x0018A5A0;
 constexpr std::uintptr_t kNormalUpdateRva = 0x000ADB40;
 constexpr std::uintptr_t kNormalVtableRva = 0x0027E2A8;
 constexpr std::uintptr_t kNormalRayCallRva = 0x000ADCCF;
+constexpr std::uintptr_t kGetPickedBodyRva = 0x0009AB30;
+constexpr std::uintptr_t kNormalInteractRva = 0x000ADFA0;
+constexpr std::array<std::uint8_t, 10> kGetPickedBodyEntry{
+    0x8B, 0x81, 0x80, 0x02, 0x00, 0x00, 0x8B, 0x40, 0x04, 0xC3};
+constexpr std::array<std::uint8_t, 12> kNormalInteractEntry{
+    0x56, 0x8B, 0xF1, 0x8B, 0x4E, 0x10, 0xE8, 0x85,
+    0xCB, 0xFE, 0xFF, 0x85};
 constexpr std::array<std::uint8_t, 3> kNormalRayCall{0xFF, 0x57, 0x68};
 constexpr std::array<std::uint8_t, 8> kCastRayEntry{
     0x8A, 0x44, 0x24, 0x18, 0x8A, 0x54, 0x24, 0x14};
@@ -113,6 +121,7 @@ constexpr std::array<std::uint8_t, 8> kEntitySetMatrixEntry{
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F;
 constexpr ULONGLONG kMaximumVisibilityPoseAgeMs = 250;
 constexpr float kMenuDistance = 1.75F;
+constexpr float kGameplayOverlayDistance = 2.5F;
 constexpr float kMenuWidth = 2.4F;
 constexpr float kMenuCenterY = 0.0F;
 constexpr adapters::hpl1::CameraLayout kCameraLayout{
@@ -171,6 +180,8 @@ std::atomic<std::uint64_t> g_redirected_rays{0};
 std::atomic<std::uint64_t> g_ray_hits{0};
 std::atomic<std::uint64_t> g_ray_winners{0};
 std::atomic<std::uint64_t> g_grab_enters{0};
+std::atomic<std::uint64_t> g_native_grab_enters{0};
+std::atomic<std::uint64_t> g_native_move_enters{0};
 std::atomic<std::uint64_t> g_grabs_acquired{0};
 std::atomic<std::uint64_t> g_grabs_released{0};
 std::atomic<std::uint64_t> g_moves_acquired{0};
@@ -178,14 +189,35 @@ std::atomic<std::uint64_t> g_moves_released{0};
 std::atomic<std::uint64_t> g_mechanism_acquired{0};
 std::atomic<std::uint64_t> g_tools_attached{0};
 std::atomic<std::uint64_t> g_tools_native{0};
+std::atomic<std::uint64_t> g_tools_render_aligned{0};
 FramePresentationGate g_frame_presentation;
 graphics::OpenGlEyeTargets g_targets;
 graphics::OpenGlEyeTargets g_overlay_targets;
 std::uint8_t* g_image = nullptr;
 thread_local void* g_updating_hands = nullptr;
+enum class ToolKind : std::uint8_t { none, flashlight, glowstick, flare };
+struct ToolAttachment final {
+    void* hands = nullptr;
+    void* model = nullptr;
+    void* entity = nullptr;
+    std::size_t slot = 0;
+    ToolKind kind = ToolKind::none;
+    runtime::VrHand hand = runtime::VrHand::right;
+    std::uint64_t updated_at = 0;
+};
+thread_local std::array<ToolAttachment, 2> g_tool_attachments{};
 thread_local bool g_selection_refresh_active = false;
 thread_local bool g_vr_selection_ready = false;
 thread_local void* g_vr_selection_player = nullptr;
+struct VrSelectionContact final {
+    void* body = nullptr;
+    std::array<float,3> world_point{};
+    std::uint64_t sampled_at = 0;
+};
+thread_local VrSelectionContact g_vr_selection_contact{};
+thread_local std::uint32_t g_refresh_entity_hits = 0;
+thread_local float g_refresh_winner_distance = -1.0F;
+thread_local float g_refresh_winner_mass = -1.0F;
 std::atomic<std::uint64_t> g_world_yaw_epoch{0};
 struct GrabHold final {
     void* state = nullptr;
@@ -610,6 +642,11 @@ struct WorldPanelGeometry final {
             -100.0F / 750.0F};
 }
 
+void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
+    const runtime::VrHmdPose& head,
+    const runtime::VrControllerFrame& frame,
+    std::uint64_t now) noexcept;
+
 [[nodiscard]] bool RenderStereo(RenderWorld original,
     void* renderer, void* world, void* camera, float frame_time,
     bool& frame_time_consumed, std::string& error) noexcept {
@@ -663,16 +700,21 @@ struct WorldPanelGeometry final {
         head_view, pose.device_to_absolute.values[7], now);
 
     std::array<graphics::TrackedHandVisual, 2> hands{};
+    std::array<runtime::VrMatrix44, 2> raw_palms{};
+    std::array<bool, 2> raw_palm_valid{};
+    runtime::VrMatrix44 resolver_head_pose{};
     const auto controller_frame = ReadNativeControllerFrame();
-    if (controller_frame.focused && !NativeUiActive()) {
-        runtime::VrMatrix44 head_pose{}, tracking_from_head{};
-        std::string hand_error;
-        if (runtime::InvertRigidTransform(
-                CollapseRigidView(head_view), head_pose, hand_error) &&
+    std::string hand_error;
+    const bool resolver_head_valid = runtime::InvertRigidTransform(
+        CollapseRigidView(head_view), resolver_head_pose, hand_error);
+    if (controller_frame.focused && !NativeUiActive() &&
+        resolver_head_valid) {
+        runtime::VrMatrix44 tracking_from_head{};
+        if (
             runtime::InvertRigidTransform(
                 pose.device_to_absolute, tracking_from_head, hand_error)) {
             const auto world_from_tracking = runtime::Multiply(
-                head_pose, tracking_from_head);
+                resolver_head_pose, tracking_from_head);
             AcquireSRWLockExclusive(&g_tracking_world_lock);
             g_world_from_tracking = world_from_tracking;
             g_world_from_tracking_time = now;
@@ -680,20 +722,34 @@ struct WorldPanelGeometry final {
                 std::memory_order_acquire);
             g_world_from_tracking_identity = pose.identity;
             ReleaseSRWLockExclusive(&g_tracking_world_lock);
+            AlignToolsForRender(world_from_tracking, pose,
+                controller_frame, now);
             for (std::size_t index = 0; index < hands.size(); ++index) {
                 const auto& tracked = controller_frame.hands[index];
                 if (!tracked.grip.device_connected ||
                     !tracked.grip.pose_valid) continue;
                 auto& hand = hands[index];
                 hand.visible = true;
-                hand.palm = runtime::Multiply(world_from_tracking,
+                raw_palms[index] = runtime::Multiply(world_from_tracking,
                     runtime::ExpandMatrix(tracked.grip.device_to_absolute));
+                raw_palm_valid[index] = true;
+                hand.palm = raw_palms[index];
                 if (tracked.skeleton_valid) {
                     hand.curl = tracked.finger_curl;
                 } else {
                     hand.curl.fill(0.1F);
                 }
             }
+        }
+    }
+    PublishGameplayPalmTracking(raw_palms, raw_palm_valid,
+        resolver_head_pose, resolver_head_valid,
+        g_world_yaw_epoch.load(std::memory_order_acquire));
+    for (std::size_t index = 0; index < hands.size(); ++index) {
+        runtime::VrMatrix44 resolved{};
+        if (hands[index].visible && !NativeUiActive() &&
+            ReadGameplayPalmPose(index, resolved)) {
+            hands[index].palm = resolved;
         }
     }
 
@@ -906,6 +962,7 @@ template <typename T>
 
 [[nodiscard]] bool InteractionPalm(runtime::VrHand hand,
     runtime::VrMatrix44& pose) noexcept;
+[[nodiscard]] bool RequiemBodyMatches(void* body) noexcept;
 
 // Black Plague's ranked ray adapter preserves the native eligibility callback
 // while gathering all hits from the palm centre and four adjacent fingers.
@@ -942,6 +999,14 @@ struct RankedRayCallback final {
         if (!std::isfinite(hit.distance) || hit.distance < 0.0F)
             return true;
         g_ray_hits.fetch_add(1, std::memory_order_relaxed);
+        // Rework's pick callback clears mpPickedBody when the nearest body
+        // has no game entity. The five-ray rank must not replay a floor/wall
+        // hit as its sole winner and mask a valid object on another ray.
+        if (!RequiemBodyMatches(body)) return true;
+        void* const entity = ReadNative<void*>(body, 0x414);
+        if (entity == nullptr || !ReadNative<bool>(entity, 0x14))
+            return true;
+        if (g_selection_refresh_active) ++g_refresh_entity_hits;
         const float score = hit.distance +
             (proxy->ray_index == 0 ? 0.0F : 0.002F);
         if (score < proxy->best_score) {
@@ -957,6 +1022,57 @@ struct PalmRaySegment final {
     std::array<float,3> from{};
     std::array<float,3> to{};
 };
+
+struct PalmSelectionCandidate final {
+    void* body = nullptr;
+    std::array<float,3> point{};
+    float distance = INFINITY;
+};
+
+[[nodiscard]] bool SafeNativeRayBefore(void* callback, void* body) noexcept {
+    if (callback == nullptr || body == nullptr) return false;
+    __try {
+        auto** vtable = *reinterpret_cast<void***>(callback);
+        using Before = bool(__thiscall*)(void*, void*);
+        return vtable != nullptr && vtable[0] != nullptr &&
+            reinterpret_cast<Before>(vtable[0])(callback, body);
+    } __except (EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+}
+
+[[nodiscard]] bool FindPalmOverlapTarget(void* callback,
+    runtime::VrHand hand, PalmSelectionCandidate& selected) noexcept {
+    selected = {};
+    const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
+    runtime::VrMatrix44 resolved{};
+    if (!ReadGameplayPalmPose(hand_index, resolved)) return false;
+    GameplayPalmOverlapResult overlap{};
+    if (!QueryGameplayPalmOverlaps(hand_index, resolved, overlap) ||
+        !overlap.valid) return false;
+    const std::array<float,3> centre{
+        resolved.values[3], resolved.values[7], resolved.values[11]};
+    for (std::size_t hit_index = 0; hit_index < overlap.hit_count;
+         ++hit_index) {
+        const auto& hit = overlap.hits[hit_index];
+        if (hit.body == nullptr || hit.contact_count == 0 ||
+            !RequiemBodyMatches(hit.body) ||
+            !SafeNativeRayBefore(callback, hit.body)) continue;
+        void* const entity = ReadNative<void*>(hit.body, 0x414);
+        if (entity == nullptr || !ReadNative<bool>(entity, 0x14)) continue;
+        std::array<float,3> point{};
+        for (std::size_t axis = 0; axis < point.size(); ++axis) {
+            point[axis] = hit.contact_sum[axis] /
+                static_cast<float>(hit.contact_count);
+        }
+        const float distance = std::hypot(
+            std::hypot(point[0] - centre[0], point[1] - centre[1]),
+            point[2] - centre[2]);
+        if (!std::isfinite(distance) || distance >= selected.distance) continue;
+        selected = {hit.body, point, distance};
+    }
+    return selected.body != nullptr;
+}
 
 [[nodiscard]] std::array<PalmRaySegment,5> InteractionRaySegments(
     const runtime::VrMatrix44& palm, float native_length) noexcept {
@@ -998,13 +1114,33 @@ void __fastcall HookedRay(void* world, void*, void* callback,
         const auto frame = ReadNativeControllerFrame();
         runtime::VrMatrix44 palm{};
         if (InteractionPalm(frame.interact_source, palm)) {
+            PalmSelectionCandidate contact{};
+            if (FindPalmOverlapTarget(callback, frame.interact_source, contact)) {
+                auto* native = reinterpret_cast<RankedRayCallback::VTable*>(
+                    ReadNative<void*>(callback, 0));
+                if (native != nullptr && native->intersect != nullptr) {
+                    RankedRayCallback::Hit hit{};
+                    hit.distance = contact.distance;
+                    hit.point = contact.point;
+                    native->intersect(callback, contact.body, &hit);
+                    g_vr_selection_ready = true;
+                    if (point) g_vr_selection_contact = {
+                        contact.body, contact.point, GetTickCount64()};
+                    if (g_selection_refresh_active) {
+                        g_refresh_winner_distance = contact.distance;
+                        g_refresh_winner_mass = ReadNative<float>(
+                            contact.body, 0x434);
+                    }
+                    g_ray_winners.fetch_add(1, std::memory_order_relaxed);
+                    return;
+                }
+            }
             const auto native_length = std::hypot(
                 std::hypot((*end)[0] - (*origin)[0],
                            (*end)[1] - (*origin)[1]),
                 (*end)[2] - (*origin)[2]);
             if (std::isfinite(native_length) && native_length > 0.0F &&
                 native_length <= 20.0F) {
-                g_vr_selection_ready = true;
                 RankedRayCallback::VTable table{
                     reinterpret_cast<bool(__thiscall*)(void*,void*)>(
                         RankedRayCallback::Before),
@@ -1029,6 +1165,15 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                     if (native != nullptr && native->intersect != nullptr) {
                         native->intersect(callback, ranked.best_body,
                             &ranked.best);
+                        g_vr_selection_ready = true;
+                        if (g_selection_refresh_active) {
+                            if (point) g_vr_selection_contact = {
+                                ranked.best_body, ranked.best.point,
+                                GetTickCount64()};
+                            g_refresh_winner_distance = ranked.best.distance;
+                            g_refresh_winner_mass = ReadNative<float>(
+                                ranked.best_body, 0x434);
+                        }
                         g_ray_winners.fetch_add(1,
                             std::memory_order_relaxed);
                     }
@@ -1050,7 +1195,28 @@ void __fastcall HookedRay(void* world, void*, void* callback,
     runtime::VrMatrix44& pose) noexcept {
     runtime::VrMatrix44 raw{};
     if (!TrackedControllerPose(hand, false, raw)) return false;
-    pose = runtime::rework_hand_profile::ApplyVisualLocalPose(raw);
+    pose = raw;
+    runtime::VrMatrix44 resolved{};
+    const std::size_t hand_index = hand == runtime::VrHand::left ? 0U : 1U;
+    if (ReadGameplayPalmPose(hand_index, resolved)) {
+        const std::array<float,3> reach{
+            raw.values[3] - resolved.values[3],
+            raw.values[7] - resolved.values[7],
+            raw.values[11] - resolved.values[11]};
+        const float distance = std::hypot(
+            std::hypot(reach[0], reach[1]), reach[2]);
+        if (!std::isfinite(distance)) return false;
+        const float scale = distance >
+                runtime::vr_interaction_policy::kMaximumCollisionInteractionReach &&
+                distance > 0.0F
+            ? runtime::vr_interaction_policy::kMaximumCollisionInteractionReach /
+                distance
+            : 1.0F;
+        pose.values[3] = resolved.values[3] + reach[0] * scale;
+        pose.values[7] = resolved.values[7] + reach[1] * scale;
+        pose.values[11] = resolved.values[11] + reach[2] * scale;
+    }
+    pose = runtime::rework_hand_profile::ApplyVisualLocalPose(pose);
     return true;
 }
 
@@ -1066,6 +1232,26 @@ void __fastcall HookedRay(void* world, void*, void* callback,
         grip.device_to_absolute.values[11]};
     return std::all_of(position.begin(), position.end(),
         [](float value) { return std::isfinite(value); });
+}
+
+[[nodiscard]] std::size_t HandIndex(runtime::VrHand hand) noexcept {
+    return hand == runtime::VrHand::left ? 0U : 1U;
+}
+
+[[nodiscard]] bool RefreshHeldPalm(void* player, runtime::VrHand hand,
+    runtime::VrMatrix44& pose, std::uint64_t minimum_generation = 0,
+    bool require_new_generation = false) noexcept {
+    if (player == nullptr) return false;
+    auto* const character_body = ReadNative<void*>(
+        player, GameplayContract().character_body_offset);
+    if (character_body == nullptr) return false;
+    ServiceGameplayPalmResolver(g_image, character_body);
+    const std::size_t hand_index = HandIndex(hand);
+    if (require_new_generation &&
+        GameplayPalmPoseGeneration(hand_index) <= minimum_generation) {
+        return false;
+    }
+    return InteractionPalm(hand, pose);
 }
 
 using Vec3 = std::array<float,3>;
@@ -1261,14 +1447,17 @@ void RestoreGrab(const GrabHold& hold) noexcept {
 void __fastcall HookedGrabEnter(void* state, void*, void* previous) noexcept {
     ActiveCall active_call;
     auto* player = ReadNative<void*>(state, 0x10);
-    const bool vr_origin = player != nullptr && g_vr_selection_ready &&
-        g_vr_selection_player == player;
+    const auto frame = ReadNativeControllerFrame();
+    // Native Grab is the authority for accepting the target. BP tags the
+    // redirected VR press even if its auxiliary picker found no winner: the
+    // native callback may still accept a body in the same input update.
+    const bool vr_origin = player != nullptr && frame.focused &&
+        frame.input.state.interact.just_pressed;
     g_vr_selection_ready = false;
     g_vr_selection_player = nullptr;
-    const auto frame = ReadNativeControllerFrame();
     reinterpret_cast<Transition>(g_image + kGrabEnterRva)(state, previous);
-    if (vr_origin && frame.focused &&
-        frame.input.state.interact.just_pressed) {
+    g_native_grab_enters.fetch_add(1, std::memory_order_relaxed);
+    if (vr_origin) {
         g_grab_enters.fetch_add(1, std::memory_order_relaxed);
         g_pending_grab_state = state;
         g_pending_grab_hand = frame.interact_source;
@@ -1283,6 +1472,7 @@ void __fastcall HookedGrabLeave(void* state, void*, void* next) noexcept {
     if (owned) {
         hold = g_grab_hold;
         g_grab_hold = {};
+        PublishGameplayPalmHeldBody(HandIndex(hold.hand), nullptr);
     }
     reinterpret_cast<Transition>(g_image + kGrabLeaveRva)(state, next);
     if (owned) RestoreGrab(hold);
@@ -1299,7 +1489,8 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
         const auto frame = ReadNativeControllerFrame();
         runtime::VrMatrix44 palm{};
         std::array<float,3> tracked{};
-        const bool valid = player != nullptr &&
+        bool held_body_published = false;
+        bool valid = player != nullptr &&
             ReadNative<int>(player, 0x2C0) == 6 &&
             ReadNative<void*>(ReadNative<void*>(player, 0x2C8),
                 6 * sizeof(void*)) == state &&
@@ -1308,21 +1499,50 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
             ReadNative<void*>(body, 0x10) == nullptr &&
             NativeJointCount(body) == 0 &&
             frame.focused && frame.input.state.interact.pressed &&
-            frame.interact_source == g_pending_grab_hand &&
-            InteractionPalm(g_pending_grab_hand, palm) &&
-            TrackingGripPosition(g_pending_grab_hand, tracked);
+            frame.interact_source == g_pending_grab_hand;
+        if (valid) {
+            const std::size_t hand_index = HandIndex(g_pending_grab_hand);
+            const std::uint64_t previous_generation =
+                GameplayPalmPoseGeneration(hand_index);
+            PublishGameplayPalmHeldBody(hand_index, body);
+            held_body_published = true;
+            valid = RefreshHeldPalm(player, g_pending_grab_hand, palm,
+                        previous_generation, true) &&
+                TrackingGripPosition(g_pending_grab_hand, tracked);
+        }
         if (valid) {
             const auto body_pose = ReadNative<runtime::VrMatrix44>(
                 body, 0x34);
             const float max_linear = ReadNative<float>(body, 0x42C);
             const float max_angular = ReadNative<float>(body, 0x430);
             const float mass = ReadNative<float>(body, 0x434);
+            const auto selected = g_vr_selection_contact;
+            const auto now = GetTickCount64();
+            std::array<float,3> local_contact{};
+            bool surface_contact = false;
+            if (selected.body == body && selected.sampled_at != 0 &&
+                now >= selected.sampled_at &&
+                now - selected.sampled_at <= 100) {
+                const auto& point = selected.world_point;
+                const float distance = std::hypot(
+                    std::hypot(point[0] - palm.values[3],
+                               point[1] - palm.values[7]),
+                    point[2] - palm.values[11]);
+                if (std::isfinite(distance) && distance <=
+                    runtime::vr_interaction_policy::kInteractionTargetDistance) {
+                    local_contact = InverseTransformPoint(body_pose, point);
+                    surface_contact = runtime::vr_mechanism_policy::Finite(
+                        local_contact);
+                }
+            }
             std::string error;
             GrabHold hold{};
             if (std::isfinite(max_linear) && max_linear >= 0.0F &&
                 std::isfinite(max_angular) && max_angular >= 0.0F &&
                 std::isfinite(mass) && mass > 0.0F &&
-                hold.pose.Begin(palm, body_pose, {}, true, error)) {
+                hold.pose.Begin(palm, body_pose,
+                    surface_contact ? local_contact : std::array<float,3>{},
+                    true, error)) {
                 hold.state = state;
                 hold.player = player;
                 hold.body = body;
@@ -1330,18 +1550,20 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
                 hold.previous_palm = {
                     palm.values[3], palm.values[7], palm.values[11]};
                 hold.previous_tracking = tracked;
-                AcquireSRWLockShared(&g_tracking_world_lock);
-                hold.yaw_epoch = g_world_from_tracking_yaw_epoch;
-                ReleaseSRWLockShared(&g_tracking_world_lock);
+                hold.yaw_epoch = GameplayPalmYawEpoch();
                 hold.max_linear = max_linear;
                 hold.max_angular = max_angular;
                 hold.collide_character = ReadNative<bool>(body, 0x3C8);
                 if (!StoreNativeBool(body, 0x3C8, false)) {
+                    PublishGameplayPalmHeldBody(
+                        HandIndex(g_pending_grab_hand), nullptr);
                     g_pending_grab_state = nullptr;
                     return;
                 }
                 g_grab_hold = hold;
                 g_grabs_acquired.fetch_add(1, std::memory_order_relaxed);
+                probe::WriteLog("Requiem VR grab acquired mass=%.3f surface=%u",
+                    mass, surface_contact ? 1U : 0U);
                 reinterpret_cast<void(__thiscall*)(void*, float)>(
                     g_image + 0x19CAC0)(body, 20.0F);
                 reinterpret_cast<void(__thiscall*)(void*, float)>(
@@ -1350,6 +1572,9 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
         }
         g_pending_grab_state = nullptr;
         if (g_grab_hold.state != state) {
+            if (held_body_published)
+                PublishGameplayPalmHeldBody(
+                    HandIndex(g_pending_grab_hand), nullptr);
             // Use the mapped native exit; mouse-relative Grab cannot take over.
             reinterpret_cast<void(__thiscall*)(void*)>(
                 g_image + kGrabExitRva)(state);
@@ -1376,13 +1601,10 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
     runtime::VrMatrix44 palm{}, destination{};
     std::array<float,3> tracking{};
     std::string error;
-    if (!InteractionPalm(g_grab_hold.hand, palm) ||
+    if (!RefreshHeldPalm(g_grab_hold.player, g_grab_hold.hand, palm) ||
         !TrackingGripPosition(g_grab_hold.hand, tracking) ||
         !g_grab_hold.pose.Update(palm, destination, error)) return;
-    std::uint64_t yaw_epoch = 0;
-    AcquireSRWLockShared(&g_tracking_world_lock);
-    yaw_epoch = g_world_from_tracking_yaw_epoch;
-    ReleaseSRWLockShared(&g_tracking_world_lock);
+    const std::uint64_t yaw_epoch = GameplayPalmYawEpoch();
     const float tracked_distance = std::hypot(
         std::hypot(tracking[0] - g_grab_hold.previous_tracking[0],
                    tracking[1] - g_grab_hold.previous_tracking[1]),
@@ -1419,15 +1641,15 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
 void __fastcall HookedMoveEnter(void* state, void*, void* previous) noexcept {
     ActiveCall active_call;
     auto* player = ReadNative<void*>(state, 0x10);
-    const bool vr_origin = player != nullptr && g_vr_selection_ready &&
-        g_vr_selection_player == player;
+    const auto frame = ReadNativeControllerFrame();
+    const bool vr_origin = player != nullptr && frame.focused &&
+        frame.input.state.interact.just_pressed;
     g_vr_selection_ready = false;
     g_vr_selection_player = nullptr;
-    const auto frame = ReadNativeControllerFrame();
     reinterpret_cast<Transition>(g_image + kMoveTargets[1])(
         state, previous);
-    if (vr_origin && frame.focused &&
-        frame.input.state.interact.just_pressed) {
+    g_native_move_enters.fetch_add(1, std::memory_order_relaxed);
+    if (vr_origin) {
         g_pending_move_state = state;
         g_pending_move_hand = frame.interact_source;
     }
@@ -1441,6 +1663,7 @@ void __fastcall HookedMoveLeave(void* state, void*, void* next) noexcept {
     if (owned) {
         hold = g_move_hold;
         g_move_hold = {};
+        PublishGameplayPalmHeldBody(HandIndex(hold.hand), nullptr);
     }
     reinterpret_cast<Transition>(g_image + kMoveTargets[2])(state, next);
     if (owned && RequiemBodyMatches(hold.body)) {
@@ -1463,8 +1686,10 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
         auto* body = ReadNative<void*>(state, 0x54);
         const auto frame = ReadNativeControllerFrame();
         MoveHold hold{};
+        runtime::VrMatrix44 interaction_palm{};
         runtime::VrMatrix44 palm{};
         Vec3 tracking{};
+        bool held_body_published = false;
         const int joint_count = NativeJointCount(body);
         bool valid = player != nullptr &&
             ReadNative<int>(player, 0x2C0) == 2 &&
@@ -1473,8 +1698,7 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
             RequiemBodyMatches(body) && joint_count >= 0 &&
             frame.focused && frame.input.state.interact.pressed &&
             frame.interact_source == g_pending_move_hand &&
-            InteractionPalm(g_pending_move_hand, palm) &&
-            TrackingGripPosition(g_pending_move_hand, tracking);
+            InteractionPalm(g_pending_move_hand, interaction_palm);
         if (valid && joint_count == 0) {
             if (!BindNoJointSlider(body, hold) &&
                 (ReadNative<void*>(body, 0x330) != nullptr ||
@@ -1484,10 +1708,23 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
             const auto body_pose = ReadNative<runtime::VrMatrix44>(
                 body, 0x34);
             hold.local_body_contact = ReadNative<Vec3>(state, 0x38);
-            const auto world_contact = TransformPoint(
+            auto world_contact = TransformPoint(
                 body_pose, hold.local_body_contact);
+            const auto selected = g_vr_selection_contact;
+            const auto now = GetTickCount64();
+            const bool fresh_surface_contact =
+                selected.body == body && selected.sampled_at != 0 &&
+                now >= selected.sampled_at &&
+                now - selected.sampled_at <= 100 &&
+                runtime::vr_mechanism_policy::Finite(selected.world_point);
+            if (fresh_surface_contact) {
+                world_contact = selected.world_point;
+                hold.local_body_contact = InverseTransformPoint(
+                    body_pose, world_contact);
+            }
             const Vec3 hand_position{
-                palm.values[3], palm.values[7], palm.values[11]};
+                interaction_palm.values[3], interaction_palm.values[7],
+                interaction_palm.values[11]};
             const float distance = runtime::vr_mechanism_policy::Length(
                 runtime::vr_mechanism_policy::Subtract(
                     world_contact, hand_position));
@@ -1509,14 +1746,23 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
                 hold.player = player;
                 hold.body = body;
                 hold.hand = g_pending_move_hand;
+                const std::size_t hand_index = HandIndex(hold.hand);
+                const std::uint64_t previous_generation =
+                    GameplayPalmPoseGeneration(hand_index);
+                PublishGameplayPalmHeldBody(hand_index, body);
+                held_body_published = true;
+                valid = RefreshHeldPalm(player, hold.hand, palm,
+                            previous_generation, true) &&
+                    TrackingGripPosition(hold.hand, tracking);
+            }
+            if (valid) {
                 hold.local_hand_contact = InverseTransformPoint(
                     palm, world_contact);
-                hold.previous_palm = hand_position;
+                hold.previous_palm = {
+                    palm.values[3], palm.values[7], palm.values[11]};
                 hold.previous_tracking = tracking;
                 hold.previous_palm_pose = palm;
-                AcquireSRWLockShared(&g_tracking_world_lock);
-                hold.yaw_epoch = g_world_from_tracking_yaw_epoch;
-                ReleaseSRWLockShared(&g_tracking_world_lock);
+                hold.yaw_epoch = GameplayPalmYawEpoch();
                 g_move_hold = hold;
                 reinterpret_cast<void(__thiscall*)(void*,bool)>(
                     g_image + 0x19CBB0)(body, false);
@@ -1539,6 +1785,9 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
         }
         g_pending_move_state = nullptr;
         if (g_move_hold.state != state) {
+            if (held_body_published)
+                PublishGameplayPalmHeldBody(
+                    HandIndex(g_pending_move_hand), nullptr);
             reinterpret_cast<void(__thiscall*)(void*)>(
                 g_image + kMoveExitRva)(state);
             return;
@@ -1562,14 +1811,11 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
     }
     runtime::VrMatrix44 palm{};
     Vec3 tracking{};
-    if (!InteractionPalm(g_move_hold.hand, palm) ||
+    if (!RefreshHeldPalm(g_move_hold.player, g_move_hold.hand, palm) ||
         !TrackingGripPosition(g_move_hold.hand, tracking)) return;
     auto body_pose = ReadNative<runtime::VrMatrix44>(
         g_move_hold.body, 0x34);
-    std::uint64_t yaw_epoch = 0;
-    AcquireSRWLockShared(&g_tracking_world_lock);
-    yaw_epoch = g_world_from_tracking_yaw_epoch;
-    ReleaseSRWLockShared(&g_tracking_world_lock);
+    const std::uint64_t yaw_epoch = GameplayPalmYawEpoch();
     const bool yaw_changed = yaw_epoch != g_move_hold.yaw_epoch;
     const Vec3 palm_position{palm.values[3],
         palm.values[7], palm.values[11]};
@@ -1645,6 +1891,19 @@ struct ToolProfile final {
     float scale = 1.0F;
 };
 
+[[nodiscard]] ToolProfile ProfileForTool(ToolKind kind) noexcept {
+    switch (kind) {
+    case ToolKind::flashlight:
+        return {0.022F, {0.0004F,0.0005F,0.090F}, -1.57F, 1.6F};
+    case ToolKind::glowstick:
+        return {0.0125F, {0.0F,0.0078F,-0.078F}, 4.71F, 1.55F};
+    case ToolKind::flare:
+        return {0.018F, {0.001F,-0.0002F,-0.090F}, 4.71F, 1.8F};
+    default:
+        return {};
+    }
+}
+
 [[nodiscard]] runtime::VrMatrix44 ReworkToolPose(
     const runtime::VrMatrix44& grip_pose,
     const ToolProfile& profile) noexcept {
@@ -1668,10 +1927,50 @@ struct ToolProfile final {
         grip_pose, grip), rotation), scale);
 }
 
+void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
+    const runtime::VrHmdPose& head,
+    const runtime::VrControllerFrame& frame,
+    std::uint64_t now) noexcept {
+    // Native Hands::Update precedes RenderWorld. The tool matrix produced
+    // there uses the previous world tracking sample while visible hands use
+    // this frame's HMD sample. Reapply only live attachments before either
+    // eye renders so both share the same tracking basis.
+    for (const auto& tool : g_tool_attachments) {
+        if (tool.kind == ToolKind::none || tool.hands == nullptr ||
+            tool.model == nullptr || tool.entity == nullptr ||
+            tool.updated_at == 0 || now < tool.updated_at ||
+            now - tool.updated_at > 100 ||
+            ReadNative<int>(tool.hands, 0x74) != 2 ||
+            ReadNative<void*>(tool.hands, tool.slot) != tool.model ||
+            ReadNative<void*>(tool.model, 0x118) != tool.entity)
+            continue;
+        const auto& grip = frame.hands[tool.hand == runtime::VrHand::left
+            ? 0U : 1U].grip;
+        if (!grip.device_connected || !grip.pose_valid ||
+            (head.identity.pose_epoch != 0 &&
+             grip.identity.pose_epoch != 0 &&
+             !runtime::SameTrackingEpoch(head.identity, grip.identity)))
+            continue;
+        const auto profile = ProfileForTool(tool.kind);
+        const auto tracked = runtime::Multiply(world_from_tracking,
+            runtime::ExpandMatrix(grip.device_to_absolute));
+        const auto socket = runtime::rework_hand_profile::
+            ApplyAttachmentGripLocalPose(tracked,
+                tool.hand == runtime::VrHand::left,
+                runtime::vr_interaction_policy::GripOpenCentreOffset(
+                    profile.radius));
+        const auto matrix = ReworkToolPose(socket, profile);
+        reinterpret_cast<EntitySetMatrix>(g_image + kEntitySetMatrixRva)(
+            tool.entity, &matrix);
+        g_tools_render_aligned.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
 void __fastcall HookedHandsUpdate(void* hands, void*, float dt) noexcept {
     ActiveCall active_call;
     void* previous = g_updating_hands;
     g_updating_hands = hands;
+    g_tool_attachments = {};
     reinterpret_cast<HandsUpdate>(g_image + kHandsUpdateRva)(hands, dt);
     g_updating_hands = previous;
 }
@@ -1700,14 +1999,9 @@ void __fastcall HookedToolMatrix(void* entity, void*,
             // These values are the Rework 23c890f HUD profiles. Requiem
             // loads the same named installed HUD models; the headset report
             // disproved BP's flashlight socket for this target.
-            const ToolProfile profile = flashlight
-                ? ToolProfile{0.022F, {0.0004F,0.0005F,0.090F},
-                    -1.57F, 1.6F}
-                : glowstick
-                    ? ToolProfile{0.0125F, {0.0F,0.0078F,-0.078F},
-                        4.71F, 1.55F}
-                    : ToolProfile{0.018F, {0.001F,-0.0002F,-0.090F},
-                        4.71F, 1.8F};
+            const ToolKind kind = flashlight ? ToolKind::flashlight
+                : glowstick ? ToolKind::glowstick : ToolKind::flare;
+            const ToolProfile profile = ProfileForTool(kind);
             const auto frame = ReadNativeControllerFrame();
             const auto tool_hand = frame.interact_source == runtime::VrHand::left
                 ? runtime::VrHand::right : runtime::VrHand::left;
@@ -1716,6 +2010,9 @@ void __fastcall HookedToolMatrix(void* entity, void*,
                     grip)) break;
             attached = ReworkToolPose(grip, profile);
             selected = &attached;
+            g_tool_attachments[slot == 0x6CU ? 0U : 1U] = {
+                g_updating_hands, model, entity, slot, kind, tool_hand,
+                GetTickCount64()};
             break;
         }
     }
@@ -1778,9 +2075,12 @@ void __fastcall HookedDrawAll(void* drawer, void*) noexcept {
             const auto model_view = runtime::Multiply(eye_view,
                 g_overlay_world_panel ? g_overlay_panel_pose : head_pose);
             const auto panel = PanelGeometry(g_overlay_surface);
-            // Rework's 800x600 message plane uses a 1/750 m pixel pitch.
-            constexpr float subtitle_scale =
-                runtime::vr_setting_limits::kSubtitleScale.default_value;
+            // Rework scales text inside its 800x600 message plane. Requiem
+            // captures text and diary animation together, so scaling the
+            // entire plane by 3.375 at 1.75 m made both fill the headset.
+            // Use the proven 1/750 m pixel pitch with a 2.5 scale at 2.5 m:
+            // the full plane is ~44 degrees high and remains in view.
+            constexpr float subtitle_scale = 2.5F;
             const float half_width = g_overlay_world_panel
                 ? panel.width * 0.5F : 400.0F / 750.0F * subtitle_scale;
             const float half_height = g_overlay_world_panel
@@ -1792,7 +2092,8 @@ void __fastcall HookedDrawAll(void* drawer, void*) noexcept {
                 model_view, g_projections[index],
                 -half_width, half_width,
                 center_y - half_height, center_y + half_height,
-                g_overlay_world_panel ? panel.distance : kMenuDistance,
+                g_overlay_world_panel ? panel.distance :
+                    kGameplayOverlayDistance,
                 error);
             std::string restore_error;
             if (!g_targets.EndEye(eye_binding, restore_error)) {
@@ -1917,6 +2218,12 @@ bool InstallRenderWorld(std::string& error) noexcept {
             kNormalUpdateEntry.end(), image + kNormalUpdateRva) ||
         ReadNative<void*>(image, kNormalVtableRva + 4) !=
             image + kNormalUpdateRva ||
+        ReadNative<void*>(image, kNormalVtableRva + 0x10) !=
+            image + kNormalInteractRva ||
+        !std::equal(kGetPickedBodyEntry.begin(),
+            kGetPickedBodyEntry.end(), image + kGetPickedBodyRva) ||
+        !std::equal(kNormalInteractEntry.begin(),
+            kNormalInteractEntry.end(), image + kNormalInteractRva) ||
         !std::equal(kNormalRayCall.begin(), kNormalRayCall.end(),
             image + kNormalRayCallRva) ||
         !std::equal(kGetJointCountEntry.begin(),
@@ -2185,6 +2492,7 @@ bool StartPresentation(runtime::OpenVrSession& session,
     g_recenter_requested.store(false, std::memory_order_release);
     g_world_panel_valid = false;
     g_world_panel_surface = NativeUiSurface::none;
+    g_tool_attachments = {};
     g_world_ui_panel_pending.store(false, std::memory_order_release);
     g_overlay_pending = false;
     g_frame_presentation.Reset();
@@ -2267,6 +2575,8 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
         g_redirected_rays.exchange(0, std::memory_order_relaxed),
         g_ray_hits.exchange(0, std::memory_order_relaxed),
         g_ray_winners.exchange(0, std::memory_order_relaxed),
+        g_native_grab_enters.exchange(0, std::memory_order_relaxed),
+        g_native_move_enters.exchange(0, std::memory_order_relaxed),
         g_grab_enters.exchange(0, std::memory_order_relaxed),
         g_grabs_acquired.exchange(0, std::memory_order_relaxed),
         g_grabs_released.exchange(0, std::memory_order_relaxed),
@@ -2275,6 +2585,7 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
         g_mechanism_acquired.exchange(0, std::memory_order_relaxed),
         g_tools_attached.exchange(0, std::memory_order_relaxed),
         g_tools_native.exchange(0, std::memory_order_relaxed),
+        g_tools_render_aligned.exchange(0, std::memory_order_relaxed),
     };
 }
 
@@ -2441,6 +2752,7 @@ void AddTrackedWorldYaw(float radians) noexcept {
 void RefreshVrSelectionBeforeInteract(void* player) noexcept {
     g_vr_selection_ready = false;
     g_vr_selection_player = nullptr;
+    g_vr_selection_contact = {};
     if (player == nullptr || g_image == nullptr ||
         !g_presenting.load(std::memory_order_acquire) ||
         !g_ray_hook.installed() || NativeUiActive() ||
@@ -2452,10 +2764,33 @@ void RefreshVrSelectionBeforeInteract(void* player) noexcept {
             g_image + kNormalVtableRva ||
         ReadNative<void*>(normal, 0x10) != player) return;
     g_selection_refresh_active = true;
+    g_refresh_entity_hits = 0;
+    g_refresh_winner_distance = -1.0F;
+    g_refresh_winner_mass = -1.0F;
     g_selection_refreshes.fetch_add(1, std::memory_order_relaxed);
     reinterpret_cast<HandsUpdate>(g_image + kNormalUpdateRva)(normal, 0.0F);
     g_selection_refresh_active = false;
     if (g_vr_selection_ready) g_vr_selection_player = player;
+    // The ray winner is only a candidate. Requiem's pick callback copies it
+    // into pick+4 after its own eligibility/range checks; OnStartInteract
+    // consumes that native field, not our ranked-ray result.
+    void* const pick = ReadNative<void*>(player, 0x280);
+    void* const accepted_body = ReadNative<void*>(pick, 4);
+    void* const accepted_entity = ReadNative<void*>(accepted_body, 0x414);
+    probe::WriteLog(
+        "Requiem VR select press entity_hits=%lu winner=%u accepted=%u picked=%u type=%ld distance=%.3f picked_distance=%.3f mass=%.3f entity_reach=%.3f",
+        static_cast<unsigned long>(g_refresh_entity_hits),
+        g_vr_selection_ready ? 1U : 0U,
+        g_vr_selection_ready && accepted_body != nullptr &&
+            accepted_body == g_vr_selection_contact.body ? 1U : 0U,
+        accepted_body != nullptr ? 1U : 0U,
+        accepted_entity != nullptr
+            ? static_cast<long>(ReadNative<int>(accepted_entity, 0xC0)) : -1L,
+        g_refresh_winner_distance,
+        pick != nullptr ? ReadNative<float>(pick, 0x10) : -1.0F,
+        g_refresh_winner_mass,
+        accepted_entity != nullptr
+            ? ReadNative<float>(accepted_entity, 0xBC) : -1.0F);
 }
 
 bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose,

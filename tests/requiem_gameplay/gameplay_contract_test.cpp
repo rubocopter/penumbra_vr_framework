@@ -12,6 +12,32 @@ int main() {
     const auto near = [](float actual, float expected) {
         return std::fabs(actual - expected) < 0.0001F;
     };
+    using penumbra_vr::backends::requiem::RequiemLocomotionDisplacement;
+    // Integrate one second of requested travel through the production helper.
+    // 120 Hz keeps each request below the native queue's 5 cm step cap.
+    for (const bool sprinting : {false, true}) {
+        const float expected_distance = sprinting ? 4.5F : 1.5F;
+        for (const std::array<float, 3> direction : {
+                 std::array<float, 3>{0.0F, 0.0F, -1.0F},
+                 std::array<float, 3>{1.0F, 0.0F, 0.0F},
+                 std::array<float, 3>{-0.6F, 0.0F, 0.8F}}) {
+            std::array<float, 3> travel{};
+            for (int tick = 0; tick < 120; ++tick) {
+                const auto step = RequiemLocomotionDisplacement(
+                    direction, 1.0F / 120.0F, sprinting);
+                for (std::size_t axis = 0; axis < travel.size(); ++axis)
+                    travel[axis] += step[axis];
+            }
+            if (!near(travel[0], direction[0] * expected_distance) ||
+                !near(travel[1], 0.0F) ||
+                !near(travel[2], direction[2] * expected_distance)) {
+                std::cerr << "Requiem " << (sprinting ? "sprint" : "walk")
+                          << " one-second travel drifted: "
+                          << std::hypot(travel[0], travel[2]) << " m\n";
+                return 1;
+            }
+        }
+    }
     // The native body position is the capsule centre. Standing (1.65 m)
     // and crouched (0.95 m) centres below describe the same 5.0 m floor.
     if (!ComposeRequiemTrackedHeadHeight(5.825F, 1.65F, 1.7F, 0.0F,

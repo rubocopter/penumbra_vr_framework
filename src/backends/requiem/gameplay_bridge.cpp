@@ -1,6 +1,7 @@
 #include "gameplay_bridge.hpp"
 
 #include "gameplay_contract.hpp"
+#include "hand_contact_probe.hpp"
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
 #include "render_world.hpp"
@@ -513,10 +514,13 @@ void __fastcall HookedCharacterUpdate(
     CallbackScope callback;
     const auto original = reinterpret_cast<CharacterUpdate>(
         g_image + GameplayContract().character_update_rva);
-    if (character_body == nullptr ||
-        g_tracked_player_body.load(std::memory_order_acquire) != character_body ||
+    const bool tracked_character_body = character_body != nullptr &&
+        g_tracked_player_body.load(std::memory_order_acquire) == character_body;
+    if (!tracked_character_body ||
         !std::isfinite(dt) || dt <= 0.0F || dt > 0.25F) {
         original(character_body, dt);
+        if (tracked_character_body)
+            ServiceGameplayPalmResolver(g_image, character_body);
         return;
     }
 
@@ -534,6 +538,7 @@ void __fastcall HookedCharacterUpdate(
         g_physical_state = {};
         InvalidateRoomScaleSample(character_body);
         original(character_body, dt);
+        ServiceGameplayPalmResolver(g_image, character_body);
         return;
     }
 
@@ -546,6 +551,7 @@ void __fastcall HookedCharacterUpdate(
         g_physical_state = {};
         InvalidateRoomScaleSample(character_body);
         original(character_body, dt);
+        ServiceGameplayPalmResolver(g_image, character_body);
         return;
     }
 
@@ -583,6 +589,7 @@ void __fastcall HookedCharacterUpdate(
         g_physical_state = {};
         InvalidateRoomScaleSample(character_body);
         original(character_body, dt);
+        ServiceGameplayPalmResolver(g_image, character_body);
         return;
     }
 
@@ -625,6 +632,7 @@ void __fastcall HookedCharacterUpdate(
     ReleaseSRWLockExclusive(&g_pending_lock);
 
     original(character_body, dt); // Native physics owns exactly one update.
+    ServiceGameplayPalmResolver(g_image, character_body);
     const Vec3 after = Read<Vec3>(
         character_body, GameplayContract().character_position_offset);
     const std::array<float, 3> body_after{after.x, after.y, after.z};
@@ -745,8 +753,8 @@ void PublishDirectLocomotion(void* player, float dt) noexcept {
     move.y = plan.move_y;
     const auto direction = runtime::HeadRelativeMoveDirection(
         g_direct_head_world_pose, move);
-    const auto displacement = runtime::LocomotionDisplacement(
-        direction, dt, 1.0F, false, g_direct_sprinting);
+    const auto displacement = RequiemLocomotionDisplacement(
+        direction, dt, g_direct_sprinting);
     const bool published = QueueLocomotionDisplacement(player, displacement);
     if (ShouldMarkDirectLocomotionAccepted(plan, published)) {
         MarkDirectLocomotionAccepted(player);
@@ -1007,6 +1015,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     auto* const previous_player = g_current_player;
     g_intents = &intents;
     g_current_player = player;
+    const int interaction_state_before = Read<int>(
+        player, contract.primary_state_index_offset);
     LARGE_INTEGER update_started{}, update_finished{};
     QueryPerformanceCounter(&update_started);
     if (original != nullptr) original(handler, dt);
@@ -1015,6 +1025,11 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     thread_local int observed_state = -1;
     const int current_state = Read<int>(player,
         contract.primary_state_index_offset);
+    if (gameplay_active && frame.input.state.interact.just_pressed) {
+        probe::WriteLog("Requiem VR interact state=%ld->%ld",
+            static_cast<long>(interaction_state_before),
+            static_cast<long>(current_state));
+    }
     if (player != observed_player) observed_state = -1;
     if (current_state == 2 && observed_state != 2)
         g_native_move_enters.fetch_add(1, std::memory_order_relaxed);
@@ -1056,7 +1071,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                     static_cast<double>(update_count)
                 : 0.0;
             probe::WriteLog(
-                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
+                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu native_grab_enter=%llu native_move_enter=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu tool_render_aligned=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
                 static_cast<double>(timing.world_frames) / elapsed_seconds,
                 mean_render_ms, phase_ms(timing.left_eye_ticks),
                 phase_ms(timing.right_eye_ticks),
@@ -1068,6 +1083,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                 static_cast<unsigned long long>(interaction.redirected_rays),
                 static_cast<unsigned long long>(interaction.ray_hits),
                 static_cast<unsigned long long>(interaction.ray_winners),
+                static_cast<unsigned long long>(interaction.native_grab_enters),
+                static_cast<unsigned long long>(interaction.native_move_enters),
                 static_cast<unsigned long long>(interaction.grab_enters),
                 static_cast<unsigned long long>(interaction.grabs_acquired),
                 static_cast<unsigned long long>(interaction.grabs_released),
@@ -1078,6 +1095,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                 static_cast<unsigned long long>(interaction.mechanisms_acquired),
                 static_cast<unsigned long long>(interaction.tools_attached),
                 static_cast<unsigned long long>(interaction.tools_native),
+                static_cast<unsigned long long>(interaction.tools_render_aligned),
                 static_cast<unsigned long long>(g_vr_inventory_presses.exchange(
                     0, std::memory_order_relaxed)),
                 static_cast<unsigned long long>(g_vr_jump_presses.exchange(

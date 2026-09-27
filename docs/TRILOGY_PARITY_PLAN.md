@@ -2,8 +2,8 @@
 
 This is the capability ledger for proving that Penumbra VR is a framework rather
 than three unrelated ports. Rework `23c890f` is the Overture behavioral
-reference; Black Plague is the second-consumer proof; Requiem is the planned
-third consumer.
+reference; Black Plague is the second-consumer proof; Requiem is the active
+third consumer with its own validation gates.
 
 ## What counts as ported
 
@@ -21,7 +21,7 @@ Validation uses the common ladder:
 
 `planned` → `implemented` → `host-tested` → `live-tested` → `headset-validated` → `supported`
 
-## Framework-readiness gate before Requiem gameplay
+## Framework-readiness gate before Requiem gameplay (passed for Hito 2)
 
 Requiem gameplay becomes the active milestone when each demonstrated Overture
 runtime/gameplay capability is one of:
@@ -69,8 +69,8 @@ shared binding graph and available-hardware backend paths must remain green.
 
 ## Current Black Plague blockers
 
-The framework-readiness gate is primarily blocked by focused validation and a
-few missing consumers, not by the absence of a VR foundation:
+These remaining Black Plague items are release/regression gates. They did not
+block the start of Requiem gameplay integration:
 
 - presentation pacing/focus regression on the current candidate;
 - physical wall/tunnel/mixed-motion comfort after the latest reconciliation;
@@ -88,107 +88,56 @@ few missing consumers, not by the absence of a VR foundation:
   shared exposure/saturation/contrast/gamma constants in isolation;
 - representative chapter progression after the visual pipeline is corrected.
 
-The detailed current work order is in `../ROADMAP.md`; the repeatable hardware
+The detailed current work order is in `ROADMAP.md`; the repeatable hardware
 procedure is in `VR_HEADSET_TEST_CHECKLIST.md`.
 
-## Requiem integration state (2026-09-26)
+## Requiem integration state (2026-09-27)
 
-The canonical Requiem image has its own verified static `RenderWorld`,
-`UpdateRenderList`, `DrawAll`, native body update/move and player movement
-boundaries in the Requiem manifest. The shared ALUT path now dispatches by
-exact host hash to a Requiem probe. That probe consumes common OpenVR session,
-camera/eye math, HPL camera adapter, GL eye targets, scissor mapping and stereo
-render policy for an initial rotational stereo path. RQ-01 confirmed ALUT/probe
-startup, a submitted stereo world and a scene visible in PSVR2. Turning the
-head exposed missing geometry until native mouse yaw changed: the native
-render-list pass still used the game camera before the VR eye pass. The proven
-Black Plague HMD visibility/frustum boundary is now adapted to Requiem's own
-exact callsite and reuses one compositor pose for visibility and both eyes.
-RQ-02 confirmed on PSVR2 that head-only turning no longer exposes missing
-geometry, so this specific visibility path is headset-validated. Requiem's
-pre-gameplay UI does not traverse `RenderWorld`; the existing SDL swap callback
-now captures that 2D framebuffer into the shared `OpenGlMenuFrame`, holds a
-stable tracked panel anchor, and submits it only when no stereo world was
-submitted in the current frame. A Requiem-local frame gate prevents duplicate
-compositor submission. The full Release build and all 43 host tests pass; the
-menu path passed RQ-03 on PSVR2: boot, menu navigation and the transition into
-gameplay can be completed with the headset on, and the 2D panel hands off to the
-stereo world. This presentation path is now headset-validated. Exact Requiem
-gameplay evidence now maps `ButtonHandler::Update`, player access, both native
-move callsites/state gates and the physical body owner. A Requiem gameplay
-bridge consumes shared controller actions and HMD-relative locomotion policy,
-preserves native keyboard/controller priority, injects only X/Z at the native
-physical owner and leaves Y/gravity/jump native-owned. The exact-build
-contract is host-tested. RQ-04 exercised basic Sense movement in the running
-game; precise HMD heading, each axis and long-term stability remain
-unverified. This remains **partial live integration**, not gameplay parity.
+The allowlisted Steam executable has its own initialized-image manifest and
+backend. Requiem consumes the common OpenVR session, stereo presentation,
+tracking, input, locomotion, crouch, accepted physical body motion, hand
+visuals, free-body grab/contact math, snap continuity and spatial UI through
+Requiem-specific renderer, player, physics and input boundaries. These are
+implemented/host-tested capabilities, not a blanket runtime support claim.
 
-RQ-04 confirmed basic Sense-left movement in the headset and a clean gameplay
-mirror on the monitor. Exact HMD-versus-body heading and individual axes were
-not isolated by that report. Requiem's own `ChangeMoveState` entry (`0x9CBA0`),
-move-state index (`+0x2D4`) and state 4 crouch handler (`0xAF364`) were verified
-offline in the initialized executable. The shared Hybrid crouch policy now
-drives the native state on the game thread with a null-body guard and retains
-native keyboard ownership. RQ-05 observed repeated native crouch/stand
-transitions without a crash or blocked stand, but physical crouch exposed a
-native camera-height jump. Requiem's rotation-only world view had retained
-native camera Y; the backend now reads body Y at its existing physical owner
-and consumes shared `VrTrackingSpace` for HMD height and button-only posture
-offset, as BP does. RQ-06 showed this first vertical correction still dropped
-the eye too far: it had used the native capsule **centre** as the tracking
-feet anchor. Rework `23c890f` anchors to `GetFeetPosition()`. The exact
-Requiem image proves active capsule height at `iCharacterBody+0xC8` via
-`GetSize`/`SetActiveSize`; the backend now uses centre minus half that height.
-RQ-07 reports physical crouch now appeared correct in the headset; the stick
-speed impression remains, and its final log block fell to 55.6 world FPS with
-5.9 ms mean RenderStereo time. The exact Requiem physics-world callsite now
-brackets native body Update for accepted X/Z motion, while the existing
-physical owner injects combined room-scale and stick requests. Shared Rework
-reconciliation and filtered render prediction are consumed through Requiem's
-own boundary. Eleven exact native gameplay queries now receive Sense actions
-after executing their original queries. These additions are host/static-tested
-and awaited RQ-08; button interaction does not prove hand grab or spatial
-selection. RQ-08 subsequently validated mixed room-scale/stick movement,
-physical crouch, wall response and flat floor objects in the headset; it also
-exposed an invisible R1 inventory that stopped stick movement, no observed R2
-interaction, and a short-feeling jump. The exact Requiem inventory activation
-changes native input mode to 5 while the earlier compositor submit omitted the
-later 2D draw. The next host-tested probe defers that submit to desktop capture
-for active inventory/notebook, maps 59 exact native queries and five menu
-pointer calls, requests recenter, and draws controller-anchored Rework hand
-meshes. RQ-09 was the next validation gate; visible hands did not prove spatial
-selection or grabbing. Right-stick turning and the perceived jump height were
-still unresolved. That probe recorded mean native button-update time and Sense
-button counters. Three startup dumps show
-the same SDL mutex fault signature as BP, with no established cause.
+Headset reports confirm boot/menu to gameplay, stereo head tracking without
+the former head-only culling gap, basic Sense-left motion, a usable gameplay
+monitor mirror, room-scale motion mixed with stick, wall collision, physical
+crouch, visible hands and accessible inventory/notebook. Jump felt better
+after the Requiem-local adjustment. Tool alignment can still drift during stick
+motion; lateral speed feels different without a measurement. Some sessions
+showed a late cadence drop of unknown ownership.
 
-RQ-09 headset evidence confirmed visible hands and usable native UI, while R2
-reached the native input query without acquiring an object; the flashlight and
-glowstick floated, and frame time worsened in the stereo-render phase late in
-the session. The next Requiem adapter consumes the existing shared grab pose,
-interaction reach, mechanism servo and snap policy through Requiem's own
-verified ray, Grab/Move state, body and hinge/slider boundaries. The native
-state retains pickup, release and joint lifecycle. Tool sockets are reused
-only because the installed HUD model assets are physically shared with BP.
-Gameplay messages/subtitles are captured once from Requiem's native DrawAll
-queue and drawn on the Rework message plane in both eyes. RQ-10 headset
-evidence confirmed R2 input and selection refreshes but no Grab/Move state
-entry; the clip showed a floating flare at ~0:55, flashlight slide at ~1:08
-and crouch stuck after physically standing with inventory open. The log showed
-no repeat of the severe RQ-09 slowdown. RQ-11 host code ports BP's ranked
-five-ray hand selection, preserves the Requiem native eligibility callback,
-and separates ray hits, selected winners and native state entries in telemetry.
-Rework HUD grip profiles now cover flashlight, glowstick and flare; inventory
-and notebook use BP/Rework spatial panel geometry, and stance tracking
-continues during these UIs. These changes are **host-tested, not live/headset
-validated**. Palm-volume and magnetic acquisition remain absent; the RQ-11
-log will discriminate whether they are needed. A local Requiem-only
-`JumpStartForce` trial changes 350 to 495, hypothesizing roughly twice the
-ballistic height; actual jump height is unmeasured and frog mode is unchanged.
+**Current blocker: headset validation of physical interaction parity.** RQ-13
+reported difficult stone/note pickup and an apparent forward stone impulse when
+stepping back. Its log had nearby VR ray candidates, including mass-26 entities,
+but zero unconditional native Grab/Move entries, so that impulse did not come
+from the VR hold path. Exact-image inspection then mapped native accepted-pick
+ownership and the Requiem palm collision ABI.
+
+The current host-tested batch ports Black Plague's stronger reusable hand
+ownership pattern into the Requiem backend. A backend-owned palm box is resolved
+against the exact Requiem physics world on the existing character-body update
+owner; palm overlap is attempted before ranked ray fallback while preserving
+native eligibility. Grab and Move exclude the held body before a synchronous
+fresh palm generation, use the resolved palm and gameplay yaw epoch while held,
+and clear ownership on failed acquisition/leave. Move also reuses a fresh
+selected surface point instead of forcing a centre anchor. Release compilation
+and **44/44** host tests pass for this batch. It remains unvalidated in the
+headset, so no support claim follows from it.
+
+The inventory-item magnetic acquisition boundary remains unported. Rework and
+BP apply magnetic range only to items, with subtype-specific reach and hand/head
+solid sight, never to stones, doors or arbitrary mechanisms. Requiem
+item-list/bounds/subtype evidence must be completed before consuming that
+policy.
+
+Requiem is **not supported**. See `CLOSURE_STATUS.md` for the single current
+manual gate and `SUPPORTED_BUILDS.md` for validation terms.
 
 ## Requiem implementation contract
 
-When the gate closes:
+The current integration follows this contract:
 
 1. fingerprint and research Requiem independently;
 2. map renderer, player/body, input, UI, interaction and audio boundaries from

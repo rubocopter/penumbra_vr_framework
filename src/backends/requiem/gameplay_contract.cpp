@@ -1,5 +1,6 @@
 #include "gameplay_contract.hpp"
 
+#include "vr_locomotion.hpp"
 #include "vr_settings.hpp"
 #include "vr_tracking_space.hpp"
 
@@ -56,6 +57,17 @@ constexpr RequiemGameplayContract kContract{
 
 const RequiemGameplayContract& GameplayContract() noexcept {
     return kContract;
+}
+
+std::array<float, 3> RequiemLocomotionDisplacement(
+    const std::array<float, 3>& world_direction,
+    float delta_seconds,
+    bool sprinting) noexcept {
+    // Requiem requests twice the standard 2.25 m/s sprint; walking stays 1.5 m/s.
+    constexpr float kRequiemSprintMultiplier = 2.0F;
+    return runtime::LocomotionDisplacement(
+        world_direction, delta_seconds,
+        sprinting ? kRequiemSprintMultiplier : 1.0F, false, sprinting);
 }
 
 DirectLocomotionPublication PlanDirectLocomotionPublication(

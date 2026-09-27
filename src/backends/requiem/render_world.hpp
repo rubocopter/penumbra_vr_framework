@@ -23,6 +23,8 @@ struct RequiemInteractionCounters final {
     std::uint64_t redirected_rays = 0;
     std::uint64_t ray_hits = 0;
     std::uint64_t ray_winners = 0;
+    std::uint64_t native_grab_enters = 0;
+    std::uint64_t native_move_enters = 0;
     std::uint64_t grab_enters = 0;
     std::uint64_t grabs_acquired = 0;
     std::uint64_t grabs_released = 0;
@@ -31,6 +33,7 @@ struct RequiemInteractionCounters final {
     std::uint64_t mechanisms_acquired = 0;
     std::uint64_t tools_attached = 0;
     std::uint64_t tools_native = 0;
+    std::uint64_t tools_render_aligned = 0;
 };
 
 [[nodiscard]] RequiemInteractionCounters ConsumeInteractionCounters() noexcept;

@@ -30,7 +30,7 @@ levels in `docs/SUPPORTED_BUILDS.md`.
 - [x] Deployment payload metadata and maintainer-recommended settings metadata
   established as future unified-installer inputs.
 
-## Deferred validation backlog — Black Plague framework readiness
+## Deferred validation backlog — Black Plague release regression
 
 The closure execution has delimited the remaining Black Plague items that need
 headset/runtime evidence. `CLOSURE_STATUS.md` owns that decision. These items
@@ -148,66 +148,37 @@ milestone while no new discriminating offline Black Plague work exists.
 - [ ] Exercise available controller families and record per-device gaps without
   inferring support from JSON bindings alone.
 
-## Requiem
+## Requiem — active Hito 2
 
-**Current milestone.** RQ-01 established live stereo gameplay presentation,
-RQ-02 headset-validated the HMD visibility/culling boundary, and RQ-03
-headset-validated boot/menu presentation plus handoff into gameplay. RQ-04
-confirmed basic Sense movement and the gameplay monitor mirror. RQ-05 confirmed
-native crouch transitions but exposed a physical-crouch camera jump. The
-first Rework/BP tracked-height correction was tested in RQ-06: it still lowered
-the view too far because it used the capsule centre. RQ-07 reports the feet
-anchor now appeared correct, while lateral-speed perception and a late
-cadence drop remain unresolved. Room-scale body motion and native button
-actions were host/static-tested before RQ-08; its result and RQ-09 gate are below.
-
-- [x] Map Requiem renderer and initial player/body movement boundaries from its
-  own exact executable evidence.
-- [x] Map the Requiem `cButtonHandler::Update`, player access, movement
-  permission/state and native body-tick ownership required for VR locomotion.
-- [x] Consume shared controller-input and locomotion capability families through Requiem-specific
-  adapters/profiles.
-- [x] Implement and headset-validate tracked stereo plus boot/menu presentation
-  without copying Black Plague RVAs/layouts.
-- [x] Implement and host-test VR input and HMD-relative body locomotion through Requiem's own
-  exact boundaries, reusing the proven Black Plague/shared policy where valid.
-- [x] RQ-04: validate basic Sense-left movement and gameplay monitor mirror in
-  the headset/desktop. A separate HMD-versus-body heading check remains.
-- [x] Map and host-test native Requiem crouch through its own move-state
-  boundary and the shared physical/button policy.
-- [x] RQ-05: capture native crouch/stand transitions and identify the camera
-  height defect; speed and HMD heading reports remain inconclusive.
-- [x] RQ-06: confirm over-deep physical crouch, stable lateral-versus-forward
-  speed perception independent of crouch, and late capture-frame slowdown.
-- [x] RQ-07: the user reports physical crouch seemed correct; stick-speed
-  asymmetry remains subjective. The last five-second log block fell to 55.6
-  world FPS while render duration stayed at 5.9 ms; cause remains open.
-- [x] Host-test Requiem physical room-scale through its own body update and
-  collision owner; map eleven native gameplay button queries for Sense.
-- [x] RQ-08: room-scale/wall, mixed stick motion and crouch worked in the
-  reported headset session; R1 opened invisible native UI and blocked movement,
-  R2 had no observed interaction, and jump felt short. No persistent new pacing
-  loss or crash was reported.
-- [x] Prepare one RQ-09 probe: exact Requiem UI queries/pointer, deferred native
-  panel presentation, recenter and controller-anchored Rework hand visuals.
-- [x] RQ-09: the headset session showed visible hands, usable menu/inventory/
-  notebook and working physical crouch; R2 arrived at the native query but
-  could not acquire an object. Tools floated and world render time rose sharply.
-- [x] Map Requiem's exact native selection ray, Grab and Move states, free-body
-  methods and hinge/slider joint families; host-test the shared hand grab,
-  mechanism policy, snap-held continuity, tool sockets and gameplay 2D overlay.
-- [x] RQ-10: headset trial reached R2 and refreshed selection but entered no
-  Grab/Move state. Flare floated, flashlight slid, and standing with inventory
-  open left crouch active. No severe late pacing loss recurred in this session.
-- [x] Prepare one RQ-11 probe: BP-ranked palm rays with selection diagnostics,
-  Rework tool profiles including flare, spatial inventory/notebook and stance
-  updates during UI. Stage a reversible Requiem-only jump-force trial.
-- [ ] RQ-11: discriminate contact/selection/native entry on one free object;
-  then test hold, release, snap while held, one mechanism, tool attachment,
-  inventory stance, spatial panels and one known platform jump. Use the same
-  log for pacing; stop if interaction still cannot be acquired.
-- [ ] Complete representative headset validation while keeping Overture and
-  Black Plague regression gates green.
+- [x] Map exact renderer, player/body, input, UI and native movement boundaries
+  from Requiem's initialized executable; consume common runtime through its
+  own adapter.
+- [x] Headset exercise boot/menu/gameplay, stereo head tracking, Sense-left
+  movement, gameplay mirror, physical/stick locomotion, wall collision, crouch,
+  visible hands, inventory and notebook in the reported routes.
+- [x] Host-test Requiem-native Grab/Move hooks, shared hand/contact mechanics,
+  snap continuity, tool sockets and world UI. These are not yet validated as
+  usable interaction in the headset.
+- [x] RQ-13 runtime: candidate rays found nearby entities but native Grab/Move
+  entries stayed zero; stone/note pickup remained hard, combined text/diary
+  overlay was too large. Do not retune grab forces from this result.
+- [x] RQ-14 host: surface contact anchor conditional on native Grab, overlay
+  reframe, post-R2 state trace and native accepted-body/type/range telemetry.
+- [x] Port the proven BP palm ownership path into Requiem: exact-build palm box,
+  collision-resolved palm, palm-overlap acquisition with native eligibility,
+  held-body exclusion, fresh-generation refresh, shared yaw epoch and surface
+  anchor for both Grab and Move. Release build and 44/44 host tests pass.
+- [ ] One interaction-only headset session: stone plus diary/item pickup from a
+  surface/edge/floor, short stick movement while held, one snap turn, release/
+  throw, and one representative door/drawer/lever when available. Confirm hand
+  blocking/sliding and stable attachment; collect the log on failed acquisition
+  or propulsion. Do not expand the headset pass until this gate is usable.
+- [ ] Port proven Rework/BP item-only magnetic pickup after exact Requiem
+  body-list, bounding-volume and item-subtype boundaries are verified. Keep
+  solid hand/head sight and native eligibility; do not extend props/mechanisms.
+- [ ] Validate representative interaction, transitions/loading, pacing,
+  tool alignment and shutdown before claiming support. Preserve Overture/BP
+  regression gates for Hito 3.
 
 ## Unified installer and release
 

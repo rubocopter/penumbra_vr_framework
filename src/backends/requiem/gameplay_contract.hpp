@@ -59,6 +59,10 @@ struct DirectLocomotionPublication final {
 };
 
 [[nodiscard]] const RequiemGameplayContract& GameplayContract() noexcept;
+[[nodiscard]] std::array<float, 3> RequiemLocomotionDisplacement(
+    const std::array<float, 3>& world_direction,
+    float delta_seconds,
+    bool sprinting) noexcept;
 [[nodiscard]] DirectLocomotionPublication PlanDirectLocomotionPublication(
     bool native_axis_observed,
     float requested_x,

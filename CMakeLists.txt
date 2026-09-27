@@ -287,6 +287,7 @@ pvr_enable_warnings(pvr_black_plague_probe)
 add_library(pvr_requiem_backend STATIC
     src/backends/requiem/gameplay_bridge.cpp
     src/backends/requiem/gameplay_contract.cpp
+    src/backends/requiem/hand_contact_probe.cpp
     src/backends/requiem/render_world.cpp
 )
 target_include_directories(pvr_requiem_backend PUBLIC
@@ -398,6 +399,16 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_hand_contact_probe_test PRIVATE pvr_vr_math)
     pvr_enable_warnings(pvr_hand_contact_probe_test)
     add_test(NAME hand_contact_probe COMMAND pvr_hand_contact_probe_test)
+
+    add_executable(pvr_requiem_hand_contact_probe_test
+        tests/requiem_gameplay/hand_contact_probe_test.cpp
+        src/backends/requiem/hand_contact_probe.cpp)
+    target_include_directories(pvr_requiem_hand_contact_probe_test PRIVATE
+        src/backends/requiem src/runtime)
+    target_link_libraries(pvr_requiem_hand_contact_probe_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_requiem_hand_contact_probe_test)
+    add_test(NAME requiem_hand_contact_probe
+        COMMAND pvr_requiem_hand_contact_probe_test)
 
     add_executable(pvr_black_plague_body_adapter_test
         tests/black_plague_body/black_plague_body_adapter_test.cpp

@@ -10,7 +10,7 @@ Penumbra VR Framework is one user-facing project, but the three games do not nee
 
 - Overture is source-integrated through the Framework-owned HPL1 product host.
 - Black Plague uses an exact-build binary backend.
-- Requiem will use exact-build research where closed-game evidence is required.
+- Requiem uses exact-build research and target-owned hooks for its closed-game renderer, player, physics, input and interaction boundaries.
 
 Do not force a universal DLL/backend flow where the games demonstrably differ.
 
