@@ -28,6 +28,26 @@
       "initializedMemoryEntropyBitsPerByte": 6.43634
     }
   },
+  "staticImportSeam": {
+    "status": "confirmed-on-disk-only",
+    "dll": "alut.dll",
+    "firstThunkRva": "0x00273898",
+    "imports": [
+      {
+        "name": "alutGetError",
+        "iatRva": "0x00273898"
+      },
+      {
+        "name": "alutLoadWAVFile",
+        "iatRva": "0x0027389C"
+      },
+      {
+        "name": "alutUnloadWAV",
+        "iatRva": "0x002738A0"
+      }
+    ],
+    "evidence": "PE import directory of the exact canonical executable; symbol names match Black Plague's ALUT imports. Runtime loading and proxy compatibility are unverified."
+  },
   "symbols": {
     "hpl.cLowLevelGraphicsSDL.SetMatrix": {
       "status": "confirmed-static-mapping",

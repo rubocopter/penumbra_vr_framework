@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x86",
+  "redistributable": "Microsoft.VC143.CRT",
+  "fileVersion": "14.44.35211.0",
+  "files": {
+    "msvcp140.dll": "97E71A3C697FB1AB3AF777DB39009E4602525E8C3AFF0837ECC7031CBA188165",
+    "vcruntime140.dll": "A9D7732A3C3DE09F0601A7FA2555093DCB49F08E2FC62A86091461F0F38393ED"
+  }
+}

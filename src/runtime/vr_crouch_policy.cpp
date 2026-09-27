@@ -80,7 +80,10 @@ VrButtonState VrPhysicalCrouchPolicy::Update(
     const bool desired_crouch = physical_crouch_ || button_latched_;
     if (desired_crouch) {
         stand_release_pending_ = false;
-    } else if (effective_crouch_ && stand_blocked) {
+    } else if (stand_blocked) {
+        // A binary backend can learn that native standing was rejected only
+        // after this policy emitted the release in the preceding frame. The
+        // verified blocked native crouch still needs Rework's release hold.
         stand_release_pending_ = true;
     } else if (!stand_blocked) {
         stand_release_pending_ = false;

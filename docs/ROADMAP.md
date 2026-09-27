@@ -72,7 +72,8 @@ deferred as release tooling.
   projection/clamp rule for accepted physical motion.
 - [ ] Revalidate mixed stick + room-scale contact against low/dynamic props while
   retaining native pure-stick stair/ledge stepping.
-- [ ] Close Hybrid crouch release-hold and blocked-stand/low-ceiling recovery.
+- [ ] Headset-revalidate Hybrid release-hold and blocked-stand/low-ceiling
+  recovery after the host-tested delayed native-feedback fix.
 - [ ] Validate VR footstep cadence/surface selection and record any remaining
   native head-bob/body-animation comfort issue separately.
 - [ ] Exercise seated/standing, explicit recenter and tracking-loss recovery.

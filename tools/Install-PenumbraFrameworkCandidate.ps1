@@ -4,6 +4,8 @@ param(
     [string]$GamePath,
     [string]$SteamRoot,
     [string[]]$ManualPaths = @(),
+    [string[]]$Selections,
+    [string]$LogPath,
     [switch]$LargeAddressAware,
     [switch]$Restore,
     [switch]$Recover,
@@ -65,6 +67,50 @@ function Assert-PackageIntegrity([string]$root) {
 }
 
 Assert-PackageIntegrity $packageRoot
+$packageManifestHash = (Get-FileHash -LiteralPath (Join-Path $packageRoot 'SHA256SUMS.txt') -Algorithm SHA256).Hash
+if (-not $LogPath) {
+    $localAppData = [Environment]::GetFolderPath('LocalApplicationData')
+    if (-not $localAppData) { throw 'Cannot resolve a local installer log directory.' }
+    $LogPath = Join-Path $localAppData 'PenumbraVR/installer.jsonl'
+}
+$LogPath = [System.IO.Path]::GetFullPath($LogPath)
+
+function Write-InstallerEvent([string]$operation, [string]$game,
+    [string]$targetPath, [string]$result, [string]$detail = '') {
+    $record = [ordered]@{
+        timeUtc = [DateTime]::UtcNow.ToString('o')
+        packageManifestSha256 = $packageManifestHash
+        operation = $operation
+        game = $game
+        path = $targetPath
+        result = $result
+    }
+    if ($detail) { $record.detail = $detail }
+    $directory = Split-Path -Parent $LogPath
+    New-Item -ItemType Directory -Path $directory -Force | Out-Null
+    [System.IO.File]::AppendAllText($LogPath,
+        (($record | ConvertTo-Json -Compress) + "`n"),
+        [System.Text.UTF8Encoding]::new($false))
+}
+
+function Invoke-LoggedInstaller([string]$operation, [string]$game,
+    [string]$targetPath, [string]$installer, [hashtable]$installerArgs) {
+    Write-InstallerEvent $operation $game $targetPath 'started'
+    try {
+        & $installer @installerArgs
+    } catch {
+        $failure = $_
+        try { Write-InstallerEvent $operation $game $targetPath 'failed' $failure.Exception.Message }
+        catch { Write-Warning "Installer also failed to write log $LogPath`: $($_.Exception.Message)" }
+        throw $failure
+    }
+    try { Write-InstallerEvent $operation $game $targetPath 'completed' }
+    catch { Write-Warning "Installer completed but failed to write log $LogPath`: $($_.Exception.Message)" }
+}
+
+if ($PSBoundParameters.ContainsKey('Selections') -and ($Recover -or $Repair -or $List)) {
+    throw '-Selections applies only to install or restore; use an explicit game and path for repair or recovery.'
+}
 
 if ($Recover) {
     if ($Game -notin @('Overture', 'BlackPlague') -or -not $GamePath -or $Restore -or
@@ -79,12 +125,16 @@ if ($Recover) {
         } elseif ($leaf -ieq 'redist') {
             Split-Path -Parent $requested
         } else { $requested }
-        & $overtureInstaller -InstallRoot $gameRoot -Recover
+        Invoke-LoggedInstaller 'recover' 'Overture' $gameRoot $overtureInstaller @{
+            InstallRoot = $gameRoot; Recover = $true
+        }
     } else {
         $executable = if ($leaf -ieq 'Penumbra.exe') { $requested }
             elseif ($leaf -ieq 'redist') { Join-Path $requested 'Penumbra.exe' }
             else { Join-Path $requested 'redist/Penumbra.exe' }
-        & $blackPlagueInstaller -GamePath $executable -Recover
+        Invoke-LoggedInstaller 'recover' 'Black Plague' $executable $blackPlagueInstaller @{
+            GamePath = $executable; Recover = $true
+        }
     }
     return
 }
@@ -102,12 +152,20 @@ if ($Repair) {
         } elseif ($leaf -ieq 'redist') {
             Split-Path -Parent $requested
         } else { $requested }
-        & $overtureInstaller -InstallRoot $gameRoot -PackageRoot (Join-Path $packageRoot 'products/overture') -Repair
+        Invoke-LoggedInstaller 'repair' 'Overture' $gameRoot $overtureInstaller @{
+            InstallRoot = $gameRoot
+            PackageRoot = Join-Path $packageRoot 'products/overture'
+            Repair = $true
+        }
     } else {
         $executable = if ($leaf -ieq 'Penumbra.exe') { $requested }
             elseif ($leaf -ieq 'redist') { Join-Path $requested 'Penumbra.exe' }
             else { Join-Path $requested 'redist/Penumbra.exe' }
-        & $blackPlagueInstaller -GamePath $executable -BuildRoot (Join-Path $packageRoot 'products/black_plague/build') -Repair
+        Invoke-LoggedInstaller 'repair' 'Black Plague' $executable $blackPlagueInstaller @{
+            GamePath = $executable
+            BuildRoot = Join-Path $packageRoot 'products/black_plague/build'
+            Repair = $true
+        }
     }
     return
 }
@@ -163,43 +221,79 @@ $choices = @($found | Where-Object { $_.Installable -and $_.Game -in @('Overture
 if ($Game -eq 'Overture') { $choices = @($choices | Where-Object { $_.Game -eq 'Overture' }) }
 if ($Game -eq 'BlackPlague') { $choices = @($choices | Where-Object { $_.Game -eq 'Black Plague' }) }
 if ($GamePath) {
-    $requestedPath = [System.IO.Path]::GetFullPath($GamePath)
-    $choices = @($choices | Where-Object { $_.Path -ieq $requestedPath })
+    $requestedPath = [System.IO.Path]::GetFullPath($GamePath).TrimEnd('\', '/')
+    $choices = @($choices | Where-Object {
+        $_.Path.TrimEnd('\', '/') -ieq $requestedPath -or
+        $_.InstallRoot.TrimEnd('\', '/') -ieq $requestedPath -or
+        (Split-Path -Parent $_.Path).TrimEnd('\', '/') -ieq $requestedPath
+    })
 }
 if (-not $choices.Count) {
     throw 'No compatible candidate matched the requested game and path. Unknown builds are never modified.'
 }
-if ($choices.Count -eq 1) {
-    $selected = $choices[0]
+$selectedEntries = @()
+if ($choices.Count -eq 1 -and -not $PSBoundParameters.ContainsKey('Selections')) {
+    $selectedEntries = @($choices[0])
 } else {
-    $answer = Read-Host 'Enter the number of the game to modify'
-    $number = 0
-    if (-not [int]::TryParse($answer, [ref]$number) -or
-        $number -lt 1 -or $number -gt $found.Count) {
-        throw 'Invalid selection; no game was modified.'
+    $rawSelections = if ($PSBoundParameters.ContainsKey('Selections')) {
+        @($Selections)
+    } else {
+        @(Read-Host 'Enter one or more game numbers, separated by commas')
     }
-    $selected = $found[$number - 1]
-    if (-not @($choices | Where-Object { $_.Path -ieq $selected.Path }).Count) {
-        throw 'Selected game is not compatible with this candidate.'
+    $numbers = @()
+    foreach ($selection in $rawSelections) {
+        foreach ($piece in @($selection -split ',')) {
+            $number = 0
+            if (-not [int]::TryParse($piece.Trim(), [ref]$number)) {
+                throw 'Invalid selection; no game was modified.'
+            }
+            $numbers += $number
+        }
+    }
+    if (-not $numbers.Count) {
+        throw 'Select at least one game; no game was modified.'
+    }
+    $seenNumbers = [System.Collections.Generic.HashSet[int]]::new()
+    foreach ($number in $numbers) {
+        if ($number -lt 1 -or $number -gt $found.Count -or
+            -not $seenNumbers.Add($number)) {
+            throw 'Invalid or duplicate selection; no game was modified.'
+        }
+        $candidate = $found[$number - 1]
+        if (-not @($choices | Where-Object { $_.Path -ieq $candidate.Path }).Count) {
+            throw 'Selected game is not compatible with this candidate; no game was modified.'
+        }
+        $selectedEntries += $candidate
     }
 }
+if ($LargeAddressAware -and @($selectedEntries | Where-Object { $_.Game -eq 'Overture' }).Count) {
+    throw 'The LAA transform option applies only to the exact-build Black Plague candidate.'
+}
 
-Write-Host ("{0} {1}: {2}" -f $(if ($Restore) { 'Restoring' } else { 'Installing' }),
-    $selected.Game, $selected.Path)
-if ($selected.Game -eq 'Black Plague') {
-    $args = @{ GamePath = $selected.Path; BuildRoot = Join-Path $packageRoot 'products/black_plague/build' }
-    if ($Restore) { $args.Restore = $true }
-    if ($LargeAddressAware) { $args.LargeAddressAware = $true }
-    & $blackPlagueInstaller @args
-} elseif ($selected.Game -eq 'Overture') {
-    if ($LargeAddressAware) {
-        throw 'The LAA transform option applies only to the exact-build Black Plague candidate.'
+foreach ($selected in $selectedEntries) {
+    Write-Host ("{0} {1}: {2}" -f $(if ($Restore) { 'Restoring' } else { 'Installing' }),
+        $selected.Game, $selected.Path)
+    try {
+        if ($selected.Game -eq 'Black Plague') {
+            $installerArgs = @{
+                GamePath = $selected.Path
+                BuildRoot = Join-Path $packageRoot 'products/black_plague/build'
+            }
+            if ($Restore) { $installerArgs.Restore = $true }
+            if ($LargeAddressAware) { $installerArgs.LargeAddressAware = $true }
+            Invoke-LoggedInstaller $(if ($Restore) { 'restore' } else { 'install' }) `
+                'Black Plague' $selected.Path $blackPlagueInstaller $installerArgs
+        } elseif ($selected.Game -eq 'Overture') {
+            $installerArgs = @{
+                InstallRoot = $selected.InstallRoot
+                PackageRoot = Join-Path $packageRoot 'products/overture'
+                ExpectedExecutableSha256 = $selected.SHA256
+            }
+            if ($Restore) { $installerArgs.Restore = $true }
+            Invoke-LoggedInstaller $(if ($Restore) { 'restore' } else { 'install' }) `
+                'Overture' $selected.Path $overtureInstaller $installerArgs
+        }
+    } catch {
+        throw "Framework candidate stopped at $($selected.Game) ($($selected.Path)); earlier selections may have completed independently: $($_.Exception.Message)"
     }
-    $args = @{
-        InstallRoot = $selected.InstallRoot
-        PackageRoot = Join-Path $packageRoot 'products/overture'
-        ExpectedExecutableSha256 = $selected.SHA256
-    }
-    if ($Restore) { $args.Restore = $true }
-    & $overtureInstaller @args
 }

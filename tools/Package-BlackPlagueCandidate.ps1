@@ -20,6 +20,30 @@ if (-not (Test-Path -LiteralPath $cachePath -PathType Leaf) -or
     -not (Select-String -LiteralPath $cachePath -Pattern '^PENUMBRA_VR_OPENVR_SDK:[^=]+=.+$' -Quiet)) {
     throw 'Release build lacks a configured real OpenVR SDK.'
 }
+$configuredSource = @(Select-String -LiteralPath $cachePath -Pattern '^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$' |
+    ForEach-Object { $_.Matches[0].Groups[1].Value })
+if ($configuredSource.Count -ne 1 -or
+    [System.IO.Path]::GetFullPath($configuredSource[0]).TrimEnd('\', '/') -ine
+        [System.IO.Path]::GetFullPath($repoRoot).TrimEnd('\', '/')) {
+    throw 'Black Plague Release build belongs to a different source checkout; configure the current repository before packaging.'
+}
+$configuredSdk = @(Select-String -LiteralPath $cachePath -Pattern '^PENUMBRA_VR_OPENVR_SDK:[^=]+=(.+)$' |
+    ForEach-Object { $_.Matches[0].Groups[1].Value })
+$pinnedSdk = Join-Path $repoRoot 'products/overture/dependencies/openvr-2.15.6'
+if ($configuredSdk.Count -ne 1 -or
+    [System.IO.Path]::GetFullPath($configuredSdk[0]).TrimEnd('\', '/') -ine
+        [System.IO.Path]::GetFullPath($pinnedSdk).TrimEnd('\', '/')) {
+    throw 'Black Plague Release build must use this checkout pinned OpenVR SDK.'
+}
+
+# The candidate contains three compiled outputs. Build their exact CMake
+# targets before copying any of them so a source edit cannot silently ship an
+# older DLL from a previous release build.
+& cmake --build $buildRoot --config Release --target `
+    pvr_black_plague_probe pvr_black_plague_bootstrap pvr_laa_transform --parallel 4
+if ($LASTEXITCODE -ne 0) {
+    throw 'Black Plague Release build failed; candidate package was not created.'
+}
 
 $deployment = Get-Content -LiteralPath (Join-Path $repoRoot 'assets/deployment/manifest.json') -Raw | ConvertFrom-Json
 $product = @($deployment.products | Where-Object { $_.game -eq 'black_plague' })

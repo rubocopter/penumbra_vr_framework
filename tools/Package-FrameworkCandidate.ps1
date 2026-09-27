@@ -40,9 +40,16 @@ Requiem is identified by the installer but has no gameplay VR backend yet.
 This is not a public three-game release or proof of headset validation.
 
 Run `tools\Install-PenumbraFrameworkCandidate.cmd` to list installations and
-select a compatible game. Use `-List` for read-only discovery, `-GamePath`
-for a specific executable, `-ManualPaths` for a non-Steam folder and `-Restore`
-to undo one selected installation. Exit the game before installing or restoring.
+select one or more compatible games by entering their numbers separated by commas.
+Use `-Selections 1,3` to select displayed numbers without a prompt, `-List` for
+read-only discovery, `-GamePath` for one game folder or executable,
+`-ManualPaths` for non-Steam folders and `-Restore` to undo selections.
+Each game has its own transaction; if a later selection fails, earlier completed
+games remain installed or restored. Exit selected games before making changes.
+Install, repair, recovery and restore write JSONL events to
+`%LOCALAPPDATA%\PenumbraVR\installer.jsonl` with the package checksum, game,
+path and result. Use `-LogPath <file>` to choose another location; `-List` does
+not create a log.
 If a deployment was interrupted, run the selector with `-Recover -Game
 Overture` or `-Recover -Game BlackPlague` and `-GamePath <game folder or
 executable>` before another install. Recovery works when the executable is

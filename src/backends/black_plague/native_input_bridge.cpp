@@ -1933,6 +1933,58 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         return fail("stand retry did not reach ChangeMoveState(0)");
     }
 
+    // Exercise Rework's Hybrid composition through the Black Plague native
+    // move-state boundary: a button latch must outlive physical uncrouching,
+    // and a rejected stand must retain the small collider until headroom
+    // returns without changing either input latch.
+    runtime::VrPhysicalCrouchPolicy hybrid_crouch;
+    const runtime::VrButtonState no_button{};
+    const auto button_press = runtime::MakeVrButtonState(true, true, true);
+    const auto apply_hybrid = [&](const runtime::VrButtonState& button,
+                                  float height, bool blocked) noexcept {
+        const auto logical = hybrid_crouch.Update(button,
+            runtime::VrCrouchMode::hybrid, 0.25F,
+            true, true, height, blocked);
+        status.policy = hybrid_crouch.status();
+        ServiceNativeVrCrouch(player_b.data(), status.policy.desired_crouch,
+            status);
+        return logical;
+    };
+    static_cast<void>(apply_hybrid(no_button, 1.70F, false));
+    auto logical_crouch = apply_hybrid(no_button, 1.40F, false);
+    if (!logical_crouch.pressed || !status.native_crouched) {
+        return fail("Hybrid physical crouch did not enter the native small collider");
+    }
+    logical_crouch = apply_hybrid(button_press, 1.40F, false);
+    logical_crouch = apply_hybrid(no_button, 1.70F, false);
+    if (!logical_crouch.pressed || !status.policy.button_latched ||
+        status.policy.physical_crouch || !status.native_crouched) {
+        return fail("Hybrid button latch did not hold native crouch after standing physically");
+    }
+    g_contract_block_stand = true;
+    logical_crouch = apply_hybrid(button_press, 1.70F, false);
+    if (logical_crouch.pressed || status.policy.desired_crouch ||
+        !status.stand_blocked || !status.native_crouched) {
+        return fail("Hybrid release did not expose a blocked native stand");
+    }
+    logical_crouch = apply_hybrid(no_button, 1.70F, status.stand_blocked);
+    if (!logical_crouch.pressed || !status.policy.stand_release_pending ||
+        status.policy.button_latched || !status.stand_blocked ||
+        !status.native_crouched) {
+        return fail("Hybrid blocked stand did not preserve the native crouch and virtual release hold");
+    }
+    g_contract_block_stand = false;
+    logical_crouch = apply_hybrid(no_button, 1.70F, status.stand_blocked);
+    if (!logical_crouch.pressed || status.stand_blocked ||
+        status.native_crouched || status.vr_stance_owned) {
+        return fail("Hybrid stand retry did not release the native small collider");
+    }
+    logical_crouch = apply_hybrid(no_button, 1.70F, status.stand_blocked);
+    if (logical_crouch.pressed || !logical_crouch.just_released ||
+        status.policy.stand_release_pending || status.native_crouched) {
+        return fail("Hybrid release hold survived recovered headroom");
+    }
+
     // The death/menu transition can retain cPlayer while destroying its
     // character body. Entering native crouch then dereferences body +0x23C.
     ContractWrite(player_b.data(), kPlayerCharacterBodyOffset,

@@ -82,6 +82,12 @@ The current contract is derived from Rework:
 - stance ownership is bound to session/player generation;
 - blocked stand is distinct from desired crouch and must retry when clearance returns.
 
+Black Plague observes a rejected native stand only after shared policy has
+processed that frame. The next policy update must restore the release hold from
+the verified blocked native state even if the previous logical state already
+reported release. The renderer uses the observed native crouch shape for its
+posture offset during that feedback frame.
+
 Do not return to compensating press/release toggles.
 
 ## 8. Presentation samples are single-consumption compositor frames

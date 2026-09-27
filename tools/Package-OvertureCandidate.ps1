@@ -6,13 +6,17 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
-if (-not $PackageRoot) {
+$buildCurrentProduct = -not $PackageRoot
+if ($buildCurrentProduct) {
     $PackageRoot = Join-Path $repoRoot 'products/overture/build/package/Release/PenumbraVR'
 }
 $packageRoot = [System.IO.Path]::GetFullPath($PackageRoot).TrimEnd('\')
 $outputPath = [System.IO.Path]::GetFullPath($OutputPath)
 if (Test-Path -LiteralPath $outputPath) {
     throw "Output archive already exists: $outputPath"
+}
+if ($buildCurrentProduct) {
+    & (Join-Path $PSScriptRoot 'Build-OvertureProduct.ps1') -Package
 }
 
 $manifest = Join-Path $packageRoot 'SHA256SUMS.txt'

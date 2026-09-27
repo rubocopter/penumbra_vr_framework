@@ -265,6 +265,27 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
         return false;
     }
 
+    // Black Plague reports a rejected native stand after policy Update, so
+    // the blocked feedback arrives one frame after the logical release.
+    policy.Reset();
+    static_cast<void>(policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.70F));
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.40F);
+    if (!state.pressed) return false;
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.90F, false);
+    if (state.pressed || !state.just_released) return false;
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.90F, true);
+    if (!state.pressed || !policy.status().stand_release_pending) return false;
+    state = policy.Update(
+        button, VrCrouchMode::physical, 0.25F, true, true, 1.90F, false);
+    if (state.pressed || !state.just_released ||
+        policy.status().stand_release_pending) {
+        return false;
+    }
+
     // Rework button-only crouch toggles on press and ignores release/held state.
     policy.Reset();
     button = penumbra_vr::runtime::MakeVrButtonState(true, true, true);

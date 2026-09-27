@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [ValidateSet('Debug', 'Release')]
-    [string]$Configuration = 'Release'
+    [string]$Configuration = 'Release',
+    [string]$RuntimeDirectory
 )
 
 Set-StrictMode -Version Latest
@@ -22,6 +23,59 @@ if (-not (Test-Path -LiteralPath $executablePath)) {
     throw "Build output not found: $executablePath"
 }
 
+# The app-local CRT is a release input, not an arbitrary property of the
+# packaging machine. Select only the recorded x86 binaries before touching an
+# existing package so a VS update cannot silently change release contents.
+$runtimeManifestPath = Join-Path $repositoryRoot 'runtime-dependencies.json'
+$runtimeManifest = Get-Content -LiteralPath $runtimeManifestPath -Raw | ConvertFrom-Json
+if ($runtimeManifest.schemaVersion -ne 1 -or $runtimeManifest.architecture -ne 'x86' -or
+    $runtimeManifest.redistributable -ne 'Microsoft.VC143.CRT') {
+    throw "Unsupported Overture Visual C++ runtime manifest: $runtimeManifestPath"
+}
+$runtimeNames = @('msvcp140.dll', 'vcruntime140.dll')
+foreach ($name in $runtimeNames) {
+    if ([string]$runtimeManifest.files.PSObject.Properties[$name].Value -notmatch '^[0-9A-Fa-f]{64}$') {
+        throw "Missing pinned SHA-256 for Visual C++ runtime $name"
+    }
+}
+if ($RuntimeDirectory) {
+    $runtimeCandidates = @([System.IO.Path]::GetFullPath($RuntimeDirectory))
+} else {
+    $vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (-not (Test-Path -LiteralPath $vswherePath -PathType Leaf)) {
+        throw 'Visual Studio runtime discovery is unavailable; pass -RuntimeDirectory with the pinned x86 CRT.'
+    }
+    $runtimeCandidates = @(& $vswherePath -products * -find 'VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\msvcp140.dll' |
+        ForEach-Object { Split-Path -Parent $_ } | Select-Object -Unique)
+}
+$crtDirectory = $null
+foreach ($candidate in $runtimeCandidates) {
+    $matchesPin = $true
+    foreach ($name in $runtimeNames) {
+        $path = Join-Path $candidate $name
+        $item = Get-Item -LiteralPath $path -Force -ErrorAction SilentlyContinue
+        if (-not $item -or $item.PSIsContainer -or
+            ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -or
+            (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -ine
+                [string]$runtimeManifest.files.PSObject.Properties[$name].Value) {
+            $matchesPin = $false
+            break
+        }
+    }
+    if ($matchesPin) { $crtDirectory = $candidate; break }
+}
+if (-not $crtDirectory) {
+    throw "No Visual C++ x86 runtime directory matches the pinned SHA-256 hashes in $runtimeManifestPath. Pass -RuntimeDirectory with the recorded CRT."
+}
+
+foreach ($candidate in @($buildRoot, (Join-Path $buildRoot 'package'),
+        (Join-Path $buildRoot "package\$Configuration"), $packageRoot)) {
+    $item = Get-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+    if ($item -and ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+        throw "Refusing to package through a reparse point: $candidate"
+    }
+}
+
 if (Test-Path -LiteralPath $packageRoot) {
     Remove-Item -LiteralPath $packageRoot -Recurse -Force
 }
@@ -37,16 +91,7 @@ Copy-Item -LiteralPath (Join-Path $repositoryRoot 'dependencies\bin\win32\OpenAL
 # redistributable DLLs next to it instead of asking players to install the
 # VC++ redist (officially supported app-local deployment). SteamVR already
 # requires Windows 10/11, where only these two files are ever missing.
-$vswherePath = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$crtDlls = @()
-if (Test-Path -LiteralPath $vswherePath) {
-    $crtDlls = & $vswherePath -latest -products * -find 'VC\Redist\MSVC\*\x86\Microsoft.VC143.CRT\msvcp140.dll' | Select-Object -First 1
-}
-if (-not ($crtDlls -and (Test-Path -LiteralPath $crtDlls))) {
-    throw 'Visual C++ 2022 redist x86 DLLs were not found; install the VC++ tools workload that provides VC\Redist.'
-}
-$crtDirectory = Split-Path -Parent $crtDlls
-foreach ($crtDll in @('msvcp140.dll', 'vcruntime140.dll')) {
+foreach ($crtDll in $runtimeNames) {
     Copy-Item -LiteralPath (Join-Path $crtDirectory $crtDll) -Destination $packageRoot
 }
 New-Item -ItemType Directory -Path (Join-Path $packageRoot 'licenses') -Force | Out-Null

@@ -1,0 +1,69 @@
+# Penumbra VR Framework: estado de cierre
+
+Fecha de auditoría: 2026-09-26. Base auditada: `main` en `7fa158d` (24 commits por delante de `origin/main`). Este documento coordina el cierre; `TRILOGY_PARITY_PLAN.md` conserva el detalle de capacidades, `SUPPORTED_BUILDS.md` los niveles de evidencia por build y `ROADMAP.md` el trabajo técnico. Ningún juego ni SteamVR se ejecutó durante esta auditoría.
+
+## Hito actual y regla de avance
+
+**Hito 2: integración real de Requiem.** El hito 0 está auditado. El hito 1 quedó delimitado tras BP-01: se preservaron los checkpoints y se confirmó gameplay sin crash en la sesión comunicada, pero la causa del fallo SDL histórico y las regresiones visuales requieren evidencia runtime/visor o un límite nativo exacto antes de corregirse. Esto permite avanzar a Requiem sin declarar BP soportado. No se modifica packaging ni se crea otro candidato antes del hito 4.
+
+## Auditoría de la ejecución anterior
+
+- `main`, el checkout auxiliar `codex/closure-installer-foundation` y el checkout de Rework estaban limpios al comenzar. El checkout de Rework está en `d41fc0e` y contiene el baseline conductual `23c890f` como ancestro. No se ha descartado trabajo ajeno.
+- Los 24 commits desde `origin/main` cambiaron 44 archivos (+3698/-99 líneas). La mayor parte es instalación, empaquetado y pruebas de despliegue. Los cambios de runtime pertinentes son la supresión del log síncrono por draw en Overture VR (`d437894`) y la corrección de crouch Hybrid ante rechazo nativo tardío en Black Plague (`8a45b4a`). El registro de imports ALUT de Requiem (`e9c4537`) es sólo evidencia estática.
+- Hay **32 ZIP locales** en `build/release`, producidos en varias revisiones por `tools/Package-FrameworkCandidate.ps1`, `tools/Package-OvertureCandidate.ps1` y `tools/Package-BlackPlagueCandidate.ps1`. Su sufijo identifica el commit de origen, no una validación de gameplay. Inventario de sufijos:
+
+  | Producto | Total | Sufijos de `PenumbraVR.<Producto>.Candidate-<sufijo>.zip` |
+  | --- | ---: | --- |
+  | Framework | 17 | `03a36a3`, `07ce96f`, `2f43567`, `52bfa2f`, `583b98a`, `74fe342`, `794955b`, `7deb1d9`, `7fa158d`, `8137c15`, `8a45b4a`, `98f6011`, `a745f90`, `c0bd099`, `dec7add`, `dece881`, `e5ebd29` |
+  | Overture | 8 | `03a36a3`, `07ce96f`, `74fe342`, `7deb1d9`, `8137c15`, `c0bd099`, `dec7add`, `e5ebd29` |
+  | BlackPlague | 7 | `03a36a3`, `07ce96f`, `583b98a`, `76a145c`, `7deb1d9`, `8137c15`, `dece881` |
+
+- Entre ellos hay ZIP con contenido idéntico pese a distinto sufijo (cuatro Overture, dos Black Plague y dos Framework). Esta proliferación y la superficie añadida por scripts de instalación aumentan el coste de mantenimiento, aunque no demuestran por sí mismas una regresión funcional. Se conservan los cambios útiles: identificación exacta de builds, preflight, backup, rollback, recuperación, reparación, selección múltiple y registro JSONL. El instalador existente queda congelado como prototipo Overture/Black Plague; no se revierten cambios válidos ni se generan nuevos paquetes.
+- La comparación con la documentación y el código no identificó una regresión nueva demostrada por los 24 commits. El crouch de BP y la presentación de Overture cambiaron después de la última validación con visor; la ausencia de una nueva prueba es un **gate pendiente**, no una afirmación de que estén rotos.
+
+## Estado real y evidencia
+
+El producto usa **OpenVR a través de SteamVR** en el runtime actual; las referencias a OpenXR del objetivo original no prueban una implementación nativa OpenXR. Las etiquetas de la tabla no se transfieren entre builds ni juegos. `Anteriormente validado en hardware` describe una versión concreta anterior; `requiere nueva validación manual` describe el estado del código actual. `Confirmado automáticamente` significa compilación, test host o inspección exacta, nunca jugabilidad en visor.
+
+| Sistema | Overture | Black Plague |
+| --- | --- | --- |
+| Startup y entrada en juego | Anteriormente validado en hardware en el checkpoint Framework; build actual requiere nueva validación manual | Gameplay actual observado en BP-01 sin crash; método exacto de arranque no consta en el clip; bootstrap completo requiere validación específica |
+| Render estéreo / SteamVR / cámara / tracking | Anteriormente validado en hardware; el gate del log VR se confirma automáticamente y requiere nueva validación manual | Gameplay actual observado en BP-01; presentación en visor no se deduce íntegramente del vídeo plano; rayos rojos/azules y vapor/humo con artefactos visibles |
+| Locomoción y crouch | Anteriormente validado en hardware; regresión final pendiente | Anteriormente validado en hardware; reconciliación de contacto y rechazo tardío de stand confirmados automáticamente y requieren nueva validación manual |
+| Manos | Anteriormente validado en hardware | Anteriormente validado en hardware parcialmente; dedos y geometría requieren nueva validación manual; material de mano observado fullbright |
+| Interacción y física | Anteriormente validado en hardware | Anteriormente validado en hardware parcialmente; agarre, props y mecanismos tras cambios host requieren nueva validación manual |
+| UI, cursor y ajustes | Anteriormente validado en hardware; pasada actual pendiente | Rutas host confirmadas automáticamente; contexto, inventario, notebook y subtítulos requieren nueva validación manual |
+| Transiciones y guardado/carga | Anteriormente ejercitados en hardware en Overture; regresión actual pendiente | Transiciones parcialmente ejercitadas en hardware; spawn yaw y guard de muerte→menú host, requieren nueva validación manual; guardado/carga completo desconocido |
+| Lifecycle y shutdown | Checkpoint anterior validado en hardware; build actual pendiente | BP-01 comunicado sin crash; fallo de mutex SDL histórico sin causa atribuida; cierre/recuperación siguen sin prueba específica |
+
+**Overture:** producto fuente propiedad del Framework, construido sin checkout Rework. Existe una pasada funcional inicial con PSVR2, pero el ejecutable actual y el instalador no tienen pasada nueva. Rework `23c890f` conserva la referencia de comportamiento. Los tests/compilación host verifican contratos, no sustituyen la pasada de visor.
+
+**Black Plague:** backend VR exact-build activo para el hash Steam allowlisted. Estéreo, cuerpo, input, manos e interacción tienen evidencia real histórica; varios arreglos recientes sólo son host-tested. Quedan problemas observados en rayos transparentes, iluminación de manos, contacto/agarre, UI y posible crash de lifecycle. No está listo para declararse `supported`.
+
+**BP-01, resultado comunicado el 2026-09-26:** el usuario jugó sin crash y aportó `C:/Users/onita/Videos/clip_1.790.421.411.686.mp4` (102,36 s, 1920×1080/60 fps). El clip muestra gameplay y dos defectos visuales distintos: vapor/humo con zona negra rectangular de bordes duros aproximadamente entre 0:02 y 0:09, y rectángulo oscuro central asociado al overlay de sigilo alrededor de 0:16. El efecto de sigilo ya comunica el estado; el rectángulo debe fundirse o desaparecer. La sesión también pasa por el área de rayos rojos previamente documentada. No se observó ni comunicó crash; no hay dump nuevo. El clip no certifica por sí solo todas las acciones, tracking binocular, guardado/carga o shutdown. Una sesión estable no elimina la posibilidad del fallo SDL intermitente. No se repetirá BP-01 para perseguir el crash sin nueva evidencia discriminante.
+
+**Requiem:** ejecutable y LAA reconocidos, manifest, localización y configuración preparados; imports `alut.dll` registrados en su propia imagen. **No existe backend VR de gameplay** ni validación de arranque runtime. Su detección por instalador no equivale a soporte. Se investiga e integra en el hito 2, consumiendo políticas comunes y manteniendo el ABI exact-build en su backend.
+
+**Capacidades comunes:** sesión OpenVR, tracking, configuración, input lógico y ocho bindings, locomoción, reconciliación de movimiento aceptado, manos/contacto/interacción, haptics y políticas de vista/render existen en `src/runtime`. Overture y BP consumen las que corresponden mediante límites propios. Requiem todavía no las consume. El bajo paso de distancia/oclusión no tiene consumidor seguro en BP; Enhanced Visuals BP permanece desactivado por resultado oscuro/saturado observado en visor.
+
+## Validación automática y bloqueadores
+
+- En `main` a `7fa158d`, `cmake --build --preset release` terminó correctamente y `ctest --test-dir build -C Release --output-on-failure` pasó **41/41** pruebas. Esta evidencia cubre contratos host de Framework/BP, no render o física vivos.
+- Build Release autónomo de Overture terminado correctamente (`products/overture/scripts/build.ps1 -Configuration Release`, sin package/deploy). Pasaron el preflight, 16 shaders, 8752 comprobaciones visuales CPU, 231 de textura, metadatos, verificación LAA y **289/289** checks unitarios. El build recompiló el producto fuente actual; no es una prueba de ejecución con visor.
+- Lo que no puede confirmarse automáticamente: presencia continua en visor, pacing/foco, cámara por ojo, comodidad/colliders, estados nativos de interacción, legibilidad/UI real, audio, transiciones, guardado/carga reales y estabilidad bajo SteamVR.
+- **Primer bloqueo técnico:** crash SDL de BP descrito como `SDL_mutexP`/`SDL_DestroyMutex` (RVA retail `0x28C09`/`0x28BD6`). `docs/DESIGN_DECISIONS.md` no atribuye la causa; los gates de ventana estable y swap completo redujeron la carrera de arranque, no la eliminaron. La primera búsqueda dentro del repositorio no halló dumps, pero la búsqueda ampliada encontró siete `Penumbra.exe.*.dmp` en `%LOCALAPPDATA%/CrashDumps`. Cuatro fallos del 20–21 de septiembre (`12528`, `25076`, `23988`, `7508`) apuntan a `SDL.dll+0x28C09`; los otros tres (`9128`, `18740`, `10376`) apuntan a `Penumbra.exe+0xD4FB0` y son otro cluster. En los cuatro de SDL el retorno inmediato del stack es siempre `Penumbra.exe+0x1A9693`, y el argumento de mutex y registro `EAX` son respectivamente `0x3F800000`, `0x74`, `0xBF800000`, `0x73`, direcciones inválidas como puntero. La SDL instalada coincide con SHA-256 `0A48932C...D28C7AF93D84`; el ejecutable instalado coincide con el hash canónico de BP de `SUPPORTED_BUILDS.md`. Ninguno de los cuatro minidumps incluye los bytes cargados del callsite; la imagen canónica en disco tiene código transformado en esa zona. No se conoce aún quién creó el valor ni si intervino un hook. No se parcheará una causa imaginada.
+- Otros bloqueadores confirmados de BP: el clip BP-01 muestra un rectángulo no deseado en el overlay de sigilo y un fondo rectangular oscuro en vapor/humo; los rayos/billboards rojos y azules ya estaban documentados como defectuosos. No se asume una causa común entre overlay, partículas y beams: investigar sus límites de draw exactos cuando vuelva a ser el hito activo. La mano se ha visto fullbright; Enhanced Visuals produce imagen oscura/saturada y sigue oculto. El consumer audio low-pass requiere mapear un callsite cargado que no coincide con los bytes del archivo canónico. Los fixes recientes de UI, crouch, agarre y death→menu requieren visor para promover evidencia.
+- El bloqueo estructural de Requiem es la ausencia de backend VR y de mapas exactos de renderer, cuerpo/jugador, input, UI, interacción y lifecycle. Su import ALUT sólo ofrece una posible entrada de bootstrap. No se asignarán RVAs de BP por analogía.
+
+## Secuencia de cierre y siguiente gate
+
+1. **Hito 0, auditoría: completado** al registrar inventario, valor, complejidad, estado de checkouts y decisiones aquí. Sin nuevos paquetes.
+2. **Hito 1, Overture/BP: delimitado/bloqueado por evidencia runtime.** El build host Overture y los 41 tests Framework/BP están verdes; BP-01 aportó gameplay sin crash y observaciones visuales concretas. Los cuatro minidumps históricos estrechan el crash SDL a un callsite y un argumento inválido, pero no permiten atribuir la causa; no prolongar la reproducción. Las restantes regresiones de visor se agruparán en una batería corta cuando proceda. No se promueve ninguno de los dos juegos a `supported`.
+3. **Hito 2, Requiem: actual.** Mapear interfaces exact-build, reutilizar Framework y backends existentes, implementar únicamente soporte verificable; terminar con backend listo para prueba runtime o bloqueo técnico concreto documentado.
+4. **Hito 3, visor:** pruebas breves de alto valor para boot/UI/gameplay, tracking/locomoción/crouch, manos/interacción, transición/carga y estabilidad. Registrar resultados separados por juego y build.
+5. **Hito 4, installer:** revisar prototipo sólo cuando los tres tengan ruta válida o los bloqueos restantes estén delimitados. Una implementación final con selección, validación, dependencias, reparación, actualización, restore/uninstall y logs; un candidato sólo para prueba real de release.
+6. **Hito 5, cierre:** tests pertinentes, release reproducible, limpieza de ZIP temporales cuando ya no sean necesarios, README y documentación de problemas aceptados. Publicar niveles separados: automático, hardware, pendiente y aceptado.
+
+**Decisión sobre SDL:** BP-01 no reprodujo el crash. Si reaparece espontáneamente, un volcado **completo**, log y pasos serán el experimento discriminante; los siete minidumps existentes no aportan los bytes cargados del callsite. WER de usuario ya tiene `LocalDumps/Penumbra.exe` con `DumpType=2`, `DumpCount=5` y `DumpFolder=%LOCALAPPDATA%/PenumbraVR/crashdumps`; esa carpeta estaba vacía en la auditoría. No se cambió el registro. No se ejecutan juegos ni SteamVR por el agente. La investigación SDL queda bloqueada por evidencia runtime mientras se avanza al hito 2.
+
+**TEST BP-01 (ejecutado por el usuario):** gameplay sin crash, con el clip arriba. No consta el número de arranques ni una verificación específica del cierre, por lo que no se anota `2/2` ni se promocionan esos sistemas. No repetir sólo para provocar el crash.

@@ -132,7 +132,10 @@ without a verified LAA backup cannot be repaired from the mod package.
 The final three-game transaction remains open.
 
 `tools/Package-BlackPlagueCandidate.ps1` assembles a candidate ZIP from the
-Release build and `assets/deployment/manifest.json`. It includes the installer,
+Release build and `assets/deployment/manifest.json`. Before copying outputs it
+checks that CMake configured this source checkout and its pinned OpenVR SDK,
+then incrementally builds the probe, bootstrap and LAA tool targets so an edited
+source file cannot silently leave an older binary in the ZIP. It includes the installer,
 DLLs, actions/bindings, localization, hand texture and licenses; its fixed ZIP
 entry ordering and timestamps make identical inputs byte-identical. The package
 test extracts it away from the source checkout and installs/restores a disposable
@@ -140,9 +143,17 @@ copy of the exact retail build. This is a Black Plague development candidate,
 not the unified three-game release or evidence of headset validation.
 
 The Framework-owned Overture source product also builds a standalone package.
-`tools/Package-OvertureCandidate.ps1` checks every file against its
-`SHA256SUMS.txt` and creates a deterministic ZIP. A disposable exact-executable
-fixture extracts that ZIP and verifies install/restore without the source tree.
+Its two app-local VC143 x86 runtime DLLs are pinned by SHA-256 in
+`products/overture/runtime-dependencies.json`. Packaging selects only a
+matching runtime from Visual Studio, or from an explicit `-RuntimeDirectory`,
+and rejects changed DLLs before replacing an existing package. This prevents
+a local runtime update from silently changing the packaged CRT bytes.
+`tools/Package-OvertureCandidate.ps1` runs the Framework-owned Release build
+and package step for its default source package, then checks every file against
+`SHA256SUMS.txt` and creates a deterministic ZIP. An explicit `-PackageRoot`
+verifies and zips that supplied package without rebuilding it. A disposable
+exact-executable fixture extracts that ZIP and verifies install/restore without
+the source tree.
 Its existing Overture installer still needs the unified transaction and
 known-build selection policy before a final release.
 Upgrade and restore validate every previously managed file and original backup
@@ -167,12 +178,20 @@ verified snapshot and recovery journal as install and restore.
 
 `tools/Package-FrameworkCandidate.ps1` combines the two verified ZIP inputs
 into one deterministic candidate archive. Its selector lists detected paths,
-allows an explicit game/executable or manual folder, installs or restores one
-chosen game, and rejects Requiem before writes. A disposable fixture exercises
-both games from the extracted archive. Its selector exposes recovery for both
-games with an explicit game path even when the executable is absent. Both paths
-expose repair with explicit game and path after verifying the complete package;
-the two-game candidate does not satisfy the final three-game release gate.
+allows an explicit game/executable or manual folder, and installs or restores
+one or more chosen compatible games. It validates every displayed selection,
+duplicate and LAA option before the first write. Each game's existing
+transaction is independent, so a later failure leaves earlier completed games
+in their recorded state. Requiem is rejected before writes. A disposable
+fixture exercises both games from the extracted archive. Its selector exposes
+recovery for both games with an explicit game path even when the executable is
+absent. Both paths expose repair with explicit game and path after verifying
+the complete package. The two-game candidate does not satisfy the final
+three-game release gate.
+The selector appends JSONL install/repair/recovery/restore events under
+`%LOCALAPPDATA%\PenumbraVR\installer.jsonl` by default, or at `-LogPath`. Each
+event records the package checksum, game, executable path and result; a failed
+dispatch records its error. Read-only discovery creates no log.
 For Overture, the selector passes its detected SHA-256 to the product installer,
 which rechecks the executable before any deployment write.
 The combined ZIP records every packaged file in `SHA256SUMS.txt`; its selector

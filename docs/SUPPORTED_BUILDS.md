@@ -59,7 +59,10 @@ At the current checkpoint:
   It has no headset validation yet. Mechanism motion, player repulsion, held-hand
   penetration, context text and blue/red effects remain open live observations.
 - **Requiem:** executable identity, LAA transform, localization and recommended
-  game settings are prepared; there is no active gameplay VR backend.
+  game settings are prepared; there is no active gameplay VR backend. Its exact
+  canonical PE imports the same three `alut.dll` functions as Black Plague, at
+  its own IAT RVAs recorded in the Requiem manifest. This is an on-disk loading
+  seam only; runtime proxy compatibility has not been tested.
 
 Capability-level state is maintained in `TRILOGY_PARITY_PLAN.md` rather than
 expanded here into session chronology.

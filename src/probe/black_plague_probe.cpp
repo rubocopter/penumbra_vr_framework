@@ -502,7 +502,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         penumbra_vr::probe::WriteLog(
             "physical_crouch enabled=%u tracking_valid=%u head_height=%.3f "
             "standing_known=%u standing_height=%.3f enter_height=%.3f "
-            "exit_height=%.3f physical=%u button_latched=%u effective=%u "
+            "exit_height=%.3f physical=%u button_latched=%u desired=%u "
+            "effective=%u stand_blocked=%u release_pending=%u "
             "entries=%llu exits=%llu native_known=%u native_crouched=%u "
             "native_state_known=%u native_state=%ld vr_owned=%u "
             "native_entries=%llu native_exits=%llu "
@@ -516,7 +517,10 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             physical_crouch.policy.exit_height,
             physical_crouch.policy.physical_crouch ? 1U : 0U,
             physical_crouch.policy.button_latched ? 1U : 0U,
+            physical_crouch.policy.desired_crouch ? 1U : 0U,
             physical_crouch.policy.effective_crouch ? 1U : 0U,
+            physical_crouch.stand_blocked ? 1U : 0U,
+            physical_crouch.policy.stand_release_pending ? 1U : 0U,
             static_cast<unsigned long long>(physical_crouch.policy.physical_entries),
             static_cast<unsigned long long>(physical_crouch.policy.physical_exits),
             physical_crouch.native_shape_known ? 1U : 0U,
