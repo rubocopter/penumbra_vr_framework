@@ -25,6 +25,13 @@ $knownBuilds = @{
         CanonicalSHA256 = 'A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71'
         Status = 'external-rework'
     }
+    'D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1' = @{
+        Game = 'Overture'
+        BuildId = 'overture-framework-release-checkpoint'
+        Variant = 'observed'
+        CanonicalSHA256 = 'D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1'
+        Status = 'framework-checkpoint'
+    }
     'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF' = @{
         Game = 'Black Plague'
         BuildId = 'black-plague-steam-observed'

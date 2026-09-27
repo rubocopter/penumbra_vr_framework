@@ -96,7 +96,7 @@ Copy-Item -LiteralPath (Join-Path $repositoryRoot 'HPL1Engine\LICENSE-shaders') 
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'OALWrapper\LICENSE') -Destination (Join-Path $packageRoot 'licenses\OALWrapper-LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'dependencies\openvr-2.15.6\LICENSE') -Destination (Join-Path $packageRoot 'licenses\OpenVR-LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'SOURCE_PROVENANCE.md') -Destination (Join-Path $packageRoot 'licenses\SOURCE_PROVENANCE.md')
-Copy-Item -LiteralPath (Join-Path $frameworkRoot 'THIRD_PARTY.md') -Destination (Join-Path $packageRoot 'licenses\THIRD_PARTY.md')
+Copy-Item -LiteralPath (Join-Path $frameworkRoot 'docs\THIRD_PARTY.md') -Destination (Join-Path $packageRoot 'licenses\THIRD_PARTY.md')
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'docs') -Destination $packageRoot -Recurse
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\deploy.ps1') -Destination (Join-Path $packageRoot 'Install-PenumbraVR.ps1')
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'scripts\Install-PenumbraVR.bat') -Destination (Join-Path $packageRoot 'Install-PenumbraVR.bat')

@@ -11,7 +11,7 @@
 namespace penumbra_vr {
 namespace {
 
-constexpr std::array<KnownBuild, 6> kKnownBuilds{{
+constexpr std::array<KnownBuild, 7> kKnownBuilds{{
     {GameId::overture,
      "overture-retail-observed",
      "95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448",
@@ -23,6 +23,12 @@ constexpr std::array<KnownBuild, 6> kKnownBuilds{{
      "A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71",
      BuildVariant::observed,
      "A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71",
+     false},
+    {GameId::overture,
+     "overture-framework-release-checkpoint",
+     "D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1",
+     BuildVariant::observed,
+     "D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1",
      false},
     {GameId::black_plague,
      "black-plague-steam-observed",

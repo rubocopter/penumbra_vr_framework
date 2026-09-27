@@ -13,7 +13,8 @@
       "architecture": "Win32",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
-        "BUILD_TESTING": "ON"
+        "BUILD_TESTING": "ON",
+        "PENUMBRA_VR_OPENVR_SDK": "${sourceDir}/products/overture/dependencies/openvr-2.15.6"
       }
     }
   ],

@@ -23,6 +23,17 @@ record state for repair/uninstall
 A filename is only a hint. SHA-256/build manifests determine identity. Unknown
 hashes fail closed and are never patched or injected.
 
+`tools/Get-PenumbraInstallations.ps1` now performs read-only Steam library and
+manual-folder discovery using the executable fingerprint tool. It lists Black
+Plague and Requiem separately even though both reside under the same Steam
+`redist`, and reports unknown hashes as non-installable. The known Framework
+Overture checkpoint is recognized as Overture but remains outside the unified
+installer until its ownership/upgrade transaction is implemented.
+Malformed executables are listed with a probe error rather than stopping the
+whole discovery pass. The Black Plague candidate installer uses this discovery
+when no path is supplied; multiple compatible copies require an explicit
+`-GamePath` so it cannot select one silently.
+
 ## Transaction rules
 
 Every write is planned before modification. A transaction records the detected
@@ -85,6 +96,26 @@ its bootstrap path has reached gameplay VR from Steam's ordinary **Play** button
 That live result validates the bootstrap concept; later runtime changes still
 retain their own capability-specific evidence levels.
 
+The development installer now validates recorded managed files, the OpenVR
+action directory and the original ALUT/localization backups before its first
+upgrade or restore write. It rejects an unowned OpenVR directory on a fresh
+install. A fixture using the canonical retail executable exercises install,
+upgrade, rejected external edits, clean restore and preservation of unrelated
+files. It also snapshots each managed target before writes and restores that
+snapshot when install, upgrade or restore raises an ordinary filesystem error.
+A locked-file fixture exercises interrupted install, upgrade and restore. The
+snapshot is removed on success and retained
+if rollback itself fails. This is in-process rollback, not yet a crash-durable
+production journal or the unified installer transaction described above.
+
+`tools/Package-BlackPlagueCandidate.ps1` assembles a candidate ZIP from the
+Release build and `assets/deployment/manifest.json`. It includes the installer,
+DLLs, actions/bindings, localization, hand texture and licenses; its fixed ZIP
+entry ordering and timestamps make identical inputs byte-identical. The package
+test extracts it away from the source checkout and installs/restores a disposable
+copy of the exact retail build. This is a Black Plague development candidate,
+not the unified three-game release or evidence of headset validation.
+
 Black Plague deploy preserves/restores a pre-existing Spanish language file and
 creates the default HRTF config only when no prior `alsoft.ini` exists. Runtime
 settings remain authoritative for later HRTF changes.
@@ -116,7 +147,7 @@ an existing profile.
 
 ## Remaining installer work
 
-- Steam discovery plus manual folder selection;
+- connect discovered paths to a multi-product selection UI;
 - transactional filesystem/install-state implementation;
 - known-build LAA apply/repair/uninstall path;
 - Overture/Requiem payload entries as their unified installer paths become

@@ -50,12 +50,24 @@ The README is intentionally a Framework landing page. Detailed contracts, valida
 <summary><strong>Development</strong></summary>
 
 Native targets are Windows/x86. Development requires Visual Studio 2022 with C++ support and CMake 3.25+.
+The preset uses the pinned OpenVR SDK in `products/overture/dependencies/openvr-2.15.6`, so its Release build includes the real OpenVR backend and loader.
 
 ```powershell
 cmake --preset vs2022-win32
 cmake --build --preset release
 ctest --preset release --output-on-failure
 ```
+
+The Framework-owned Overture product can be built and packaged with
+`tools/Build-OvertureProduct.ps1 -Package`. A standalone Black Plague candidate
+ZIP can be produced with `tools/Package-BlackPlagueCandidate.ps1 -OutputPath
+build/release/PenumbraVR.BlackPlague.Candidate.zip`. Neither package is the
+unified release; the [installer design](docs/INSTALLER_DESIGN.md) tracks that
+remaining work.
+`tools/Get-PenumbraInstallations.ps1` lists recognized Steam installations;
+pass `-ManualPaths` for installations outside the discovered libraries. The
+Black Plague candidate installer auto-detects one compatible Steam copy, with
+`-GamePath` available for manual selection.
 
 Engineering rules and implementation contracts are documented in [AGENTS.md](AGENTS.md), [design decisions](docs/DESIGN_DECISIONS.md) and the [Rework porting contract](docs/REWORK_PORTING_PLAN.md).
 

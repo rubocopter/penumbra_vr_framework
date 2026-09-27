@@ -38,6 +38,14 @@ int main() {
             false,
         },
         {
+            "D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1",
+            penumbra_vr::GameId::overture,
+            "overture-framework-release-checkpoint",
+            penumbra_vr::BuildVariant::observed,
+            "D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1",
+            false,
+        },
+        {
             "FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF",
             penumbra_vr::GameId::black_plague,
             "black-plague-steam-observed",
