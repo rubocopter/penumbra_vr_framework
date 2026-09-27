@@ -68,6 +68,9 @@ Product-specific Overture release history is retained under
 
 ### Repository/documentation maintenance
 
+- Removed the session-oriented closure status document; current work order, capability state and build evidence now live only in their owning documents.
+- Reduced installer documentation to its durable transaction contract and current prototype baseline.
+
 - Consolidated durable state into the architecture, parity, supported-build,
   roadmap, configuration, installer and current headset-validation documents.
 - Removed versioned debugging chronologies whose conclusions are already encoded

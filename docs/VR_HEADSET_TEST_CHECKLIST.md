@@ -1,10 +1,10 @@
 # Black Plague headset validation checklist
 
-This is the Black Plague release-regression checklist. The active Requiem Hito 2
-gate is recorded in `CLOSURE_STATUS.md`; the improved puzzle-block test has
-already taken place. Historical session chronology is
-intentionally omitted. Do not repeat a closed reverse-engineering milestone
-unless new evidence contradicts it.
+This is the Black Plague release-regression checklist. The active Requiem work
+order is recorded in `ROADMAP.md`; the capability/evidence boundary is in
+`TRILOGY_PARITY_PLAN.md`. Historical session chronology is intentionally
+omitted. Do not repeat a closed reverse-engineering milestone unless new
+evidence contradicts it.
 
 ## Before the headset session
 

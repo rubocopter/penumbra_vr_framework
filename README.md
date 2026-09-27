@@ -39,7 +39,6 @@ For a finished Overture package today, use [Penumbra: Overture VR Rework](https:
 ## Documentation
 
 [Roadmap](docs/ROADMAP.md) ·
-[Closure status](docs/CLOSURE_STATUS.md) ·
 [Architecture](docs/ARCHITECTURE.md) ·
 [Trilogy parity](docs/TRILOGY_PARITY_PLAN.md) ·
 [Supported builds](docs/SUPPORTED_BUILDS.md) ·
@@ -61,37 +60,16 @@ cmake --build --preset release
 ctest --preset release --output-on-failure
 ```
 
-The Framework-owned Overture product can be built and packaged with
-`tools/Build-OvertureProduct.ps1 -Package`. To produce a standalone candidate,
-`tools/Package-OvertureCandidate.ps1 -OutputPath
-build/release/PenumbraVR.Overture.Candidate.zip` runs that Release build and
-package step before creating the ZIP. A standalone Black Plague
-candidate ZIP can be produced with `tools/Package-BlackPlagueCandidate.ps1
--OutputPath build/release/PenumbraVR.BlackPlague.Candidate.zip`; that command
-incrementally builds Black Plague's packaged targets from this checkout first.
-Neither package is the unified release; the [installer design](docs/INSTALLER_DESIGN.md) tracks
-that remaining work.
+The Framework-owned products can be built and packaged with the scripts under
+`tools/`. `Package-OvertureCandidate.ps1`, `Package-BlackPlagueCandidate.ps1`
+and `Package-FrameworkCandidate.ps1` produce deterministic development
+candidates; the combined candidate currently covers Overture and Black Plague
+only. Requiem has no production deployment transaction yet.
 
-Overture packaging accepts only the x86 Visual C++ runtime DLL hashes recorded
-in `products/overture/runtime-dependencies.json`. If the installed Visual
-Studio runtime differs, provide the pinned CRT directory to
-`products/overture/scripts/package.ps1 -RuntimeDirectory <directory>`.
-`tools/Package-FrameworkCandidate.ps1 -OutputPath
-build/release/PenumbraVR.Framework.Candidate.zip` combines both host-tested
-candidates with one selector. It lists Requiem but refuses to install it because
-the current prototype has no verified Requiem deployment transaction. The
-active development backend is not a supported release. The selector accepts
-multiple displayed game numbers in one run; each game keeps its own
-install/restore transaction.
-It accepts `-LargeAddressAware` for an optional exact-build Black Plague
-transform with a reversible executable backup; this path has host tests only.
-The selector records install, repair, recovery and restore results at
-`%LOCALAPPDATA%\PenumbraVR\installer.jsonl` (`-LogPath` overrides it).
-`tools/Get-PenumbraInstallations.ps1` lists recognized Steam installations;
-pass `-ManualPaths` for installations outside the discovered libraries. The
-Black Plague candidate installer auto-detects one compatible Steam copy, with
-`-GamePath` available for manual selection.
-
+Packaging, discovery, LAA transformation, repair/recovery and rollback contracts
+are documented in [installer design](docs/INSTALLER_DESIGN.md). Candidate
+packages are development artifacts and do not imply headset validation or public
+support.
 Engineering rules and implementation contracts are documented in [AGENTS.md](AGENTS.md), [design decisions](docs/DESIGN_DECISIONS.md) and the [Rework porting contract](docs/REWORK_PORTING_PLAN.md).
 
 </details>

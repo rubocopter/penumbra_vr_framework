@@ -1,8 +1,8 @@
 # Observed and supported builds
 
 Recognition, development validation and public support are separate states. A
-known hash may be usable for research or an exact-build backend without being a
-supported public release.
+known hash can be valid research/backend input without being a supported public
+release.
 
 ## Known executables
 
@@ -12,13 +12,12 @@ supported public release.
 | Overture VR Rework v0.1.0 | x86, LAA | `A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71` | Proven historical/public Rework reference |
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
-| Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Optional candidate install/upgrade/repair/recovery/rollback/restore host-tested; no live/headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | After the Push Enter fix, the user pushed a cube to the switch, tipped it and solved the puzzle without a problem. The log confirms VR Push acquisition and palm force. Other interaction families and progression still need validation. Not supported. |
+| Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative Push puzzle headset-validated, other interaction/progression gates open |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
-Canonical Black Plague and Requiem evidence lives in the corresponding files
-under `manifests/`. Their transformed-variant entries preserve the canonical
-semantic build identity.
+Canonical Black Plague and Requiem binary evidence lives under `manifests/`.
+Transformed-variant entries preserve the canonical semantic build identity.
 
 ## Validation terminology
 
@@ -26,84 +25,39 @@ Use these states consistently:
 
 `planned` → `implemented` → `host-tested` → `live-tested` → `headset-validated` → `supported`
 
-At the current checkpoint:
+Current product-level evidence:
 
-- **Overture:** the original Rework v0.1.0 is the proven public product baseline.
-  The Framework-owned Overture product builds/deploys autonomously and has an
-  initial functional headset/controller regression pass. Its current candidate
-  ZIP has host-tested install/restore on a disposable exact-executable fixture;
-  the combined two-game candidate has host-tested install/repair/recovery/restore
-  evidence. Neither has a new headset pass and the Framework has no public
-  release yet.
-- **Black Plague:** tracked stereo, camera/head tracking and multiple body/input
-  paths have real headset evidence. The normal-Steam bootstrap has also reached
-  gameplay VR from the standard Steam **Play** button. The current development
-  candidate contains later host-tested fixes for presentation pacing, hand asset
-  deployment, physical-motion reconciliation, map-start yaw, particle refresh,
-  native settings labels, same-sample held-palm refresh, inventory
-  drag/default/context routing and controller-aim `UseItem` targeting. The
-  current host-tested candidate additionally rejects negative interaction-ray
-  distances seen in live acquisition logs, restores the context edge through
-  BP's existing native context/widget implementation despite its top-level
-  right-button discard, and reports live particle refresh counters; those fixes
-  must be revalidated before their evidence level is promoted. The development
-  DLL used in the 2026-09-24 headset pass also uses a deterministic
-  free-prop grip, preserves held objects through snap yaw, presents inventory
-  and notebook in the stereo world. That pass showed an inventory closing flash,
-  misplaced notebook, subtitles visible in recording but not in the headset,
-  difficult mechanism pickup and a death-to-menu crash. A later host-tested
-  candidate, now installed for the next headset pass, corrects the null-body
-  crouch transition, broadens selected Move
-  pickup to the proven 0.40 m reach, restores Rework notebook/subtitle placement,
-  retains the closing UI panel for one frame, and disables BP Enhanced Visuals.
-  It has no headset validation yet. Mechanism motion, player repulsion, held-hand
-  penetration, context text and blue/red effects remain open live observations.
-- **Requiem:** the allowlisted exact-build backend shares the ALUT bootstrap,
-  consumes common OpenVR/runtime policy, and has target-owned render, body,
-  input, UI and interaction boundaries. RQ-03 validated boot/menu to gameplay
-  with the visor; later headset reports confirm basic Sense movement, mirror,
-  room-scale/stick/crouch, visible hands and accessible inventory/notebook.
-  RQ-13 still could not reliably acquire stones or notes: ray candidates were
-  found, but unconditional native Grab/Move entries were zero. The observed
-  stone impulse cannot be assigned to the VR hold path. Exact-image inspection
-  subsequently mapped native pick acceptance plus the Requiem palm collision
-  ABI. The later batch uses a backend-owned collision-resolved palm, native-
-  eligible palm-overlap acquisition, held-body exclusion, fresh palm generation
-  and the gameplay yaw epoch for both Grab and Move; it also preserves fresh
-  surface contact for hand-relative anchors. The next headset session improved
-  diary pickup but confirmed that 26 kg puzzle blocks enter Push=1. An earlier
-  headset report confirmed stick direction and palm collision contact, with
-  intermittent acceleration/jumps; its telemetry showed that the Rework-derived
-  palm force did not engage. After correction of the premature Enter-time check,
-  the user tested the cube again and reported a clear improvement. The latest
-  log (`requiem-probe-24356.log`) confirms five VR Push acquisitions and 1927
-  applied palm-force ticks. The user confirmed that this cube reached its
-  switch, tipped and solved the puzzle without a problem. This specific Push
-  sequence is headset-validated; other interactions are not.
-  Late pacing loss and SDL mutex crashes have unknown causes.
-  The earlier interaction batch passed **44/44** host tests; the latest Push
-  acquisition fix compiled in Release and passed its three relevant host tests.
-  Requiem remains unsupported pending representative Grab/Move, mechanism,
-  transition and stability validation.
+- **Overture:** Rework v0.1.0 remains the proven public reference. The
+  Framework-owned product builds and deploys autonomously and has an earlier
+  functional headset/controller regression pass, but the current Framework
+  candidate needs a new regression before release.
+- **Black Plague:** tracked stereo, head/camera tracking and several body/input
+  paths have real headset evidence; the managed Steam bootstrap has reached
+  gameplay VR from Steam **Play**. Later host-tested changes still require the
+  focused regressions listed in `ROADMAP.md`.
+- **Requiem:** boot/menu/gameplay stereo, Sense locomotion, room-scale/body
+  movement, crouch, visible hands and inventory/notebook have headset evidence.
+  A representative Push puzzle is headset-validated after the Push acquisition
+  fix; free-body Grab/Move, another mechanism, transition/progression and
+  stability still require independent evidence.
 
-Capability-level state is maintained in `TRILOGY_PARITY_PLAN.md` rather than
-expanded here into session chronology.
+None of the Framework-owned trilogy products is currently a supported public
+Framework release.
 
 ## Support rules
 
 - Unknown executable hashes fail closed.
-- Binary signatures/RVAs/calling conventions are exact-build evidence, never a
-  generic HPL contract.
-- Module-relative addresses remain required even when an image uses its preferred
-  base.
+- Binary signatures, RVAs, structure fields and calling conventions are
+  exact-build evidence, never a generic HPL contract.
+- Module-relative addresses remain required even when an image uses its
+  preferred base.
 - One native callsite has one Framework owner; additional consumers use explicit
   fan-out/status boundaries.
-- A compiled test or exact-image check does not imply live/headset support.
-- Evidence from one game, build or controller family does not automatically
-  transfer to another.
+- Compile, unit-test and exact-image results do not imply live/headset support.
+- Evidence from one game, build, capability or controller family does not
+  automatically transfer to another.
 - LAA transformation is permitted only for the recorded canonical build and
-  ultimately belongs inside the transactional installer with verified backup and
-  rollback.
+  belongs inside a verified transactional backup/rollback path.
 
 Inspect a candidate executable without modifying it with:
 

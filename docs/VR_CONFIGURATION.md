@@ -143,7 +143,8 @@ VR input, tracking and locomotion policy, using backend defaults for the current
 development probe. It does not yet consume a persisted Requiem VR settings block
 or expose a native VR settings page. The profile's `vr` value remains `null`:
 there is no validated user-facing Requiem VR preset to install. The exact
-current capability and headset gate are recorded in `CLOSURE_STATUS.md`.
+current capability and headset gate are recorded in `ROADMAP.md` and
+`TRILOGY_PARITY_PLAN.md`.
 
 ## Installer policy
 
