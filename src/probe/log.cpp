@@ -1,4 +1,5 @@
 #include "log.hpp"
+#include "pvr_version.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -52,6 +53,7 @@ bool OpenLog(std::wstring& path, std::wstring& error,
         error = L"Could not open probe log (Win32 error " + std::to_wstring(GetLastError()) + L")";
         return false;
     }
+    WriteLog("Penumbra VR Framework %s (%s)", PVR_VERSION_TEXT, PVR_RELEASE_CHANNEL);
     return true;
 }
 

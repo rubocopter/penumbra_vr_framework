@@ -1,0 +1,25 @@
+#include <windows.h>
+1 VERSIONINFO
+ FILEVERSION @VERSION_TUPLE@
+ PRODUCTVERSION @VERSION_TUPLE@
+ FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+ FILEFLAGS 0
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_UNKNOWN
+BEGIN
+ BLOCK "StringFileInfo"
+ BEGIN
+  BLOCK "040904b0"
+  BEGIN
+   VALUE "CompanyName", "Penumbra VR contributors\0"
+   VALUE "FileDescription", "Penumbra VR Framework\0"
+   VALUE "FileVersion", "@VERSION@.0\0"
+   VALUE "ProductName", "Penumbra VR Framework\0"
+   VALUE "ProductVersion", "@VERSION@\0"
+  END
+ END
+ BLOCK "VarFileInfo"
+ BEGIN
+  VALUE "Translation", 0x409, 1200
+ END
+END

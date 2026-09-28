@@ -4,6 +4,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include "pvr_version.hpp"
 
 #include <array>
 #include <cstdarg>
@@ -260,6 +261,7 @@ DWORD WINAPI BootstrapThread(void*) noexcept {
     }
     g_log_file = route->log_file;
 
+    Log("Penumbra VR Framework %s (%s)", PVR_VERSION_TEXT, PVR_RELEASE_CHANNEL);
     Log("%s bootstrap accepted host build=%.*s sha256=%s", route->name,
         static_cast<int>(build->id.size()), build->id.data(), sha256.c_str());
     if (!WaitForSafeInitialization(*route)) {

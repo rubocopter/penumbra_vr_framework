@@ -1,6 +1,15 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(PenumbraVR VERSION 0.0.1 LANGUAGES CXX)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/release.json" PVR_RELEASE_JSON)
+string(JSON PVR_RELEASE_VERSION GET "${PVR_RELEASE_JSON}" version)
+project(PenumbraVR VERSION ${PVR_RELEASE_VERSION} LANGUAGES CXX RC)
+execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File
+    "${CMAKE_CURRENT_SOURCE_DIR}/tools/Write-PenumbraVrVersion.ps1"
+    -OutputDirectory "${CMAKE_CURRENT_BINARY_DIR}/generated"
+    COMMAND_ERROR_IS_FATAL ANY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    release.json tools/Write-PenumbraVrVersion.ps1 src/common/version.rc.in)
+include_directories("${CMAKE_CURRENT_BINARY_DIR}/generated")
 
 if(NOT WIN32)
     message(FATAL_ERROR "The initial binary probe targets the Windows releases of Penumbra.")
@@ -767,3 +776,7 @@ if(BUILD_TESTING)
 
     add_test(NAME camera_matrix_override COMMAND pvr_camera_matrix_override_test)
 endif()
+
+foreach(pvr_release_target IN ITEMS pvr_black_plague_probe pvr_requiem_probe pvr_black_plague_bootstrap pvr_laa_transform)
+    target_sources(${pvr_release_target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/pvr_version.rc")
+endforeach()

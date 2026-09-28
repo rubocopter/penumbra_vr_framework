@@ -23,7 +23,8 @@
  * Add a revision history for ever release made (and commit so the magic version # gets updated)
  */
 #define PRODUCT_NAME "Penumbra:Overture"_L
-#define PRODUCT_VERSION "VR"_L
+#include "pvr_version.hpp"
+#define PRODUCT_VERSION PVR_VERSION_WIDE
 #define PRODUCT_DATE "date"_L
 /* Revision History */
 /*
