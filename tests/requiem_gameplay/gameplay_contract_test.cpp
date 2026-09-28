@@ -15,20 +15,27 @@ int main() {
     };
     // The headset trial confirms the installed model/light alignment, but
     // model -Y mapped to socket -Z points back at the player in Requiem.
-    // Preserve that alignment with the opposite direction and prior 1.6 size.
+    // Preserve the validated forward direction and native child geometry.
     const auto flashlight = penumbra_vr::backends::requiem::
         InstalledFlashlightToolPose(penumbra_vr::runtime::IdentityMatrix());
     const auto light_z = flashlight.values[9] * -0.103966F +
         flashlight.values[11];
     const auto ray_z = flashlight.values[9] * -0.203767F +
         flashlight.values[11];
-    if (!(ray_z > light_z && light_z > 0.0F) ||
-        !near(ray_z-light_z, 1.6F*(0.203767F-0.103966F))) {
+    if (!(ray_z > light_z && light_z > 0.0F)) {
         std::cerr << "Requiem flashlight points back at the player\n";
         return 1;
     }
-    // Uniform resizing must keep the measured model grip at the socket,
-    // including after wrist rotation and world translation.
+    // HPL normalizes the axis billboard basis, so its installed 0.210 height
+    // does not inherit parent scale. Its near edge must meet the emitter;
+    // enlarging only the parent separates them despite a shared transform.
+    const auto ray_near_edge=ray_z-0.210F/2.0F;
+    if (std::fabs(ray_near_edge-light_z)>0.01F) {
+        std::cerr << "Requiem flashlight ray begins beyond the emitter\n";
+        return 1;
+    }
+    // The native attachment must remain rigid and keep the measured grip at
+    // the socket, including after wrist rotation and world translation.
     auto wrist=penumbra_vr::runtime::IdentityMatrix();
     wrist.values={0,0,1,3, 0,1,0,4, -1,0,0,5, 0,0,0,1};
     const auto held=penumbra_vr::backends::requiem::InstalledFlashlightToolPose(wrist);
@@ -38,8 +45,8 @@ int main() {
         const auto length=std::sqrt(flashlight.values[row]*flashlight.values[row]+
             flashlight.values[row+4]*flashlight.values[row+4]+
             flashlight.values[row+8]*flashlight.values[row+8]);
-        if (!near(grip,wrist.values[offset+3]) || !near(length,1.6F)) {
-            std::cerr << "Requiem flashlight resizing moved the grip or changed aspect\n";
+        if (!near(grip,wrist.values[offset+3]) || !near(length,1.0F)) {
+            std::cerr << "Requiem flashlight parent scales native children or moves the grip\n";
             return 1;
         }
     }

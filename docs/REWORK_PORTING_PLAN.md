@@ -120,10 +120,16 @@ The latest headset clip and log validate motion coherence for all three tested
 tools. The installed BP/Requiem flashlight DAE places spotlight/ray nodes on
 model -Y. A target-owned measured-grip socket has headset evidence for beam/
 model alignment, but copying BP's rotation mapped that axis backwards in
-Requiem. Its corrected target profile reverses model/light together, preserves
-the measured grip under scaling, and restores the prior Requiem 1.6 size and
-0.022 grip radius. That direction/size correction is host-tested pending one
-headset check; earlier slight finger intersection remains a known limitation.
+Requiem. Reversing the target socket has headset evidence for forward direction,
+but restoring Rework's 1.6 parent scale reintroduced beam separation. HPL's
+`BillBoard.cpp::GetModelMatrix` normalizes the axis billboard basis; its installed
+0.210 height stays fixed while the centre at model Y=-0.203767 inherits scale.
+Against the emitter at Y=-0.103966, 1.6 predicts a 0.05468 gap instead of the
+native 0.00520 overlap. The target profile therefore keeps a rigid native-size
+parent and 0.020 grip radius with the validated direction. This combined
+correction is host-tested pending one headset check; a larger tool requires
+separately proving the target billboard-size boundary. Earlier slight finger
+intersection remains a known limitation.
 
 Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform.
 It previously anchored the body's local origin, independent of the selected
