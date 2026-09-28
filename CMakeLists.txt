@@ -576,7 +576,8 @@ if(BUILD_TESTING)
     add_executable(pvr_requiem_frame_presentation_test
         tests/requiem_frame_presentation/frame_presentation_gate_test.cpp)
     target_include_directories(pvr_requiem_frame_presentation_test PRIVATE
-        src/backends/requiem)
+        src/backends/requiem src/runtime)
+    target_link_libraries(pvr_requiem_frame_presentation_test PRIVATE pvr_vr_math)
     pvr_enable_warnings(pvr_requiem_frame_presentation_test)
     add_test(NAME requiem_frame_presentation
         COMMAND pvr_requiem_frame_presentation_test)

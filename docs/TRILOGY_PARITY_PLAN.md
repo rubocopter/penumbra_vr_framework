@@ -114,6 +114,9 @@ body and its bright effect. The live native attachment now supplies Rework/BP's
 shared held-hand pose to the visible hand; this correction is host-tested only.
 The installed flashlight model has separate native light and flare nodes, so
 the visual gap is not yet attributable to the model socket or render timing.
+Requiem now refreshes the live attachment at its existing UpdateRenderList
+owner before native light/billboard collection, then again before eye drawing;
+this timing correction is host-tested and awaits a focused headset comparison.
 
 **Current gate:** validate tool alignment and classify the remaining interaction
 rough edges when the corresponding native object is available. Magnetic

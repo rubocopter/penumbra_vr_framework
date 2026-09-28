@@ -61,12 +61,19 @@ Current work is deliberately narrow:
 - [ ] Validate tool alignment before any support claim. A headset clip with
   flashlight, glowstick and flare showed the models following the hand, but
   fingers could cross the tool and the flashlight's bright effect appeared
-  offset from its body. Requiem now feeds its live native tool attachment into
-  the proven held-hand pose; that correction is host-tested only. The light
-  offset remains unclassified. One representative level progression is
+  offset from its body. Requiem feeds its live native tool attachment into
+  the proven held-hand pose and refreshes that attachment before native
+  light/billboard collection. Both corrections are host-tested only; the
+  effect offset and finger clearance need one focused headset check. One
+  representative level progression is
   headset-tested. Stacked blocks could be displaced
   accidentally while climbing; the matching telemetry shows `Grab=6` and
   jumps, with no VR Push acquisition or force in that interval.
+- [ ] Classify Requiem's intermittent Steam Play startup failure. Eight
+  captured dumps fault in `SDL_mutexP` from the same Requiem return site
+  `0x5A9DA3` with an invalid mutex argument; the cause is not established.
+  Probe entry logging and delayed OpenVR/deep-hook initialization are host-tested
+  only. A normal launch attempt and its bootstrap/probe log are the next gate.
 
 ## Hito 3 — trilogy regression
 

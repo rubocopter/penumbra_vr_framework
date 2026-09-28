@@ -1,4 +1,5 @@
 #include "penumbra_vr/black_plague_probe_lifecycle.hpp"
+#include "penumbra_vr/requiem_probe_lifecycle.hpp"
 
 #include <array>
 #include <cstdint>
@@ -55,6 +56,15 @@ constexpr std::uint32_t AllCapabilities() noexcept {
         !penumbra_vr::BlackPlagueDeepHookBootstrapReady(1) &&
         penumbra_vr::BlackPlagueDeepHookBootstrapReady(2) &&
         penumbra_vr::BlackPlagueDeepHookBootstrapReady(3);
+}
+
+[[nodiscard]] bool TestRequiemGraphicsBootstrapReadiness() {
+    // The probe defers OpenVR and deeper hooks until two completed SDL swaps.
+    // This tests the gate, not the cause of the native startup crash.
+    return !penumbra_vr::RequiemOpenVrBootstrapReady(0) &&
+        !penumbra_vr::RequiemOpenVrBootstrapReady(1) &&
+        penumbra_vr::RequiemOpenVrBootstrapReady(2) &&
+        penumbra_vr::RequiemOpenVrBootstrapReady(3);
 }
 
 [[nodiscard]] bool TestEveryTeardownFailureCanRetry() {
@@ -172,6 +182,10 @@ int main() {
     if (!TestGraphicsBootstrapReadiness()) {
         std::cerr << "probe deep-hook graphics bootstrap policy failed\n";
         return 2;
+    }
+    if (!TestRequiemGraphicsBootstrapReadiness()) {
+        std::cerr << "Requiem OpenVR graphics bootstrap policy failed\n";
+        return 5;
     }
     if (!TestEveryTeardownFailureCanRetry()) {
         std::cerr << "probe teardown retry ledger failed\n";

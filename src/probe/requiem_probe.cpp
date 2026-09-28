@@ -1,6 +1,7 @@
 #include "log.hpp"
 #include "penumbra_vr/build_catalog.hpp"
 #include "penumbra_vr/requiem_probe_capabilities.hpp"
+#include "penumbra_vr/requiem_probe_lifecycle.hpp"
 #include "gameplay_bridge.hpp"
 #include "render_world.hpp"
 #include "openvr_session.hpp"
@@ -86,6 +87,7 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
         InterlockedExchange(&g_state, 0);
         return 0;
     }
+    penumbra_vr::probe::WriteLog("Requiem probe initialization entered");
     const auto host_path = ModulePath(nullptr);
     std::string sha256;
     std::wstring hash_error;
@@ -109,6 +111,40 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
     const auto probe_path = ModulePath(g_instance);
     std::string error;
     const auto probe_directory = std::filesystem::path(probe_path).parent_path();
+    if (!penumbra_vr::hooks::InstallSdlSwapHook(
+            &penumbra_vr::backends::requiem::OnSdlSwap, error)) {
+        penumbra_vr::probe::WriteLog(
+            "Requiem SDL bootstrap hook install failed: %s", error.c_str());
+        std::string cleanup_error;
+        const bool clean = Cleanup(cleanup_error);
+        InterlockedExchange(&g_state, clean ? 0 : 4);
+        return 0;
+    }
+    g_swap_hook_installed = true;
+
+    constexpr ULONGLONG kGraphicsBootstrapTimeoutMs = 15'000;
+    const ULONGLONG completed_swap_deadline =
+        GetTickCount64() + kGraphicsBootstrapTimeoutMs;
+    while (!penumbra_vr::RequiemOpenVrBootstrapReady(
+               penumbra_vr::hooks::CompletedFrameCount()) &&
+           GetTickCount64() < completed_swap_deadline) {
+        Sleep(1);
+    }
+    if (!penumbra_vr::RequiemOpenVrBootstrapReady(
+            penumbra_vr::hooks::CompletedFrameCount())) {
+        penumbra_vr::probe::WriteLog(
+            "Requiem SDL bootstrap timed out before normal-loop readiness; completed=%llu observed=%llu",
+            static_cast<unsigned long long>(penumbra_vr::hooks::CompletedFrameCount()),
+            static_cast<unsigned long long>(penumbra_vr::hooks::ObservedFrameCount()));
+        std::string cleanup_error;
+        const bool clean = Cleanup(cleanup_error);
+        InterlockedExchange(&g_state, clean ? 0 : 4);
+        return 0;
+    }
+    penumbra_vr::probe::WriteLog(
+        "Requiem SDL bootstrap ready completed=%llu observed=%llu; entering OpenVR initialization",
+        static_cast<unsigned long long>(penumbra_vr::hooks::CompletedFrameCount()),
+        static_cast<unsigned long long>(penumbra_vr::hooks::ObservedFrameCount()));
     if (probe_path.empty() || !g_session.Initialize(
             (probe_directory / L"openvr_api.dll").wstring(), error)) {
         penumbra_vr::probe::WriteLog("Requiem OpenVR init failed: %s", error.c_str());
@@ -117,6 +153,7 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
         InterlockedExchange(&g_state, clean ? 0 : 4);
         return 0;
     }
+    penumbra_vr::probe::WriteLog("Requiem OpenVR initialization completed");
     std::string input_error;
     const bool input_ready = g_session.InitializeControllerInput(
         (probe_directory / L"vr" / L"actions.json").wstring(), input_error);
@@ -151,15 +188,6 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
         return 0;
     }
     g_scissor_hook_installed = true;
-    if (!penumbra_vr::hooks::InstallSdlSwapHook(
-            &penumbra_vr::backends::requiem::OnSdlSwap, error)) {
-        penumbra_vr::probe::WriteLog("Requiem SDL swap install failed: %s", error.c_str());
-        std::string cleanup_error;
-        const bool clean = Cleanup(cleanup_error);
-        InterlockedExchange(&g_state, clean ? 0 : 4);
-        return 0;
-    }
-    g_swap_hook_installed = true;
     penumbra_vr::probe::WriteLog(
         "Requiem host accepted; exact gameplay, RenderWorld, GL scissor and SDL swap hooks installed");
     InterlockedExchange(&g_state, 2);

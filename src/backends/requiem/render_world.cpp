@@ -13,6 +13,7 @@
 #include "opengl_eye_scissor.hpp"
 #include "rel32_call_hook.hpp"
 #include "stereo_render_policy.hpp"
+#include "tool_visibility_tracking.hpp"
 #include "vr_math.hpp"
 #include "vr_panel_policy.hpp"
 #include "vr_grab_pose.hpp"
@@ -221,6 +222,7 @@ std::atomic<std::uint64_t> g_refraction_resize_attempts{0};
 std::atomic<std::uint64_t> g_tools_attached{0};
 std::atomic<std::uint64_t> g_tools_native{0};
 std::atomic<std::uint64_t> g_tools_render_aligned{0};
+std::atomic<std::uint64_t> g_tools_visibility_aligned{0};
 FramePresentationGate g_frame_presentation;
 graphics::OpenGlEyeTargets g_targets;
 graphics::OpenGlEyeTargets g_overlay_targets;
@@ -631,6 +633,12 @@ void PublishTrackedHeadWorldPose(
     ReleaseSRWLockExclusive(&g_head_world_pose_lock);
 }
 
+[[nodiscard]] std::array<float, 2> AlignToolsForRender(
+    const runtime::VrMatrix44& world_from_tracking,
+    const runtime::VrHmdPose& head,
+    const runtime::VrControllerFrame& frame,
+    std::uint64_t now) noexcept;
+
 void __fastcall HookedUpdateRenderList(void* renderer, void*,
     void* world, void* camera, float frame_time) noexcept {
     ActiveCall active_call;
@@ -686,6 +694,27 @@ void __fastcall HookedUpdateRenderList(void* renderer, void*,
         LogFailureOnce("visibility camera override", error);
         original(renderer, world, camera, frame_time);
         return;
+    }
+    if (!inside_eye) {
+        const auto frame = ReadNativeControllerFrame();
+        if (frame.focused && !NativeUiActive()) {
+            runtime::VrMatrix44 world_from_tracking{};
+            std::string tool_error;
+            if (ComposeToolVisibilityTracking(head_view,
+                    pose.device_to_absolute, world_from_tracking,
+                    tool_error)) {
+                // HPL gathers lights and billboards in UpdateRenderList.
+                // Refresh the live native attachment before that collection.
+                const auto weights = AlignToolsForRender(
+                    world_from_tracking, pose, frame, sampled_at_ms);
+                for (const float weight : weights) {
+                    if (weight > 0.0F) {
+                        g_tools_visibility_aligned.fetch_add(
+                            1, std::memory_order_relaxed);
+                    }
+                }
+            }
+        }
     }
     original(renderer, world, camera, frame_time);
     if (!override.Restore(error)) {
@@ -777,12 +806,6 @@ struct WorldPanelGeometry final {
             -100.0F / 750.0F};
 }
 
-[[nodiscard]] std::array<float, 2> AlignToolsForRender(
-    const runtime::VrMatrix44& world_from_tracking,
-    const runtime::VrHmdPose& head,
-    const runtime::VrControllerFrame& frame,
-    std::uint64_t now) noexcept;
-
 [[nodiscard]] bool RenderStereo(RenderWorld original,
     void* renderer, void* world, void* camera, float frame_time,
     bool& frame_time_consumed, std::string& error) noexcept {
@@ -845,12 +868,9 @@ struct WorldPanelGeometry final {
         CollapseRigidView(head_view), resolver_head_pose, hand_error);
     if (controller_frame.focused && !NativeUiActive() &&
         resolver_head_valid) {
-        runtime::VrMatrix44 tracking_from_head{};
-        if (
-            runtime::InvertRigidTransform(
-                pose.device_to_absolute, tracking_from_head, hand_error)) {
-            const auto world_from_tracking = runtime::Multiply(
-                resolver_head_pose, tracking_from_head);
+        runtime::VrMatrix44 world_from_tracking{};
+        if (ComposeToolVisibilityTracking(head_view,
+                pose.device_to_absolute, world_from_tracking, hand_error)) {
             AcquireSRWLockExclusive(&g_tracking_world_lock);
             g_world_from_tracking = world_from_tracking;
             g_world_from_tracking_time = now;
@@ -2197,10 +2217,10 @@ struct ToolProfile final {
     const runtime::VrHmdPose& head,
     const runtime::VrControllerFrame& frame,
     std::uint64_t now) noexcept {
-    // Native Hands::Update precedes RenderWorld. The tool matrix produced
-    // there uses the previous world tracking sample while visible hands use
-    // this frame's HMD sample. Reapply only live attachments before either
-    // eye renders so both share the same tracking basis.
+    // Native Hands::Update precedes visibility collection and RenderWorld.
+    // Refresh only live attachments against the current tracking sample at
+    // both boundaries: before HPL collects child lights/billboards, and again
+    // before the eyes draw the tool mesh and visible fingers.
     std::array<float, 2> hold_weights{};
     for (const auto& tool : g_tool_attachments) {
         if (tool.kind == ToolKind::none || tool.hands == nullptr ||
@@ -2941,6 +2961,7 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
         g_tools_attached.exchange(0, std::memory_order_relaxed),
         g_tools_native.exchange(0, std::memory_order_relaxed),
         g_tools_render_aligned.exchange(0, std::memory_order_relaxed),
+        g_tools_visibility_aligned.exchange(0, std::memory_order_relaxed),
         g_native_push_enters.exchange(0, std::memory_order_relaxed),
         g_pushes_acquired.exchange(0, std::memory_order_relaxed),
         g_push_force_ticks.exchange(0, std::memory_order_relaxed),

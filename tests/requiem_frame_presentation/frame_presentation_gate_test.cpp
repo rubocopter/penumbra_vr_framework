@@ -1,9 +1,37 @@
 #include "frame_presentation_gate.hpp"
+#include "tool_visibility_tracking.hpp"
 
+#include <cmath>
 #include <iostream>
 
 int main() {
     using penumbra_vr::backends::requiem::FramePresentationGate;
+    using penumbra_vr::backends::requiem::ComposeToolVisibilityTracking;
+    using penumbra_vr::runtime::IdentityMatrix;
+    using penumbra_vr::runtime::VrMatrix34;
+    using penumbra_vr::runtime::VrMatrix44;
+
+    auto head_view = IdentityMatrix();
+    head_view.values[3] = -10.0F;
+    head_view.values[7] = -3.0F;
+    head_view.values[11] = -5.0F;
+    VrMatrix34 tracked_head{{1, 0, 0, 1, 0, 1, 0, 2, 0, 0, 1, 3}};
+    VrMatrix44 tracking_world{};
+    std::string tracking_error;
+    if (!ComposeToolVisibilityTracking(head_view, tracked_head,
+            tracking_world, tracking_error) ||
+        std::abs(tracking_world.values[3] - 9.0F) > 0.0001F ||
+        std::abs(tracking_world.values[7] - 1.0F) > 0.0001F ||
+        std::abs(tracking_world.values[11] - 2.0F) > 0.0001F) {
+        std::cerr << "Requiem tool visibility uses a different tracking basis from the eye\n";
+        return 6;
+    }
+    tracked_head.values[0] = 2.0F;
+    if (ComposeToolVisibilityTracking(head_view, tracked_head,
+            tracking_world, tracking_error)) {
+        std::cerr << "Requiem tool visibility accepted a non-rigid HMD pose\n";
+        return 7;
+    }
 
     FramePresentationGate gate;
 

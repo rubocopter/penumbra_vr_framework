@@ -1104,7 +1104,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                     static_cast<double>(update_count)
                 : 0.0;
             probe::WriteLog(
-                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu native_grab_enter=%llu native_move_enter=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu tool_render_aligned=%llu native_push_enter=%llu push_acquire=%llu push_force_ticks=%llu refract_native=%llu refract_copy=%llu refract_resize=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
+                "Requiem VR timing world_fps=%.1f render_mean_ms=%.1f left_ms=%.1f right_ms=%.1f overlay_ms=%.1f submit_ms=%.1f update_mean_ms=%.1f interact=%llu select_refresh=%llu select_ray=%llu select_hit=%llu select_winner=%llu native_grab_enter=%llu native_move_enter=%llu grab_enter=%llu grab_acquire=%llu grab_release=%llu move_enter=%llu move_acquire=%llu move_release=%llu mechanism_acquire=%llu tool_attached=%llu tool_native=%llu tool_render_aligned=%llu tool_visibility_aligned=%llu native_push_enter=%llu push_acquire=%llu push_force_ticks=%llu refract_native=%llu refract_copy=%llu refract_resize=%llu inventory=%llu jump_press=%llu jump_held=%llu ui_updates=%llu",
                 static_cast<double>(timing.world_frames) / elapsed_seconds,
                 mean_render_ms, phase_ms(timing.left_eye_ticks),
                 phase_ms(timing.right_eye_ticks),
@@ -1129,6 +1129,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
                 static_cast<unsigned long long>(interaction.tools_attached),
                 static_cast<unsigned long long>(interaction.tools_native),
                 static_cast<unsigned long long>(interaction.tools_render_aligned),
+                static_cast<unsigned long long>(interaction.tools_visibility_aligned),
                 static_cast<unsigned long long>(interaction.native_push_enters),
                 static_cast<unsigned long long>(interaction.pushes_acquired),
                 static_cast<unsigned long long>(interaction.push_force_ticks),
