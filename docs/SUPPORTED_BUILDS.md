@@ -13,7 +13,7 @@ release.
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative Push, free-body Grab, jointed Move and level transition headset-tested; portal presentation defect and other gates open |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative Push, free-body Grab, jointed Move, level transition and portal refraction correction headset-tested; other gates open |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
 Canonical Black Plague and Requiem binary evidence lives under `manifests/`.
@@ -39,13 +39,13 @@ Current product-level evidence:
   movement, crouch, visible hands and inventory/notebook have headset evidence.
   A representative Push puzzle, free-body `Grab=6` carry/snap/release sequence,
   jointed `Move=2` monolith puzzle and level-01 transition have headset evidence.
-  Portal presentation has visible artifacts; stacked `Grab=6` blocks could
-  shift during climbing and monolith turning felt resistant. Free-body `Move=2`,
-  throwing and tool alignment still need independent evidence. A refraction
-  on/off headset comparison isolated the portal's large artifact, and HPL
-  logged a successful exit on that candidate. The subsequent exact-build
-  refraction-copy change is host-tested only and needs a focused visor pass,
-  including exit, before its visual/shutdown behavior can be promoted.
+  The exact-build refraction-copy correction removed the portal's large
+  rectangular/striped artifact with Refractions enabled in a headset clip;
+  runtime telemetry confirmed the full-eye copy path and about 90 FPS, and HPL
+  logged a successful exit on that candidate. Subtle motion ghosting remains
+  unclassified. Stacked `Grab=6` blocks could shift during climbing and
+  monolith turning felt resistant. Free-body `Move=2`, throwing and tool
+  alignment still need independent evidence.
 
 None of the Framework-owned trilogy products is currently a supported public
 Framework release.

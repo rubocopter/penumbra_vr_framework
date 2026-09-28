@@ -50,20 +50,18 @@ Current work is deliberately narrow:
   and disappeared when disabled; the visible ring/scene returned. The
   `portal-fx` warning belongs to untextured map control geometry. Native HPL
   screen copies use 2560×1440 while VR eye targets are 3400×3468.
-- [ ] Validate the Requiem exact-build eye-sized refraction copy candidate in
-  visor with Refractions enabled. Its two native renderer callsites and GL copy
-  operation are host-verified only. Check portal shape, movement ghosting,
-  pacing and clean exit before closing presentation. Preserve the authored
-  refractive effect.
+- [x] Validate the Requiem exact-build eye-sized refraction copy in visor with
+  Refractions enabled. The portal ring rendered without the prior rectangular
+  and striped artifact; the native copy was upgraded for both eyes, gameplay
+  held about 90 FPS, and HPL exited successfully. The clip does not establish
+  whether subtle motion ghosting remains in headset.
 - [ ] Port Rework/BP magnetic pickup only for inventory items after Requiem's
   exact body-list, bounds and item-subtype boundaries are demonstrated. Do not
   extend that policy to props or mechanisms.
-- [ ] Validate tool alignment before any support claim. HPL logged a successful
-  shutdown after the portal comparison on the prior candidate; repeat exit on
-  the new refraction candidate. One representative level progression is
-  headset-tested. Stacked blocks could be displaced accidentally while
-  climbing; the matching telemetry shows `Grab=6` and jumps, with no VR Push
-  acquisition or force in that interval.
+- [ ] Validate tool alignment before any support claim. One representative
+  level progression is headset-tested. Stacked blocks could be displaced
+  accidentally while climbing; the matching telemetry shows `Grab=6` and
+  jumps, with no VR Push acquisition or force in that interval.
 
 ## Hito 3 — trilogy regression
 

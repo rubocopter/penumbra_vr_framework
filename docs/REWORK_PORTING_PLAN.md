@@ -90,7 +90,9 @@ but the Framework draws each VR eye into a larger target; the shipped shader
 samples the copy in eye viewport pixels. The refraction-on/off headset
 comparison exposes this incompatible renderer boundary. A Requiem exact-build
 adapter now captures the full eye into the bound screen texture only at the two
-verified refraction copy callsites; it is host-tested and awaits visor evidence.
+verified refraction copy callsites. The headset clip with Refractions enabled
+shows the portal ring without the prior rectangular/striped defect; the runtime
+copy counters match the intercepted calls, with normal pacing and exit.
 This renderer-specific correction does not establish a shared cross-game
 refraction policy or validate Black Plague's particle scenes.
 
