@@ -58,8 +58,13 @@ Current work is deliberately narrow:
 - [ ] Port Rework/BP magnetic pickup only for inventory items after Requiem's
   exact body-list, bounds and item-subtype boundaries are demonstrated. Do not
   extend that policy to props or mechanisms.
-- [ ] Validate tool alignment before any support claim. One representative
-  level progression is headset-tested. Stacked blocks could be displaced
+- [ ] Validate tool alignment before any support claim. A headset clip with
+  flashlight, glowstick and flare showed the models following the hand, but
+  fingers could cross the tool and the flashlight's bright effect appeared
+  offset from its body. Requiem now feeds its live native tool attachment into
+  the proven held-hand pose; that correction is host-tested only. The light
+  offset remains unclassified. One representative level progression is
+  headset-tested. Stacked blocks could be displaced
   accidentally while climbing; the matching telemetry shows `Grab=6` and
   jumps, with no VR Push acquisition or force in that interval.
 

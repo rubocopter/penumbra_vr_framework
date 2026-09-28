@@ -44,8 +44,11 @@ Current product-level evidence:
   runtime telemetry confirmed the full-eye copy path and about 90 FPS, and HPL
   logged a successful exit on that candidate. Subtle motion ghosting remains
   unclassified. Stacked `Grab=6` blocks could shift during climbing and
-  monolith turning felt resistant. Free-body `Move=2`, throwing and tool
-  alignment still need independent evidence.
+  monolith turning felt resistant. A flashlight/glowstick/flare clip confirmed
+  that tool models track the hand but exposed finger intersection and an
+  apparent flashlight effect offset. The subsequent attached-tool hand-pose
+  correction is host-tested only. Free-body `Move=2`, throwing and final tool
+  alignment still need independent headset evidence.
 
 None of the Framework-owned trilogy products is currently a supported public
 Framework release.

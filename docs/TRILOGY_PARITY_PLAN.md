@@ -27,7 +27,7 @@ Extraction alone is not parity. Validation uses the common ladder:
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
 | Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed; held Grab body remained attached through one headset snap turn | Transition/tracking-loss and BP held-object continuity regression |
 | Controller actions/bindings | 42 actions, 6 sets, 8 bindings | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Hardware/per-device regression before support claims |
-| Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data | BP keeps richer skeletal channels | Visible tracked hands consumed | BP finger/material pass; Requiem tool alignment |
+| Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data | BP keeps richer skeletal channels | Visible tracked hands consumed; Requiem attached-tool hold pose host-tested after visor evidence of finger/tool intersection | BP finger/material pass; Requiem tool grip and light alignment headset check |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
 | Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Consumed through BP Grab/Move boundaries; latest changes host-tested | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP regression, Requiem throwable prop and distinct Move path when encountered |
 | Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Requiem mechanism comfort investigation; BP mechanism regression |
@@ -107,7 +107,13 @@ With Refractions enabled, the subsequent headset clip showed the authored portal
 ring without the large rectangular/striped defect. Runtime telemetry recorded
 one texture resize followed by full-eye copies at every intercepted native
 refraction call, with roughly 90 FPS in the portal scene; HPL exited normally.
-Subtle motion ghosting in headset and tool alignment remain open.
+Subtle motion ghosting in headset and tool alignment remain open. A later
+flashlight/glowstick/flare clip showed the Requiem tool matrices tracking the
+hand, with some finger intersection and an apparent gap between the flashlight
+body and its bright effect. The live native attachment now supplies Rework/BP's
+shared held-hand pose to the visible hand; this correction is host-tested only.
+The installed flashlight model has separate native light and flare nodes, so
+the visual gap is not yet attributable to the model socket or render timing.
 
 **Current gate:** validate tool alignment and classify the remaining interaction
 rough edges when the corresponding native object is available. Magnetic

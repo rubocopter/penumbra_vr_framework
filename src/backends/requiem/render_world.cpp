@@ -777,7 +777,8 @@ struct WorldPanelGeometry final {
             -100.0F / 750.0F};
 }
 
-void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
+[[nodiscard]] std::array<float, 2> AlignToolsForRender(
+    const runtime::VrMatrix44& world_from_tracking,
     const runtime::VrHmdPose& head,
     const runtime::VrControllerFrame& frame,
     std::uint64_t now) noexcept;
@@ -857,8 +858,8 @@ void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
                 std::memory_order_acquire);
             g_world_from_tracking_identity = pose.identity;
             ReleaseSRWLockExclusive(&g_tracking_world_lock);
-            AlignToolsForRender(world_from_tracking, pose,
-                controller_frame, now);
+            const auto tool_hold_weights = AlignToolsForRender(
+                world_from_tracking, pose, controller_frame, now);
             for (std::size_t index = 0; index < hands.size(); ++index) {
                 const auto& tracked = controller_frame.hands[index];
                 if (!tracked.grip.device_connected ||
@@ -869,6 +870,7 @@ void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
                     runtime::ExpandMatrix(tracked.grip.device_to_absolute));
                 raw_palm_valid[index] = true;
                 hand.palm = raw_palms[index];
+                hand.hold_pose_weight = tool_hold_weights[index];
                 if (tracked.skeleton_valid) {
                     hand.curl = tracked.finger_curl;
                 } else {
@@ -2190,7 +2192,8 @@ struct ToolProfile final {
         grip_pose, grip), rotation), scale);
 }
 
-void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
+[[nodiscard]] std::array<float, 2> AlignToolsForRender(
+    const runtime::VrMatrix44& world_from_tracking,
     const runtime::VrHmdPose& head,
     const runtime::VrControllerFrame& frame,
     std::uint64_t now) noexcept {
@@ -2198,6 +2201,7 @@ void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
     // there uses the previous world tracking sample while visible hands use
     // this frame's HMD sample. Reapply only live attachments before either
     // eye renders so both share the same tracking basis.
+    std::array<float, 2> hold_weights{};
     for (const auto& tool : g_tool_attachments) {
         if (tool.kind == ToolKind::none || tool.hands == nullptr ||
             tool.model == nullptr || tool.entity == nullptr ||
@@ -2225,8 +2229,14 @@ void AlignToolsForRender(const runtime::VrMatrix44& world_from_tracking,
         const auto matrix = ReworkToolPose(socket, profile);
         reinterpret_cast<EntitySetMatrix>(g_image + kEntitySetMatrixRva)(
             tool.entity, &matrix);
+        // Rework's attached-tool grip and BP's shared hold-pose weight keep
+        // the visible fingers wrapped around the live native attachment.
+        const auto hand_index = tool.hand == runtime::VrHand::left ? 0U : 1U;
+        hold_weights[hand_index] = std::max(hold_weights[hand_index],
+            runtime::vr_interaction_policy::GripPoseWeight(profile.radius));
         g_tools_render_aligned.fetch_add(1, std::memory_order_relaxed);
     }
+    return hold_weights;
 }
 
 void __fastcall HookedHandsUpdate(void* hands, void*, float dt) noexcept {
