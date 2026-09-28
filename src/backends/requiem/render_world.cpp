@@ -2313,7 +2313,7 @@ void __fastcall HookedToolMatrix(void* entity, void*,
             const bool flare = equal(name, "Flare");
             if (!flashlight && !glowstick && !flare) break;
             // Glowstick/flare use the Rework HUD profiles. The flashlight
-            // uses the BP socket measured on this installed DAE's light nodes.
+            // uses the installed DAE's measured grip with Requiem orientation.
             const ToolKind kind = flashlight ? ToolKind::flashlight
                 : glowstick ? ToolKind::glowstick : ToolKind::flare;
             const ToolProfile profile = ProfileForTool(kind);

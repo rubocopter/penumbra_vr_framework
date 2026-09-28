@@ -54,8 +54,10 @@ Current product-level evidence:
   hand under stick locomotion. A newer headset clip with the resolved-palm
   correction shows flashlight, glowstick and flare staying with the hand;
   the matching log records resolved-palm attachment and no raw-palm use.
-  Static flashlight light position and slight finger penetration remain open.
-  The installed-asset flashlight socket correction is host-tested only.
+  The latest headset trial confirms flashlight beam/model alignment, but the
+  flashlight points back at the player and is smaller. The direction reversal
+  around the measured grip and restoration of its prior 1.6 scale are
+  host-tested only. Slight finger penetration remains a known limitation.
   Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments
   at Requiem return site `0x5A9DA3`. The latest candidate reached a tracked
   menu frame before the same fault, so delayed OpenVR does not close this

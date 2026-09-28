@@ -61,13 +61,14 @@ Current work is deliberately narrow:
 - [x] Validate tool/hand motion coherence: a new headset clip shows flashlight,
   glowstick and flare staying with the visible hand during stick locomotion.
   Its log records resolved-palm attachment throughout, with no raw-palm use.
-- [ ] Validate the remaining tool presentation. The same clip shows slight
-  finger penetration and the flashlight effect separated from its model.
-  The installed BP/Requiem DAE puts the spotlight/ray on model -Y; Requiem's
-  borrowed Rework socket turned that axis toward hand +Z. A target-owned
-  socket now turns it toward hand -Z, matching the BP measured asset; the
-  correction is host-tested only and needs one headset check. Do not change
-  the shared installed DAE to mask the socket mismatch.
+- [ ] Confirm the final flashlight direction/size, then conclude this
+  representative interaction milestone as requested by the user. The latest
+  headset trial confirms that the beam meets the model, but the BP-derived
+  socket points the flashlight back at the player and reduced its size.
+  Requiem now reverses the model/light together around the measured grip and
+  restores its prior 1.6 visual scale and 0.022 grip radius. This correction is
+  host-tested; one brief forward-pointing check remains. Preserve the known
+  finger/contact limitations and broader capability gaps for later regression.
   One representative level progression is headset-tested. Stacked blocks
   could be displaced accidentally while climbing; telemetry shows `Grab=6`
   and jumps, with no VR Push acquisition or force in that interval.

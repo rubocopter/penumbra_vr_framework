@@ -117,10 +117,13 @@ Plague's tool path, Requiem used a raw grip for the tool while drawing the hand
 from the collision-resolved palm. Its adapter now uses the same resolved palm
 for both, with a raw fallback across missing publications and snap-turn epochs.
 The latest headset clip and log validate motion coherence for all three tested
-tools. Static light and finger alignment remain open. The installed
-BP/Requiem flashlight DAE has a -Y spotlight/ray axis; Rework's modified DAE
-profile rotated it the wrong way in Requiem. Requiem now uses a target-owned
-socket matching the installed asset, host-tested pending headset validation.
+tools. The installed BP/Requiem flashlight DAE places spotlight/ray nodes on
+model -Y. A target-owned measured-grip socket has headset evidence for beam/
+model alignment, but copying BP's rotation mapped that axis backwards in
+Requiem. Its corrected target profile reverses model/light together, preserves
+the measured grip under scaling, and restores the prior Requiem 1.6 size and
+0.022 grip radius. That direction/size correction is host-tested pending one
+headset check; earlier slight finger intersection remains a known limitation.
 
 Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform.
 It previously anchored the body's local origin, independent of the selected

@@ -120,14 +120,17 @@ the resolved palm. Requiem now uses one palm publication for tool and hand at
 native update, visibility and eye rendering, with an old-yaw fallback. A new
 headset clip confirms that the three tools remain steady relative to the hand
 under stick locomotion; its log recorded resolved-palm use and no raw-palm use.
-Slight finger intersection and a static flashlight effect gap remain. The
-installed flashlight DAE shares BP's -Y spotlight/ray axis, while Requiem had
-used Rework's -90-degree socket for its modified asset. The Requiem adapter now
-uses a target-owned socket matched to the installed DAE; this last change is
-host-tested only.
+The latest headset trial confirms that the installed-asset socket aligns the
+flashlight beam with its model, but also disproves its direction in Requiem:
+the flashlight points back at the player and is visibly smaller. The adapter
+now reverses model/light around the measured grip and restores the prior 1.6
+scale and 0.022 grip radius. Direction/size and a fixed grip under wrist
+rotation are host-tested only. Earlier slight finger intersection remains a
+known limitation unless new headset evidence establishes otherwise.
 
-**Current gate:** validate static flashlight/finger alignment and classify the remaining interaction
-rough edges when the corresponding native object is available. Magnetic
+**Current gate:** a brief flashlight direction/size check, after which the user
+requests concluding the representative Requiem interaction milestone. Broader
+interaction gaps and known limitations remain visible for regression. Magnetic
 acquisition remains limited to the proven Rework/BP inventory-item policy and
 must not be enabled in Requiem until its exact body-list, bounds and item-subtype
 boundaries are demonstrated.

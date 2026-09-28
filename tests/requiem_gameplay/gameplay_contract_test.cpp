@@ -13,19 +13,35 @@ int main() {
     const auto near = [](float actual, float expected) {
         return std::fabs(actual - expected) < 0.0001F;
     };
-    // The installed BP/Requiem HUD flashlight points down model -Y. Its
-    // spotlight must face tracked hand -Z after the target-owned socket pose.
+    // The headset trial confirms the installed model/light alignment, but
+    // model -Y mapped to socket -Z points back at the player in Requiem.
+    // Preserve that alignment with the opposite direction and prior 1.6 size.
     const auto flashlight = penumbra_vr::backends::requiem::
         InstalledFlashlightToolPose(penumbra_vr::runtime::IdentityMatrix());
     const auto light_z = flashlight.values[9] * -0.103966F +
         flashlight.values[11];
     const auto ray_z = flashlight.values[9] * -0.203767F +
         flashlight.values[11];
-    if (!near(flashlight.values[6], -1.0F) ||
-        !near(flashlight.values[9], 1.0F) ||
-        !(ray_z < light_z && light_z < 0.0F)) {
-        std::cerr << "Requiem flashlight light nodes face away from the hand\n";
+    if (!(ray_z > light_z && light_z > 0.0F) ||
+        !near(ray_z-light_z, 1.6F*(0.203767F-0.103966F))) {
+        std::cerr << "Requiem flashlight points back at the player\n";
         return 1;
+    }
+    // Uniform resizing must keep the measured model grip at the socket,
+    // including after wrist rotation and world translation.
+    auto wrist=penumbra_vr::runtime::IdentityMatrix();
+    wrist.values={0,0,1,3, 0,1,0,4, -1,0,0,5, 0,0,0,1};
+    const auto held=penumbra_vr::backends::requiem::InstalledFlashlightToolPose(wrist);
+    for (std::size_t row=0; row<3; ++row) {
+        const auto offset=row*4;
+        const auto grip=held.values[offset+1]*-0.016669F+held.values[offset+3];
+        const auto length=std::sqrt(flashlight.values[row]*flashlight.values[row]+
+            flashlight.values[row+4]*flashlight.values[row+4]+
+            flashlight.values[row+8]*flashlight.values[row+8]);
+        if (!near(grip,wrist.values[offset+3]) || !near(length,1.6F)) {
+            std::cerr << "Requiem flashlight resizing moved the grip or changed aspect\n";
+            return 1;
+        }
     }
     using penumbra_vr::backends::requiem::RequiemLocomotionDisplacement;
     using penumbra_vr::backends::requiem::RequiemPushAxisProjection;
