@@ -96,13 +96,16 @@ copy counters match the intercepted calls, with normal pacing and exit.
 This renderer-specific correction does not establish a shared cross-game
 refraction policy or validate Black Plague's particle scenes.
 
-Rework `23c890f` closes the visible hand around an attached tool according to
-its grip radius. Black Plague consumes the same shared hold-pose policy.
-Requiem's first tool headset clip exposed finger intersection because its
-visible hand did not consume that weight. The Requiem adapter now supplies the
-weight only after validating the live native attachment at render time; the
-correction still needs headset validation. The flashlight's apparent light
-offset remains a separate target-owned model/light question.
+Rework `23c890f` fixes the visible hand curl around an attached tool according
+to its grip radius, overriding sensor curl while attached. Black Plague and
+Requiem consume the shared hold-pose policy. Requiem's tool clips exposed
+finger intersection: its visible hand first lacked the attachment weight, and
+the shared articulation then allowed sensor curl to exceed that weight. The
+adapter now supplies the weight only after validating the live attachment,
+and shared articulation fixes the curl to that weight. The latter change is
+host-tested and still needs visor validation. The flashlight's apparent light
+offset remains a separate target-owned model/light question; Rework's modified
+DAE positions its ray billboard differently from Requiem's installed asset.
 
 Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform but
 anchors the body's local origin, independent of the selected surface point.

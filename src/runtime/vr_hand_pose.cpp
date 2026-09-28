@@ -69,7 +69,9 @@ VrHandArticulation ArticulateVrHand(
     VrHandArticulation result;
     const float hold = UnitInput(hold_pose_weight);
     for (std::size_t finger=0;finger<curls.size();++finger) {
-        const float curl=std::max(UnitInput(curls[finger]), hold);
+        // Rework fixes every attached-tool finger at the handle-radius pose.
+        // Sensor curls must not close it farther through the tool mesh.
+        const float curl=hold > 0.0F ? hold : UnitInput(curls[finger]);
         auto& pose=result.fingers[finger];
         if (hold > 0.0F && finger==0) {
             // Rework 23c890f switches attached tools to its dedicated hold

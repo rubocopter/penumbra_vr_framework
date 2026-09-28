@@ -80,5 +80,13 @@ int main() {
         held.fingers[2].flexion_degrees!=std::array<float,3>{55,70,40} ||
         held.fingers[3].flexion_degrees!=std::array<float,3>{55,70,40} ||
         held.fingers[4].flexion_degrees!=std::array<float,3>{55,70,40}) return 15;
+    const std::array<float,5> mixed_curls{1.0F,0.9F,0.1F,1.0F,0.0F};
+    const auto radius_pose=ArticulateVrHand({},false,0.875F);
+    const auto held_mixed=ArticulateVrHand(mixed_curls,false,0.875F);
+    for (std::size_t finger=0;finger<mixed_curls.size();++finger)
+        if (held_mixed.fingers[finger].flexion_degrees!=
+            radius_pose.fingers[finger].flexion_degrees) return 16;
+    if (ArticulateVrHand(mixed_curls,false).fingers[0].flexion_degrees==
+        radius_pose.fingers[0].flexion_degrees) return 17;
     std::cout<<"Hand conditioning and articulation: BP free-hand response plus Rework held-tool pose passed\n";
 }

@@ -63,12 +63,18 @@ Current work is deliberately narrow:
   fingers could cross the tool and the flashlight's bright effect appeared
   offset from its body. Requiem feeds its live native tool attachment into
   the proven held-hand pose and refreshes that attachment before native
-  light/billboard collection. Both corrections are host-tested only; the
-  effect offset and finger clearance need one focused headset check. One
-  representative level progression is
-  headset-tested. Stacked blocks could be displaced
-  accidentally while climbing; the matching telemetry shows `Grab=6` and
-  jumps, with no VR Push acquisition or force in that interval.
+  light/billboard collection. A later clip and log confirm the refresh runs
+  during tool gameplay, but still show finger intersection; the flashlight
+  effect is ambiguous beside nearby geometry. Shared held-tool articulation
+  now fixes finger curl to the handle-radius pose as Rework does, rather than
+  letting sensor curl close farther; this change is host-tested only. The
+  installed flashlight DAE places its billboard farther forward than Rework's
+  model, so assess that effect separately without changing the shared game
+  asset or moving the whole tool. Finger clearance needs a focused visor
+  check. One representative level progression is headset-tested. Stacked
+  blocks could be displaced accidentally while climbing; the matching
+  telemetry shows `Grab=6` and jumps, with no VR Push acquisition or force in
+  that interval.
 - [ ] Classify Requiem's intermittent Steam Play startup failure. Nine
   captured dumps fault in `SDL_mutexP` from the same Requiem return site
   `0x5A9DA3` with varying invalid mutex arguments. In the latest attempt,

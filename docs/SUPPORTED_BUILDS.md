@@ -46,8 +46,10 @@ Current product-level evidence:
   unclassified. Stacked `Grab=6` blocks could shift during climbing and
   monolith turning felt resistant. A flashlight/glowstick/flare clip confirmed
   that tool models track the hand but exposed finger intersection and an
-  apparent flashlight effect offset. The subsequent attached-tool hand-pose
-  and pre-visibility attachment refresh corrections are host-tested only.
+  apparent flashlight effect offset. A subsequent clip and log show the
+  pre-visibility attachment refresh running during tool gameplay, but finger
+  intersection remains visible and final light alignment is unvalidated. The
+  Rework-derived fixed held-tool curl correction is host-tested only.
   Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments
   at Requiem return site `0x5A9DA3`. The latest candidate reached a tracked
   menu frame before the same fault, so delayed OpenVR does not close this
