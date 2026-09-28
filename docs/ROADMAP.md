@@ -33,9 +33,11 @@ sequence only.
 
 Current work is deliberately narrow:
 
-- [ ] Validate one representative free-body Grab/Move sequence: acquire a
-  stone, diary or item from a surface/edge/floor, keep it held during short stick
-  movement and one snap turn, then release/throw it.
+- [x] Validate one representative free-body Grab sequence: a small stone block
+  was acquired repeatedly from different contact points, carried with stick
+  movement and one snap turn, then released without visible instability. Its
+  matching level-01 asset declares `CanBeThrown=False`; throwing a throwable
+  prop and the distinct free-body `Move=2` path remain unvalidated.
 - [ ] Exercise one representative native mechanism when available (door,
   drawer or lever) and confirm hand blocking/sliding remains stable.
 - [ ] If the same route reaches one naturally, observe a transition/loading

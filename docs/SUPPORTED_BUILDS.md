@@ -13,7 +13,7 @@ release.
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
-| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative Push puzzle headset-validated, other interaction/progression gates open |
+| Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative Push puzzle and free-body Grab headset-validated, other interaction/progression gates open |
 | Requiem verified LAA transform | x86 PE32, LAA | `577D1D7780872CD6C5B99B45759CDC48FEE486A1CCBF319E8F6CF0EAED54E955` | Recognized transformed variant; offline/host verified only |
 
 Canonical Black Plague and Requiem binary evidence lives under `manifests/`.
@@ -37,9 +37,10 @@ Current product-level evidence:
   focused regressions listed in `ROADMAP.md`.
 - **Requiem:** boot/menu/gameplay stereo, Sense locomotion, room-scale/body
   movement, crouch, visible hands and inventory/notebook have headset evidence.
-  A representative Push puzzle is headset-validated after the Push acquisition
-  fix; free-body Grab/Move, another mechanism, transition/progression and
-  stability still require independent evidence.
+  A representative Push puzzle and a free-body `Grab=6` carry/snap/release
+  sequence are headset-validated. Free-body `Move=2`, throwing, another native
+  mechanism, transition/progression and stability still require independent
+  evidence.
 
 None of the Framework-owned trilogy products is currently a supported public
 Framework release.

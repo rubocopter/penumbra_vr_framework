@@ -25,11 +25,11 @@ Extraction alone is not parity. Validation uses the common ladder:
 | --- | --- | --- | --- | --- |
 | Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-candidate presentation/focus/transition regression per game |
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
-| Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed | Transition/tracking-loss and held-object continuity regression |
+| Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed; held Grab body remained attached through one headset snap turn | Transition/tracking-loss and BP held-object continuity regression |
 | Controller actions/bindings | 42 actions, 6 sets, 8 bindings | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Hardware/per-device regression before support claims |
 | Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data | BP keeps richer skeletal channels | Visible tracked hands consumed | BP finger/material pass; Requiem tool alignment |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
-| Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Consumed through BP Grab/Move boundaries; latest changes host-tested | Grab/Move lifecycle, held-body exclusion and fresh resolved palm host-tested | Requiem representative free-body headset gate; BP regression |
+| Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Consumed through BP Grab/Move boundaries; latest changes host-tested | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP regression, Requiem throwable prop and distinct Move path when encountered |
 | Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Requiem Push uses a target-owned native adapter; representative cube puzzle headset-validated | Validate another Requiem mechanism; BP mechanism regression |
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
 | VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
@@ -72,10 +72,20 @@ session the cube was pushed to its switch, tipped and used to solve the puzzle;
 telemetry confirmed VR Push acquisition and applied hand force. That sequence is
 headset-validated and does not promote unrelated Grab/Move or mechanism paths.
 
-**Current gate:** one representative free-body Grab/Move sequence plus one
-native mechanism when available. Magnetic acquisition remains limited to the
-proven Rework/BP inventory-item policy and must not be enabled in Requiem until
-its exact body-list, bounds and item-subtype boundaries are demonstrated.
+In the next headset session, a small stone block entered native `Grab=6` after
+VR selection and was acquired/released repeatedly with fresh surface contact.
+The player carried it with stick movement, made one snap turn while holding it,
+changed the grip point and released it without a visible defect. The matching
+level-01 stone-block asset declares `CanBeThrown=False`; throwing, free-body
+`Move=2` and native mechanisms have no equivalent headset proof. Requiem's
+successful surface-contact grip is a useful comparison for BP's currently
+host-tested fixed-origin grip. BP needs its own headset evidence before changing
+that adapter.
+
+**Current gate:** one native mechanism when available. Magnetic acquisition
+remains limited to the proven Rework/BP inventory-item policy and must not be
+enabled in Requiem until its exact body-list, bounds and item-subtype boundaries
+are demonstrated.
 
 Requiem is **not supported**. See `ROADMAP.md` for the current work order and
 `SUPPORTED_BUILDS.md` for build identity and validation terms.
