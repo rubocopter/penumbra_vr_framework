@@ -30,11 +30,11 @@ Extraction alone is not parity. Validation uses the common ladder:
 | Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data | BP keeps richer skeletal channels | Visible tracked hands consumed | BP finger/material pass; Requiem tool alignment |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
 | Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Consumed through BP Grab/Move boundaries; latest changes host-tested | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP regression, Requiem throwable prop and distinct Move path when encountered |
-| Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Requiem Push uses a target-owned native adapter; representative cube puzzle headset-validated | Validate another Requiem mechanism; BP mechanism regression |
+| Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Requiem mechanism comfort investigation; BP mechanism regression |
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
 | VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
-| Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage exists but remains disabled pending target lighting parity; particle telemetry exists | No support claim | Fix target-specific inputs before promoting shared visual policy |
+| Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage exists but remains disabled pending target lighting parity; particle telemetry exists | Portal effects show rectangular/striped artifacts in headset footage; no visual support claim | Diagnose Requiem portal/refraction presentation before promoting shared visual policy |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Development deploy and two-game candidate consume them | Development backend only; production transaction absent | Unified three-game transactional installer |
 
 ## Black Plague release-regression state
@@ -82,10 +82,24 @@ successful surface-contact grip is a useful comparison for BP's currently
 host-tested fixed-origin grip. BP needs its own headset evidence before changing
 that adapter.
 
-**Current gate:** one native mechanism when available. Magnetic acquisition
-remains limited to the proven Rework/BP inventory-item policy and must not be
-enabled in Requiem until its exact body-list, bounds and item-subtype boundaries
-are demonstrated.
+The next headset pass completed level 01 and loaded the following area. Its
+monolith used native `Move=2` for the jointed rings; telemetry recorded 20
+native entries, 20 VR acquisitions and 20 releases, and the authored puzzle
+advanced. The rings felt somewhat resistant and could spring back. The level
+script also clamps their joint limits at puzzle positions, so the VR contribution
+to that feel remains unresolved. The user could accidentally displace stacked
+Push blocks while climbing them. Gameplay pacing returned to roughly 90 FPS
+after loading, but the portal showed rectangular/striped visual artifacts in
+the recording. The native HPL log reports a missing `portal-fx` texture when
+level 01 loads; portal materials also use screen-space refraction. The share of
+the visual defect caused by native asset data versus VR eye-target rendering is
+unresolved. The transition/progression was exercised; portal presentation,
+tool alignment and shutdown remain open.
+
+**Current gate:** diagnose the observed portal presentation defect while keeping
+the interaction rough edges visible. Magnetic acquisition remains limited to
+the proven Rework/BP inventory-item policy and must not be enabled in Requiem
+until its exact body-list, bounds and item-subtype boundaries are demonstrated.
 
 Requiem is **not supported**. See `ROADMAP.md` for the current work order and
 `SUPPORTED_BUILDS.md` for build identity and validation terms.

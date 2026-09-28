@@ -38,16 +38,23 @@ Current work is deliberately narrow:
   movement and one snap turn, then released without visible instability. Its
   matching level-01 asset declares `CanBeThrown=False`; throwing a throwable
   prop and the distinct free-body `Move=2` path remain unvalidated.
-- [ ] Exercise one representative native mechanism when available (door,
-  drawer or lever) and confirm hand blocking/sliding remains stable.
-- [ ] If the same route reaches one naturally, observe a transition/loading
-  boundary and pacing. Do not broaden the headset pass before the interaction
-  gate is usable.
+- [x] Exercise a representative native mechanism: the level-01 monolith's
+  jointed `Move=2` rings were acquired, turned and released through the native
+  puzzle. The rings felt somewhat resistant and could spring back; keep that
+  comfort issue visible while preserving the script's joint stops.
+- [x] Observe the naturally reached transition/loading boundary and pacing:
+  the level-01 exit loaded the next area and gameplay returned to about 90 FPS.
+  Portal effects showed conspicuous rectangular/striped artifacts.
+- [ ] Diagnose the Requiem portal presentation defect: the native HPL log
+  reports missing `portal-fx` material/texture, while the portal also uses
+  screen-space refraction inside VR eye targets. Establish each cause before
+  changing assets or rendering; preserve the authored effect.
 - [ ] Port Rework/BP magnetic pickup only for inventory items after Requiem's
   exact body-list, bounds and item-subtype boundaries are demonstrated. Do not
   extend that policy to props or mechanisms.
-- [ ] Validate tool alignment, shutdown and representative progression before
-  any support claim.
+- [ ] Validate tool alignment and shutdown before any support claim. One
+  representative level progression is headset-tested; stacked Push blocks could
+  be displaced accidentally while the player climbed them.
 
 ## Hito 3 — trilogy regression
 
