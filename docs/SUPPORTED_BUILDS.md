@@ -41,7 +41,11 @@ Current product-level evidence:
   jointed `Move=2` monolith puzzle and level-01 transition have headset evidence.
   Portal presentation has visible artifacts; stacked `Grab=6` blocks could
   shift during climbing and monolith turning felt resistant. Free-body `Move=2`,
-  throwing, tool alignment and shutdown still need independent evidence.
+  throwing and tool alignment still need independent evidence. A refraction
+  on/off headset comparison isolated the portal's large artifact, and HPL
+  logged a successful exit on that candidate. The subsequent exact-build
+  refraction-copy change is host-tested only and needs a focused visor pass,
+  including exit, before its visual/shutdown behavior can be promoted.
 
 None of the Framework-owned trilogy products is currently a supported public
 Framework release.

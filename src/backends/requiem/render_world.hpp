@@ -37,6 +37,9 @@ struct RequiemInteractionCounters final {
     std::uint64_t native_push_enters = 0;
     std::uint64_t pushes_acquired = 0;
     std::uint64_t push_force_ticks = 0;
+    std::uint64_t refraction_native_calls = 0;
+    std::uint64_t refraction_copy_attempts = 0;
+    std::uint64_t refraction_resize_attempts = 0;
 };
 
 [[nodiscard]] RequiemInteractionCounters ConsumeInteractionCounters() noexcept;

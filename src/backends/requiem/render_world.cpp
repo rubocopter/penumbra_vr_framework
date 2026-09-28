@@ -6,6 +6,7 @@
 #include "gameplay_bridge.hpp"
 #include "hand_contact_probe.hpp"
 #include "iat_hook.hpp"
+#include "refraction_copy_gate.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
 #include "opengl_eye_targets.hpp"
@@ -48,6 +49,14 @@ constexpr std::array<std::uint8_t, 5> kUpdateRenderListCall{
     0xE8, 0xC7, 0xD0, 0x03, 0x00};
 constexpr std::uintptr_t kDrawAllCallRva = 0x000EDEC2;
 constexpr std::uintptr_t kDrawAllRva = 0x000F5140;
+constexpr std::uintptr_t kCopyContextToTextureSlotRva = 0x0028969C;
+constexpr std::uintptr_t kCopyContextToTextureRva = 0x00160640;
+constexpr std::array<std::uint8_t, 8> kCopyContextToTextureEntry{
+    0x53, 0x55, 0x8B, 0x6C, 0x24, 0x0C, 0x85, 0xED};
+constexpr std::array<std::uint8_t, 6> kRefractionClippedCopyCall{
+    0xFF, 0x92, 0x74, 0x01, 0x00, 0x00};
+constexpr std::uintptr_t kRefractionClippedCopyCallRva = 0x0012C279;
+constexpr std::uintptr_t kRefractionFullCopyCallRva = 0x0012C2C8;
 constexpr std::array<std::uint8_t, 5> kDrawAllCall{
     0xE8, 0x79, 0x72, 0x00, 0x00};
 constexpr std::array<std::uint8_t, 8> kDrawAllEntry{
@@ -152,6 +161,8 @@ using UpdateRenderList = void(__thiscall*)(void*, void*, void*, float);
 using DrawAll = void(__thiscall*)(void*);
 using HandsUpdate = void(__thiscall*)(void*, float);
 using EntitySetMatrix = void(__thiscall*)(void*, const runtime::VrMatrix44*);
+using CopyContextToTexture = void(__thiscall*)(
+    void*, void*, const void*, const void*, const void*);
 using Ray = void(__thiscall*)(void*, void*,
     const std::array<float,3>*, const std::array<float,3>*,
     bool, bool, bool, bool);
@@ -161,6 +172,7 @@ hooks::Rel32CallHook g_visibility_hook;
 hooks::Rel32CallHook g_draw_all_hook;
 hooks::Rel32CallHook g_tool_matrix_hook;
 hooks::IatHook g_hands_update_hook;
+hooks::IatHook g_refraction_copy_hook;
 hooks::IatHook g_ray_hook;
 std::array<hooks::IatHook, 3> g_grab_hooks{};
 std::array<hooks::IatHook, 3> g_move_state_hooks{};
@@ -168,6 +180,7 @@ std::array<hooks::IatHook, 3> g_push_state_hooks{};
 std::atomic<RenderWorld> g_original{nullptr};
 std::atomic<UpdateRenderList> g_original_visibility{nullptr};
 std::atomic<DrawAll> g_original_draw_all{nullptr};
+std::atomic<CopyContextToTexture> g_original_refraction_copy{nullptr};
 std::atomic<runtime::OpenVrSession*> g_session{nullptr};
 std::atomic<bool> g_presenting{false};
 std::atomic<bool> g_destroy_requested{false};
@@ -202,6 +215,9 @@ std::atomic<std::uint64_t> g_mechanism_acquired{0};
 std::atomic<std::uint64_t> g_native_push_enters{0};
 std::atomic<std::uint64_t> g_pushes_acquired{0};
 std::atomic<std::uint64_t> g_push_force_ticks{0};
+std::atomic<std::uint64_t> g_refraction_native_calls{0};
+std::atomic<std::uint64_t> g_refraction_copy_attempts{0};
+std::atomic<std::uint64_t> g_refraction_resize_attempts{0};
 std::atomic<std::uint64_t> g_tools_attached{0};
 std::atomic<std::uint64_t> g_tools_native{0};
 std::atomic<std::uint64_t> g_tools_render_aligned{0};
@@ -326,6 +342,15 @@ struct VisibilityPresentation {
 };
 thread_local VisibilityPresentation g_pending_visibility;
 thread_local bool g_inside_stereo_eye = false;
+struct RefractionEyeCopyContext final {
+    HGLRC context = nullptr;
+    GLint framebuffer = 0;
+    GLint eye_width = 0;
+    GLint eye_height = 0;
+    GLint native_width = 0;
+    GLint native_height = 0;
+};
+thread_local const RefractionEyeCopyContext* g_refraction_eye_copy = nullptr;
 thread_local runtime::VrHmdPose g_pending_world_ui_pose;
 thread_local bool g_pending_world_ui_pose_valid = false;
 thread_local bool g_overlay_pending = false;
@@ -341,6 +366,89 @@ public:
     ActiveCall(const ActiveCall&) = delete;
     ActiveCall& operator=(const ActiveCall&) = delete;
 };
+
+class ScopedRefractionEyeCopy final {
+public:
+    ScopedRefractionEyeCopy(const graphics::OpenGlEyeTargets& targets,
+        graphics::Eye eye, const graphics::OpenGlEyeBinding& binding) noexcept
+        : previous_(g_refraction_eye_copy),
+          context_{wglGetCurrentContext(),
+              static_cast<GLint>(targets.target(eye).framebuffer),
+              static_cast<GLint>(targets.width()),
+              static_cast<GLint>(targets.height()),
+              binding.previous_viewport[2],
+              binding.previous_viewport[3]} {
+        g_refraction_eye_copy = &context_;
+    }
+    ~ScopedRefractionEyeCopy() { g_refraction_eye_copy = previous_; }
+    ScopedRefractionEyeCopy(const ScopedRefractionEyeCopy&) = delete;
+    ScopedRefractionEyeCopy& operator=(const ScopedRefractionEyeCopy&) = delete;
+private:
+    const RefractionEyeCopyContext* previous_ = nullptr;
+    RefractionEyeCopyContext context_{};
+};
+
+void __fastcall HookedCopyContextToTexture(void* graphics, void*,
+    void* texture, const void* position, const void* size,
+    const void* texture_offset) noexcept {
+    ActiveCall active_call;
+    const auto return_address = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto original = g_original_refraction_copy.load(
+        std::memory_order_acquire);
+    if (original == nullptr) return;
+    original(graphics, texture, position, size, texture_offset);
+
+    const auto* eye = g_refraction_eye_copy;
+    if (texture == nullptr || eye == nullptr ||
+        eye->context != wglGetCurrentContext() ||
+        g_image == nullptr || !g_inside_stereo_eye) return;
+    const auto image_base = reinterpret_cast<std::uintptr_t>(g_image);
+    if (return_address != image_base + 0x12C27F &&
+        return_address != image_base + 0x12C2CE) return;
+    g_refraction_native_calls.fetch_add(1, std::memory_order_relaxed);
+
+    // The original HPL copy binds its rectangle screen texture on unit 0.
+    // Preserve every other copy and GL state when the exact eye boundary is
+    // unavailable; the native refraction path remains the fallback.
+    constexpr GLenum kActiveTexture = 0x84E0;
+    constexpr GLenum kTexture0 = 0x84C0;
+    constexpr GLenum kTextureRectangle = 0x84F5;
+    constexpr GLenum kTextureBindingRectangle = 0x84F6;
+    constexpr GLenum kMaxRectangleTextureSize = 0x84F8;
+    constexpr GLenum kFramebufferBinding = 0x8CA6;
+    constexpr GLint kRgba8 = 0x8058;
+    GLint active_texture = 0;
+    glGetIntegerv(kActiveTexture, &active_texture);
+    if (active_texture != static_cast<GLint>(kTexture0)) return;
+    GLint framebuffer = 0, rectangle_texture = 0, max_size = 0;
+    std::array<GLint, 4> viewport{};
+    glGetIntegerv(kFramebufferBinding, &framebuffer);
+    glGetIntegerv(GL_VIEWPORT, viewport.data());
+    glGetIntegerv(kTextureBindingRectangle, &rectangle_texture);
+    glGetIntegerv(kMaxRectangleTextureSize, &max_size);
+    if (!ShouldCaptureRefractionEye({
+            image_base, return_address, true, eye->framebuffer, framebuffer,
+            viewport, eye->eye_width, eye->eye_height,
+            eye->native_width, eye->native_height,
+            static_cast<std::uint32_t>(rectangle_texture), max_size})) return;
+
+    GLint texture_width = 0, texture_height = 0;
+    glGetTexLevelParameteriv(kTextureRectangle, 0,
+        GL_TEXTURE_WIDTH, &texture_width);
+    glGetTexLevelParameteriv(kTextureRectangle, 0,
+        GL_TEXTURE_HEIGHT, &texture_height);
+    if (texture_width != eye->eye_width ||
+        texture_height != eye->eye_height) {
+        glCopyTexImage2D(kTextureRectangle, 0, kRgba8, 0, 0,
+            eye->eye_width, eye->eye_height, 0);
+        g_refraction_resize_attempts.fetch_add(1,
+            std::memory_order_relaxed);
+    } else {
+        glCopyTexSubImage2D(kTextureRectangle, 0, 0, 0, 0, 0,
+            eye->eye_width, eye->eye_height);
+    }
+    g_refraction_copy_attempts.fetch_add(1, std::memory_order_relaxed);
+}
 
 void LogFailureOnce(const char* phase, const std::string& error) noexcept {
     if (!g_error_logged.exchange(true, std::memory_order_acq_rel)) {
@@ -628,6 +736,7 @@ private:
         hooks::ScopedEyeScissor scissor({
             binding.previous_viewport[2], binding.previous_viewport[3]});
         StereoEyeScope eye_scope;
+        ScopedRefractionEyeCopy refraction_copy(g_targets, eye, binding);
         original(renderer, world, camera, frame_time);
         world_rendered = true;
         // Controller-anchored Rework mesh is presentation only. Native
@@ -2320,6 +2429,7 @@ bool InstallRenderWorld(std::string& error) noexcept {
     error.clear();
     if (g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_hands_update_hook.installed() ||
+        g_refraction_copy_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
@@ -2354,6 +2464,20 @@ bool InstallRenderWorld(std::string& error) noexcept {
         !std::equal(kDrawAllEntry.begin(), kDrawAllEntry.end(),
             image + kDrawAllRva)) {
         error = "Requiem DrawAll boundary does not match the exact build";
+        return false;
+    }
+    if (ReadNative<void*>(image, kCopyContextToTextureSlotRva) !=
+            image + kCopyContextToTextureRva ||
+        !std::equal(kCopyContextToTextureEntry.begin(),
+            kCopyContextToTextureEntry.end(),
+            image + kCopyContextToTextureRva) ||
+        !std::equal(kRefractionClippedCopyCall.begin(),
+            kRefractionClippedCopyCall.end(),
+            image + kRefractionClippedCopyCallRva) ||
+        !std::equal(kRefractionClippedCopyCall.begin(),
+            kRefractionClippedCopyCall.end(),
+            image + kRefractionFullCopyCallRva)) {
+        error = "Requiem exact-build refraction screen-copy boundary mismatch";
         return false;
     }
     const auto* hands_slot = image + kHandsUpdateSlotRva;
@@ -2590,12 +2714,28 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if (!rolled_back) error += "; rollback failed: " + rollback_error;
         return false;
     }
+    g_original_refraction_copy.store(
+        reinterpret_cast<CopyContextToTexture>(
+            image + kCopyContextToTextureRva), std::memory_order_release);
+    if (!hooks::InstallPointerHook(
+            reinterpret_cast<void**>(image + kCopyContextToTextureSlotRva),
+            image + kCopyContextToTextureRva,
+            reinterpret_cast<void*>(&HookedCopyContextToTexture),
+            g_refraction_copy_hook, error)) {
+        const std::string install_error = error;
+        std::string rollback_error;
+        const bool rolled_back = RemoveRenderWorld(rollback_error);
+        error = install_error;
+        if (!rolled_back) error += "; rollback failed: " + rollback_error;
+        return false;
+    }
     return true;
 }
 
 bool RenderHooksInstalled() noexcept {
     return g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_hands_update_hook.installed() ||
+        g_refraction_copy_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
@@ -2612,6 +2752,8 @@ bool RemoveRenderWorld(std::string& error) noexcept {
         error = "Requiem presentation still owns OpenGL targets";
         return false;
     }
+    if (g_refraction_copy_hook.installed() &&
+        !hooks::RemoveIatHook(g_refraction_copy_hook, error)) return false;
     if (g_ray_hook.installed() &&
         !hooks::RemoveIatHook(g_ray_hook, error)) return false;
     for (auto& hook : g_grab_hooks)
@@ -2647,6 +2789,7 @@ bool StartPresentation(runtime::OpenVrSession& session,
     error.clear();
     if (!g_hook.installed() || !g_visibility_hook.installed() ||
         !g_draw_all_hook.installed() ||
+        !g_refraction_copy_hook.installed() ||
         !g_hands_update_hook.installed() || !g_tool_matrix_hook.installed() ||
         !g_ray_hook.installed() ||
         !std::all_of(g_grab_hooks.begin(), g_grab_hooks.end(),
@@ -2676,6 +2819,9 @@ bool StartPresentation(runtime::OpenVrSession& session,
     g_tracking_world_yaw.store(0.0F, std::memory_order_release);
     g_world_timing_frames.store(0, std::memory_order_relaxed);
     g_world_render_ticks.store(0, std::memory_order_relaxed);
+    g_refraction_native_calls.store(0, std::memory_order_relaxed);
+    g_refraction_copy_attempts.store(0, std::memory_order_relaxed);
+    g_refraction_resize_attempts.store(0, std::memory_order_relaxed);
     for (auto& ticks : g_eye_ticks) ticks.store(0, std::memory_order_relaxed);
     g_overlay_ticks.store(0, std::memory_order_relaxed);
     g_submit_ticks.store(0, std::memory_order_relaxed);
@@ -2788,6 +2934,9 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
         g_native_push_enters.exchange(0, std::memory_order_relaxed),
         g_pushes_acquired.exchange(0, std::memory_order_relaxed),
         g_push_force_ticks.exchange(0, std::memory_order_relaxed),
+        g_refraction_native_calls.exchange(0, std::memory_order_relaxed),
+        g_refraction_copy_attempts.exchange(0, std::memory_order_relaxed),
+        g_refraction_resize_attempts.exchange(0, std::memory_order_relaxed),
     };
 }
 

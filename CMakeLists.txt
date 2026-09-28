@@ -581,6 +581,14 @@ if(BUILD_TESTING)
     add_test(NAME requiem_frame_presentation
         COMMAND pvr_requiem_frame_presentation_test)
 
+    add_executable(pvr_requiem_refraction_copy_gate_test
+        tests/requiem_frame_presentation/refraction_copy_gate_test.cpp)
+    target_include_directories(pvr_requiem_refraction_copy_gate_test PRIVATE
+        src/backends/requiem)
+    pvr_enable_warnings(pvr_requiem_refraction_copy_gate_test)
+    add_test(NAME requiem_refraction_copy_gate
+        COMMAND pvr_requiem_refraction_copy_gate_test)
+
     add_executable(pvr_requiem_gameplay_contract_test
         tests/requiem_gameplay/gameplay_contract_test.cpp)
     target_include_directories(pvr_requiem_gameplay_contract_test PRIVATE

@@ -701,6 +701,51 @@ int main() {
         if (actual[3]!=255 || !output.EndEye(output_binding,error) ||
             !enhanced.Destroy(error) || !output.Destroy(error)) return 56;
     }
+    {
+        // HPL allocates its rectangle screen copy at native resolution. The
+        // Requiem eye adapter must be able to expand that bound texture and
+        // refresh the complete eye without changing its GL texture identity.
+        penumbra_vr::graphics::OpenGlEyeTargets refraction_targets;
+        penumbra_vr::graphics::OpenGlEyeBinding binding;
+        if (!refraction_targets.CreateOrResize(64,64,error) ||
+            !refraction_targets.BeginEye(penumbra_vr::graphics::Eye::left,binding,error)) {
+            std::cerr << "Refraction eye copy setup failed: " << error << '\n';
+            return 57;
+        }
+        constexpr GLenum rectangle_target=0x84F5;
+        GLuint rectangle=0;
+        glGenTextures(1,&rectangle);
+        glBindTexture(rectangle_target,rectangle);
+        glTexImage2D(rectangle_target,0,GL_RGBA8,16,16,0,
+            GL_RGBA,GL_UNSIGNED_BYTE,nullptr);
+        glDisable(GL_SCISSOR_TEST);
+        glClearColor(1,0,0,1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glCopyTexImage2D(rectangle_target,0,GL_RGBA8,0,0,64,64,0);
+        GLint copied_width=0,copied_height=0;
+        glGetTexLevelParameteriv(rectangle_target,0,GL_TEXTURE_WIDTH,&copied_width);
+        glGetTexLevelParameteriv(rectangle_target,0,GL_TEXTURE_HEIGHT,&copied_height);
+        if (copied_width!=64 || copied_height!=64 || glGetError()!=GL_NO_ERROR) {
+            std::cerr << "Rectangle screen copy did not expand to eye size\n";
+            return 58;
+        }
+        glClearColor(0,1,0,1);
+        glClear(GL_COLOR_BUFFER_BIT);
+        glCopyTexSubImage2D(rectangle_target,0,0,0,0,0,64,64);
+        std::vector<GLubyte> pixels(64*64*4);
+        glGetTexImage(rectangle_target,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
+        const std::size_t corner=(63*64+63)*4;
+        if (glGetError()!=GL_NO_ERROR ||
+            pixels[corner]!=0 || pixels[corner+1]!=255 ||
+            pixels[corner+2]!=0 || pixels[corner+3]!=255) {
+            std::cerr << "Full-eye rectangle copy missed the far corner\n";
+            return 59;
+        }
+        glBindTexture(rectangle_target,0);
+        glDeleteTextures(1,&rectangle);
+        if (!refraction_targets.EndEye(binding,error) ||
+            !refraction_targets.Destroy(error)) return 60;
+    }
     std::cout << "OpenGL eye target allocation, resize and state restoration passed\n";
     return 0;
 }

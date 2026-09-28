@@ -34,7 +34,7 @@ Extraction alone is not parity. Validation uses the common ladder:
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
 | VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
-| Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage exists but remains disabled pending target lighting parity; particle telemetry exists | Portal effects show rectangular/striped artifacts in headset footage; no visual support claim | Diagnose Requiem portal/refraction presentation before promoting shared visual policy |
+| Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage exists but remains disabled pending target lighting parity; particle telemetry exists | Refraction-on/off headset comparison isolated the portal's large artifact; exact-build full-eye copy candidate is host-tested only | Validate Requiem candidate and residual ghosting before assessing BP's distinct particle scenes |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Development deploy and two-game candidate consume them | Development backend only; production transaction absent | Unified three-game transactional installer |
 
 ## Black Plague release-regression state
@@ -98,12 +98,19 @@ uses separate refractive materials. The HPL log records a 2560×1440 screen
 buffer; the VR log records 3400×3468 eye targets. Exact Requiem code calls
 `glCopyTexSubImage2D` through its native screen-copy path, while the shipped
 refraction shader samples `screenMap` in viewport pixel coordinates. This size
-mismatch is a plausible cause, not yet a runtime-isolated cause; it needs a
-refraction-off headset comparison. The transition/progression was exercised;
-portal presentation, tool alignment and shutdown remain open.
+mismatch is implicated by the next headset recording: the rectangular/striped
+defect appeared with Refractions enabled and disappeared when disabled, while
+the portal ring remained visible. A small motion-related ghosting impression
+remained with Refractions disabled. A Requiem-only candidate now captures the
+whole bound VR eye into HPL's rectangle screen texture at the two exact
+renderer copy sites; the exact image, GL operation and fail-closed gate are
+host-tested. Its visual result and pacing still need visor evidence. The
+transition/progression was exercised, and HPL logged a successful exit after
+the comparison on the prior candidate. Portal presentation and tool alignment
+remain open on the new one.
 
-**Current gate:** diagnose the observed portal presentation defect while keeping
-the interaction rough edges visible. Magnetic acquisition remains limited to
+**Current gate:** validate the exact-build Requiem refraction candidate while
+keeping the interaction rough edges visible. Magnetic acquisition remains limited to
 the proven Rework/BP inventory-item policy and must not be enabled in Requiem
 until its exact body-list, bounds and item-subtype boundaries are demonstrated.
 

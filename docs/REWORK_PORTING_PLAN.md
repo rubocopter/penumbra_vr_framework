@@ -84,6 +84,16 @@ Some Rework behavior is intentionally product-specific unless future evidence
 proves otherwise, including exact HPL material/light response, model/weapon
 statistics, authored rig/socket data and source-game UI/gameplay mechanics.
 
+Rework `23c890f` copies refraction from a framebuffer whose dimensions match
+its native screen texture. Requiem's binary renderer retains that copy path,
+but the Framework draws each VR eye into a larger target; the shipped shader
+samples the copy in eye viewport pixels. The refraction-on/off headset
+comparison exposes this incompatible renderer boundary. A Requiem exact-build
+adapter now captures the full eye into the bound screen texture only at the two
+verified refraction copy callsites; it is host-tested and awaits visor evidence.
+This renderer-specific correction does not establish a shared cross-game
+refraction policy or validate Black Plague's particle scenes.
+
 Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform but
 anchors the body's local origin, independent of the selected surface point.
 Rework's variable surface contact and conditional `mbPickAtPoint` mode produced
