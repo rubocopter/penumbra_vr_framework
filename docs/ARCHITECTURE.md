@@ -255,13 +255,9 @@ integration models. Installer responsibilities are:
 `assets/settings/recommended.json` is the optional recommended-profile input.
 User calibration must not be silently overwritten.
 
-## Current implementation boundary
+## Implementation and evidence ownership
 
-Overture is integrated, Black Plague has a substantial development backend,
-and Requiem has an active exact-build VR backend. Requiem's physical puzzle
-interaction remains the gameplay gate. The latest Push acquisition fix has
-been exercised in the headset and a cube puzzle was completed without problems.
-Representative free-body Grab, jointed Move and the first level transition also
-have headset evidence. Static tool alignment and other interaction families
-remain open. Black Plague regression items remain documented release gates. A shared subsystem is
-considered proven only when a real second consumer uses it successfully.
+A shared subsystem is considered proven only when a real second consumer uses
+it successfully. Current capability state belongs in `TRILOGY_PARITY_PLAN.md`,
+build identity and evidence levels in `SUPPORTED_BUILDS.md`, and active work
+order in `ROADMAP.md`.

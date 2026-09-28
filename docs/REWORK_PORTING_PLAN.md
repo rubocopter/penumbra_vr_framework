@@ -98,8 +98,10 @@ contract at its own vtable and two callsites; its installed refraction shaders
 also sample in viewport pixels. Both adapters now consume one OpenGL full-eye
 capture implementation, with per-game caller allowlists and rollback ownership.
 A real-driver host test verifies expansion, full-corner refresh and preservation
-of GL binding/viewport state. BP visual appearance is still unvalidated; this
-port does not establish that every smoke effect uses refraction.
+of GL binding/viewport state. BP's own headset run confirms correct special
+effects in the observed scene, with native full-eye copy/resize telemetry.
+This port does not establish that every smoke effect uses refraction or that
+every material variant is validated.
 
 Rework `23c890f` fixes the visible hand curl around an attached tool according
 to its grip radius, overriding sensor curl while attached. Black Plague and
@@ -107,10 +109,10 @@ Requiem consume the shared hold-pose policy. Requiem's tool clips exposed
 finger intersection: its visible hand first lacked the attachment weight, and
 the shared articulation then allowed sensor curl to exceed that weight. The
 adapter now supplies the weight only after validating the live attachment,
-and shared articulation fixes the curl to that weight. The latter change is
-host-tested and still needs visor validation. The flashlight's apparent light
-offset remains a separate target-owned model/light question; Rework's modified
-DAE positions its ray billboard differently from Requiem's installed asset.
+and shared articulation fixes the curl to that weight. Host tests protect that
+policy; slight finger intersection remains a headset limitation. Tool light
+geometry is target-owned: Rework's modified DAE positions its ray billboard
+differently from Requiem's installed asset.
 The subsequent Requiem trial showed that the fixed curl alone did not keep the
 native tool attached to the visible hand during stick movement. Unlike Black
 Plague's tool path, Requiem used a raw grip for the tool while drawing the hand
@@ -127,8 +129,8 @@ but restoring Rework's 1.6 parent scale reintroduced beam separation. HPL's
 Against the emitter at Y=-0.103966, 1.6 predicts a 0.05468 gap instead of the
 native 0.00520 overlap. The target profile therefore keeps a rigid native-size
 parent and 0.020 grip radius with the validated direction. This combined
-correction is host-tested pending one headset check; a larger tool requires
-separately proving the target billboard-size boundary. Earlier slight finger
+correction has host tests and the user's final headset acceptance/image; a larger
+tool requires separately proving the target billboard-size boundary. Earlier slight finger
 intersection remains a known limitation.
 
 Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform.
@@ -142,8 +144,9 @@ VR winner now uses the shared 0.40 m reach bound, while stale/native-only picks
 retain the tighter box guard. The Requiem headset sequence later demonstrated
 stable reacquisition of one prop from different surface points. BP now anchors
 a fresh, accepted VR surface contact within the shared reach bound and retains
-its origin fallback for stale/native-only picks; this port is host-tested
-pending a BP visor trial. Native-origin grabs and jointed
+its origin fallback for stale/native-only picks. BP's own headset trial confirms
+chair acquisition from different contact points; held snap turns and throwing
+still require separate evidence. Native-origin grabs and jointed
 `Move=2` mechanisms retain their native behavior. A published world-yaw epoch
 also distinguishes snap turning from physical palm jumps: free bodies follow
 that rebase without a one-frame force impulse, while mechanisms rebase their

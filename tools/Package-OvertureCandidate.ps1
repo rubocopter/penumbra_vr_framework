@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'Test-PenumbraVrMetadata.ps1')
 $buildCurrentProduct = -not $PackageRoot
 if ($buildCurrentProduct) {
     $PackageRoot = Join-Path $repoRoot 'products/overture/build/package/Release/PenumbraVR'

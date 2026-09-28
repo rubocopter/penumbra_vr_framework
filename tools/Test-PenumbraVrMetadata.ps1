@@ -267,6 +267,34 @@ if (($bindingUrls | Sort-Object -Unique).Count -ne $bindingUrls.Count) {
     throw 'Duplicate SteamVR default-binding paths were found.'
 }
 
+$expectedBindingPaths = @{
+    playstation_vr2_sense = 'bindings/psvr2_sense.json'
+    vive_controller = 'bindings/vive_controller.json'
+    knuckles = 'bindings/knuckles.json'
+    oculus_touch = 'bindings/oculus_touch.json'
+    pico4_controller = 'bindings/pico4_controller.json'
+    pico_neo3_controller = 'bindings/pico_neo3_controller.json'
+    'microsoft/motion_controller' = 'bindings/microsoft_motion_controller.json'
+    holographic_controller = 'bindings/holographic_controller.json'
+}
+if (@(Compare-Object -ReferenceObject @($expectedBindingPaths.Keys | Sort-Object) `
+        -DifferenceObject @($bindingControllerTypes | Sort-Object)).Count -ne 0) {
+    throw 'SteamVR manifests must retain all eight bundled controller profiles.'
+}
+$actionTypes = @{}
+foreach ($action in $actionManifest.actions) { $actionTypes[$action.name] = $action.type }
+# Preserve the documented compatibility layouts without pretending they offer
+# full action parity. Every other implemented output, including both dominant
+# hands, tracking, UI and haptics, must survive metadata/package changes.
+$noSkeleton = @('/actions/global/in/left_skeleton', '/actions/global/in/right_skeleton')
+$legacyVive = @($noSkeleton)
+foreach ($set in @('gameplay', 'gameplay_left')) {
+    foreach ($action in @('turn', 'holster', 'crouch', 'pause')) {
+        $legacyVive += "/actions/$set/in/$action"
+    }
+}
+$legacyWmr = @($noSkeleton) + @('/actions/gameplay/in/holster', '/actions/gameplay_left/in/holster')
+
 $mandatoryActions = @($actionManifest.actions | Where-Object {
     $_.PSObject.Properties.Name -contains 'requirement' -and $_.requirement -eq 'mandatory'
 } | ForEach-Object { $_.name })
@@ -279,6 +307,9 @@ $skeletalControllerTypes = @(
 )
 
 foreach ($defaultBinding in $actionManifest.default_bindings) {
+    if ($defaultBinding.binding_url -cne $expectedBindingPaths[$defaultBinding.controller_type]) {
+        throw "Controller '$($defaultBinding.controller_type)' has an unexpected binding path."
+    }
     $bindingRelativePath = $defaultBinding.binding_url.Replace(
         '/', [System.IO.Path]::DirectorySeparatorChar)
     $bindingPath = Join-Path $openVrAssetRoot $bindingRelativePath
@@ -314,6 +345,10 @@ foreach ($defaultBinding in $actionManifest.default_bindings) {
                 }
                 if ($actionNames -notcontains $directBinding.output) {
                     throw "Unknown SteamVR action '$($directBinding.output)' in $bindingRelativePath."
+                }
+                $expectedType = @{ haptics = 'vibration'; poses = 'pose'; skeleton = 'skeleton' }[$directCollection]
+                if ($actionTypes[$directBinding.output] -ne $expectedType) {
+                    throw "SteamVR $directCollection output '$($directBinding.output)' has incompatible type in $bindingRelativePath."
                 }
                 if ($directCollection -eq 'skeleton') {
                     $hand = if ($directBinding.output -match '/in/(left|right)_skeleton$') {
@@ -362,6 +397,21 @@ foreach ($defaultBinding in $actionManifest.default_bindings) {
     foreach ($mandatoryAction in $mandatoryActions) {
         if ($boundOutputs -notcontains $mandatoryAction) {
             throw "Mandatory SteamVR action '$mandatoryAction' has no binding in $bindingRelativePath."
+        }
+    }
+
+    $allOutputs = @($boundOutputs) + @($binding.bindings.PSObject.Properties |
+        ForEach-Object { $_.Value.skeleton } |
+        ForEach-Object { if ($null -ne $_) { $_.output } })
+    $unassigned = switch ($defaultBinding.controller_type) {
+        'vive_controller' { $legacyVive }
+        'microsoft/motion_controller' { $legacyWmr }
+        'holographic_controller' { $legacyWmr }
+        default { @() }
+    }
+    foreach ($actionName in $actionNames) {
+        if ($unassigned -notcontains $actionName -and $allOutputs -notcontains $actionName) {
+            throw "Controller '$($defaultBinding.controller_type)' has lost implemented action '$actionName'."
         }
     }
 

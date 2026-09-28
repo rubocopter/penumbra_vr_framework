@@ -26,16 +26,51 @@ Extraction alone is not parity. Validation uses the common ladder:
 | Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-candidate presentation/focus/transition regression per game |
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
 | Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed; held Grab body remained attached through one headset snap turn | Transition/tracking-loss and BP held-object continuity regression |
-| Controller actions/bindings | 42 actions, 6 sets, 8 bindings | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Hardware/per-device regression before support claims |
-| Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Resolved-palm tool/hand motion headset-validated in flashlight/glowstick/flare clip; installed-asset flashlight socket correction host-tested | BP finger/material pass; Requiem static finger/light alignment headset check |
+| Controller actions/bindings | 42 actions, 6 sets, 8 graphs; all three consumers and package/install/repair distribution host-verified | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Device hardware regression; Vive compatibility and WMR holster omissions remain |
+| Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Tool/hand motion and final native-size flashlight beam/model alignment headset-validated | BP finger/material pass; slight finger/contact imperfections remain |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
-| Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Fresh bounded surface-contact Grab ported from Requiem path, host-tested; stale/native picks retain origin fallback | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP surface regrab regression, Requiem throwable prop and distinct Move path when encountered |
+| Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Surface-contact Grab port has headset evidence from acquiring a chair at different points; stale/native picks retain origin fallback | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP held turn/throw/mechanism regression; Requiem throwable prop and distinct Move path when encountered |
 | Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Requiem mechanism comfort investigation; BP mechanism regression |
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
 | VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
-| Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; exact-build full-eye refraction port is host-tested with separate particle/copy telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Subtle motion ghosting remains unclassified; BP refractive particles need target visor evidence, and ordinary smoke is a separate family |
+| Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; observed special effects now render correctly in headset with native full-eye copy/resize telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Coverage of all smoke/material variants and subtle ghosting remains unestablished |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | Combined deterministic package/selector and GUI discovery/control creation host-tested; final user acceptance pending |
+
+## Controller profiles and distribution
+
+All three products consume the same 42 logical actions and six action sets,
+including the mirrored dominant-hand layouts. The bundled defaults are:
+
+| Family | SteamVR controller type | Bundled action coverage |
+| --- | --- | --- |
+| PS VR2 Sense | `playstation_vr2_sense` | All 42 actions |
+| HTC Vive | `vive_controller` | Compatibility layout: no turn, button crouch, holster, pause or skeletons |
+| Valve Index | `knuckles` | All 42 actions |
+| Oculus Touch | `oculus_touch` | All 42 actions |
+| Pico 4 | `pico4_controller` | All 42 actions |
+| Pico Neo 3 | `pico_neo3_controller` | All 42 actions |
+| Windows Mixed Reality | `microsoft/motion_controller` | No holster or skeletons |
+| Holographic/WMR | `holographic_controller` | No holster or skeletons |
+
+Coverage here means declared binding outputs, not hardware validation. Sense
+has game-specific headset evidence; the other families still require physical
+device validation. Vive's omitted actions matter to the binary backends, which
+do not supply a raw-input fallback. Missing skeletons use the existing hand-pose
+fallback. SteamVR permits custom remapping.
+
+`products/overture/scripts/generate-bindings.ps1` owns the physical layouts;
+`assets/openvr/overture` supplies Overture and `assets/openvr` supplies the
+shared Black Plague/Requiem root. Metadata checks enforce functional parity
+between those trees, the eight controller types, output coverage and direct
+pose/skeleton/haptic types. Each product loads executable/loader-adjacent
+`vr/actions.json`; SteamVR selects defaults by controller type. Installation
+repairs the owned default files without replacing saved SteamVR custom bindings.
+
+Package/install/repair fixtures verify the manifest and all eight graphs by
+source hash for Overture and the shared root, including Requiem selection and
+repair of deleted/corrupted graphs. This is host-tested distribution evidence;
+it does not establish device compatibility or public support.
 
 ## Black Plague release-regression state
 
@@ -46,6 +81,13 @@ physical motion, crouch recovery, hands, free-body/mechanism interaction, UI,
 audio, visual effects, transitions and shutdown. Exact work order belongs in
 `ROADMAP.md`; the hardware procedure belongs in
 `VR_HEADSET_TEST_CHECKLIST.md`.
+
+The current headset run confirms special effects in the observed scene and
+surface-contact acquisition of a chair from different points. Its matching
+exact-build log records full-eye refraction copy/resize activity. The same run
+exposes vertical mini-hops when touching ventilation walls. Their cause remains
+unknown; accepted motion, native stepping and crouch/body contact need a focused
+investigation before closing the wall/tunnel comfort gate.
 
 The SDL mutex crash remains historical and unattributed. Existing dumps do not
 justify assigning a cause. Collect a new discriminating dump/log only if it
@@ -80,7 +122,8 @@ level-01 stone-block asset declares `CanBeThrown=False`; throwing, free-body
 `Move=2` have no equivalent headset proof from this small-block sequence.
 Requiem's successful surface-contact grip has been ported into BP's fresh,
 bounded VR-origin path while preserving its stale/native origin fallback.
-The BP port is host-tested and still needs its own headset evidence.
+The BP port now has its own headset evidence from grabbing a chair at different
+contact points; that report does not validate BP held snap turns or throwing.
 
 The next headset pass completed level 01 and loaded the following area. Its
 monolith used native `Move=2` for the jointed rings; telemetry recorded 20
@@ -107,31 +150,27 @@ With Refractions enabled, the subsequent headset clip showed the authored portal
 ring without the large rectangular/striped defect. Runtime telemetry recorded
 one texture resize followed by full-eye copies at every intercepted native
 refraction call, with roughly 90 FPS in the portal scene; HPL exited normally.
-Subtle motion ghosting remains unclassified. An earlier
-flashlight/glowstick/flare visor trial showed the native tools moving relative
-to the visible hand during stick locomotion. Telemetry confirmed pre-visibility
-attachment refresh ran, so timing alone did not explain the separation.
-Rework fixes attached-tool finger curl to the grip-radius pose; Framework's
-shared articulation now does the same, but the subsequent visor trial showed
-no perceptible alignment improvement. The remaining Requiem-specific difference
-was positional: the visible hand consumed the collision-resolved palm while
-the tool refresh consumed the raw grip. Black Plague's tool path already uses
-the resolved palm. Requiem now uses one palm publication for tool and hand at
+Subtle motion ghosting remains unclassified.
+
+Requiem's tool/hand motion defect came from using raw grip for the tool while
+the visible hand consumed the collision-resolved palm. Pre-visibility refresh
+and Rework's fixed grip-radius curl alone did not resolve that difference.
+Requiem now uses one palm publication for tool and hand at
 native update, visibility and eye rendering, with an old-yaw fallback. A new
 headset clip confirms that the three tools remain steady relative to the hand
 under stick locomotion; its log recorded resolved-palm use and no raw-palm use.
-Headset trials establish beam/model alignment at native size and correct
-forward orientation after reversing the installed-asset socket. Restoring 1.6
-parent scale separated the beam again: the HPL axis billboard normalizes its
-rendered basis and keeps its installed height while its centre inherits scale.
+The target-owned flashlight socket preserves forward orientation at native
+size. HPL's axis billboard normalizes its rendered basis and keeps its installed
+height while its centre inherits scale, so scaling the parent separates the beam.
 Requiem now keeps the validated orientation with a rigid native-size attachment
 and 0.020 grip radius. Host tests protect the billboard near edge/emitter gap,
-direction and fixed grip under wrist rotation; their combined result still
-needs a brief headset check. Earlier slight finger intersection remains a
-known limitation unless new headset evidence establishes otherwise.
+direction and fixed grip under wrist rotation. The user accepted the combined
+result and supplied a headset image showing the beam at the housing edge.
+Earlier slight finger intersection remains a known limitation unless new
+headset evidence establishes otherwise.
 
-**Current gate:** a brief flashlight beam/model alignment check, after which the user
-requests concluding the representative Requiem interaction milestone. Broader
+The representative Requiem interaction milestone is concluded at the user's
+request after the final flashlight validation. Broader
 interaction gaps and known limitations remain visible for regression. Magnetic
 acquisition remains limited to the proven Rework/BP inventory-item policy and
 must not be enabled in Requiem until its exact body-list, bounds and item-subtype

@@ -5,6 +5,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'Test-PenumbraVrMetadata.ps1')
 $outputPath = [System.IO.Path]::GetFullPath($OutputPath)
 if (Test-Path -LiteralPath $outputPath) {
     throw "Output archive already exists: $outputPath"

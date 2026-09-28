@@ -26,12 +26,17 @@ This file owns the current work order. Capability state lives in
 
 ## Hito 2 — Requiem interaction
 
+The representative interaction milestone is concluded at the user's request.
+The final native-size, forward-facing flashlight has headset confirmation for
+beam/model alignment. Broader coverage and known limitations remain regression
+work; this is not full-game support.
+
 The representative Push puzzle gate is closed: in headset the cube could be
 pushed to the switch, tipped and used to solve the puzzle. Runtime telemetry
 confirmed VR Push acquisition and applied hand force. This validates that Push
 sequence only.
 
-Current work is deliberately narrow:
+Representative headset evidence:
 
 - [x] Validate one representative free-body Grab sequence: a small stone block
   was acquired repeatedly from different contact points, carried with stick
@@ -55,37 +60,40 @@ Current work is deliberately narrow:
   and striped artifact; the native copy was upgraded for both eyes, gameplay
   held about 90 FPS, and HPL exited successfully. The clip does not establish
   whether subtle motion ghosting remains in headset.
-- [ ] Port Rework/BP magnetic pickup only for inventory items after Requiem's
-  exact body-list, bounds and item-subtype boundaries are demonstrated. Do not
-  extend that policy to props or mechanisms.
 - [x] Validate tool/hand motion coherence: a new headset clip shows flashlight,
   glowstick and flare staying with the visible hand during stick locomotion.
   Its log records resolved-palm attachment throughout, with no raw-palm use.
-- [ ] Confirm the final flashlight beam/model alignment, then conclude this
-  representative interaction milestone as requested by the user. Headset
-  evidence establishes forward orientation, but restoring 1.6 parent scale
-  separated the beam again. The installed axis billboard keeps its fixed
-  height while its centre inherits parent scale; source/asset math predicts
-  about a 5.5 cm gap. Requiem retains the validated orientation and restores a
-  rigid, native-size attachment, host-tested pending one brief headset check.
-  The earlier native-size trial had correct beam/model alignment. Preserve the known
-  finger/contact limitations and broader capability gaps for later regression.
-  One representative level progression is headset-tested. Stacked blocks
-  could be displaced accidentally while climbing; telemetry shows `Grab=6`
-  and jumps, with no VR Push acquisition or force in that interval.
+- [x] Validate final flashlight orientation and beam/model alignment at native
+  size. The user accepted the result and supplied a confirming headset image.
+
+Known limitations carried into later regression:
+
+- Requiem inventory-only magnetic pickup still needs exact body-list, bounds
+  and item-subtype evidence; do not extend it to props or mechanisms.
+- Slight finger/contact imperfections, monolith ring resistance and accidental
+  stacked-block displacement remain visible. The climbing interval used
+  `Grab=6` and jumps, with no VR Push acquisition/force.
 - [ ] Classify Requiem's intermittent Steam Play startup failure. Nine
   captured dumps fault in `SDL_mutexP` from the same Requiem return site
-  `0x5A9DA3` with varying invalid mutex arguments. In the latest attempt,
-  the probe completed OpenVR, installed the hooks and submitted the first
-  tracked menu frame about 40 seconds before the fault. Delaying OpenVR until
-  two completed SDL swaps did not prevent it; the upstream cause remains
-  unknown. Do not hook the mutex without exact initialized-image evidence.
+  `0x5A9DA3` with varying invalid mutex arguments. A captured failure occurred
+  after tracked menu submission; delaying OpenVR until two completed SDL swaps
+  did not prevent it. The upstream cause remains unknown. Resume investigation
+  only with new discriminating evidence; do not hook the mutex speculatively.
 
 ## Hito 3 — trilogy regression
 
 After the Requiem interaction gate, run a small production-path regression for
 all three games. Preserve the validation ladder; old headset evidence does not
 automatically validate a newer candidate.
+
+- [x] Audit all eight bundled controller graphs and their consumers in the
+  three games. Host guards reject dropped profiles/actions and type drift;
+  package/install/repair fixtures verify all eight by hash. Device hardware
+  validation and the documented Vive/WMR layout limitations remain separate.
+
+The next focused runtime issue is Black Plague's vertical mini-hops while
+touching ventilation walls. Investigate accepted motion, native stepping and
+crouch/body contact together; the cause is not yet established.
 
 ### Overture
 
@@ -99,12 +107,14 @@ automatically validate a newer candidate.
 - [ ] Revalidate continuous presentation, focus/Alt+Tab, mirror and map
   transitions on the current candidate.
 - [ ] Revalidate wall/tunnel pressure, mixed stick + room-scale contact, Hybrid
-  crouch recovery and accepted-motion footsteps.
+  crouch recovery and accepted-motion footsteps. A new headset run reproduces
+  vertical mini-hops in a ventilation duct while in contact with its walls.
 - [ ] Revalidate free-body acquisition/hold/throw, snap-turn continuity and
   representative slider/hinge/door mechanisms. A fresh, bounded surface
   contact now anchors VR-origin Grab as it does in the headset-tested Requiem
-  path; BP's stale/native-only origin fallback remains. The port is host-tested
-  and requires BP headset validation.
+  path; BP's stale/native-only origin fallback remains. A chair was grabbed
+  successfully from different points in headset. Held snap turns, throw and
+  mechanisms remain separate regression cases.
 - [ ] Validate imported-hand fingers/material presentation, tool sockets and
   mapped haptics.
 - [ ] Validate inventory/notebook/context actions, `UseItem`, subtitles and the
@@ -112,12 +122,14 @@ automatically validate a newer candidate.
 - [ ] Validate HRTF/reverb on headset audio hardware. Keep the missing
   distance/occlusion low-pass consumer as implementation work until its exact
   target boundary is mapped.
-- [ ] Validate BP refractive particle scenes with Refractions enabled. The
+- [x] Validate a representative BP special-effects scene after the port. The
   exact initialized BP image independently maps its two renderer screen-copy
   sites and the installed shaders sample in eye pixels. BP now consumes the
   full-eye copy proven in Requiem; native call/copy/resize counters and real
-  OpenGL tests protect this host-tested port. Ordinary smoke/billboard defects
-  and subtle ghosting still need their own runtime classification.
+  OpenGL tests protect the port. The user reports that the observed effects
+  now render correctly, and the matching log records full-eye copy/resize
+  activity. This does not establish coverage of every smoke/material variant
+  or subtle ghosting.
 - [ ] Reproduce death → main menu only as part of normal regression; the SDL
   mutex crash remains historical/unattributed unless a new discriminating dump
   appears.
@@ -129,19 +141,20 @@ The repeatable Black Plague hardware procedure is in
 
 The user requested this work alongside the remaining runtime gates. The
 shared Black Plague/Requiem redist transaction, combined selector and graphical
-front end have host evidence. The candidate remains a prototype; the current
-runtime still needs its own visor validation.
+front end have host evidence. The candidate remains a prototype; broader runtime
+regression, production UI acceptance and release audit are still separate gates.
 
 - [x] Host-test the shared Black Plague/Requiem deployment transaction,
   three-game selector and Overture ownership/upgrade integration.
-- [ ] Keep discovery and exact-build fingerprinting read-only until a complete
-  transaction has been planned.
-- [ ] Finish transactional install, repair, recovery, upgrade and uninstall for
-  all supported products, including the verified LAA transform where applicable.
-- [ ] Register/restore OpenVR assets, localization and optional recommended
-  settings transactionally.
-- [ ] Package licenses/attribution and validate clean install, upgrade, repair,
-  interruption recovery and exact restore.
+- [x] Host-test read-only discovery and exact-build fingerprinting before writes.
+- [x] Host-test transactional install, repair, recovery and exact restore for
+  Overture and the shared root, including the verified BP LAA transform.
+- [x] Package and verify all eight controller defaults for each root and both
+  Spanish localizations under the shared transaction.
+- [ ] Finish production OpenVR registration/versioning/rollback and optional
+  recommended settings. Preserve user calibration and custom bindings.
+- [ ] Complete redistribution license audit and clean-user acceptance of
+  install, upgrade, repair, interrupted-operation recovery and exact restore.
 - [x] Provide and host-test the graphical launcher with a hidden PowerShell
   console, exact-build detection, manual folders, install, repair and uninstall.
   Packaged discovery includes pristine and managed Overture and the shared BP/

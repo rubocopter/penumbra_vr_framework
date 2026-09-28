@@ -93,7 +93,7 @@ The bundled Vive compatibility profile preserves the original layout:
 | Right grip | Inventory | Close |
 | Right menu | Examine | Back |
 
-Turn, button crouch, holster, pause, and recenter are not assigned in this compatibility profile. They can be mapped through SteamVR.
+Turn, button crouch, holster and pause are not assigned in this compatibility profile. They can be mapped through SteamVR. Menu clicks also request horizontal recenter, sharing the notebook/examine and UI back/close controls.
 
 ### Valve Index
 

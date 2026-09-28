@@ -6,6 +6,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+& (Join-Path $PSScriptRoot 'Test-PenumbraVrMetadata.ps1')
 if (-not $BuildRoot) {
     $BuildRoot = Join-Path $repoRoot 'build'
 }

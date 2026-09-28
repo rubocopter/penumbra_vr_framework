@@ -16,6 +16,22 @@ if (-not $temporaryRoot.StartsWith($tempBase, [StringComparison]::OrdinalIgnoreC
     throw 'Unsafe Framework fixture path.'
 }
 
+function Assert-ControllerProfiles([string]$Source, [string]$Target, [string]$Product) {
+    $manifest = Get-Content -LiteralPath (Join-Path $Source 'actions.json') -Raw | ConvertFrom-Json
+    if (@($manifest.default_bindings).Count -ne 8) { throw 'Source controller-profile set is incomplete.' }
+    foreach ($relative in @('actions.json') + @($manifest.default_bindings.binding_url)) {
+        $sourceFile = Join-Path $Source $relative
+        $targetFile = Join-Path $Target $relative
+        if (-not (Test-Path -LiteralPath $targetFile -PathType Leaf) -or
+            (Get-FileHash -LiteralPath $sourceFile).Hash -ne (Get-FileHash -LiteralPath $targetFile).Hash) {
+            throw "$Product controller payload missing or changed: $relative"
+        }
+    }
+    Write-Host "${Product}: action manifest and all eight controller profiles verified."
+}
+$overtureProfiles = Join-Path $repoRoot 'assets/openvr/overture'
+$sharedProfiles = Join-Path $repoRoot 'assets/openvr'
+
 try {
     New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
     $archive = Join-Path $temporaryRoot 'Framework.zip'
@@ -28,6 +44,8 @@ try {
     }
     $unpacked = Join-Path $temporaryRoot 'unpacked'
     Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
+    Assert-ControllerProfiles $overtureProfiles (Join-Path $unpacked 'products/overture/vr') 'Overture package'
+    Assert-ControllerProfiles $sharedProfiles (Join-Path $unpacked 'products/black_plague/assets/openvr') 'BP/Requiem package'
     $installer = Join-Path $unpacked 'tools/Install-PenumbraFrameworkCandidate.ps1'
     $gui = Join-Path $unpacked 'tools/Install-PenumbraFrameworkGui.ps1'
     $guiLauncher = Join-Path $unpacked 'tools/Instalar-Penumbra-VR.vbs'
@@ -74,6 +92,7 @@ try {
     if (-not (Test-Path -LiteralPath $requiemProbe)) {
         throw 'Requiem selection did not install the shared redist transaction.'
     }
+    Assert-ControllerProfiles $sharedProfiles (Join-Path $blackPlagueRedist 'vr') 'Requiem install'
     & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame -Restore @logArgs 6>$null | Out-Null
     if (Test-Path -LiteralPath $requiemProbe) {
         throw 'Requiem selection did not restore the shared redist transaction.'
@@ -94,6 +113,7 @@ try {
     if (-not (Test-Path -LiteralPath $requiemProbe)) {
         throw 'Framework candidate did not install Requiem in the shared redist.'
     }
+    Assert-ControllerProfiles $sharedProfiles (Join-Path $blackPlagueRedist 'vr') 'Black Plague install'
     if ((Get-FileHash -LiteralPath $blackPlagueGame -Algorithm SHA256).Hash -ne
         'DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196') {
         throw 'Framework candidate did not apply the exact Black Plague LAA variant.'
@@ -113,14 +133,18 @@ try {
     $bpProbe = Join-Path $blackPlagueRedist 'PenumbraVR.BlackPlague.Probe.dll'
     $bpProbeHash = (Get-FileHash -LiteralPath $bpProbe -Algorithm SHA256).Hash
     [System.IO.File]::WriteAllText($bpProbe, 'damaged managed probe')
+    Remove-Item -LiteralPath (Join-Path $blackPlagueRedist 'vr/bindings/vive_controller.json')
+    [System.IO.File]::WriteAllText((Join-Path $blackPlagueRedist 'vr/bindings/psvr2_sense.json'), 'damaged managed binding')
     & $installer -Game BlackPlague -GamePath $blackPlagueRedist -Repair @logArgs 6>$null | Out-Null
     if ((Get-FileHash -LiteralPath $bpProbe -Algorithm SHA256).Hash -ne $bpProbeHash) {
         throw 'Framework candidate did not repair Black Plague.'
     }
+    Assert-ControllerProfiles $sharedProfiles (Join-Path $blackPlagueRedist 'vr') 'BP/Requiem repair'
     & $installer -SteamRoot $noSteam -ManualPaths @($blackPlagueRedist) -Game BlackPlague -Restore @logArgs 6>$null | Out-Null
     if ((Get-FileHash -LiteralPath $alut -Algorithm SHA256).Hash -ne $alutOriginal -or
         (Get-FileHash -LiteralPath $blackPlagueGame -Algorithm SHA256).Hash -ne
-            'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF') {
+            'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF' -or
+        (Test-Path -LiteralPath (Join-Path $blackPlagueRedist 'vr/actions.json'))) {
         throw 'Framework candidate did not restore Black Plague.'
     }
     $bpRecoveryDispatched = $false
@@ -133,19 +157,24 @@ try {
     if (-not (Test-Path -LiteralPath $overtureState -PathType Leaf)) {
         throw 'Framework candidate did not install Overture.'
     }
+    Assert-ControllerProfiles $overtureProfiles (Join-Path $overtureRedist 'vr') 'Overture install'
     $installedOvertureHash = (Get-FileHash -LiteralPath $overtureGame -Algorithm SHA256).Hash
     $englishLang = Join-Path $overtureRedist 'config/English.lang'
     $installedEnglishHash = (Get-FileHash -LiteralPath $englishLang -Algorithm SHA256).Hash
     Remove-Item -LiteralPath $overtureGame
     Remove-Item -LiteralPath $englishLang
+    Remove-Item -LiteralPath (Join-Path $overtureRedist 'vr/bindings/vive_controller.json')
+    [System.IO.File]::WriteAllText((Join-Path $overtureRedist 'vr/bindings/psvr2_sense.json'), 'damaged managed binding')
     & $installer -Game Overture -GamePath $overtureGame -Repair @logArgs 6>$null | Out-Null
     if ((Get-FileHash -LiteralPath $overtureGame -Algorithm SHA256).Hash -ne $installedOvertureHash -or
         (Get-FileHash -LiteralPath $englishLang -Algorithm SHA256).Hash -ne $installedEnglishHash) {
         throw 'Framework candidate did not repair missing Overture executable and language files.'
     }
+    Assert-ControllerProfiles $overtureProfiles (Join-Path $overtureRedist 'vr') 'Overture repair'
     & $installer -SteamRoot $steam -Game Overture -GamePath $overtureGame -Restore @logArgs 6>$null | Out-Null
     if ((Get-FileHash -LiteralPath $overtureGame -Algorithm SHA256).Hash -ne $overtureOriginal -or
-        (Test-Path -LiteralPath $overtureState)) {
+        (Test-Path -LiteralPath $overtureState) -or
+        (Test-Path -LiteralPath (Join-Path $overtureRedist 'vr/actions.json'))) {
         throw 'Framework candidate did not restore Overture.'
     }
     $recoveryDispatched = $false

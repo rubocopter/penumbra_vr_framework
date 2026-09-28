@@ -102,6 +102,14 @@ preserve while the final installer is built:
   and the shared Black Plague/Requiem root and logs operations as JSONL;
 - complete package verification before discovery or writes.
 
+Controller distribution checks compare `vr/actions.json` and all eight default
+graphs against their owning source tree by SHA-256 in both packaged products,
+isolated installs of all three games and repairs of both roots. Deleted Vive
+and corrupted Sense defaults are restored by repair. Metadata rejects a dropped
+family, binding-path drift, lost implemented actions and incompatible direct
+output types. Controller hardware validation is a separate gate; layout limits
+are recorded in `TRILOGY_PARITY_PLAN.md`.
+
 The shared transaction's rollback, install, repeated repair and exact restore
 pass a fixture with both exact executables, preserving pristine localization
 backups and deployment ownership. The combined package is deterministic and
@@ -115,9 +123,10 @@ support and final UI acceptance remain separate gates.
 
 - exercise the graphical install/repair/uninstall flow on a clean user setup;
 - finish production OpenVR registration/versioning/rollback;
-- apply localization and optional recommended settings transactionally;
+- finish optional recommended-settings transactions; localization already has
+  shared-root install/repair/restore host evidence;
 - complete the dependency/redistribution license audit; packaged notices already include both translations;
 - validate clean install, upgrade, repair, interruption recovery, external
   modification handling and exact restore for every supported product; and
-- expose the final product selection/UI only after those transactions are
-  complete.
+- accept the existing graphical product selection/UI on a clean user setup
+  before production distribution.

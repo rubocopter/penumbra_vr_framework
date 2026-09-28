@@ -14,7 +14,7 @@
 
 The project turns the proven Overture VR Rework into a shared runtime, keeping reusable VR systems common while renderer, physics, gameplay and exact-build behavior remain inside each game's backend.
 
-> **Pre-alpha — no public Framework release yet.** Overture is the proven baseline. Black Plague runs in tracked stereo from Steam's normal **Play** path on the allowlisted build. Requiem now has an active VR backend; reliable object interaction remains its main gameplay blocker.
+> **Pre-alpha — no public Framework release yet.** Overture is the proven baseline. Black Plague runs in tracked stereo from Steam's normal **Play** path on the allowlisted build. Requiem's representative interaction milestone is complete; trilogy regression and production installer acceptance remain open.
 
 <p align="center">
   <img src="docs/images/landing/overture-vr.png" alt="Penumbra: Overture VR" width="31%">
@@ -27,8 +27,8 @@ The project turns the proven Overture VR Rework into a shared runtime, keeping r
 | Game | Framework state |
 | --- | --- |
 | **Overture** | Integrated Framework-owned source product. The proven VR Rework remains the behavioral reference and has an initial Framework headset regression pass. |
-| **Black Plague** | Active backend with native tracked stereo, OpenVR input, room-scale/body integration, crouch, hands, physical interaction, tracked inventory/notebook input, native VR settings and reusable audio integration. Current work is focused on remaining interaction, comfort, presentation and headset-validation gaps. |
-| **Requiem** | Active exact-build backend. Headset tests reached boot, menu, stereo gameplay, Sense locomotion, physical movement/crouch, visible hands and inventory/notebook. The user pushed and tipped a cube to solve a puzzle after the latest Push fix. Other physical interactions, transitions and stability remain validation gates. |
+| **Black Plague** | Active backend with tracked stereo, input, body/crouch, hands, interaction, UI, settings and audio. Headset tests confirm surface-contact chair grips and special effects in the observed scene. Mini-hops against ventilation walls remain an open comfort defect. |
+| **Requiem** | Active exact-build backend. Representative Push, free-body Grab with carry/snap/release, jointed Move, first level transition, portal refraction and stable hand-held tools have headset evidence, including final flashlight orientation and beam alignment. Broader coverage, intermittent startup failure and known contact imperfections remain open. |
 
 **Latest Black Plague headset test:** [September 2026 development preview](https://youtu.be/NQWUBmgOjEw).
 
@@ -63,8 +63,11 @@ ctest --preset release --output-on-failure
 The Framework-owned products can be built and packaged with the scripts under
 `tools/`. `Package-OvertureCandidate.ps1`, `Package-BlackPlagueCandidate.ps1`
 and `Package-FrameworkCandidate.ps1` produce deterministic development
-candidates; the combined candidate currently covers Overture and Black Plague
-only. Requiem has no production deployment transaction yet.
+candidates. The combined candidate covers Overture and the shared Black
+Plague/Requiem installation, with a graphical launcher that hides the terminal.
+Its package/install/repair checks verify all eight controller profiles for all
+three games. Controller hardware coverage and production installer acceptance
+remain separate gates; see the [controller ledger](docs/TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
 
 Packaging, discovery, LAA transformation, repair/recovery and rollback contracts
 are documented in [installer design](docs/INSTALLER_DESIGN.md). Candidate

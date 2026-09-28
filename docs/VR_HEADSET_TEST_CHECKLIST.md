@@ -1,6 +1,6 @@
 # Black Plague headset validation checklist
 
-This is the Black Plague release-regression checklist. The active Requiem work
+This is the Black Plague release-regression checklist. The current work
 order is recorded in `ROADMAP.md`; the capability/evidence boundary is in
 `TRILOGY_PARITY_PLAN.md`. Historical session chronology is intentionally
 omitted. Do not repeat a closed reverse-engineering milestone unless new

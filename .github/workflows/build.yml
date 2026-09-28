@@ -20,6 +20,10 @@ jobs:
         shell: pwsh
         run: ./tools/Test-PenumbraVrMetadata.ps1
 
+      - name: Reject controller profile metadata regressions
+        shell: pwsh
+        run: ./tests/deployment/Test-ControllerProfileMetadata.ps1
+
       - name: Configure Visual Studio 2022 Win32
         shell: pwsh
         run: cmake --preset vs2022-win32

@@ -41,28 +41,44 @@ Product-specific Overture release history is retained under
 - Added map-start yaw compensation, per-eye particle refresh and stronger
   body-lifecycle guards from current exact-build evidence; these remain at their
   documented validation levels until headset retest.
+- Ported fresh surface-contact Grab from Requiem while preserving native/stale
+  fallback, and independently mapped the native full-eye refraction-copy
+  boundary. A Black Plague headset run confirms chair grips from different
+  points and correct special effects in the observed scene. Ventilation-wall
+  mini-hops remain an open comfort defect.
 
 ### Requiem
 
 - Added an exact-build development backend using the shared OpenVR session,
   tracked stereo, Sense input, physical locomotion/crouch, hands and spatial UI.
 - Reused the common hand/contact behavior through Requiem-owned native Grab,
-  Move and Push boundaries. Headset tests reached gameplay and improved diary
-  pickup; puzzle-block manipulation remains the current gate.
+  Move and Push boundaries. Headset tests validate representative free-body
+  Grab with carry/snap/release and jointed Move through the monolith puzzle.
 - Corrected a Push acquisition check that ran before Requiem published its new
   player state. In the subsequent headset test, the user moved and tipped a
   cube to solve a puzzle without problems; the log confirmed VR acquisition
-  and hand force. Other interactions and transitions remain open.
+  and hand force.
+- Validated the first level transition and exact-build full-eye portal
+  refraction correction. Tools now share the resolved palm with the visible
+  hand; final native-size flashlight direction and beam alignment have headset
+  acceptance. Broader progression, intermittent startup failure and known
+  contact imperfections remain open.
 
 ### Deployment and data
 
 - Added exact canonical/LAA fingerprints for Black Plague and Requiem.
-- Added shared OpenVR actions and eight controller binding graphs.
+- Added shared OpenVR actions and eight controller binding graphs consumed by
+  all three games, with metadata guards and source-hash checks through package,
+  installation and repair. Hardware validation and compatibility layout limits
+  remain separate.
 - Added Framework-owned Black Plague/Requiem Spanish localization payloads with
   hashes and attribution.
 - Added `assets/deployment/manifest.json` as the shared deploy/installer payload
-  contract. The Black Plague development deploy now covers bootstrap/probe DLLs,
-  OpenVR assets, hand texture, Spanish localization and generated HRTF config.
+  contract. The shared Black Plague/Requiem deploy covers bootstrap/probe DLLs,
+  OpenVR assets, hand texture, both Spanish localizations and generated HRTF config.
+- Added the combined deterministic development package and hidden-console
+  graphical installer prototype, with host-tested discovery, install, repair,
+  recovery and exact restore. Production acceptance and release audit remain open.
 - Added `assets/settings/recommended.json` with maintainer-tested per-game
   configuration data for future reversible installer presets.
 
