@@ -39,8 +39,8 @@ Current product-level evidence:
   movement, crouch, visible hands and inventory/notebook have headset evidence.
   A representative Push puzzle, free-body `Grab=6` carry/snap/release sequence,
   jointed `Move=2` monolith puzzle and level-01 transition have headset evidence.
-  Portal presentation has visible artifacts; stacked Push blocks could shift
-  during climbing and monolith turning felt resistant. Free-body `Move=2`,
+  Portal presentation has visible artifacts; stacked `Grab=6` blocks could
+  shift during climbing and monolith turning felt resistant. Free-body `Move=2`,
   throwing, tool alignment and shutdown still need independent evidence.
 
 None of the Framework-owned trilogy products is currently a supported public

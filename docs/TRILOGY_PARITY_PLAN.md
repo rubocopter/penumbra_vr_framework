@@ -88,13 +88,19 @@ native entries, 20 VR acquisitions and 20 releases, and the authored puzzle
 advanced. The rings felt somewhat resistant and could spring back. The level
 script also clamps their joint limits at puzzle positions, so the VR contribution
 to that feel remains unresolved. The user could accidentally displace stacked
-Push blocks while climbing them. Gameplay pacing returned to roughly 90 FPS
-after loading, but the portal showed rectangular/striped visual artifacts in
-the recording. The native HPL log reports a missing `portal-fx` texture when
-level 01 loads; portal materials also use screen-space refraction. The share of
-the visual defect caused by native asset data versus VR eye-target rendering is
-unresolved. The transition/progression was exercised; portal presentation,
-tool alignment and shutdown remain open.
+blocks while climbing them. In the matching log interval, blocks entered native
+`Grab=6` and jumps occurred, but VR Push acquisition and force stayed at zero;
+the displacement cannot be attributed to the VR Push force path. Gameplay
+pacing returned to roughly 90 FPS after loading, but the portal showed
+rectangular/striped visual artifacts in the recording. The native `portal-fx`
+warning refers to untextured map control geometry, while the visible portal
+uses separate refractive materials. The HPL log records a 2560×1440 screen
+buffer; the VR log records 3400×3468 eye targets. Exact Requiem code calls
+`glCopyTexSubImage2D` through its native screen-copy path, while the shipped
+refraction shader samples `screenMap` in viewport pixel coordinates. This size
+mismatch is a plausible cause, not yet a runtime-isolated cause; it needs a
+refraction-off headset comparison. The transition/progression was exercised;
+portal presentation, tool alignment and shutdown remain open.
 
 **Current gate:** diagnose the observed portal presentation defect while keeping
 the interaction rough edges visible. Magnetic acquisition remains limited to
