@@ -7,6 +7,7 @@
 #include "hand_contact_probe.hpp"
 #include "iat_hook.hpp"
 #include "refraction_copy_gate.hpp"
+#include "tool_socket_profile.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
 #include "opengl_eye_targets.hpp"
@@ -347,14 +348,7 @@ struct VisibilityPresentation {
 };
 thread_local VisibilityPresentation g_pending_visibility;
 thread_local bool g_inside_stereo_eye = false;
-struct RefractionEyeCopyContext final {
-    HGLRC context = nullptr;
-    GLint framebuffer = 0;
-    GLint eye_width = 0;
-    GLint eye_height = 0;
-    GLint native_width = 0;
-    GLint native_height = 0;
-};
+using RefractionEyeCopyContext = graphics::RefractionEyeCopyContext;
 thread_local const RefractionEyeCopyContext* g_refraction_eye_copy = nullptr;
 thread_local runtime::VrHmdPose g_pending_world_ui_pose;
 thread_local bool g_pending_world_ui_pose_valid = false;
@@ -408,50 +402,13 @@ void __fastcall HookedCopyContextToTexture(void* graphics, void*,
         eye->context != wglGetCurrentContext() ||
         g_image == nullptr || !g_inside_stereo_eye) return;
     const auto image_base = reinterpret_cast<std::uintptr_t>(g_image);
-    if (return_address != image_base + 0x12C27F &&
-        return_address != image_base + 0x12C2CE) return;
+    if (!IsRefractionCopyReturn(image_base, return_address)) return;
     g_refraction_native_calls.fetch_add(1, std::memory_order_relaxed);
 
-    // The original HPL copy binds its rectangle screen texture on unit 0.
-    // Preserve every other copy and GL state when the exact eye boundary is
-    // unavailable; the native refraction path remains the fallback.
-    constexpr GLenum kActiveTexture = 0x84E0;
-    constexpr GLenum kTexture0 = 0x84C0;
-    constexpr GLenum kTextureRectangle = 0x84F5;
-    constexpr GLenum kTextureBindingRectangle = 0x84F6;
-    constexpr GLenum kMaxRectangleTextureSize = 0x84F8;
-    constexpr GLenum kFramebufferBinding = 0x8CA6;
-    constexpr GLint kRgba8 = 0x8058;
-    GLint active_texture = 0;
-    glGetIntegerv(kActiveTexture, &active_texture);
-    if (active_texture != static_cast<GLint>(kTexture0)) return;
-    GLint framebuffer = 0, rectangle_texture = 0, max_size = 0;
-    std::array<GLint, 4> viewport{};
-    glGetIntegerv(kFramebufferBinding, &framebuffer);
-    glGetIntegerv(GL_VIEWPORT, viewport.data());
-    glGetIntegerv(kTextureBindingRectangle, &rectangle_texture);
-    glGetIntegerv(kMaxRectangleTextureSize, &max_size);
-    if (!ShouldCaptureRefractionEye({
-            image_base, return_address, true, eye->framebuffer, framebuffer,
-            viewport, eye->eye_width, eye->eye_height,
-            eye->native_width, eye->native_height,
-            static_cast<std::uint32_t>(rectangle_texture), max_size})) return;
-
-    GLint texture_width = 0, texture_height = 0;
-    glGetTexLevelParameteriv(kTextureRectangle, 0,
-        GL_TEXTURE_WIDTH, &texture_width);
-    glGetTexLevelParameteriv(kTextureRectangle, 0,
-        GL_TEXTURE_HEIGHT, &texture_height);
-    if (texture_width != eye->eye_width ||
-        texture_height != eye->eye_height) {
-        glCopyTexImage2D(kTextureRectangle, 0, kRgba8, 0, 0,
-            eye->eye_width, eye->eye_height, 0);
-        g_refraction_resize_attempts.fetch_add(1,
-            std::memory_order_relaxed);
-    } else {
-        glCopyTexSubImage2D(kTextureRectangle, 0, 0, 0, 0, 0,
-            eye->eye_width, eye->eye_height);
-    }
+    const auto result = graphics::CaptureBoundRefractionEye(*eye);
+    if (result == graphics::RefractionEyeCopyResult::skipped) return;
+    if (result == graphics::RefractionEyeCopyResult::resized)
+        g_refraction_resize_attempts.fetch_add(1, std::memory_order_relaxed);
     g_refraction_copy_attempts.fetch_add(1, std::memory_order_relaxed);
 }
 
@@ -2237,7 +2194,7 @@ struct ToolProfile final {
 [[nodiscard]] ToolProfile ProfileForTool(ToolKind kind) noexcept {
     switch (kind) {
     case ToolKind::flashlight:
-        return {0.022F, {0.0004F,0.0005F,0.090F}, -1.57F, 1.6F};
+        return {kInstalledFlashlightGripRadius, {}, 0.0F, 1.0F};
     case ToolKind::glowstick:
         return {0.0125F, {0.0F,0.0078F,-0.078F}, 4.71F, 1.55F};
     case ToolKind::flare:
@@ -2268,6 +2225,14 @@ struct ToolProfile final {
     scale.values[10] = profile.scale;
     return runtime::Multiply(runtime::Multiply(runtime::Multiply(
         grip_pose, grip), rotation), scale);
+}
+
+[[nodiscard]] runtime::VrMatrix44 ToolPose(
+    const runtime::VrMatrix44& grip_pose, ToolKind kind,
+    const ToolProfile& profile) noexcept {
+    return kind == ToolKind::flashlight
+        ? InstalledFlashlightToolPose(grip_pose)
+        : ReworkToolPose(grip_pose, profile);
 }
 
 [[nodiscard]] std::array<float, 2> AlignToolsForRender(
@@ -2305,7 +2270,7 @@ struct ToolProfile final {
                 tool.hand == runtime::VrHand::left,
                 runtime::vr_interaction_policy::GripOpenCentreOffset(
                     profile.radius));
-        const auto matrix = ReworkToolPose(socket, profile);
+        const auto matrix = ToolPose(socket, tool.kind, profile);
         reinterpret_cast<EntitySetMatrix>(g_image + kEntitySetMatrixRva)(
             tool.entity, &matrix);
         // Rework's attached-tool grip and BP's shared hold-pose weight keep
@@ -2347,9 +2312,8 @@ void __fastcall HookedToolMatrix(void* entity, void*,
             const bool glowstick = equal(name, "Glowstick");
             const bool flare = equal(name, "Flare");
             if (!flashlight && !glowstick && !flare) break;
-            // These values are the Rework 23c890f HUD profiles. Requiem
-            // loads the same named installed HUD models; the headset report
-            // disproved BP's flashlight socket for this target.
+            // Glowstick/flare use the Rework HUD profiles. The flashlight
+            // uses the BP socket measured on this installed DAE's light nodes.
             const ToolKind kind = flashlight ? ToolKind::flashlight
                 : glowstick ? ToolKind::glowstick : ToolKind::flare;
             const ToolProfile profile = ProfileForTool(kind);
@@ -2359,7 +2323,7 @@ void __fastcall HookedToolMatrix(void* entity, void*,
             runtime::VrMatrix44 grip{};
             if (!TrackedToolGripPose(tool_hand, profile.radius,
                     grip)) break;
-            attached = ReworkToolPose(grip, profile);
+            attached = ToolPose(grip, kind, profile);
             selected = &attached;
             g_tool_attachments[slot == 0x6CU ? 0U : 1U] = {
                 g_updating_hands, model, entity, slot, kind, tool_hand,

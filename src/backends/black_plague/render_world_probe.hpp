@@ -35,6 +35,9 @@ struct RenderWorldFrameTelemetry {
     std::uint32_t stereo_frames = 0;
     std::uint32_t menu_frames = 0;
     std::uint32_t stereo_eye_passes = 0;
+    std::uint64_t refraction_native_calls = 0;
+    std::uint64_t refraction_copy_attempts = 0;
+    std::uint64_t refraction_resize_attempts = 0;
     std::uint64_t particle_update_calls = 0;
     std::uint64_t particle_eye_refreshes = 0;
     std::uint64_t particle_refresh_misses = 0;

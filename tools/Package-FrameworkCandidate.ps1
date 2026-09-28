@@ -29,41 +29,47 @@ try {
     New-Item -ItemType Directory -Path $toolsRoot | Out-Null
     foreach ($name in @('Install-PenumbraFrameworkCandidate.ps1',
                         'Install-PenumbraFrameworkCandidate.cmd',
+                        'Install-PenumbraFrameworkGui.ps1',
+                        'Instalar-Penumbra-VR.vbs',
                         'Get-PenumbraInstallations.ps1', 'Get-PenumbraBuildInfo.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $toolsRoot
     }
     @'
 # Penumbra VR Framework candidate
 
-This archive contains host-tested Overture and Black Plague candidate builds.
-Requiem is identified by the installer but has no gameplay VR backend yet.
-This is not a public three-game release or proof of headset validation.
+This archive contains host-tested Overture and shared Black Plague/Requiem
+deployment candidates. Requiem's runtime has representative headset evidence;
+the full game and this installer are not yet headset validated or supported.
 
-Run `tools\Install-PenumbraFrameworkCandidate.cmd` to list installations and
+Double-click `tools\Instalar-Penumbra-VR.vbs` for the graphical installer.
+It hides the PowerShell console, detects exact builds, and presents install,
+repair and uninstall actions. For diagnostics, run
+`tools\Install-PenumbraFrameworkCandidate.cmd` to list installations and
 select one or more compatible games by entering their numbers separated by commas.
 Use `-Selections 1,3` to select displayed numbers without a prompt, `-List` for
 read-only discovery, `-GamePath` for one game folder or executable,
 `-ManualPaths` for non-Steam folders and `-Restore` to undo selections.
-Each game has its own transaction; if a later selection fails, earlier completed
-games remain installed or restored. Exit selected games before making changes.
+Black Plague and Requiem share one redist transaction. Overture has its own;
+if a later root fails, earlier completed roots remain installed or restored.
+Exit selected games before making changes.
 Install, repair, recovery and restore write JSONL events to
 `%LOCALAPPDATA%\PenumbraVR\installer.jsonl` with the package checksum, game,
 path and result. Use `-LogPath <file>` to choose another location; `-List` does
 not create a log.
 If a deployment was interrupted, run the selector with `-Recover -Game
-Overture` or `-Recover -Game BlackPlague` and `-GamePath <game folder or
+Overture`, `-Recover -Game BlackPlague` or `-Recover -Game Requiem` with `-GamePath <game folder or
 executable>` before another install. Recovery works when the executable is
 missing.
-Use `-Repair -Game Overture` or `-Repair -Game BlackPlague` with an explicit
+Use `-Repair -Game Overture`, `-Repair -Game BlackPlague` or `-Repair -Game Requiem` with an explicit
 `-GamePath <game folder or executable>` to replace damaged recorded mod files
 from this verified package. Repair requires the recorded original backups;
 Black Plague can reconstruct its managed LAA executable from the verified
 canonical backup. User audio settings remain under strict checks.
-For Black Plague only, `-LargeAddressAware` applies the verified exact-build
-PE transform with a managed canonical backup. It remains a host-tested option.
+For the shared redist, `-LargeAddressAware` applies the verified Black Plague
+PE transform with a managed canonical backup. Requiem's executable is unchanged.
 
-The Overture and Black Plague subfolders retain their own installer and license
-notices. SteamVR is required for gameplay.
+The product subfolders retain installer and license notices. SteamVR is
+required for gameplay.
 '@ | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
 
     $checksums = @(

@@ -11,7 +11,7 @@ binary data behind a backend or product adapter.
 | --- | --- | --- |
 | Overture | Framework-owned source product built from the imported HPL1/game host | Proven behavioral reference and first shared-runtime consumer |
 | Black Plague | Exact-build binary backend loaded through a managed bootstrap | Active second-backend integration and portability proof |
-| Requiem | Exact-build binary backend sharing the ALUT bootstrap path with Black Plague | Active third consumer; gameplay and interaction validation pending |
+| Requiem | Exact-build binary backend sharing the ALUT bootstrap and `redist` deployment transaction with Black Plague | Active third consumer; representative gameplay headset evidence, broader validation pending |
 
 Rework `23c890f` is the proven Overture baseline. It is reference evidence, not a
 runtime or build dependency of the Framework-owned Overture product.
@@ -229,6 +229,15 @@ neutral intermediate/MSAA/final-treatment path with direct-eye fallback. HPL
 material/ambient behavior that is specific to Overture stays product-owned until
 another backend demonstrates a real reusable boundary.
 
+The two binary backends share a bounded OpenGL refraction-copy implementation.
+Each backend owns and verifies its own graphics vtable and exact caller allowlist,
+calls the native copy first and supplies an eye-scoped framebuffer/context.
+The shared graphics code requires the core/ARB framebuffer API and checks both
+read and draw framebuffer identity, texture unit, rectangle binding, viewport,
+dimensions and size limits before copying the complete eye. It carries no game
+RVAs and never changes bindings; experimental multisample rendering remains
+outside the validated BP copy boundary.
+
 ## Deployment direction
 
 The final product should expose one safe installer while retaining the different
@@ -252,6 +261,7 @@ Overture is integrated, Black Plague has a substantial development backend,
 and Requiem has an active exact-build VR backend. Requiem's physical puzzle
 interaction remains the gameplay gate. The latest Push acquisition fix has
 been exercised in the headset and a cube puzzle was completed without problems.
-Other physical interactions and transitions still need validation. Black Plague
-regression items remain documented release gates. A shared subsystem is
+Representative free-body Grab, jointed Move and the first level transition also
+have headset evidence. Static tool alignment and other interaction families
+remain open. Black Plague regression items remain documented release gates. A shared subsystem is
 considered proven only when a real second consumer uses it successfully.

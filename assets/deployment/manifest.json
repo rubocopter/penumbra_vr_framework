@@ -24,6 +24,15 @@
           "restorePolicy": "remove-if-owned"
         },
         {
+          "id": "requiem_probe",
+          "source": {
+            "kind": "build-output",
+            "path": "PenumbraVR.Requiem.Probe.dll"
+          },
+          "destination": "PenumbraVR.Requiem.Probe.dll",
+          "restorePolicy": "remove-if-owned"
+        },
+        {
           "id": "openvr_loader",
           "source": {
             "kind": "build-output",
@@ -57,6 +66,15 @@
             "path": "assets/localization/black_plague/redist/config/Espanol.lang"
           },
           "destination": "config/Espanol.lang",
+          "restorePolicy": "backup-if-present"
+        },
+        {
+          "id": "requiem_spanish_localization",
+          "source": {
+            "kind": "repository-file",
+            "path": "assets/localization/requiem/redist/expansion01/config/Espanol_exp.lang"
+          },
+          "destination": "expansion01/config/Espanol_exp.lang",
           "restorePolicy": "backup-if-present"
         },
         {

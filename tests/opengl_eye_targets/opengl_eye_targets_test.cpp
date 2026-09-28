@@ -1,5 +1,6 @@
 #include "opengl_enhanced_eye_stage.hpp"
 #include "opengl_eye_targets.hpp"
+#include "opengl_refraction_copy.hpp"
 #include "opengl_eye_scissor.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
@@ -721,7 +722,14 @@ int main() {
         glDisable(GL_SCISSOR_TEST);
         glClearColor(1,0,0,1);
         glClear(GL_COLOR_BUFFER_BIT);
-        glCopyTexImage2D(rectangle_target,0,GL_RGBA8,0,0,64,64,0);
+        // Reproduce the native copy extent, then run the real shared adapter.
+        glCopyTexSubImage2D(rectangle_target,0,0,0,0,0,16,16);
+        using namespace penumbra_vr::graphics;
+        RefractionEyeCopyContext copy_context{wglGetCurrentContext(),
+            static_cast<std::int32_t>(refraction_targets.target(Eye::left).framebuffer),
+            64,64,16,16};
+        if (CaptureBoundRefractionEye(copy_context)!=RefractionEyeCopyResult::resized)
+            return 61;
         GLint copied_width=0,copied_height=0;
         glGetTexLevelParameteriv(rectangle_target,0,GL_TEXTURE_WIDTH,&copied_width);
         glGetTexLevelParameteriv(rectangle_target,0,GL_TEXTURE_HEIGHT,&copied_height);
@@ -731,7 +739,39 @@ int main() {
         }
         glClearColor(0,1,0,1);
         glClear(GL_COLOR_BUFFER_BIT);
-        glCopyTexSubImage2D(rectangle_target,0,0,0,0,0,64,64);
+        if (CaptureBoundRefractionEye(copy_context)!=RefractionEyeCopyResult::copied)
+            return 62;
+        // Texture copies read from GL_READ_FRAMEBUFFER, independently of the
+        // draw target. A split read binding must skip without changing either.
+        const auto bind_framebuffer=GlProc<void(APIENTRY*)(GLenum,GLuint)>(
+            "glBindFramebuffer");
+        if (!bind_framebuffer) return 66;
+        constexpr GLenum read_framebuffer=0x8CA8;
+        constexpr GLenum read_framebuffer_binding=0x8CAA;
+        const auto other_framebuffer=refraction_targets.target(Eye::right).framebuffer;
+        bind_framebuffer(read_framebuffer,other_framebuffer);
+        if (CaptureBoundRefractionEye(copy_context)!=RefractionEyeCopyResult::skipped) {
+            std::cerr << "Refraction copy accepted another read framebuffer\n";
+            return 67;
+        }
+        GLint bound_read=0;
+        glGetIntegerv(read_framebuffer_binding,&bound_read);
+        if (bound_read!=static_cast<GLint>(other_framebuffer) ||
+            CurrentFramebuffer()!=refraction_targets.target(Eye::left).framebuffer)
+            return 68;
+        bind_framebuffer(read_framebuffer,refraction_targets.target(Eye::left).framebuffer);
+        // Stale eye dimensions and another framebuffer must fail closed.
+        auto stale=copy_context;
+        stale.eye_width=32;
+        if (CaptureBoundRefractionEye(stale)!=RefractionEyeCopyResult::skipped) return 63;
+        stale=copy_context;
+        ++stale.framebuffer;
+        if (CaptureBoundRefractionEye(stale)!=RefractionEyeCopyResult::skipped) return 64;
+        GLint bound_rectangle=0;
+        glGetIntegerv(0x84F6,&bound_rectangle);
+        if (bound_rectangle!=static_cast<GLint>(rectangle) ||
+            CurrentFramebuffer()!=refraction_targets.target(Eye::left).framebuffer ||
+            !ViewportEquals({0,0,64,64})) return 65;
         std::vector<GLubyte> pixels(64*64*4);
         glGetTexImage(rectangle_target,0,GL_RGBA,GL_UNSIGNED_BYTE,pixels.data());
         const std::size_t corner=(63*64+63)*4;

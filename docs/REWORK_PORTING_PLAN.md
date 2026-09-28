@@ -78,7 +78,7 @@ Still incomplete at the cross-game level:
 - complete reusable UI/subtitle behavior;
 - full Enhanced Visuals parity beyond the transferable eye stage;
 - controller-family hardware validation;
-- unified installer transaction.
+- final installer user acceptance and release audit.
 
 Some Rework behavior is intentionally product-specific unless future evidence
 proves otherwise, including exact HPL material/light response, model/weapon
@@ -93,8 +93,13 @@ adapter now captures the full eye into the bound screen texture only at the two
 verified refraction copy callsites. The headset clip with Refractions enabled
 shows the portal ring without the prior rectangular/striped defect; the runtime
 copy counters match the intercepted calls, with normal pacing and exit.
-This renderer-specific correction does not establish a shared cross-game
-refraction policy or validate Black Plague's particle scenes.
+Black Plague's initialized image independently maps the same renderer copy
+contract at its own vtable and two callsites; its installed refraction shaders
+also sample in viewport pixels. Both adapters now consume one OpenGL full-eye
+capture implementation, with per-game caller allowlists and rollback ownership.
+A real-driver host test verifies expansion, full-corner refresh and preservation
+of GL binding/viewport state. BP visual appearance is still unvalidated; this
+port does not establish that every smoke effect uses refraction.
 
 Rework `23c890f` fixes the visible hand curl around an attached tool according
 to its grip radius, overriding sensor curl while attached. Black Plague and
@@ -110,19 +115,26 @@ The subsequent Requiem trial showed that the fixed curl alone did not keep the
 native tool attached to the visible hand during stick movement. Unlike Black
 Plague's tool path, Requiem used a raw grip for the tool while drawing the hand
 from the collision-resolved palm. Its adapter now uses the same resolved palm
-for both, with a raw fallback across missing publications and snap-turn epochs;
-this target correction is host-tested only.
+for both, with a raw fallback across missing publications and snap-turn epochs.
+The latest headset clip and log validate motion coherence for all three tested
+tools. Static light and finger alignment remain open. The installed
+BP/Requiem flashlight DAE has a -Y spotlight/ray axis; Rework's modified DAE
+profile rotated it the wrong way in Requiem. Requiem now uses a target-owned
+socket matching the installed asset, host-tested pending headset validation.
 
-Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform but
-anchors the body's local origin, independent of the selected surface point.
+Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform.
+It previously anchored the body's local origin, independent of the selected
+surface point.
 Rework's variable surface contact and conditional `mbPickAtPoint` mode produced
 different grip placements for the same Black Plague prop. In the 2026-09-24
 headset clip, repeated native selections still needed many attempts despite a
 valid nearby VR target: the extra palm-box contact test rejected them. A fresh
 VR winner now uses the shared 0.40 m reach bound, while stale/native-only picks
-retain the tighter box guard. The fixed socket is a BP-specific exception to
-Rework's contact anchor, requested to make repeated pickups predictable; its
-placement still needs headset validation. Native-origin grabs and jointed
+retain the tighter box guard. The Requiem headset sequence later demonstrated
+stable reacquisition of one prop from different surface points. BP now anchors
+a fresh, accepted VR surface contact within the shared reach bound and retains
+its origin fallback for stale/native-only picks; this port is host-tested
+pending a BP visor trial. Native-origin grabs and jointed
 `Move=2` mechanisms retain their native behavior. A published world-yaw epoch
 also distinguishes snap turning from physical palm jumps: free bodies follow
 that rebase without a one-frame force impulse, while mechanisms rebase their

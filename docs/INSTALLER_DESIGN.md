@@ -1,8 +1,9 @@
 # Unified installer design
 
 Penumbra VR should install as one product while preserving the integration model
-required by each game. A host-tested two-game candidate exists for Overture and
-Black Plague; the production three-game installer is not complete. This file
+required by each game. The combined Overture and shared Black Plague/Requiem
+candidate passes deterministic packaging, install/repair/restore and GUI
+fixture checks. Production user acceptance and the release audit remain open. This file
 owns the durable installer contract, not incremental packaging history.
 
 ## User-facing flow
@@ -73,9 +74,12 @@ support evidence.
 ownership. Development deploys and the final installer must consume the same
 logical IDs, source classes, destinations and restore policy.
 
-Current Black Plague payload ownership includes the ALUT bootstrap proxy,
-Framework probe DLL, `openvr_api.dll`, shared OpenVR actions/bindings, imported
-hand texture, Spanish localization and managed HRTF configuration boundary.
+The Black Plague/Requiem executables share one `redist` directory and one ALUT
+bootstrap proxy. Their probe DLLs, `openvr_api.dll`, OpenVR actions/bindings,
+imported hand texture, both Spanish localizations and managed HRTF config are
+owned by one transaction and one restore journal. Requiem payloads are enabled
+only when its companion executable has a recognized exact hash; the proxy
+dispatches to the matching probe after hashing the process image.
 
 `assets/localization/manifest.json` owns Black Plague/Requiem localization
 payloads and hashes. `assets/openvr` owns shared action/binding assets.
@@ -94,21 +98,25 @@ preserve while the final installer is built:
 - transactional install/upgrade/restore with preflight validation and rollback;
 - durable recovery journals for interrupted Overture and Black Plague writes;
 - explicit repair of recorded owned payloads while rejecting foreign changes;
-- a combined candidate that can select/install/repair/recover/restore one or
-  both implemented games and logs operations as JSONL;
+- a combined candidate that can select/install/repair/recover/restore Overture
+  and the shared Black Plague/Requiem root and logs operations as JSONL;
 - complete package verification before discovery or writes.
 
-The combined candidate deliberately rejects Requiem because no production
-Requiem deployment transaction exists yet. This two-game prototype is not a
-three-game release and does not promote runtime/headset support.
+The shared transaction's rollback, install, repeated repair and exact restore
+pass a fixture with both exact executables, preserving pristine localization
+backups and deployment ownership. The combined package is deterministic and
+its selector deduplicates the shared root. The VBS launcher starts the Windows
+Forms GUI with a hidden PowerShell console; packaged control creation and
+read-only discovery of pristine Overture plus BP/Requiem pass host checks.
+The GUI blocks repeated operations while a transaction runs. Runtime/headset
+support and final UI acceptance remain separate gates.
 
 ## Remaining production work
 
-- integrate Framework-owned Overture upgrade/ownership and a verified Requiem
-  deployment transaction into one multi-product flow;
+- exercise the graphical install/repair/uninstall flow on a clean user setup;
 - finish production OpenVR registration/versioning/rollback;
 - apply localization and optional recommended settings transactionally;
-- package licenses/attribution;
+- complete the dependency/redistribution license audit; packaged notices already include both translations;
 - validate clean install, upgrade, repair, interruption recovery, external
   modification handling and exact restore for every supported product; and
 - expose the final product selection/UI only after those transactions are

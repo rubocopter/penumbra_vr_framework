@@ -1851,10 +1851,13 @@ void AcquirePendingGrab(void* state, std::uint64_t player_generation,
     // and moving the prop by the whole hand/body gap on the following frame.
     PreparedGrab prepared;
     prepared.hold=hold;
-    // BP's ray contact varies with entry angle and often leaves a long lever
-    // arm or a rejected grab. The accepted free body's local origin is the
-    // deterministic grip socket for this backend, independent of hit point.
-    prepared.local_contact={};
+    // Requiem's headset-tested free-body grab follows the accepted surface
+    // point when a fresh VR winner is within reach. Preserve the BP origin
+    // fallback for stale/native-only picks, which have no trustworthy VR
+    // contact. The palm refresh below excludes this exact held body first.
+    prepared.local_contact=selected_contact_in_reach
+        ? InverseTransformPoint(body_pose,selected_target.point) : Vec{};
+    if (!FiniteVec(prepared.local_contact)) prepared.local_contact={};
     prepared.palm_generation=GameplayPalmPoseGeneration(hand_index);
     prepared.started=now;
     prepared.active=true;
@@ -1916,8 +1919,8 @@ void FinishPreparedGrab(void* player,std::uint64_t player_generation,bool ui) {
     std::string error;
     // Rework's point-contact mode is the stable VR grip. BP's native E1 flag
     // can select the offset-preserving mode for the same free prop, leaving it
-    // beside the visible hand. Every VR-origin Grab anchors its selected
-    // surface contact in the resolved palm regardless of that native bit.
+    // beside the visible hand. Anchor the fresh VR surface contact in the
+    // resolved palm regardless of that native bit.
     if (!acquired.pose.Begin(palm,body_pose,prepared.local_contact,true,error)) {
         ++g_blocked_grabs;
         CancelPreparedGrab(true);

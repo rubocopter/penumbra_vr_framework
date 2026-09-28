@@ -405,10 +405,12 @@ if (($blackPlaguePayloadIds | Sort-Object -Unique).Count -ne $blackPlaguePayload
 $requiredBlackPlaguePayloadIds = @(
     'bootstrap_proxy',
     'probe',
+    'requiem_probe',
     'openvr_loader',
     'openvr_actions',
     'hand_texture',
     'spanish_localization',
+    'requiem_spanish_localization',
     'openal_hrtf_config'
 )
 if (@(Compare-Object -ReferenceObject ($requiredBlackPlaguePayloadIds | Sort-Object) -DifferenceObject ($blackPlaguePayloadIds | Sort-Object)).Count -ne 0) {
@@ -418,10 +420,12 @@ if (@(Compare-Object -ReferenceObject ($requiredBlackPlaguePayloadIds | Sort-Obj
 $expectedBlackPlagueDestinations = @{
     bootstrap_proxy = 'alut.dll'
     probe = 'PenumbraVR.BlackPlague.Probe.dll'
+    requiem_probe = 'PenumbraVR.Requiem.Probe.dll'
     openvr_loader = 'openvr_api.dll'
     openvr_actions = 'vr'
     hand_texture = 'assets/rework/HAND_Low_C.jpg'
     spanish_localization = 'config/Espanol.lang'
+    requiem_spanish_localization = 'expansion01/config/Espanol_exp.lang'
     openal_hrtf_config = 'alsoft.ini'
 }
 foreach ($payload in @($blackPlagueDeployment[0].payloads)) {

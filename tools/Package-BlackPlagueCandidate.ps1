@@ -40,7 +40,8 @@ if ($configuredSdk.Count -ne 1 -or
 # targets before copying any of them so a source edit cannot silently ship an
 # older DLL from a previous release build.
 & cmake --build $buildRoot --config Release --target `
-    pvr_black_plague_probe pvr_black_plague_bootstrap pvr_laa_transform --parallel 4
+    pvr_black_plague_probe pvr_requiem_probe `
+    pvr_black_plague_bootstrap pvr_laa_transform --parallel 4
 if ($LASTEXITCODE -ne 0) {
     throw 'Black Plague Release build failed; candidate package was not created.'
 }
@@ -98,6 +99,9 @@ try {
 
     $supportFiles = @(
         'assets/deployment/manifest.json',
+        'assets/localization/manifest.json',
+        'assets/localization/black_plague/leeme.txt',
+        'assets/localization/requiem/leeme.txt',
         'tools/Install-BlackPlagueSteamBootstrap.ps1',
         'tools/Install-Black-Plague-VR.cmd',
         'tools/Get-PenumbraInstallations.ps1',

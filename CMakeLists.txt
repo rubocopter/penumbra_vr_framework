@@ -54,6 +54,7 @@ target_include_directories(pvr_rel32_call_hook PUBLIC src/hooks)
 pvr_enable_warnings(pvr_rel32_call_hook)
 
 add_library(pvr_opengl_eye_targets STATIC
+    src/graphics/opengl_refraction_copy.cpp
     src/graphics/opengl_enhanced_eye_stage.cpp
     src/graphics/opengl_eye_targets.cpp
     src/graphics/opengl_menu_frame.cpp
@@ -582,10 +583,18 @@ if(BUILD_TESTING)
     add_test(NAME requiem_frame_presentation
         COMMAND pvr_requiem_frame_presentation_test)
 
+    add_executable(pvr_black_plague_refraction_copy_gate_test
+        tests/black_plague_render/refraction_copy_gate_test.cpp)
+    target_include_directories(pvr_black_plague_refraction_copy_gate_test PRIVATE
+        src/backends/black_plague src/graphics)
+    pvr_enable_warnings(pvr_black_plague_refraction_copy_gate_test)
+    add_test(NAME black_plague_refraction_copy_gate
+        COMMAND pvr_black_plague_refraction_copy_gate_test)
+
     add_executable(pvr_requiem_refraction_copy_gate_test
         tests/requiem_frame_presentation/refraction_copy_gate_test.cpp)
     target_include_directories(pvr_requiem_refraction_copy_gate_test PRIVATE
-        src/backends/requiem)
+        src/backends/requiem src/graphics)
     pvr_enable_warnings(pvr_requiem_refraction_copy_gate_test)
     add_test(NAME requiem_refraction_copy_gate
         COMMAND pvr_requiem_refraction_copy_gate_test)

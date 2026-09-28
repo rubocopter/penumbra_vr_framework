@@ -58,17 +58,16 @@ Current work is deliberately narrow:
 - [ ] Port Rework/BP magnetic pickup only for inventory items after Requiem's
   exact body-list, bounds and item-subtype boundaries are demonstrated. Do not
   extend that policy to props or mechanisms.
-- [ ] Validate tool attachment before any support claim. The latest visor
-  clip shows flashlight, glowstick and flare moving relative to the visible
-  hand during stick locomotion; the fixed finger-curl policy alone did not
-  remove that motion. The hand was drawn from the collision-resolved palm
-  while the tool used the raw controller pose. Requiem now feeds the same
-  resolved palm to its native tool attachment before light collection and at
-  eye rendering, with a raw fallback on missing or old-yaw publication. This
-  exact-build correction and observational palm-source counters are host-tested
-  only. Check hand/tool coherence with one short locomotion trial, then assess
-  any static flashlight effect offset separately. The installed flashlight
-  DAE differs from Rework's; do not change the asset shared with Black Plague.
+- [x] Validate tool/hand motion coherence: a new headset clip shows flashlight,
+  glowstick and flare staying with the visible hand during stick locomotion.
+  Its log records resolved-palm attachment throughout, with no raw-palm use.
+- [ ] Validate the remaining tool presentation. The same clip shows slight
+  finger penetration and the flashlight effect separated from its model.
+  The installed BP/Requiem DAE puts the spotlight/ray on model -Y; Requiem's
+  borrowed Rework socket turned that axis toward hand +Z. A target-owned
+  socket now turns it toward hand -Z, matching the BP measured asset; the
+  correction is host-tested only and needs one headset check. Do not change
+  the shared installed DAE to mask the socket mismatch.
   One representative level progression is headset-tested. Stacked blocks
   could be displaced accidentally while climbing; telemetry shows `Grab=6`
   and jumps, with no VR Push acquisition or force in that interval.
@@ -100,7 +99,10 @@ automatically validate a newer candidate.
 - [ ] Revalidate wall/tunnel pressure, mixed stick + room-scale contact, Hybrid
   crouch recovery and accepted-motion footsteps.
 - [ ] Revalidate free-body acquisition/hold/throw, snap-turn continuity and
-  representative slider/hinge/door mechanisms.
+  representative slider/hinge/door mechanisms. A fresh, bounded surface
+  contact now anchors VR-origin Grab as it does in the headset-tested Requiem
+  path; BP's stale/native-only origin fallback remains. The port is host-tested
+  and requires BP headset validation.
 - [ ] Validate imported-hand fingers/material presentation, tool sockets and
   mapped haptics.
 - [ ] Validate inventory/notebook/context actions, `UseItem`, subtitles and the
@@ -108,9 +110,12 @@ automatically validate a newer candidate.
 - [ ] Validate HRTF/reverb on headset audio hardware. Keep the missing
   distance/occlusion low-pass consumer as implementation work until its exact
   target boundary is mapped.
-- [ ] Revisit the known billboard/beam and particle scenes. Use existing
-  telemetry to classify the failing render family before changing renderer
-  policy.
+- [ ] Validate BP refractive particle scenes with Refractions enabled. The
+  exact initialized BP image independently maps its two renderer screen-copy
+  sites and the installed shaders sample in eye pixels. BP now consumes the
+  full-eye copy proven in Requiem; native call/copy/resize counters and real
+  OpenGL tests protect this host-tested port. Ordinary smoke/billboard defects
+  and subtle ghosting still need their own runtime classification.
 - [ ] Reproduce death → main menu only as part of normal regression; the SDL
   mutex crash remains historical/unattributed unless a new discriminating dump
   appears.
@@ -120,11 +125,13 @@ The repeatable Black Plague hardware procedure is in
 
 ## Hito 4 — unified installer
 
-Runtime work remains ahead of production release tooling. The current two-game
-candidate is a host-tested prototype, not a release.
+The user requested this work alongside the remaining runtime gates. The
+shared Black Plague/Requiem redist transaction, combined selector and graphical
+front end have host evidence. The candidate remains a prototype; the current
+runtime still needs its own visor validation.
 
-- [ ] Add a verified Requiem deployment transaction and complete Overture
-  ownership/upgrade integration.
+- [x] Host-test the shared Black Plague/Requiem deployment transaction,
+  three-game selector and Overture ownership/upgrade integration.
 - [ ] Keep discovery and exact-build fingerprinting read-only until a complete
   transaction has been planned.
 - [ ] Finish transactional install, repair, recovery, upgrade and uninstall for
@@ -133,6 +140,10 @@ candidate is a host-tested prototype, not a release.
   settings transactionally.
 - [ ] Package licenses/attribution and validate clean install, upgrade, repair,
   interruption recovery and exact restore.
+- [x] Provide and host-test the graphical launcher with a hidden PowerShell
+  console, exact-build detection, manual folders, install, repair and uninstall.
+  Packaged discovery includes pristine and managed Overture and the shared BP/
+  Requiem root. Final user acceptance remains part of the release gate.
 
 ## Hito 5 — release
 

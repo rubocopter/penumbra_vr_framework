@@ -58,6 +58,7 @@ foreach ($manual in $ManualPaths) {
     }
 }
 
+$results = [System.Collections.Generic.List[object]]::new()
 foreach ($candidate in @($candidates | Sort-Object Path)) {
     $probeError = $null
     try {
@@ -76,7 +77,7 @@ foreach ($candidate in @($candidates | Sort-Object Path)) {
     $installRoot = if ((Split-Path -Leaf $parent) -ieq 'redist') {
         Split-Path -Parent $parent
     } else { $parent }
-    [PSCustomObject][ordered]@{
+    $results.Add([PSCustomObject][ordered]@{
         Path = $candidate.Path
         InstallRoot = $installRoot
         Source = $candidate.Source
@@ -85,7 +86,38 @@ foreach ($candidate in @($candidates | Sort-Object Path)) {
         BuildId = $info.BuildId
         Variant = $info.Variant
         SHA256 = $info.SHA256
-        Installable = ($info.KnownBuild -and $info.Game -eq 'Black Plague')
+        Installable = ($info.KnownBuild -and $info.Game -in @('Overture', 'Black Plague'))
         ProbeError = $probeError
-    }
+    })
 }
+foreach ($requiem in @($results | Where-Object { $_.Game -eq 'Requiem' -and $_.KnownBuild })) {
+    $sharedRoot = Split-Path -Parent $requiem.Path
+    $companion = @($results | Where-Object {
+        $_.Game -eq 'Black Plague' -and $_.KnownBuild -and
+        (Split-Path -Parent $_.Path) -ieq $sharedRoot
+    })
+    # Both executables load one redist/alut.dll. The current transaction
+    # requires the exact BP companion before enabling the Requiem payload.
+    $requiem.Installable = $companion.Count -eq 1
+}
+foreach ($entry in @($results | Where-Object { $_.Game -eq 'Unknown' -and
+                                              (Split-Path -Leaf $_.Path) -ieq 'Penumbra.exe' })) {
+    $statePath = Join-Path $entry.InstallRoot '.penumbravr/deploy-state.json'
+    if (-not (Test-Path -LiteralPath $statePath -PathType Leaf)) { continue }
+    try {
+        $state = Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+        $redistRoot = [System.IO.Path]::GetFullPath(
+            (Join-Path $entry.InstallRoot 'redist')).TrimEnd('\')
+        $launcher = @($state.Files | Where-Object { $_.Path -eq 'Penumbra.exe' })
+        if ($state.Version -eq 1 -and
+            [System.IO.Path]::GetFullPath([string]$state.RedistRoot).TrimEnd('\') -ieq $redistRoot -and
+            $launcher.Count -eq 1 -and
+            [string]$launcher[0].DeployedHash -ieq [string]$entry.SHA256) {
+            $entry.Game = 'Overture'
+            $entry.KnownBuild = $true
+            $entry.BuildId = 'overture-framework-managed'
+            $entry.Installable = $true
+        }
+    } catch { continue }
+}
+$results

@@ -8,6 +8,7 @@
 #include "opengl_tracked_hands.hpp"
 #include "native_input_bridge.hpp"
 #include "particle_stereo_refresh.hpp"
+#include "refraction_copy_gate.hpp"
 #include "presentation_timing.hpp"
 #include "spatial_interaction.hpp"
 #include "spawn_yaw_rebase.hpp"
@@ -26,6 +27,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <GL/gl.h>
+#include <intrin.h>
 
 #include <array>
 #include <algorithm>
@@ -67,6 +69,15 @@ constexpr std::uintptr_t kParticleGetModelMatrixSlotRva = 0x002875B8;
 constexpr std::uintptr_t kParticleUpdateGraphicsSlotRva = 0x002875C0;
 constexpr std::uintptr_t kParticleGetModelMatrixRva = 0x00169C50;
 constexpr std::uintptr_t kParticleUpdateGraphicsRva = 0x00169FF0;
+// Exact initialized Black Plague image; independent of Requiem's addresses.
+constexpr std::uintptr_t kCopyContextToTextureSlotRva = 0x002884CC;
+constexpr std::uintptr_t kCopyContextToTextureRva = 0x0015FEA0;
+constexpr std::uintptr_t kRefractionClippedCopyCallRva = 0x0012BC79;
+constexpr std::uintptr_t kRefractionFullCopyCallRva = 0x0012BCC8;
+constexpr std::array<std::uint8_t, 8> kCopyContextToTextureEntry{
+    0x53, 0x55, 0x8B, 0x6C, 0x24, 0x0C, 0x85, 0xED};
+constexpr std::array<std::uint8_t, 6> kRefractionCopyCall{
+    0xFF, 0x92, 0x74, 0x01, 0x00, 0x00};
 constexpr GLenum kGlFramebufferBinding = 0x8CA6;
 constexpr GLenum kGlMaxRenderbufferSize = 0x84E8;
 constexpr std::array<std::uint8_t, 5> kExpectedRenderWorldCall{
@@ -120,6 +131,8 @@ using UpdateRenderList = void(__thiscall*)(
     float frame_time);
 using GraphicsDrawerDrawAll = void(__thiscall*)(void* drawer);
 using CameraSetYaw = void(__thiscall*)(void* camera, float yaw);
+using CopyContextToTexture = void(__thiscall*)(
+    void*, void*, const void*, const void*, const void*);
 using ParticleGetModelMatrix = void*(__thiscall*)(void* emitter, void* camera);
 
 enum class DuplicationState : std::uint8_t {
@@ -327,6 +340,13 @@ hooks::Rel32CallHook g_hook;
 hooks::Rel32CallHook g_visibility_hook;
 hooks::Rel32CallHook g_draw_all_hook;
 hooks::Rel32CallHook g_spawn_yaw_hook;
+hooks::IatHook g_refraction_copy_hook;
+std::atomic<CopyContextToTexture> g_original_refraction_copy{nullptr};
+std::atomic<std::uintptr_t> g_refraction_image_base{0};
+std::atomic<std::uint64_t> g_refraction_native_calls{0};
+std::atomic<std::uint64_t> g_refraction_copy_attempts{0};
+std::atomic<std::uint64_t> g_refraction_resize_attempts{0};
+thread_local const graphics::RefractionEyeCopyContext* g_refraction_eye_copy = nullptr;
 hooks::IatHook g_particle_get_model_matrix_hook;
 hooks::IatHook g_particle_update_graphics_hook;
 std::atomic<void*> g_original_target{nullptr};
@@ -618,6 +638,52 @@ public:
         g_active_calls.fetch_sub(1, std::memory_order_acq_rel);
     }
 };
+
+class ScopedRefractionEyeCopy final {
+public:
+    explicit ScopedRefractionEyeCopy(const graphics::OpenGlEyeBinding& binding,
+        bool multisample_scene) noexcept : previous_(g_refraction_eye_copy) {
+        // BeginPersistentEyeTarget established this framebuffer and viewport.
+        // The experimental multisample stage has a different read boundary.
+        g_refraction_eye_copy = nullptr;
+        if (multisample_scene) return;
+        std::array<GLint,4> viewport{};
+        glGetIntegerv(GL_VIEWPORT, viewport.data());
+        glGetIntegerv(kGlFramebufferBinding, &context_.framebuffer);
+        context_.context = wglGetCurrentContext();
+        context_.eye_width = viewport[2];
+        context_.eye_height = viewport[3];
+        context_.native_width = binding.previous_viewport[2];
+        context_.native_height = binding.previous_viewport[3];
+        g_refraction_eye_copy = &context_;
+    }
+    ~ScopedRefractionEyeCopy() { g_refraction_eye_copy = previous_; }
+    ScopedRefractionEyeCopy(const ScopedRefractionEyeCopy&) = delete;
+    ScopedRefractionEyeCopy& operator=(const ScopedRefractionEyeCopy&) = delete;
+private:
+    const graphics::RefractionEyeCopyContext* previous_;
+    graphics::RefractionEyeCopyContext context_{};
+};
+
+void __fastcall HookedCopyContextToTexture(void* graphics, void*,
+    void* texture, const void* position, const void* size,
+    const void* texture_offset) noexcept {
+    ActiveCall active_call;
+    const auto return_address = reinterpret_cast<std::uintptr_t>(_ReturnAddress());
+    const auto original = g_original_refraction_copy.load(std::memory_order_acquire);
+    if (original == nullptr) return;
+    original(graphics, texture, position, size, texture_offset);
+    const auto* eye = g_refraction_eye_copy;
+    const auto image_base = g_refraction_image_base.load(std::memory_order_acquire);
+    if (texture == nullptr || eye == nullptr ||
+        !IsRefractionCopyReturn(image_base, return_address)) return;
+    g_refraction_native_calls.fetch_add(1, std::memory_order_relaxed);
+    const auto result = graphics::CaptureBoundRefractionEye(*eye);
+    if (result == graphics::RefractionEyeCopyResult::skipped) return;
+    if (result == graphics::RefractionEyeCopyResult::resized)
+        g_refraction_resize_attempts.fetch_add(1, std::memory_order_relaxed);
+    g_refraction_copy_attempts.fetch_add(1, std::memory_order_relaxed);
+}
 
 void __fastcall HookedParticleUpdateGraphics(
     void* emitter,
@@ -1257,6 +1323,7 @@ void __fastcall HookedUpdateRenderList(
     {
         hooks::ScopedEyeScissor scissor({
             binding.previous_viewport[2], binding.previous_viewport[3]});
+        ScopedRefractionEyeCopy refraction_copy(binding, enhanced_binding.active);
         const auto world_render_start = PerformanceClock::now();
         original(renderer, world, camera, frame_time);
         world_render_cpu_ns += ElapsedNanoseconds(world_render_start);
@@ -1938,7 +2005,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     if (g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_spawn_yaw_hook.installed() ||
         g_particle_get_model_matrix_hook.installed() ||
-        g_particle_update_graphics_hook.installed()) {
+        g_particle_update_graphics_hook.installed() || g_refraction_copy_hook.installed()) {
         error = "The Black Plague RenderWorld probe is already installed";
         return false;
     }
@@ -2033,6 +2100,18 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         return false;
     }
 
+    if (*reinterpret_cast<void**>(image + kCopyContextToTextureSlotRva) !=
+            image + kCopyContextToTextureRva ||
+        !std::equal(kCopyContextToTextureEntry.begin(), kCopyContextToTextureEntry.end(),
+            image + kCopyContextToTextureRva) ||
+        !std::equal(kRefractionCopyCall.begin(), kRefractionCopyCall.end(),
+            image + kRefractionClippedCopyCallRva) ||
+        !std::equal(kRefractionCopyCall.begin(), kRefractionCopyCall.end(),
+            image + kRefractionFullCopyCallRva)) {
+        error = "Black Plague exact-build refraction screen-copy boundary mismatch";
+        return false;
+    }
+
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     g_presentation_timing.Reset();
@@ -2080,6 +2159,13 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         expected_particle_get_model_matrix, std::memory_order_release);
     g_original_particle_update_graphics.store(
         expected_particle_update_graphics, std::memory_order_release);
+    g_refraction_image_base.store(reinterpret_cast<std::uintptr_t>(image),
+        std::memory_order_release);
+    g_original_refraction_copy.store(reinterpret_cast<CopyContextToTexture>(
+        image + kCopyContextToTextureRva), std::memory_order_release);
+    g_refraction_native_calls.store(0, std::memory_order_relaxed);
+    g_refraction_copy_attempts.store(0, std::memory_order_relaxed);
+    g_refraction_resize_attempts.store(0, std::memory_order_relaxed);
     g_particle_stereo_refresh.Reset();
     g_particle_update_calls.store(0, std::memory_order_release);
     g_particle_eye_refreshes.store(0, std::memory_order_release);
@@ -2193,6 +2279,16 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
         }
         return false;
     }
+    if (!hooks::InstallPointerHook(
+            reinterpret_cast<void**>(image + kCopyContextToTextureSlotRva),
+            image + kCopyContextToTextureRva,
+            reinterpret_cast<void*>(&HookedCopyContextToTexture),
+            g_refraction_copy_hook, error)) {
+        std::string rollback_error;
+        if (!RemoveRenderWorldProbe(rollback_error))
+            error += "; refraction hook rollback also failed: " + rollback_error;
+        return false;
+    }
     return true;
 }
 
@@ -2206,6 +2302,9 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         error = "A controlled stereo-matrix request is still active";
         return false;
     }
+    std::string refraction_error;
+    const bool refraction_removed = hooks::RemoveIatHook(
+        g_refraction_copy_hook, refraction_error);
     std::string particle_get_model_matrix_error;
     const bool particle_get_model_matrix_removed = hooks::RemoveIatHook(
         g_particle_get_model_matrix_hook, particle_get_model_matrix_error);
@@ -2223,10 +2322,12 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         hooks::RemoveRel32CallHook(g_visibility_hook, visibility_error);
     std::string render_error;
     const bool render_removed = hooks::RemoveRel32CallHook(g_hook, render_error);
-    if (!particle_get_model_matrix_removed || !particle_update_graphics_removed ||
+    if (!refraction_removed || !particle_get_model_matrix_removed || !particle_update_graphics_removed ||
         !spawn_yaw_removed || !draw_all_removed || !visibility_removed ||
         !render_removed) {
-        error = !particle_get_model_matrix_removed
+        error = !refraction_removed
+            ? "Could not remove the refraction screen-copy hook: " + refraction_error
+            : !particle_get_model_matrix_removed
             ? "Could not remove the ParticleEmitter3D GetModelMatrix hook: " +
                 particle_get_model_matrix_error
             : !particle_update_graphics_removed
@@ -2831,6 +2932,12 @@ RenderWorldFrameTelemetry ConsumeRenderWorldFrameTelemetry() noexcept {
     result.presentation_render_age_ms = timing.render_age_ms;
     result.presentation_submit_age_valid = timing.submit_age_valid;
     result.presentation_submit_age_ms = timing.submit_age_ms;
+    result.refraction_native_calls = g_refraction_native_calls.exchange(0,
+        std::memory_order_relaxed);
+    result.refraction_copy_attempts = g_refraction_copy_attempts.exchange(0,
+        std::memory_order_relaxed);
+    result.refraction_resize_attempts = g_refraction_resize_attempts.exchange(0,
+        std::memory_order_relaxed);
     result.particle_update_calls =
         g_particle_update_calls.exchange(0, std::memory_order_acq_rel);
     result.particle_eye_refreshes =

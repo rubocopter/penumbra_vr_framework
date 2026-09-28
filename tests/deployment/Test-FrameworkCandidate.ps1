@@ -29,6 +29,20 @@ try {
     $unpacked = Join-Path $temporaryRoot 'unpacked'
     Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
     $installer = Join-Path $unpacked 'tools/Install-PenumbraFrameworkCandidate.ps1'
+    $gui = Join-Path $unpacked 'tools/Install-PenumbraFrameworkGui.ps1'
+    $guiLauncher = Join-Path $unpacked 'tools/Instalar-Penumbra-VR.vbs'
+    foreach ($gameNotice in @('black_plague', 'requiem')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $unpacked "products/black_plague/assets/localization/$gameNotice/leeme.txt") -PathType Leaf)) {
+            throw "Framework package omitted the $gameNotice localization notice."
+        }
+    }
+    if (-not (Test-Path -LiteralPath $gui -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $guiLauncher -PathType Leaf) -or
+        -not (Select-String -LiteralPath $guiLauncher -Pattern 'shell.Run command, 0, False' -Quiet)) {
+        throw 'Framework package omitted the terminal-free GUI launcher.'
+    }
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $gui -SmokeTest 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) { throw 'Packaged GUI failed to create its Windows controls.' }
     $steam = Join-Path $temporaryRoot 'Steam'
     $common = Join-Path $steam 'steamapps/common'
     $overtureRedist = Join-Path $common 'Penumbra Overture/redist'
@@ -48,12 +62,22 @@ try {
     $logPath = Join-Path $temporaryRoot 'installer.jsonl'
     $logArgs = @{ LogPath = $logPath }
 
+    $guiRows = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $gui -SmokeTest -SteamRoot $steam)
+    if ($LASTEXITCODE -ne 0 -or $guiRows -notcontains 'Overture' -or
+        $guiRows -notcontains 'Black Plague + Requiem') {
+        throw 'Packaged GUI omitted a clean Overture or shared Black Plague/Requiem installation.'
+    }
     & $installer -SteamRoot $steam -List 6>$null | Out-Null
     if (Test-Path -LiteralPath $logPath) { throw 'Read-only discovery created an installer log.' }
-    $rejected = $false
-    try { & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame 6>$null | Out-Null }
-    catch { $rejected = $_.Exception.Message -like '*no Framework gameplay VR backend*' }
-    if (-not $rejected) { throw 'Requiem was not rejected as unavailable.' }
+    & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame @logArgs 6>$null | Out-Null
+    $requiemProbe = Join-Path $blackPlagueRedist 'PenumbraVR.Requiem.Probe.dll'
+    if (-not (Test-Path -LiteralPath $requiemProbe)) {
+        throw 'Requiem selection did not install the shared redist transaction.'
+    }
+    & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame -Restore @logArgs 6>$null | Out-Null
+    if (Test-Path -LiteralPath $requiemProbe) {
+        throw 'Requiem selection did not restore the shared redist transaction.'
+    }
     $rejected = $false
     try { & $installer -SteamRoot $steam -Game Overture -GamePath $overtureGame -LargeAddressAware 6>$null | Out-Null }
     catch { $rejected = $_.Exception.Message -like '*LAA transform option applies only*' }
@@ -66,6 +90,9 @@ try {
     & $installer -SteamRoot $noSteam -GamePath $blackPlagueRedist -Game BlackPlague -LargeAddressAware @logArgs 6>$null | Out-Null
     if (-not (Test-Path -LiteralPath (Join-Path $blackPlagueRedist 'PenumbraVR.BlackPlague.install.json'))) {
         throw 'Framework candidate did not install Black Plague.'
+    }
+    if (-not (Test-Path -LiteralPath $requiemProbe)) {
+        throw 'Framework candidate did not install Requiem in the shared redist.'
     }
     if ((Get-FileHash -LiteralPath $blackPlagueGame -Algorithm SHA256).Hash -ne
         'DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196') {
@@ -139,13 +166,11 @@ try {
         throw 'Multi-game fixture discovery did not find all three executables.'
     }
     $both = @($blackPlagueIndex, $overtureIndex)
-    $rejectedMixedRequiem = $false
-    try { & $installer -SteamRoot $steam -Selections @($blackPlagueIndex, $requiemIndex) 6>$null | Out-Null }
-    catch { $rejectedMixedRequiem = $_.Exception.Message -like '*not compatible*' }
-    if (-not $rejectedMixedRequiem -or
-        (Test-Path -LiteralPath (Join-Path $blackPlagueRedist 'PenumbraVR.BlackPlague.install.json'))) {
-        throw 'Multi-game selection did not reject Requiem before changing Black Plague.'
+    & $installer -SteamRoot $steam -Selections @($blackPlagueIndex, $requiemIndex) @logArgs 6>$null | Out-Null
+    if (-not (Test-Path -LiteralPath $requiemProbe)) {
+        throw 'Shared Black Plague/Requiem selection omitted the Requiem probe.'
     }
+    & $installer -SteamRoot $steam -Selections @($blackPlagueIndex, $requiemIndex) -Restore @logArgs 6>$null | Out-Null
     $rejectedMixedLaa = $false
     try { & $installer -SteamRoot $steam -Selections $both -LargeAddressAware 6>$null | Out-Null }
     catch { $rejectedMixedLaa = $_.Exception.Message -like '*LAA transform option applies only*' }
@@ -198,7 +223,7 @@ try {
     if (-not $rejectedTamper) {
         throw 'Framework candidate did not reject an altered package before discovery.'
     }
-    Write-Host 'One Framework ZIP installs, repairs and restores Overture/Black Plague; Requiem stays fail-closed.'
+    Write-Host 'One Framework package installs, repairs and restores Overture and shared Black Plague/Requiem redist.'
 } finally {
     if (Test-Path -LiteralPath $temporaryRoot -PathType Container) {
         Remove-Item -LiteralPath $temporaryRoot -Recurse -Force

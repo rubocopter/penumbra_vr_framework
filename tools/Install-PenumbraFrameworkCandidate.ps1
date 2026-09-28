@@ -113,9 +113,9 @@ if ($PSBoundParameters.ContainsKey('Selections') -and ($Recover -or $Repair -or 
 }
 
 if ($Recover) {
-    if ($Game -notin @('Overture', 'BlackPlague') -or -not $GamePath -or $Restore -or
+    if ($Game -notin @('Overture', 'BlackPlague', 'Requiem') -or -not $GamePath -or $Restore -or
         $LargeAddressAware -or $List -or $Repair) {
-        throw 'Recovery requires -Game Overture or -Game BlackPlague and an explicit -GamePath; omit other operation switches.'
+        throw 'Recovery requires an explicit game and -GamePath; omit other operation switches.'
     }
     $requested = [System.IO.Path]::GetFullPath($GamePath)
     $leaf = Split-Path -Leaf $requested
@@ -130,9 +130,10 @@ if ($Recover) {
         }
     } else {
         $executable = if ($leaf -ieq 'Penumbra.exe') { $requested }
+            elseif ($leaf -ieq 'Requiem.exe') { Join-Path (Split-Path -Parent $requested) 'Penumbra.exe' }
             elseif ($leaf -ieq 'redist') { Join-Path $requested 'Penumbra.exe' }
             else { Join-Path $requested 'redist/Penumbra.exe' }
-        Invoke-LoggedInstaller 'recover' 'Black Plague' $executable $blackPlagueInstaller @{
+        Invoke-LoggedInstaller 'recover' $(if ($Game -eq 'Requiem') { 'Requiem' } else { 'Black Plague' }) $executable $blackPlagueInstaller @{
             GamePath = $executable; Recover = $true
         }
     }
@@ -140,9 +141,9 @@ if ($Recover) {
 }
 
 if ($Repair) {
-    if ($Game -notin @('Overture', 'BlackPlague') -or -not $GamePath -or $Restore -or
+    if ($Game -notin @('Overture', 'BlackPlague', 'Requiem') -or -not $GamePath -or $Restore -or
         $LargeAddressAware -or $List) {
-        throw 'Repair requires -Game Overture or -Game BlackPlague and an explicit -GamePath; omit other operation switches.'
+        throw 'Repair requires an explicit game and -GamePath; omit other operation switches.'
     }
     $requested = [System.IO.Path]::GetFullPath($GamePath)
     $leaf = Split-Path -Leaf $requested
@@ -159,9 +160,10 @@ if ($Repair) {
         }
     } else {
         $executable = if ($leaf -ieq 'Penumbra.exe') { $requested }
+            elseif ($leaf -ieq 'Requiem.exe') { Join-Path (Split-Path -Parent $requested) 'Penumbra.exe' }
             elseif ($leaf -ieq 'redist') { Join-Path $requested 'Penumbra.exe' }
             else { Join-Path $requested 'redist/Penumbra.exe' }
-        Invoke-LoggedInstaller 'repair' 'Black Plague' $executable $blackPlagueInstaller @{
+        Invoke-LoggedInstaller 'repair' $(if ($Game -eq 'Requiem') { 'Requiem' } else { 'Black Plague' }) $executable $blackPlagueInstaller @{
             GamePath = $executable
             BuildRoot = Join-Path $packageRoot 'products/black_plague/build'
             Repair = $true
@@ -214,12 +216,10 @@ for ($i = 0; $i -lt $found.Count; $i++) {
 }
 if ($List) { return }
 
-if ($Game -eq 'Requiem') {
-    throw 'Requiem is recognized but has no Framework gameplay VR backend or installable candidate yet.'
-}
-$choices = @($found | Where-Object { $_.Installable -and $_.Game -in @('Overture', 'Black Plague') })
+$choices = @($found | Where-Object { $_.Installable -and $_.Game -in @('Overture', 'Black Plague', 'Requiem') })
 if ($Game -eq 'Overture') { $choices = @($choices | Where-Object { $_.Game -eq 'Overture' }) }
 if ($Game -eq 'BlackPlague') { $choices = @($choices | Where-Object { $_.Game -eq 'Black Plague' }) }
+if ($Game -eq 'Requiem') { $choices = @($choices | Where-Object { $_.Game -eq 'Requiem' }) }
 if ($GamePath) {
     $requestedPath = [System.IO.Path]::GetFullPath($GamePath).TrimEnd('\', '/')
     $choices = @($choices | Where-Object {
@@ -270,19 +270,28 @@ if ($LargeAddressAware -and @($selectedEntries | Where-Object { $_.Game -eq 'Ove
     throw 'The LAA transform option applies only to the exact-build Black Plague candidate.'
 }
 
+$handledSharedRoots = [System.Collections.Generic.HashSet[string]]::new(
+    [System.StringComparer]::OrdinalIgnoreCase)
 foreach ($selected in $selectedEntries) {
+    if ($selected.Game -in @('Black Plague', 'Requiem') -and
+        -not $handledSharedRoots.Add((Split-Path -Parent $selected.Path))) {
+        continue
+    }
     Write-Host ("{0} {1}: {2}" -f $(if ($Restore) { 'Restoring' } else { 'Installing' }),
         $selected.Game, $selected.Path)
     try {
-        if ($selected.Game -eq 'Black Plague') {
+        if ($selected.Game -in @('Black Plague', 'Requiem')) {
+            $sharedGameExe = if ($selected.Game -eq 'Requiem') {
+                Join-Path (Split-Path -Parent $selected.Path) 'Penumbra.exe'
+            } else { $selected.Path }
             $installerArgs = @{
-                GamePath = $selected.Path
+                GamePath = $sharedGameExe
                 BuildRoot = Join-Path $packageRoot 'products/black_plague/build'
             }
             if ($Restore) { $installerArgs.Restore = $true }
             if ($LargeAddressAware) { $installerArgs.LargeAddressAware = $true }
             Invoke-LoggedInstaller $(if ($Restore) { 'restore' } else { 'install' }) `
-                'Black Plague' $selected.Path $blackPlagueInstaller $installerArgs
+                $selected.Game $selected.Path $blackPlagueInstaller $installerArgs
         } elseif ($selected.Game -eq 'Overture') {
             $installerArgs = @{
                 InstallRoot = $selected.InstallRoot

@@ -1,4 +1,5 @@
 #include "gameplay_contract.hpp"
+#include "tool_socket_profile.hpp"
 
 #include <array>
 #include <cmath>
@@ -12,6 +13,20 @@ int main() {
     const auto near = [](float actual, float expected) {
         return std::fabs(actual - expected) < 0.0001F;
     };
+    // The installed BP/Requiem HUD flashlight points down model -Y. Its
+    // spotlight must face tracked hand -Z after the target-owned socket pose.
+    const auto flashlight = penumbra_vr::backends::requiem::
+        InstalledFlashlightToolPose(penumbra_vr::runtime::IdentityMatrix());
+    const auto light_z = flashlight.values[9] * -0.103966F +
+        flashlight.values[11];
+    const auto ray_z = flashlight.values[9] * -0.203767F +
+        flashlight.values[11];
+    if (!near(flashlight.values[6], -1.0F) ||
+        !near(flashlight.values[9], 1.0F) ||
+        !(ray_z < light_z && light_z < 0.0F)) {
+        std::cerr << "Requiem flashlight light nodes face away from the hand\n";
+        return 1;
+    }
     using penumbra_vr::backends::requiem::RequiemLocomotionDisplacement;
     using penumbra_vr::backends::requiem::RequiemPushAxisProjection;
     using penumbra_vr::backends::requiem::RequiemPushHandForce;

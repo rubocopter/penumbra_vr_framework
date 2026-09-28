@@ -677,8 +677,9 @@ int RunSpatialTest() {
     if (g_held.load()) return 139;
     Put(state.data(),0x14,Vec{});
 
-    // Grab=6 must consume the VR winner for eligibility, while the final grip
-    // pose uses the same deterministic body origin for either entry angle.
+    // A fresh selected surface point is the grip contact. Requiem's tested
+    // free-body path lets the player regrab a prop from a different point;
+    // retaining the BP body-origin socket would erase that hand contact.
     Put(body.data(),0x34,runtime::IdentityMatrix());
     Put(state.data(),0x14,Vec{2.0F,0,0});
     Put(state.data(),0xE1,true);
@@ -695,9 +696,9 @@ int RunSpatialTest() {
     Matrix selected_palm{};
     if (!HandPose(runtime::VrHand::right,false,selected_palm,
             anchored_selected_velocity,anchored_selected_angular)) return 150;
-    const auto anchored_origin=TransformPoint(
-        Read<Matrix>(body.data(),0x34),Vec{});
-    if (!VecNearlyEqual(anchored_origin,
+    const auto anchored_contact=TransformPoint(
+        Read<Matrix>(body.data(),0x34),selected_contact);
+    if (!VecNearlyEqual(anchored_contact,
             {selected_palm.values[3],selected_palm.values[7],
                 selected_palm.values[11]},0.001F)) return 151;
     test_frame.input.state.interact.pressed=false;

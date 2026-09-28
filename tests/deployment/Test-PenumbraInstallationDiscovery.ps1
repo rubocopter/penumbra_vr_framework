@@ -33,8 +33,8 @@ try {
     $found = @(& $discover -SteamRoot $steamRoot)
     if ($found.Count -ne 3 -or
         @($found | Where-Object { $_.Game -eq 'Black Plague' -and $_.KnownBuild }).Count -ne 1 -or
-        @($found | Where-Object { $_.Game -eq 'Requiem' -and $_.KnownBuild -and -not $_.Installable }).Count -ne 1 -or
-        @($found | Where-Object { $_.Game -eq 'Overture' -and $_.KnownBuild -and -not $_.Installable }).Count -ne 1) {
+        @($found | Where-Object { $_.Game -eq 'Requiem' -and $_.KnownBuild -and $_.Installable }).Count -ne 1 -or
+        @($found | Where-Object { $_.Game -eq 'Overture' -and $_.KnownBuild -and $_.Installable }).Count -ne 1) {
         throw 'Steam library discovery did not distinguish all known executable identities.'
     }
 

@@ -34,7 +34,9 @@ Current product-level evidence:
 - **Black Plague:** tracked stereo, head/camera tracking and several body/input
   paths have real headset evidence; the managed Steam bootstrap has reached
   gameplay VR from Steam **Play**. Later host-tested changes still require the
-  focused regressions listed in `ROADMAP.md`.
+  focused regressions listed in `ROADMAP.md`. The surface-contact Grab port
+  and exact-build full-eye refraction port are host-tested only; neither has
+  new Black Plague headset evidence.
 - **Requiem:** boot/menu/gameplay stereo, Sense locomotion, room-scale/body
   movement, crouch, visible hands and inventory/notebook have headset evidence.
   A representative Push puzzle, free-body `Grab=6` carry/snap/release sequence,
@@ -49,13 +51,15 @@ Current product-level evidence:
   apparent flashlight effect offset. A subsequent clip and log show the
   pre-visibility attachment refresh running during tool gameplay. A later
   visor trial still showed all three tools moving relative to the visible
-  hand under stick locomotion, so neither that refresh nor the host-tested
-  fixed finger curl closes tool alignment. Requiem's resolved-palm tool
-  correction is host-tested only; final light and finger alignment remain open.
+  hand under stick locomotion. A newer headset clip with the resolved-palm
+  correction shows flashlight, glowstick and flare staying with the hand;
+  the matching log records resolved-palm attachment and no raw-palm use.
+  Static flashlight light position and slight finger penetration remain open.
+  The installed-asset flashlight socket correction is host-tested only.
   Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments
   at Requiem return site `0x5A9DA3`. The latest candidate reached a tracked
   menu frame before the same fault, so delayed OpenVR does not close this
-  gate. Free-body `Move=2`, throwing and final tool alignment
+  gate. Free-body `Move=2`, throwing and final static tool alignment
   still need independent headset evidence.
 
 None of the Framework-owned trilogy products is currently a supported public

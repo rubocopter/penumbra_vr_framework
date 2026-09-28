@@ -5,7 +5,7 @@
 #include <array>
 #include <cstdint>
 
-namespace penumbra_vr::backends::requiem {
+namespace penumbra_vr::backends::black_plague {
 
 // Return sites of the two exact-build Renderer3D calls to the low-level
 // CopyContextToTexure vtable slot. No other screen-copy consumer may use the
@@ -16,7 +16,7 @@ using RefractionCopyRequest = graphics::RefractionCopyRequest;
     std::uintptr_t image_base, std::uintptr_t return_address) noexcept {
     if (image_base == 0 || return_address < image_base) return false;
     const auto site = return_address - image_base;
-    return site == 0x12C27F || site == 0x12C2CE;
+    return site == 0x12BC7F || site == 0x12BCCE;
 }
 
 [[nodiscard]] constexpr bool ShouldCaptureRefractionEye(
@@ -25,4 +25,4 @@ using RefractionCopyRequest = graphics::RefractionCopyRequest;
         graphics::RefractionEyeGeometryMatches(request);
 }
 
-} // namespace penumbra_vr::backends::requiem
+} // namespace penumbra_vr::backends::black_plague

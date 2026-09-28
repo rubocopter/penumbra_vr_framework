@@ -849,6 +849,59 @@
         "0x5347 is the pressed branch; 0x538A is reached for released/not-held handling and both can occur for a toggle crouch press",
         "0xD790C/0xD7913 are the gravity-disabled branch only; gravity-active player bodies instead reach the later unconditional synchronization calls"
       ]
+    },
+    "hpl.cLowLevelGraphicsSDL.CopyContextToTexure": {
+      "status": "host-tested",
+      "rva": "0x0015FEA0",
+      "callingConvention": "thiscall",
+      "stackArguments": [
+        "iTexture* texture",
+        "const cVector2l* position",
+        "const cVector2l* size",
+        "const cVector2l* textureOffset"
+      ],
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "53 55 8B 6C 24 0C 85 ED 8B D9 74 66 8B 4C 24 10",
+        "mask": "xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "vtableSlotRva": "0x002884CC",
+      "vtableByteOffset": "0x174",
+      "refractionCallSites": [
+        {
+          "rva": "0x0012BC79",
+          "returnRva": "0x0012BC7F",
+          "bytes": "FF 92 74 01 00 00",
+          "kind": "clipped"
+        },
+        {
+          "rva": "0x0012BCC8",
+          "returnRva": "0x0012BCCE",
+          "bytes": "FF 92 74 01 00 00",
+          "kind": "full-screen"
+        }
+      ],
+      "otherScreenCopyReturnRvas": [
+        "0x0000A819",
+        "0x0012E3A6",
+        "0x0012ECFE",
+        "0x0012FBF2"
+      ],
+      "sourceEvidence": {
+        "captureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+        "referenceRevision": "23c890f",
+        "referenceFiles": [
+          "HPL1Engine/sources/graphics/Renderer3D.cpp",
+          "HPL1Engine/sources/impl/LowLevelGraphicsSDL.cpp"
+        ]
+      },
+      "evidence": [
+        "The initialized function binds texture unit 0, computes native screen/texture Y offsets, calls OPENGL32!glCopyTexSubImage2D through IAT RVA 0x2725E0 and returns with ret 0x10.",
+        "Renderer3D callsites are followed by the native Copy clipped/full screen texture log strings and then refraction-program setup.",
+        "Installed refract_fp.cg samples samplerRECT screenMap in viewport pixel coordinates; eye-sized texture refresh is required when the VR viewport exceeds the native screen.",
+        "Only the two mapped refraction callers may capture the full VR eye. Runtime visual appearance remains unvalidated in Black Plague."
+      ]
     }
   }
 }
