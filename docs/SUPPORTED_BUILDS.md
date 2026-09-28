@@ -47,9 +47,11 @@ Current product-level evidence:
   monolith turning felt resistant. A flashlight/glowstick/flare clip confirmed
   that tool models track the hand but exposed finger intersection and an
   apparent flashlight effect offset. A subsequent clip and log show the
-  pre-visibility attachment refresh running during tool gameplay, but finger
-  intersection remains visible and final light alignment is unvalidated. The
-  Rework-derived fixed held-tool curl correction is host-tested only.
+  pre-visibility attachment refresh running during tool gameplay. A later
+  visor trial still showed all three tools moving relative to the visible
+  hand under stick locomotion, so neither that refresh nor the host-tested
+  fixed finger curl closes tool alignment. Requiem's resolved-palm tool
+  correction is host-tested only; final light and finger alignment remain open.
   Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments
   at Requiem return site `0x5A9DA3`. The latest candidate reached a tracked
   menu frame before the same fault, so delayed OpenVR does not close this

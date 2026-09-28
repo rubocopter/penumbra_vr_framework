@@ -106,6 +106,12 @@ and shared articulation fixes the curl to that weight. The latter change is
 host-tested and still needs visor validation. The flashlight's apparent light
 offset remains a separate target-owned model/light question; Rework's modified
 DAE positions its ray billboard differently from Requiem's installed asset.
+The subsequent Requiem trial showed that the fixed curl alone did not keep the
+native tool attached to the visible hand during stick movement. Unlike Black
+Plague's tool path, Requiem used a raw grip for the tool while drawing the hand
+from the collision-resolved palm. Its adapter now uses the same resolved palm
+for both, with a raw fallback across missing publications and snap-turn epochs;
+this target correction is host-tested only.
 
 Black Plague's VR-origin free `Grab=6` uses Rework's point-in-palm transform but
 anchors the body's local origin, independent of the selected surface point.

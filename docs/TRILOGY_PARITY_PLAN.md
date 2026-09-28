@@ -27,7 +27,7 @@ Extraction alone is not parity. Validation uses the common ladder:
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
 | Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed; held Grab body remained attached through one headset snap turn | Transition/tracking-loss and BP held-object continuity regression |
 | Controller actions/bindings | 42 actions, 6 sets, 8 bindings | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Hardware/per-device regression before support claims |
-| Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Visible tracked hands consumed; Requiem attachment refresh observed in gameplay; fixed held-tool curl host-tested after visor evidence of finger/tool intersection | BP finger/material pass; Requiem tool grip and light alignment headset check |
+| Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Visible tracked hands consumed; resolved-palm tool alignment host-tested after visor evidence of motion under stick locomotion | BP finger/material pass; Requiem tool grip and light alignment headset check |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
 | Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Consumed through BP Grab/Move boundaries; latest changes host-tested | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP regression, Requiem throwable prop and distinct Move path when encountered |
 | Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Requiem mechanism comfort investigation; BP mechanism regression |
@@ -107,21 +107,22 @@ With Refractions enabled, the subsequent headset clip showed the authored portal
 ring without the large rectangular/striped defect. Runtime telemetry recorded
 one texture resize followed by full-eye copies at every intercepted native
 refraction call, with roughly 90 FPS in the portal scene; HPL exited normally.
-Subtle motion ghosting in headset and tool alignment remain open. A later
-flashlight/glowstick/flare clip showed the Requiem tool matrices tracking the
-hand, with some finger intersection and an apparent gap between the flashlight
-body and its bright effect in some views. Telemetry from that clip confirms
-the live attachment was refreshed before native light/billboard collection;
-the timing path is live-tested, while final visual alignment is not validated.
-Rework fixes attached-tool finger curl to the grip-radius pose. The Framework
-had instead taken the greater of sensor curl and that pose, allowing fingers
-to close through a held tool. Shared articulation now follows Rework; the
-correction is host-tested for Requiem and Black Plague. Requiem's installed
-flashlight DAE places its ray billboard about 0.10 model units farther along
-the model axis than Rework's altered DAE. This target asset difference is a
-plausible cause of the apparent effect gap, but the clip includes nearby
-occluding geometry and does not establish causation. The installed asset is
-shared with Black Plague, so it must not be changed globally for Requiem.
+Subtle motion ghosting in headset and tool alignment remain open. The
+flashlight/glowstick/flare visor trial showed the native tools moving relative
+to the visible hand during stick locomotion. Telemetry confirms pre-visibility
+attachment refresh ran, so timing alone does not explain the separation.
+Rework fixes attached-tool finger curl to the grip-radius pose; Framework's
+shared articulation now does the same, but the subsequent visor trial showed
+no perceptible alignment improvement. The remaining Requiem-specific difference
+was positional: the visible hand consumed the collision-resolved palm while
+the tool refresh consumed the raw grip. Black Plague's tool path already uses
+the resolved palm. Requiem now uses one palm publication for tool and hand at
+native update, visibility and eye rendering, with an old-yaw fallback; this
+correction is host-tested only. Atomic counters report resolved/raw tool-palm
+use and samples where their positions differ by over 2 cm. Requiem's installed
+flashlight DAE also places its ray billboard about 0.10 model units farther
+along the model axis than Rework's altered DAE. That asset is shared with
+Black Plague; its contribution to any remaining static effect gap is unproven.
 
 **Current gate:** validate tool alignment and classify the remaining interaction
 rough edges when the corresponding native object is available. Magnetic

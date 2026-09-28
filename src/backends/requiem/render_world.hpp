@@ -35,6 +35,9 @@ struct RequiemInteractionCounters final {
     std::uint64_t tools_native = 0;
     std::uint64_t tools_render_aligned = 0;
     std::uint64_t tools_visibility_aligned = 0;
+    std::uint64_t tools_visibility_resolved_palm = 0;
+    std::uint64_t tools_visibility_raw_palm = 0;
+    std::uint64_t tools_visibility_palm_gap_over_2cm = 0;
     std::uint64_t native_push_enters = 0;
     std::uint64_t pushes_acquired = 0;
     std::uint64_t push_force_ticks = 0;

@@ -7,6 +7,16 @@
 
 namespace penumbra_vr::backends::requiem {
 
+// Tool and visible hand must consume the same palm publication. A stale palm
+// from an earlier world-yaw epoch cannot be used during a snap turn.
+[[nodiscard]] inline runtime::VrMatrix44 SelectToolPalmPose(
+    const runtime::VrMatrix44& raw,
+    const runtime::VrMatrix44& resolved,
+    bool resolved_valid,
+    bool same_yaw_epoch) noexcept {
+    return resolved_valid && same_yaw_epoch ? resolved : raw;
+}
+
 // Use the same HMD sample to place a native tool before visibility/light
 // collection and to draw its hand in the subsequent stereo eye pass.
 [[nodiscard]] inline bool ComposeToolVisibilityTracking(

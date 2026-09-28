@@ -58,23 +58,20 @@ Current work is deliberately narrow:
 - [ ] Port Rework/BP magnetic pickup only for inventory items after Requiem's
   exact body-list, bounds and item-subtype boundaries are demonstrated. Do not
   extend that policy to props or mechanisms.
-- [ ] Validate tool alignment before any support claim. A headset clip with
-  flashlight, glowstick and flare showed the models following the hand, but
-  fingers could cross the tool and the flashlight's bright effect appeared
-  offset from its body. Requiem feeds its live native tool attachment into
-  the proven held-hand pose and refreshes that attachment before native
-  light/billboard collection. A later clip and log confirm the refresh runs
-  during tool gameplay, but still show finger intersection; the flashlight
-  effect is ambiguous beside nearby geometry. Shared held-tool articulation
-  now fixes finger curl to the handle-radius pose as Rework does, rather than
-  letting sensor curl close farther; this change is host-tested only. The
-  installed flashlight DAE places its billboard farther forward than Rework's
-  model, so assess that effect separately without changing the shared game
-  asset or moving the whole tool. Finger clearance needs a focused visor
-  check. One representative level progression is headset-tested. Stacked
-  blocks could be displaced accidentally while climbing; the matching
-  telemetry shows `Grab=6` and jumps, with no VR Push acquisition or force in
-  that interval.
+- [ ] Validate tool attachment before any support claim. The latest visor
+  clip shows flashlight, glowstick and flare moving relative to the visible
+  hand during stick locomotion; the fixed finger-curl policy alone did not
+  remove that motion. The hand was drawn from the collision-resolved palm
+  while the tool used the raw controller pose. Requiem now feeds the same
+  resolved palm to its native tool attachment before light collection and at
+  eye rendering, with a raw fallback on missing or old-yaw publication. This
+  exact-build correction and observational palm-source counters are host-tested
+  only. Check hand/tool coherence with one short locomotion trial, then assess
+  any static flashlight effect offset separately. The installed flashlight
+  DAE differs from Rework's; do not change the asset shared with Black Plague.
+  One representative level progression is headset-tested. Stacked blocks
+  could be displaced accidentally while climbing; telemetry shows `Grab=6`
+  and jumps, with no VR Push acquisition or force in that interval.
 - [ ] Classify Requiem's intermittent Steam Play startup failure. Nine
   captured dumps fault in `SDL_mutexP` from the same Requiem return site
   `0x5A9DA3` with varying invalid mutex arguments. In the latest attempt,

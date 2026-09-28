@@ -223,6 +223,9 @@ std::atomic<std::uint64_t> g_tools_attached{0};
 std::atomic<std::uint64_t> g_tools_native{0};
 std::atomic<std::uint64_t> g_tools_render_aligned{0};
 std::atomic<std::uint64_t> g_tools_visibility_aligned{0};
+std::atomic<std::uint64_t> g_tools_visibility_resolved_palm{0};
+std::atomic<std::uint64_t> g_tools_visibility_raw_palm{0};
+std::atomic<std::uint64_t> g_tools_visibility_palm_gap_over_2cm{0};
 FramePresentationGate g_frame_presentation;
 graphics::OpenGlEyeTargets g_targets;
 graphics::OpenGlEyeTargets g_overlay_targets;
@@ -634,7 +637,8 @@ void PublishTrackedHeadWorldPose(
 }
 
 [[nodiscard]] std::array<float, 2> AlignToolsForRender(
-    const runtime::VrMatrix44& world_from_tracking,
+    const std::array<runtime::VrMatrix44, 2>& palms,
+    const std::array<bool, 2>& palm_valid,
     const runtime::VrHmdPose& head,
     const runtime::VrControllerFrame& frame,
     std::uint64_t now) noexcept;
@@ -704,13 +708,49 @@ void __fastcall HookedUpdateRenderList(void* renderer, void*,
                     pose.device_to_absolute, world_from_tracking,
                     tool_error)) {
                 // HPL gathers lights and billboards in UpdateRenderList.
-                // Refresh the live native attachment before that collection.
+                // Use the same collision-resolved palm as the visible hand.
+                // A raw-only attachment visibly slides during stick motion.
+                std::array<runtime::VrMatrix44, 2> palms{};
+                std::array<bool, 2> palm_valid{};
+                std::array<bool, 2> palm_resolved{};
+                std::array<bool, 2> palm_gap_over_2cm{};
+                const bool same_yaw_epoch = GameplayPalmYawEpoch() ==
+                    g_world_yaw_epoch.load(std::memory_order_acquire);
+                for (std::size_t index = 0; index < palms.size(); ++index) {
+                    const auto& grip = frame.hands[index].grip;
+                    if (!grip.device_connected || !grip.pose_valid) continue;
+                    const auto raw = runtime::Multiply(world_from_tracking,
+                        runtime::ExpandMatrix(grip.device_to_absolute));
+                    runtime::VrMatrix44 resolved{};
+                    const bool resolved_valid = same_yaw_epoch &&
+                        ReadGameplayPalmPose(index, resolved);
+                    palm_resolved[index] = resolved_valid;
+                    if (resolved_valid) {
+                        const float dx = raw.values[3] - resolved.values[3];
+                        const float dy = raw.values[7] - resolved.values[7];
+                        const float dz = raw.values[11] - resolved.values[11];
+                        palm_gap_over_2cm[index] =
+                            std::hypot(std::hypot(dx, dy), dz) > 0.02F;
+                    }
+                    palms[index] = SelectToolPalmPose(
+                        raw, resolved, resolved_valid, same_yaw_epoch);
+                    palm_valid[index] = true;
+                }
+                // Refresh the live native attachment before collection.
                 const auto weights = AlignToolsForRender(
-                    world_from_tracking, pose, frame, sampled_at_ms);
-                for (const float weight : weights) {
+                    palms, palm_valid, pose, frame, sampled_at_ms);
+                for (std::size_t index = 0; index < weights.size(); ++index) {
+                    const float weight = weights[index];
                     if (weight > 0.0F) {
                         g_tools_visibility_aligned.fetch_add(
                             1, std::memory_order_relaxed);
+                        (palm_resolved[index]
+                            ? g_tools_visibility_resolved_palm
+                            : g_tools_visibility_raw_palm).fetch_add(
+                                1, std::memory_order_relaxed);
+                        if (palm_gap_over_2cm[index])
+                            g_tools_visibility_palm_gap_over_2cm.fetch_add(
+                                1, std::memory_order_relaxed);
                     }
                 }
             }
@@ -866,31 +906,30 @@ struct WorldPanelGeometry final {
     std::string hand_error;
     const bool resolver_head_valid = runtime::InvertRigidTransform(
         CollapseRigidView(head_view), resolver_head_pose, hand_error);
+    runtime::VrMatrix44 tool_world_from_tracking{};
+    bool tool_tracking_ready = false;
     if (controller_frame.focused && !NativeUiActive() &&
         resolver_head_valid) {
-        runtime::VrMatrix44 world_from_tracking{};
         if (ComposeToolVisibilityTracking(head_view,
-                pose.device_to_absolute, world_from_tracking, hand_error)) {
+                pose.device_to_absolute, tool_world_from_tracking, hand_error)) {
+            tool_tracking_ready = true;
             AcquireSRWLockExclusive(&g_tracking_world_lock);
-            g_world_from_tracking = world_from_tracking;
+            g_world_from_tracking = tool_world_from_tracking;
             g_world_from_tracking_time = now;
             g_world_from_tracking_yaw_epoch = g_world_yaw_epoch.load(
                 std::memory_order_acquire);
             g_world_from_tracking_identity = pose.identity;
             ReleaseSRWLockExclusive(&g_tracking_world_lock);
-            const auto tool_hold_weights = AlignToolsForRender(
-                world_from_tracking, pose, controller_frame, now);
             for (std::size_t index = 0; index < hands.size(); ++index) {
                 const auto& tracked = controller_frame.hands[index];
                 if (!tracked.grip.device_connected ||
                     !tracked.grip.pose_valid) continue;
                 auto& hand = hands[index];
                 hand.visible = true;
-                raw_palms[index] = runtime::Multiply(world_from_tracking,
+                raw_palms[index] = runtime::Multiply(tool_world_from_tracking,
                     runtime::ExpandMatrix(tracked.grip.device_to_absolute));
                 raw_palm_valid[index] = true;
                 hand.palm = raw_palms[index];
-                hand.hold_pose_weight = tool_hold_weights[index];
                 if (tracked.skeleton_valid) {
                     hand.curl = tracked.finger_curl;
                 } else {
@@ -908,6 +947,18 @@ struct WorldPanelGeometry final {
             ReadGameplayPalmPose(index, resolved)) {
             hands[index].palm = resolved;
         }
+    }
+    if (tool_tracking_ready) {
+        std::array<runtime::VrMatrix44, 2> tool_palms{};
+        std::array<bool, 2> tool_palm_valid{};
+        for (std::size_t index = 0; index < hands.size(); ++index) {
+            tool_palms[index] = hands[index].palm;
+            tool_palm_valid[index] = hands[index].visible;
+        }
+        const auto tool_hold_weights = AlignToolsForRender(
+            tool_palms, tool_palm_valid, pose, controller_frame, now);
+        for (std::size_t index = 0; index < hands.size(); ++index)
+            hands[index].hold_pose_weight = tool_hold_weights[index];
     }
 
     const auto plan = runtime::PlanStereoWorldRendering(
@@ -1111,8 +1162,15 @@ template <typename T>
     float radius, runtime::VrMatrix44& pose) noexcept {
     runtime::VrMatrix44 raw{};
     if (!TrackedControllerPose(hand, false, raw)) return false;
+    runtime::VrMatrix44 resolved{};
+    const bool same_yaw_epoch = GameplayPalmYawEpoch() ==
+        g_world_yaw_epoch.load(std::memory_order_acquire);
+    const bool resolved_valid = same_yaw_epoch &&
+        ReadGameplayPalmPose(hand == runtime::VrHand::left ? 0U : 1U,
+            resolved);
     pose = runtime::rework_hand_profile::ApplyAttachmentGripLocalPose(
-        raw, hand == runtime::VrHand::left,
+        SelectToolPalmPose(raw, resolved, resolved_valid, same_yaw_epoch),
+        hand == runtime::VrHand::left,
         runtime::vr_interaction_policy::GripOpenCentreOffset(radius));
     return true;
 }
@@ -2213,7 +2271,8 @@ struct ToolProfile final {
 }
 
 [[nodiscard]] std::array<float, 2> AlignToolsForRender(
-    const runtime::VrMatrix44& world_from_tracking,
+    const std::array<runtime::VrMatrix44, 2>& palms,
+    const std::array<bool, 2>& palm_valid,
     const runtime::VrHmdPose& head,
     const runtime::VrControllerFrame& frame,
     std::uint64_t now) noexcept {
@@ -2239,10 +2298,10 @@ struct ToolProfile final {
              !runtime::SameTrackingEpoch(head.identity, grip.identity)))
             continue;
         const auto profile = ProfileForTool(tool.kind);
-        const auto tracked = runtime::Multiply(world_from_tracking,
-            runtime::ExpandMatrix(grip.device_to_absolute));
+        const auto hand_index = tool.hand == runtime::VrHand::left ? 0U : 1U;
+        if (!palm_valid[hand_index]) continue;
         const auto socket = runtime::rework_hand_profile::
-            ApplyAttachmentGripLocalPose(tracked,
+            ApplyAttachmentGripLocalPose(palms[hand_index],
                 tool.hand == runtime::VrHand::left,
                 runtime::vr_interaction_policy::GripOpenCentreOffset(
                     profile.radius));
@@ -2251,7 +2310,6 @@ struct ToolProfile final {
             tool.entity, &matrix);
         // Rework's attached-tool grip and BP's shared hold-pose weight keep
         // the visible fingers wrapped around the live native attachment.
-        const auto hand_index = tool.hand == runtime::VrHand::left ? 0U : 1U;
         hold_weights[hand_index] = std::max(hold_weights[hand_index],
             runtime::vr_interaction_policy::GripPoseWeight(profile.radius));
         g_tools_render_aligned.fetch_add(1, std::memory_order_relaxed);
@@ -2962,6 +3020,12 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
         g_tools_native.exchange(0, std::memory_order_relaxed),
         g_tools_render_aligned.exchange(0, std::memory_order_relaxed),
         g_tools_visibility_aligned.exchange(0, std::memory_order_relaxed),
+        g_tools_visibility_resolved_palm.exchange(
+            0, std::memory_order_relaxed),
+        g_tools_visibility_raw_palm.exchange(
+            0, std::memory_order_relaxed),
+        g_tools_visibility_palm_gap_over_2cm.exchange(
+            0, std::memory_order_relaxed),
         g_native_push_enters.exchange(0, std::memory_order_relaxed),
         g_pushes_acquired.exchange(0, std::memory_order_relaxed),
         g_push_force_ticks.exchange(0, std::memory_order_relaxed),

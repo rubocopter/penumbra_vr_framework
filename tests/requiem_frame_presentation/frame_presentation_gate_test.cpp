@@ -7,6 +7,7 @@
 int main() {
     using penumbra_vr::backends::requiem::FramePresentationGate;
     using penumbra_vr::backends::requiem::ComposeToolVisibilityTracking;
+    using penumbra_vr::backends::requiem::SelectToolPalmPose;
     using penumbra_vr::runtime::IdentityMatrix;
     using penumbra_vr::runtime::VrMatrix34;
     using penumbra_vr::runtime::VrMatrix44;
@@ -31,6 +32,19 @@ int main() {
             tracking_world, tracking_error)) {
         std::cerr << "Requiem tool visibility accepted a non-rigid HMD pose\n";
         return 7;
+    }
+    auto raw_palm = IdentityMatrix();
+    raw_palm.values[3] = 1.0F;
+    auto resolved_palm = raw_palm;
+    resolved_palm.values[3] = 0.75F;
+    if (SelectToolPalmPose(raw_palm, resolved_palm, true, true).values !=
+            resolved_palm.values ||
+        SelectToolPalmPose(raw_palm, resolved_palm, true, false).values !=
+            raw_palm.values ||
+        SelectToolPalmPose(raw_palm, resolved_palm, false, true).values !=
+            raw_palm.values) {
+        std::cerr << "Requiem tool palm diverged from the visible resolved hand\n";
+        return 8;
     }
 
     FramePresentationGate gate;
