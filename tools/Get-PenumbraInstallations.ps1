@@ -5,15 +5,21 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+Import-Module (Join-Path $PSScriptRoot 'PenumbraVrPrerequisites.psm1') -Force
 if (-not $SteamRoot) {
-    $SteamRoot = Join-Path ${env:ProgramFiles(x86)} 'Steam'
+    foreach($key in @('HKCU:\Software\Valve\Steam','HKLM:\SOFTWARE\WOW6432Node\Valve\Steam')) {
+        $registry=Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+        if($registry.SteamPath) { $SteamRoot=$registry.SteamPath; break }
+        if($registry.InstallPath) { $SteamRoot=$registry.InstallPath; break }
+    }
+    if(-not $SteamRoot) { $SteamRoot = Join-Path ${env:ProgramFiles(x86)} 'Steam' }
 }
 $buildInfoScript = Join-Path $PSScriptRoot 'Get-PenumbraBuildInfo.ps1'
 $seen = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $candidates = [System.Collections.Generic.List[object]]::new()
 
-function Add-Candidate([string]$Path, [string]$Source) {
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
+function Add-Candidate([string]$Path, [string]$Source, [bool]$AllowMissing=$false) {
+    if (-not $AllowMissing -and -not (Test-Path -LiteralPath $Path -PathType Leaf)) { return }
     $absolute = [System.IO.Path]::GetFullPath($Path)
     if ($seen.Add($absolute)) {
         $candidates.Add([PSCustomObject]@{ Path = $absolute; Source = $Source })
@@ -25,6 +31,12 @@ function Add-FromFolder([string]$Folder, [string]$Source) {
                            'redist/Penumbra.exe', 'redist/Requiem.exe')) {
         Add-Candidate (Join-Path $Folder $relative) $Source
     }
+    if((Test-Path -LiteralPath (Join-Path $Folder '.penumbravr/deploy-state.json')) -or
+       (Test-Path -LiteralPath (Join-Path $Folder '.penumbravr-journal')) -or
+       (Test-Path -LiteralPath (Join-Path $Folder 'redist/PenumbraVR.BlackPlague.install.json')) -or
+       (Test-Path -LiteralPath (Join-Path $Folder 'redist/.penumbravr-bp-journal'))) {
+        Add-Candidate (Join-Path $Folder 'redist/Penumbra.exe') $Source $true
+    }
 }
 
 $libraries = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -33,7 +45,7 @@ if (Test-Path -LiteralPath $SteamRoot -PathType Container) {
     $libraryFile = Join-Path $SteamRoot 'steamapps/libraryfolders.vdf'
     if (Test-Path -LiteralPath $libraryFile -PathType Leaf) {
         $contents = Get-Content -LiteralPath $libraryFile -Raw
-        foreach ($match in [regex]::Matches($contents, '(?m)"path"\s*"([^"]+)"')) {
+        foreach ($match in [regex]::Matches($contents, '"(?:path|[0-9]+)"\s*"([^"]+)"')) {
             $library = $match.Groups[1].Value.Replace('\\', '\')
             if (Test-Path -LiteralPath $library -PathType Container) {
                 [void]$libraries.Add([System.IO.Path]::GetFullPath($library))
@@ -45,6 +57,14 @@ foreach ($library in @($libraries | Sort-Object)) {
     $common = Join-Path $library 'steamapps/common'
     foreach ($folder in @('Penumbra Overture', 'Penumbra Black Plague')) {
         Add-FromFolder (Join-Path $common $folder) 'Steam'
+    }
+    foreach($id in @('22180','22120','22140')) {
+        $manifest=Join-Path $library "steamapps/appmanifest_$id.acf"
+        if(-not (Test-Path -LiteralPath $manifest -PathType Leaf)) { continue }
+        $text=Get-Content -LiteralPath $manifest -Raw
+        if($text -match '"installdir"\s*"([^"\\/:]+)"' -and $Matches[1] -notin @('.','..')) {
+            Add-FromFolder (Join-Path $common $Matches[1]) 'Steam manifest'
+        }
     }
 }
 foreach ($manual in $ManualPaths) {
@@ -88,6 +108,11 @@ foreach ($candidate in @($candidates | Sort-Object Path)) {
         SHA256 = $info.SHA256
         Installable = ($info.KnownBuild -and $info.Game -in @('Overture', 'Black Plague'))
         ProbeError = $probeError
+        Status = 'unknown-build'
+        Issues = @()
+        Managed = $false
+        NeedsRecovery = $false
+        RequiemPresent = Test-Path -LiteralPath (Join-Path $parent 'Requiem.exe') -PathType Leaf
     })
 }
 foreach ($requiem in @($results | Where-Object { $_.Game -eq 'Requiem' -and $_.KnownBuild })) {
@@ -119,5 +144,19 @@ foreach ($entry in @($results | Where-Object { $_.Game -eq 'Unknown' -and
             $entry.Installable = $true
         }
     } catch { continue }
+}
+foreach($entry in $results) {
+    $redist=Split-Path -Parent $entry.Path
+    $oState=Join-Path $entry.InstallRoot '.penumbravr/deploy-state.json'
+    $bState=Join-Path $redist 'PenumbraVR.BlackPlague.install.json'
+    $entry.Managed=(Test-Path -LiteralPath $oState -PathType Leaf) -or (Test-Path -LiteralPath $bState -PathType Leaf)
+    $entry.NeedsRecovery=(Test-Path -LiteralPath (Join-Path $entry.InstallRoot '.penumbravr-journal')) -or (Test-Path -LiteralPath (Join-Path $redist '.penumbravr-bp-journal'))
+    if($entry.NeedsRecovery) { $entry.Status='recovery-required'; $entry.Installable=$false; $entry.Issues=@('Recover the interrupted transaction before modifying this root.'); continue }
+    if(-not $entry.KnownBuild) { $entry.Status=if($entry.Managed){'damaged-managed'}else{'unknown-build'}; $entry.Issues=@('Executable is missing, invalid or not an allowlisted build.'); continue }
+    $game=switch($entry.Game){'Overture'{'overture'} 'Black Plague'{'black_plague'} 'Requiem'{'requiem'}}
+    $missing=@(Test-PvrGameContent -Game $game -RedistRoot $redist | Where-Object {$_.Status -ne 'present'})
+    $entry.Issues=@($missing | ForEach-Object {"$($_.Name): $($_.Status). $($_.Remediation)"})
+    if($entry.Game -eq 'Requiem' -and -not $entry.Installable) { $entry.Issues+= 'Requiem requires its supported Black Plague companion in the same redist.' }
+    if($missing.Count -or -not $entry.Installable) { $entry.Installable=$false; $entry.Status='incomplete' } else { $entry.Status='available' }
 }
 $results

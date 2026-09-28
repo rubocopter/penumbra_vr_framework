@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "architecture": "x86",
+  "gameLibraries": [
+    {"name":"SDL","path":"SDL.dll"},
+    {"name":"Physics","path":"Newton.dll"},
+    {"name":"Vorbis file decoder","path":"libvorbisfile.dll"},
+    {"name":"Vorbis decoder","path":"libvorbis.dll"},
+    {"name":"Ogg decoder","path":"libogg.dll"},
+    {"name":"Audio initialization","path":"alut.dll"},
+    {"name":"Cg shader runtime","path":"cg.dll"},
+    {"name":"Cg OpenGL runtime","path":"cgGL.dll"},
+    {"name":"Image decoder","path":"SDL_image.dll"},
+    {"name":"Font decoder","path":"SDL_ttf.dll"},
+    {"name":"JPEG decoder","path":"jpeg.dll"},
+    {"name":"PNG decoder","path":"libpng12.dll"},
+    {"name":"Compression","path":"zlib1.dll"},
+    {"name":"Game Visual C++ 7.1 runtime","path":"msvcr71.dll","games":["black_plague","requiem"]},
+    {"name":"Game Visual C++ 7.1 C++ runtime","path":"msvcp71.dll","games":["black_plague","requiem"]}
+  ],
+  "bundledLibraries": [
+    {"name":"OpenVR loader","path":"openvr_api.dll","source":"products/overture/dependencies/openvr-2.15.6/bin/win32/openvr_api.dll","sha256":"AB696E4F218A95B3E396BC310F9FE6485DF48C99C0969762083212B1E1F025A6","license":"BSD-3-Clause","version":"SDK 2.15.6"},
+    {"name":"OpenAL Soft","path":"OpenAL32.dll","source":"products/overture/dependencies/bin/win32/OpenAL32.dll","sha256":"606CF8B4C22C7AE00813585279AC045115907BC66D1483EB26355907021EA4B0","license":"LGPL (see pinned source/notices)","version":"1.25.2"},
+    {"name":"Microsoft Visual C++ x86 C++ runtime","path":"msvcp140.dll","source":"products/overture/msvcp140.dll","sha256":"97E71A3C697FB1AB3AF777DB39009E4602525E8C3AFF0837ECC7031CBA188165","games":["overture"],"license":"Microsoft Visual Studio redistributable terms","version":"14.44.35211.0"},
+    {"name":"Microsoft Visual C++ x86 runtime","path":"vcruntime140.dll","source":"products/overture/vcruntime140.dll","sha256":"A9D7732A3C3DE09F0601A7FA2555093DCB49F08E2FC62A86091461F0F38393ED","games":["overture"],"license":"Microsoft Visual Studio redistributable terms","version":"14.44.35211.0"}
+  ],
+  "gameFiles": {
+    "overture":["config/default_settings.cfg","config/game.cfg","config/startup.cfg","config/English.lang"],
+    "black_plague":["config/default_settings.cfg","config/game.cfg","config/startup.cfg","config/English.lang"],
+    "requiem":["expansion01/config/requiem_default_settings.cfg","expansion01/config/requiem_game.cfg","expansion01/config/requiem_startup.cfg","expansion01/config/English_exp.lang"]
+  }
+}

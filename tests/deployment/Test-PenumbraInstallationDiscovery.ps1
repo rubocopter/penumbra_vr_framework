@@ -23,6 +23,8 @@ try {
     $overtureRedist = Join-Path $temporaryRoot 'Library/steamapps/common/Penumbra Overture/redist'
     New-Item -ItemType Directory -Path $overtureRedist -Force | Out-Null
     Copy-Item -LiteralPath $OvertureCheckpointExe -Destination (Join-Path $overtureRedist 'Penumbra.exe')
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $redist
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $overtureRedist -Games overture
     $steamRoot = Join-Path $temporaryRoot 'Steam'
     New-Item -ItemType Directory -Path (Join-Path $steamRoot 'steamapps') -Force | Out-Null
     $libraryPath = (Join-Path $temporaryRoot 'Library').Replace('\', '\\')
@@ -42,6 +44,18 @@ try {
     if ($manual.Count -ne 2) {
         throw 'Manual redist path discovery duplicated or omitted executables.'
     }
+    Remove-Item -LiteralPath (Join-Path $redist 'expansion01/maps/fixture.dae')
+    $incomplete=@(& $discover -SteamRoot $steamRoot | Where-Object {$_.Game -eq 'Requiem'})
+    if ($incomplete.Count -ne 1 -or $incomplete[0].Installable -or $incomplete[0].Status -ne 'incomplete') { throw 'EXE-only or damaged Requiem was accepted.' }
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $redist
+    $custom=Join-Path $temporaryRoot 'Library/steamapps/common/Custom folder with spaces'
+    Move-Item -LiteralPath (Split-Path -Parent $overtureRedist) -Destination $custom
+    [IO.File]::WriteAllText((Join-Path $temporaryRoot 'Library/steamapps/appmanifest_22180.acf'),'"AppState" { "appid" "22180" "installdir" "Custom folder with spaces" }')
+    $renamed=@(& $discover -SteamRoot $steamRoot | Where-Object {$_.Game -eq 'Overture'})
+    if($renamed.Count -ne 1 -or -not $renamed[0].Installable) { throw 'Appmanifest installdir was ignored.' }
+    $legacy='"libraryfolders" { "1" "'+$libraryPath+'" }'
+    [IO.File]::WriteAllText((Join-Path $steamRoot 'steamapps/libraryfolders.vdf'),$legacy)
+    if(@(& $discover -SteamRoot $steamRoot).Count -ne 3) { throw 'Legacy library format omitted.' }
 
     $unknown = Join-Path $redist 'Unknown.exe'
     Copy-Item -LiteralPath $BlackPlagueExe -Destination $unknown
