@@ -48,9 +48,10 @@ Current product-level evidence:
   that tool models track the hand but exposed finger intersection and an
   apparent flashlight effect offset. The subsequent attached-tool hand-pose
   and pre-visibility attachment refresh corrections are host-tested only.
-  Eight intermittent startup dumps identify the same invalid `SDL_mutexP`
-  argument at Requiem return site `0x5A9DA3`; cause and candidate behavior
-  remain unvalidated. Free-body `Move=2`, throwing and final tool alignment
+  Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments
+  at Requiem return site `0x5A9DA3`. The latest candidate reached a tracked
+  menu frame before the same fault, so delayed OpenVR does not close this
+  gate. Free-body `Move=2`, throwing and final tool alignment
   still need independent headset evidence.
 
 None of the Framework-owned trilogy products is currently a supported public

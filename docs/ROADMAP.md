@@ -69,11 +69,13 @@ Current work is deliberately narrow:
   headset-tested. Stacked blocks could be displaced
   accidentally while climbing; the matching telemetry shows `Grab=6` and
   jumps, with no VR Push acquisition or force in that interval.
-- [ ] Classify Requiem's intermittent Steam Play startup failure. Eight
+- [ ] Classify Requiem's intermittent Steam Play startup failure. Nine
   captured dumps fault in `SDL_mutexP` from the same Requiem return site
-  `0x5A9DA3` with an invalid mutex argument; the cause is not established.
-  Probe entry logging and delayed OpenVR/deep-hook initialization are host-tested
-  only. A normal launch attempt and its bootstrap/probe log are the next gate.
+  `0x5A9DA3` with varying invalid mutex arguments. In the latest attempt,
+  the probe completed OpenVR, installed the hooks and submitted the first
+  tracked menu frame about 40 seconds before the fault. Delaying OpenVR until
+  two completed SDL swaps did not prevent it; the upstream cause remains
+  unknown. Do not hook the mutex without exact initialized-image evidence.
 
 ## Hito 3 — trilogy regression
 
