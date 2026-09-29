@@ -16,13 +16,13 @@
 
 One PCVR project for the trilogy. You must own and install the original games; Requiem uses the Black Plague base installation.
 
-[Releases](https://github.com/rubocopter/penumbra_vr_framework/releases) · [Installation](#installation) · [Troubleshooting](docs/TROUBLESHOOTING.md)
+[**Download v1.0.0**](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.0) · [Installation](#installation) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Report an issue](https://github.com/rubocopter/penumbra_vr_framework/issues)
 
 ## Status
 
-**v1.0.0 is the first public Framework release.** It ships one graphical installer for Overture and the shared Black Plague/Requiem installation. The exact published Setup EXE is the artifact that passed the recorded host/fixture acceptance and the maintainer's repeated install/uninstall and game-entry checks on the three games.
+**v1.0.0 is the first public Framework release.** One graphical installer covers Overture and the shared Black Plague/Requiem installation. The published Setup EXE has been exercised through repeated real install/uninstall flows and successful game-entry checks on all three games, with automated coverage for the supported installation topologies, repair, recovery and removal.
 
-Validation breadth still differs by game and hardware. The public release does not turn untested controller families, clean-PC combinations or unresolved gameplay defects into headset-validated support. See the [release status](docs/CLOSURE_STATUS.md), [recognized builds](docs/SUPPORTED_BUILDS.md) and known issues below.
+Validation breadth still differs by game and hardware. PS VR2 + Sense is the controller setup validated end to end by the maintainer; other bundled controller profiles still need device-specific feedback. Independent clean-PC coverage also remains limited. See the [release status](docs/CLOSURE_STATUS.md), [recognized builds](docs/SUPPORTED_BUILDS.md) and known issues below for the evidence boundaries.
 
 ## Supported Games
 
@@ -32,7 +32,7 @@ Validation breadth still differs by game and hardware. The public release does n
 | **Penumbra: Black Plague** | Gameplay VR from Steam Play and representative interactions/effects tested in headset; the v1.0 installer has maintainer game-entry acceptance. | Black Plague installation. |
 | **Penumbra: Requiem** | Representative puzzles, first transition, portal effects and held tools tested in headset; broader progression and launch reliability remain open. | Expansion in the Black Plague installation; requires its base game. |
 
-The release recognizes specific builds, rather than every retail or modified executable. Check [recognized builds and validation](docs/SUPPORTED_BUILDS.md) before installing; unknown executables are rejected.
+The release recognizes specific builds rather than every retail or modified executable. Check [recognized builds and validation](docs/SUPPORTED_BUILDS.md) before installing; unknown executables are rejected.
 
 ## Features
 
@@ -42,7 +42,7 @@ The release recognizes specific builds, rather than every retail or modified exe
 - VR menus, inventory and notebook presentation.
 - SteamVR Input bindings for eight controller profiles, with coverage limits listed below.
 - Configurable comfort and display options in Overture and Black Plague; Requiem currently uses development defaults.
-- One installer for Overture and the shared Black Plague/Requiem root, with discovery, backups, repair and restore.
+- One installer for Overture and the shared Black Plague/Requiem root, with discovery, backups, repair, recovery and restore.
 
 Feature coverage and validation differ by game; see the [trilogy capability ledger](docs/TRILOGY_PARITY_PLAN.md) for details.
 
@@ -52,16 +52,14 @@ Download **PenumbraVR-Setup-1.0.0.exe** from the [v1.0.0 release](https://github
 
 1. Install the original games and close them. Use recognized, clean game files.
 2. Double-click the Setup EXE and accept Windows elevation. It contains the installer and mod payload for your installed games.
-3. Choose English or Español. English is the default; Español automatically selects the optional translations, which remain editable.
-4. Review the detected games. Use **Folder... / Carpeta...** to select a folder if necessary.
-5. Select the games and optional components, then choose **Install / update**. Requiem is an optional layer of the validated Black Plague base.
+3. Choose **English** or **Español**. English is the default; Español automatically selects the optional translations, which remain editable.
+4. Review the detected games. Use **Locate game… / Buscar juego…** if an installation was not found automatically.
+5. Select the games and optional components you want. The primary action changes automatically between **Install**, **Update**, **Apply changes** and **Repair installation** according to the selected installation state.
 6. Start SteamVR and confirm the headset/controllers are ready, then launch the selected game manually through its normal Steam **Play** button.
 
-You do not need the whole trilogy. The installer handles Overture only, Black Plague only, Black Plague + Requiem, Overture + Black Plague, or all three. Automated topology A–F coverage exercises these combinations; the maintainer also repeated real install/uninstall flows and entered all three games with the published EXE. This is not an independent clean-PC certification.
+You do not need the whole trilogy. The installer handles Overture only, Black Plague only, Black Plague + Requiem, Overture + Black Plague, or all three. Requiem appears as a layer of its Black Plague installation rather than as a separate standalone target.
 
-Spanish localization, Overture texture enhancements and targeted recommended graphics settings are optional. English starts with translations off; selecting Español checks the translation options. Settings changes preserve language, resolution and personal calibration; removal preserves subsequent user edits. Reopen the same EXE for repair and removal. See [installer behavior](docs/INSTALLER_DESIGN.md) for recovery and ownership rules.
-
-For the separately released Overture baseline, see [Overture VR Rework](https://github.com/rubocopter/penumbra_vr_rework). Its release and installation instructions belong to that project.
+Spanish localization, Overture texture enhancements and targeted recommended graphics settings are optional. English starts with translations off; selecting Español checks the translation options. Settings changes preserve language, resolution and personal calibration; removal preserves subsequent user edits. Reopen the same EXE to modify components, verify or repair the installation, generate diagnostics, or uninstall. See [installer behavior](docs/INSTALLER_DESIGN.md) for recovery and ownership rules.
 
 ## Requirements
 
@@ -104,9 +102,7 @@ See [controls](docs/CONTROLS.md) for the Sense quick reference, menus and other 
 
 ## Gameplay
 
-*Gameplay video coming soon.*
-
-<!-- Replace this placeholder with a public video of the current trilogy release. -->
+*Current v1.0 gameplay video coming soon.*
 
 ### Steam Artwork
 
@@ -135,9 +131,9 @@ Optional Steam library artwork for Overture, Black Plague and Requiem is include
 
 ## Troubleshooting
 
-If a game is missing, use manual folder selection and check its build. If it launches flat, confirm the installation completed and SteamVR is running, then collect the logs. Missing bindings can be checked in SteamVR and repaired by reopening the release installer.
+If a game is missing, use **Locate game… / Buscar juego…** and check its build. If it launches flat, confirm the installation completed and SteamVR is running, then collect the logs. Missing bindings can be checked in SteamVR and repaired by reopening the release installer.
 
-For unsupported versions, dependency failures, modified-file conflicts and interrupted installs, follow [Troubleshooting](docs/TROUBLESHOOTING.md). The GUI provides **Verificar** and **Diagnóstico ZIP**; diagnostics include bounded, redacted technical data and relevant log tails, excluding saves and raw personal settings.
+For unsupported versions, dependency failures, modified-file conflicts and interrupted installs, follow [Troubleshooting](docs/TROUBLESHOOTING.md). The **Maintenance / Mantenimiento** tab provides **Verify VR installation / Comprobar instalación VR**, **Repair installation / Reparar instalación**, **Generate diagnostics ZIP / Generar ZIP de diagnóstico**, the installation log and interrupted-install recovery.
 
 ## Bug Reports
 
@@ -145,15 +141,15 @@ Use [GitHub Issues](https://github.com/rubocopter/penumbra_vr_framework/issues) 
 
 ## Uninstallation
 
-Close the games and reopen the same **PenumbraVR-Setup-1.0.0.exe**. Use the **Maintenance / Mantenimiento** tab, select the installed root and choose **Uninstall / Desinstalar**. The installer verifies backups and restores owned original files.
+Close the games and reopen the same **PenumbraVR-Setup-1.0.0.exe**. Use the **Maintenance / Mantenimiento** tab and choose **Uninstall… / Desinstalar…**. The removal dialog lets you select which installed VR components to remove while the installer verifies backups and restores owned original files.
 
-Overture can be removed independently. **Retirar Requiem** keeps Black Plague installed; removing Black Plague also removes its dependent Requiem layer. Preserve the installer backups and follow [recovery guidance](docs/TROUBLESHOOTING.md#repair-recovery-and-removal) if an operation was interrupted or reports modified files.
+Overture can be removed independently. Black Plague and Requiem share one installation root: selecting only the Requiem layer removes its VR support while keeping Black Plague, while removing Black Plague also removes its dependent Requiem layer. Preserve the installer backups and follow [recovery guidance](docs/TROUBLESHOOTING.md#repair-recovery-and-removal) if an operation was interrupted or reports modified files.
 
 ## Documentation
 
 [VR configuration](docs/VR_CONFIGURATION.md) · [Controls](docs/CONTROLS.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Recognized builds](docs/SUPPORTED_BUILDS.md)
 
-For maintainers: [Architecture](docs/ARCHITECTURE.md) · [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) · [Installer contract](docs/INSTALLER_DESIGN.md) · [Release checklist](docs/CLOSURE_STATUS.md) · [Roadmap](docs/ROADMAP.md)
+For maintainers: [Architecture](docs/ARCHITECTURE.md) · [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) · [Installer contract](docs/INSTALLER_DESIGN.md) · [Release status](docs/CLOSURE_STATUS.md) · [Roadmap](docs/ROADMAP.md)
 
 ## Building
 
