@@ -1,6 +1,7 @@
 #include "render_world.hpp"
 
 #include "camera_matrix_override.hpp"
+#include "camera_capture.hpp"
 #include "frame_presentation_gate.hpp"
 #include "gameplay_contract.hpp"
 #include "gameplay_bridge.hpp"
@@ -146,16 +147,15 @@ constexpr float kMenuDistance = 1.75F;
 constexpr float kGameplayOverlayDistance = 2.5F;
 constexpr float kMenuWidth = 2.4F;
 constexpr float kMenuCenterY = 0.0F;
-constexpr adapters::hpl1::CameraLayout kCameraLayout{
-    .position_offset = 0x04,
-    .fov_offset = 0x10,
-    .aspect_offset = 0x14,
-    .view_matrix_offset = 0x44,
-    .projection_matrix_offset = 0x84,
-    .flags_offset = 0x8D0,
-    .view_updated_flag_index = 1,
-    .projection_updated_flag_index = 2,
-};
+constexpr auto kCameraLayout = kGameplayCameraLayout;
+// Manifest-confirmed Requiem native lazy matrix getters (thiscall, const ref).
+constexpr std::uintptr_t kGetViewMatrixRva = 0x00113880;
+constexpr std::uintptr_t kGetProjectionMatrixRva = 0x001139C0;
+constexpr std::array<std::uint8_t, 16> kGetViewMatrixEntry{
+    0x81, 0xEC, 0x8C, 0, 0, 0, 0x53, 0x55,
+    0x8B, 0xE9, 0x8A, 0x85, 0xD1, 0x08, 0, 0};
+constexpr std::array<std::uint8_t, 8> kGetProjectionMatrixEntry{
+    0x8B, 0xC1, 0x8A, 0x88, 0xD2, 0x08, 0, 0};
 constexpr float kHplNearClip = 0.05F;
 
 using RenderWorld = void(__thiscall*)(void*, void*, void*, float);
@@ -435,6 +435,16 @@ void LogFailureOnce(const char* phase, const std::string& error) noexcept {
         std::fabs(view[15] - 1.0F) <= kTolerance;
 }
 
+[[nodiscard]] bool CaptureNativeGameplayCamera(void* camera,
+    adapters::hpl1::CameraMatrixSnapshot& snapshot,
+    std::string& error) noexcept {
+    return CaptureGameplayCamera(camera, [](void* native_camera) {
+        using Getter = const runtime::VrMatrix44&(__thiscall*)(void*);
+        static_cast<void>(reinterpret_cast<Getter>(g_image + kGetViewMatrixRva)(native_camera));
+        static_cast<void>(reinterpret_cast<Getter>(g_image + kGetProjectionMatrixRva)(native_camera));
+    }, snapshot, error);
+}
+
 [[nodiscard]] float TrackingWorldYaw(
     const runtime::VrMatrix44& native_view,
     const runtime::VrMatrix34& anchor) noexcept {
@@ -614,8 +624,7 @@ void __fastcall HookedUpdateRenderList(void* renderer, void*,
     if (!inside_eye) g_pending_visibility.valid = false;
     adapters::hpl1::CameraMatrixSnapshot camera_snapshot;
     std::string error;
-    if (!adapters::hpl1::CaptureCameraMatrices(
-            camera, kCameraLayout, camera_snapshot, error)) {
+    if (!CaptureNativeGameplayCamera(camera, camera_snapshot, error)) {
         LogFailureOnce("visibility camera capture", error);
         original(renderer, world, camera, frame_time);
         return;
@@ -817,8 +826,7 @@ struct WorldPanelGeometry final {
     if (!g_overlay_targets.CreateOrResize(800, 600, error)) return false;
 
     adapters::hpl1::CameraMatrixSnapshot camera_snapshot;
-    if (!adapters::hpl1::CaptureCameraMatrices(
-            camera, kCameraLayout, camera_snapshot, error)) return false;
+    if (!CaptureNativeGameplayCamera(camera, camera_snapshot, error)) return false;
     if (!LooksLikeMappedGameplayCamera(camera_snapshot)) {
         error = "The Requiem world camera is not the mapped perspective camera";
         return false;
@@ -2502,6 +2510,13 @@ bool InstallRenderWorld(std::string& error) noexcept {
     auto* call = image + kRenderWorldCallRva;
     auto* visibility_call = image + kUpdateRenderListCallRva;
     auto* draw_all_call = image + kDrawAllCallRva;
+    if (!std::equal(kGetViewMatrixEntry.begin(), kGetViewMatrixEntry.end(),
+            image + kGetViewMatrixRva) ||
+        !std::equal(kGetProjectionMatrixEntry.begin(), kGetProjectionMatrixEntry.end(),
+            image + kGetProjectionMatrixRva)) {
+        error = "Requiem native camera getters do not match the exact build";
+        return false;
+    }
     if (!std::equal(kRenderWorldCall.begin(), kRenderWorldCall.end(), call)) {
         error = "Requiem initialized RenderWorld call does not match the exact build";
         return false;

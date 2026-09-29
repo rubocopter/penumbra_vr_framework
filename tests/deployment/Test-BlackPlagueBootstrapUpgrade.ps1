@@ -6,6 +6,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installer = Join-Path $repoRoot 'tools/Install-BlackPlagueSteamBootstrap.ps1'
 $expectedExe = 'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF'

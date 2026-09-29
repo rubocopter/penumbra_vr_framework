@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$BlackPlagueExe,[Parameter(Mandatory=$true)][string]$RequiemExe,[Parameter(Mandatory=$true)][string]$RetailAlut)
 $ErrorActionPreference='Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installer=Join-Path $repo 'tools/Install-BlackPlagueSteamBootstrap.ps1'
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('PvrComponents-'+[guid]::NewGuid().ToString('N'))

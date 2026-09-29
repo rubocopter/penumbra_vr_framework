@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$BlackPlagueExe,[Parameter(Mandatory=$true)][string]$RetailAlut,[string]$PackagePath)
 $ErrorActionPreference='Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('PvrMaintenance-'+[guid]::NewGuid().ToString('N'))
 try{

@@ -637,6 +637,20 @@ if(BUILD_TESTING)
     add_test(NAME requiem_gameplay_contract
         COMMAND pvr_requiem_gameplay_contract_test)
 
+    add_executable(pvr_requiem_camera_capture_test tests/requiem_gameplay/camera_capture_test.cpp)
+    target_include_directories(pvr_requiem_camera_capture_test PRIVATE src/backends/requiem)
+    target_link_libraries(pvr_requiem_camera_capture_test PRIVATE pvr_hpl1_camera_adapter)
+    pvr_enable_warnings(pvr_requiem_camera_capture_test)
+    add_test(NAME requiem_camera_capture COMMAND pvr_requiem_camera_capture_test)
+
+    add_executable(pvr_overture_nudge_test tests/overture_nudge/newton_nudge_test.cpp)
+    target_include_directories(pvr_overture_nudge_test PRIVATE products/overture/dependencies/include products/overture/PenumbraOverture)
+    target_link_libraries(pvr_overture_nudge_test PRIVATE "${CMAKE_SOURCE_DIR}/products/overture/dependencies/lib/win32/newton.lib")
+    add_custom_command(TARGET pvr_overture_nudge_test POST_BUILD COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/products/overture/dependencies/lib/win32/Newton.dll" "$<TARGET_FILE_DIR:pvr_overture_nudge_test>")
+    pvr_enable_warnings(pvr_overture_nudge_test)
+    add_test(NAME overture_nudge COMMAND pvr_overture_nudge_test)
+
     add_executable(pvr_black_plague_presentation_timing_test
         tests/black_plague_presentation_timing/presentation_timing_test.cpp
     )

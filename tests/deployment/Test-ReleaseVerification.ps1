@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$BlackPlagueExe,[Parameter(Mandatory=$true)][string]$RetailAlut,[Parameter(Mandatory=$true)][string]$RequiemExe)
 $ErrorActionPreference='Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $repo=Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('PvrVerify-'+[guid]::NewGuid().ToString('N'))
 function Assert($condition,[string]$message){if(-not $condition){throw $message}}

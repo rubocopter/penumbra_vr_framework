@@ -32,6 +32,7 @@
 #include "VRHelper.hpp"
 #include "VRHaptics.h"
 #include "VRHandCollisionPolicy.h"
+#include "VRHandNudgePolicy.h"
 #include "vr_magnetic_pickup_policy.hpp"
 
 namespace
@@ -934,7 +935,8 @@ void cPlayerState_Normal_VR::OnUpdate(float afTimeStep)
               fDesiredPushSpeed - fCurrentPushSpeed, 0.0f, fMaxDeltaV);
             if (fDeltaV <= 0.005f) continue;
             pBody->AddImpulseAtPosition(
-              vPushDir * (fDeltaV * fBodyMass), vContact);
+              vPushDir * VRNudgePointDeltaVelocity(
+                fDeltaV, fBodyMass, bConstrainedJoint), vContact);
 
             static unsigned long slNextNudgeLogMs = 0;
             unsigned long lNudgeNowMs = GetApplicationTime();

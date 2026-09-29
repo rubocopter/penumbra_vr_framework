@@ -29,5 +29,37 @@ try {
     [IO.File]::WriteAllText($path,'<!DOCTYPE x [<!ENTITY secret SYSTEM "file:///test">]><Graphics/>')
     $failed=$false;try{Get-PvrConfigurationPlan -Game overture -Path $path | Out-Null}catch{$failed=$true}
     Assert $failed 'External entity accepted'
+    $root=Join-Path $temp 'redist'
+    New-Item -ItemType Directory -Path (Join-Path $root 'config') -Force | Out-Null
+    $settings=Join-Path $root 'config/default_settings.cfg'
+    [IO.File]::WriteAllText((Join-Path $root 'config/English.lang'),'<LANGUAGE/>')
+    [IO.File]::WriteAllText($settings,'<Game LanguageFile="Espanol.lang" CurrentUser="my-save" /><VR PlayerHeight="1.9" /><Graphics LimitFPS="true" />')
+    $records=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $root -SettingsScope DefaultFiles)
+    Assert (@($records.Changes | Where-Object {$_.Attribute -eq 'LanguageFile' -and $_.Applied -ieq 'English.lang'}).Count -eq 1) 'Missing selected language was not repaired without recommended graphics'
+    foreach($record in $records){Set-PvrConfiguration -Plan $record}
+    $text=[IO.File]::ReadAllText($settings)
+    Assert ($text.Contains('LanguageFile="English.lang"') -and $text.Contains('CurrentUser="my-save"') -and $text.Contains('PlayerHeight="1.9"') -and $text.Contains('LimitFPS="true"')) 'Language repair changed personal or graphical settings'
+    foreach($record in $records){Restore-PvrConfiguration -Plan $record}
+    Assert ([IO.File]::ReadAllText($settings).Contains('LanguageFile="Espanol.lang"')) 'Language ownership did not restore original'
+    [IO.File]::WriteAllText((Join-Path $root 'config/Espanol.lang'),'<LANGUAGE/>')
+    $records=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $root -SettingsScope DefaultFiles)
+    Assert (-not @($records.Changes | Where-Object {$_.Attribute -eq 'LanguageFile'}).Count) 'Installed language preference was overwritten'
+    # Substitute only the OS Documents path; parse/write real isolated files.
+    $userSettings=Join-Path $temp 'Documents/settings.cfg'
+    New-Item -ItemType Directory -Path (Split-Path -Parent $userSettings) | Out-Null
+    $module=Get-Module PenumbraVrConfiguration
+    & $module {param($paths) $script:FixturePaths=$paths; function script:Get-PvrConfigurationPaths {param($Game,$RedistRoot) $script:FixturePaths}} @($settings,$userSettings)
+    foreach($oldRecord in @($false,$true)) {
+        [IO.File]::WriteAllText($userSettings,'<Game LanguageFile="missing.lang" />')
+        $previous=Get-PvrConfigurationPlan -Game overture -Path $userSettings -RedistRoot $root -ApplyRecommendedSettings:$false
+        if($oldRecord){$previous.PSObject.Properties.Remove('ApplyKeys')}
+        Set-PvrConfiguration -Plan $previous
+        [IO.File]::WriteAllText($userSettings,'<Game LanguageFile="Espanol.lang" />')
+        $before=(Get-FileHash $userSettings).Hash
+        $records=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $root -Previous @($previous) -SettingsScope DefaultFiles)
+        foreach($record in $records){Test-PvrConfigurationPlan -Plan $record; Set-PvrConfiguration -Plan $record}
+        Assert ((Get-FileHash $userSettings).Hash -eq $before) 'DefaultFiles touched retained Documents ownership'
+        Assert (@($records | Where-Object {$_.Path -eq $userSettings}).Count -eq 1) 'DefaultFiles lost Documents restoration ownership'
+    }
     Write-Host 'Configuration: targeted fragments, unknown values/comments, idempotence, user-edit restore and DTD rejection passed.'
 } finally {if(Test-Path $temp){Remove-Item -LiteralPath $temp -Recurse -Force}}

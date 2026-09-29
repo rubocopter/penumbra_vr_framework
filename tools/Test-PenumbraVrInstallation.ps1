@@ -67,11 +67,11 @@ try {
         }
     }
     foreach($gameId in $installedGames){
-        Get-PvrConfigurationRecords -Game $gameId -RedistRoot $redist -Previous @($configuration | Where-Object {$null -ne $_ -and $_.Game -eq $gameId}) | Out-Null
+        Get-PvrConfigurationRecords -Game $gameId -RedistRoot $redist -Previous @($configuration | Where-Object {$null -ne $_ -and $_.Game -eq $gameId}) -ValidateOwnershipOnly | Out-Null
     }
     foreach($plan in @($configuration | Where-Object {$null -ne $_})){
         if($plan.Game -notin @('overture','black_plague','requiem')){throw 'Unknown configuration owner.'}
-        Get-PvrConfigurationRecords -Game $plan.Game -RedistRoot $redist -Previous @($plan) | Out-Null
+        Get-PvrConfigurationRecords -Game $plan.Game -RedistRoot $redist -Previous @($plan) -ValidateOwnershipOnly | Out-Null
         Read-PvrConfig $plan.Path | Out-Null
         Check ('Configuration '+$plan.Game) $true 'Parsed targeted configuration; personal choices may differ.'
     }

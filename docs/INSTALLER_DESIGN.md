@@ -198,10 +198,22 @@ remain separate results.
 ### Settings, recovery and diagnostics
 
 Preview an optional targeted game XML patch using an allowlist from existing
-recommendations. Exclude language, resolution, personal calibration and
-experimental mirror choices. Back up changed attributes, stage/parse and
+recommendations. Preserve resolution, personal calibration and experimental
+mirror choices. Separately, install/update/repair checks the selected
+`Game/LanguageFile` against the final language payload, including staged or
+retired optional translations. Only a missing language falls back to the game's
+bundled English file (`English_exp.lang` for Requiem). This launch-compatibility
+check runs even when graphical recommendations are unchecked, and uses the
+selected default/user-file scope (GUI defaults to both). Valid existing language
+choices remain unchanged. Back up changed attributes, stage/parse and
 journal changes. Removal restores only values still equal to installer-applied
 values; preserve later user edits. Keep corrected B/R post-effects/refractions.
+
+Configuration records distinguish retained restore ownership from attributes
+actually scheduled for this invocation. Repeated repair must not replay an old
+English fallback over a later valid language selection. Original absent-language
+preferences remain recorded for conditional restoration; no configuration
+folder, savegame or calibration is deleted.
 
 Integrate GUI recovery and preview what explicit repair replaces. Preserve
 SteamVR custom bindings and expose conflicts. Log version, plan, dependencies,

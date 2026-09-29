@@ -23,6 +23,11 @@ Compile, host, live and headset evidence remain distinct. The candidate is
 - Resolve or obtain new discriminating validation of the documented Requiem
   intermittent startup crash before claiming reliable Requiem launch. Its cause
   remains unknown; do not hook SDL or modify gameplay speculatively.
+- Confirm the host-tested mechanism-nudge unit correction in Overture and
+  native camera-cache refresh in Requiem with the headset. The user's current
+  install/uninstall acceptance exposed excessive door movement and low initial
+  Requiem height that recovered after opening inventory; these are active
+  release regressions, independent of the intermittent SDL startup crash.
 
 Only reproducible crashes, inability to launch VR, installation/dependency/input
 failures, broken save/load/progression, incorrect files or blocking configuration,

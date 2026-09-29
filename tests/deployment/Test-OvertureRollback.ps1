@@ -2,6 +2,8 @@
 param()
 
 $ErrorActionPreference = 'Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $installer = Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'products/overture/scripts/deploy.ps1'
 $tempBase = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
 $fixture = [System.IO.Path]::GetFullPath((Join-Path $tempBase ('PenumbraVrOvertureRollback-' + [guid]::NewGuid().ToString('N'))))

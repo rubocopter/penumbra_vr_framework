@@ -84,6 +84,30 @@ Some Rework behavior is intentionally product-specific unless future evidence
 proves otherwise, including exact HPL material/light response, model/weapon
 statistics, authored rig/socket data and source-game UI/gameplay mechanics.
 
+### Release-blocking native boundary corrections
+
+The Overture door-nudge report was compared against Rework `23c890f`:
+Framework retained the same contact-speed limits and `delta-v * mass` call.
+The bundled Newton 1.x header declares `NewtonAddBodyImpulse` with
+`pointDeltaVeloc`, and the HPL wrapper forwards its vector unchanged. A host
+test against the actual shipped Newton DLL demonstrates that a 0.36 m/s request
+became 1.08 m/s for a 3 kg body. Direct adaptation is incorrect at this boundary.
+Overture now passes bounded delta velocity for recognized constrained hinges
+and sliders, retaining the native joint lifecycle and existing contact-speed
+policy. Loose-prop tuning remains the reference behavior. The real-DLL test
+covers masses 1, 3, 25 and 100 kg; door feel still requires headset acceptance.
+
+Rework's source camera consumes native `GetViewMatrix`, which resolves dirty
+position/rotation caches. Requiem previously copied the matrix cache before
+native visibility resolved it, then fixed a per-body height calibration from
+that possibly stale view. Opening inventory changes the tracked-body generation
+and permits a new calibration, matching the reported recovery. Requiem now calls
+its own manifest-confirmed lazy view/projection getters before both visibility
+and stereo snapshots. Entry signatures are validated before hooks are installed.
+A host dirty-camera regression demonstrates the stale floor-height capture and
+its correction. No camera offset, automatic recenter, or new height algorithm
+was introduced; initial height remains a focused headset regression gate.
+
 Rework `23c890f` copies refraction from a framebuffer whose dimensions match
 its native screen texture. Requiem's binary renderer retains that copy path,
 but the Framework draws each VR eye into a larger target; the shipped shader

@@ -464,7 +464,7 @@ if($Repair){
     }
 }
 foreach($gameId in @('black_plague','requiem')) {
-    Get-PvrConfigurationRecords -Game $gameId -RedistRoot $GameRoot -Previous @($PreviousConfiguration | Where-Object {$_.Game -eq $gameId}) | Out-Null
+    Get-PvrConfigurationRecords -Game $gameId -RedistRoot $GameRoot -Previous @($PreviousConfiguration | Where-Object {$_.Game -eq $gameId}) -ValidateOwnershipOnly | Out-Null
 }
 $RepairLaaExecutable = $Repair -and $PreviousState -and
     [bool](Get-OptionalProperty $PreviousState 'laaApplied') -and
@@ -896,13 +896,17 @@ $ConfigurationToRestore=@()
 foreach($gameId in @('black_plague','requiem')) {
     $previous=@($PreviousConfiguration | Where-Object {$_.Game -eq $gameId})
     if($gameId -eq 'requiem' -and -not $InstallRequiem){$ConfigurationToRestore+=$previous;continue}
-    $records=@(Get-PvrConfigurationRecords -Game $gameId -RedistRoot $GameRoot -Previous $previous -Apply:$RecommendedSettings -SettingsScope $SettingsScope)
+    $spanish=if($gameId -eq 'requiem'){'Espanol_exp.lang'}else{'Espanol.lang'}
+    $selected=if($gameId -eq 'requiem'){$InstallSpanishRequiemSelected}else{$InstallSpanishBlackPlagueSelected}
+    $retired=if($gameId -eq 'requiem'){$previousRequiemLocalizationSha256 -and -not $RequiemLocalizationHadOriginal}else{(Get-OptionalProperty $PreviousState 'spanishLocalizationSha256') -and -not $LocalizationHadOriginal}
+    $records=@(Get-PvrConfigurationRecords -Game $gameId -RedistRoot $GameRoot -Previous $previous -Apply:$RecommendedSettings -SettingsScope $SettingsScope -AdditionalLanguageFiles @(if($selected){$spanish}) -RemovedLanguageFiles @(if(-not $selected -and $retired){$spanish}))
     $Configuration+=$records
 }
 foreach($path in $ManagedTransactionPaths){Assert-ManagedTransactionPath $path | Out-Null}
 foreach($plan in $ConfigurationToRestore){Test-PvrConfigurationPlan -Plan $plan -Restore}
-if($RecommendedSettings){foreach($plan in $Configuration){Test-PvrConfigurationPlan -Plan $plan}}
-$ActiveConfigurationPaths=@($ConfigurationToRestore | ForEach-Object {$_.Path})+@(if($RecommendedSettings){$Configuration | ForEach-Object {$_.Path}})
+$ConfigurationToApply=@($Configuration | Where-Object {@($_.ApplyKeys).Count})
+foreach($plan in $ConfigurationToApply){Test-PvrConfigurationPlan -Plan $plan -LanguageOnly:(-not $RecommendedSettings)}
+$ActiveConfigurationPaths=@($ConfigurationToRestore | ForEach-Object {$_.Path})+@($ConfigurationToApply | ForEach-Object {$_.Path})
 if($Preflight) {
     [pscustomobject]@{Components=@('shared','black_plague')+@(if($InstallRequiem){'requiem'})+@(if($InstallSpanishBlackPlagueSelected){'spanish_black_plague'})+@(if($InstallSpanishRequiemSelected){'spanish_requiem'});Files=@($AlutPath,$ProbePath,$OpenAlPath,$OpenAlImplementationPath,$OpenVrPath,$VrAssetsPath,$HandTexturePath)+@(if($InstallRequiem){$RequiemProbePath})+@(if($InstallSpanishBlackPlagueSelected){$LocalizationPath})+@(if($InstallSpanishRequiemSelected){$RequiemLocalizationPath});Configuration=@($Configuration);RetiredConfiguration=@($ConfigurationToRestore);Operation=$(if($Repair){'repair'}else{'install'})}
     return
@@ -910,7 +914,7 @@ if($Preflight) {
 $deploymentSnapshot = New-DeploymentSnapshot
 try {
 foreach($plan in $ConfigurationToRestore){Restore-PvrConfiguration -Plan $plan}
-if($RecommendedSettings){foreach($plan in $Configuration){Set-PvrConfiguration -Plan $plan}}
+foreach($plan in $ConfigurationToApply){Set-PvrConfiguration -Plan $plan -LanguageOnly:(-not $RecommendedSettings)}
 if ($OpenAlOriginalHadFile -and -not $PreviousOpenAlProxySha256) {
     Copy-Item -LiteralPath $OpenAlPath -Destination $OriginalOpenAlPath
     if ((Get-Sha256 $OriginalOpenAlPath) -ne [string]$OpenAlOriginalSha256) {

@@ -21,6 +21,13 @@ Extraction alone is not parity. Validation uses the common ladder:
 
 ## Capability ledger
 
+Current release regression: the user's Requiem run started near floor height
+until inventory was opened. Refreshing the exact native lazy camera caches
+before capture is host-tested; initial-height headset confirmation remains
+pending. Overture's excessive door nudge is addressed at its Newton delta-velocity
+boundary and also awaits headset confirmation. See
+`REWORK_PORTING_PLAN.md` for the reference comparison and correction contracts.
+
 | Capability family | Shared/framework state | Black Plague | Requiem | Remaining evidence/work |
 | --- | --- | --- | --- | --- |
 | Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-candidate presentation/focus/transition regression per game |

@@ -6,6 +6,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $installer = Join-Path $repoRoot 'tools/Install-BlackPlagueSteamBootstrap.ps1'
 $tempBase = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath()).TrimEnd('\') + '\'
@@ -48,6 +50,10 @@ try {
     $originalExe = Get-Sha256 $exe
     $originalAlut = Get-Sha256 $alut
     $originalLocalization = Get-Sha256 $localization
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $gameRoot -Games black_plague
+    $settings=Join-Path $gameRoot 'config/default_settings.cfg'
+    [IO.File]::WriteAllText($settings,'<Map File="fixture.dae" /><Game LanguageFile="missing-old-language.lang" /><VR PlayerHeight="1.9" />')
+    $originalSettings=Get-Sha256 $settings
     $childScript = Join-Path $fixture 'crash-child.ps1'
     @'
 [CmdletBinding()]
@@ -55,6 +61,8 @@ param([string]$InstallerPath, [string]$GameExe, [string]$BuildRoot,
       [string]$LocalizationPath, [string]$LoaderPath,
       [string]$RestoreValue, [string]$LaaValue)
 $ErrorActionPreference = 'Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $global:CrashLocalizationPath = $LocalizationPath
 $global:CrashLoaderPath = $LoaderPath
 $global:CrashOnRestore = $RestoreValue -eq 'true'
@@ -107,6 +115,7 @@ if ($global:CrashOnRestore) {
     Assert-Hash $exe $originalExe
     Assert-Hash $alut $originalAlut
     Assert-Hash $localization $originalLocalization
+    Assert-Hash $settings $originalSettings
     if (Test-Path -LiteralPath $state) { throw 'Fresh install recovery left deployment state.' }
 
     & $installer -GamePath $exe -BuildRoot $BuildRoot -CommunityTranslations 6>$null | Out-Null

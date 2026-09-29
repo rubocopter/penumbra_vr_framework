@@ -485,7 +485,7 @@ if ($Repair -and $null -eq $previousState) {
 }
 $configurationProperty=if($previousState){$previousState.PSObject.Properties['Configuration']}else{$null}
 $previousConfiguration=if($configurationProperty){@($configurationProperty.Value)}else{@()}
-$previousConfiguration=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration)
+$previousConfiguration=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration -ValidateOwnershipOnly)
 
 if ($Restore) {
     if ($null -eq $previousState) {
@@ -667,14 +667,17 @@ foreach ($relativePath in @($previousEntries.Keys) + @($mappings.Keys)) {
     $installTargets.Add((Get-PathUnderRoot $redistRoot ([string]$relativePath)))
 }
 $installTargets.Add($stateRoot)
-$configurationPlans=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration -Apply:$RecommendedSettings -SettingsScope $SettingsScope)
-if($RecommendedSettings){foreach($plan in $configurationPlans){Test-PvrConfigurationPlan -Plan $plan}}
-foreach($plan in $configurationPlans){$installTargets.Add([string]$plan.Path)}
+$spanishSelected=$mappings.ContainsKey('config/Espanol.lang')
+$retiredSpanish=-not $spanishSelected -and $previousEntries.ContainsKey('config/Espanol.lang') -and -not $previousEntries['config/Espanol.lang'].HadOriginal
+$configurationPlans=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration -Apply:$RecommendedSettings -SettingsScope $SettingsScope -AdditionalLanguageFiles @(if($spanishSelected){'Espanol.lang'}) -RemovedLanguageFiles @(if($retiredSpanish){'Espanol.lang'}))
+$configurationPlansToApply=@($configurationPlans | Where-Object {@($_.ApplyKeys).Count})
+foreach($plan in $configurationPlansToApply){Test-PvrConfigurationPlan -Plan $plan -LanguageOnly:(-not $RecommendedSettings)}
+foreach($plan in $configurationPlansToApply){$installTargets.Add([string]$plan.Path)}
 foreach($path in $installTargets){Assert-ManagedTarget $path $gameRoot | Out-Null}
 if($Preflight) { [pscustomobject]@{Files=@($mappings.Keys | Sort-Object);RetiredFiles=@($previousEntries.Keys | Where-Object {-not $mappings.ContainsKey($_)});Configuration=@($configurationPlans);Operation=$(if($Repair){'repair'}else{'install'})}; return }
 $deploymentSnapshot = New-DeploymentSnapshot $installTargets.ToArray() $gameRoot
 try {
-if($RecommendedSettings){foreach($plan in $configurationPlans){Set-PvrConfiguration -Plan $plan}}
+foreach($plan in $configurationPlansToApply){Set-PvrConfiguration -Plan $plan -LanguageOnly:(-not $RecommendedSettings)}
 foreach ($previousPath in @($previousEntries.Keys)) {
     if ($mappings.ContainsKey($previousPath)) {
         continue

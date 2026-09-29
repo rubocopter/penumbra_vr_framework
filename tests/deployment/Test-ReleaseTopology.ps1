@@ -1,5 +1,7 @@
 param([Parameter(Mandatory=$true)][string]$PackagePath,[Parameter(Mandatory=$true)][string]$OvertureExe,[Parameter(Mandatory=$true)][string]$BlackPlagueExe,[Parameter(Mandatory=$true)][string]$RequiemExe,[Parameter(Mandatory=$true)][string]$RetailAlut)
 $ErrorActionPreference='Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $temp=Join-Path ([IO.Path]::GetTempPath()) ('PvrTopology-'+[guid]::NewGuid().ToString('N'))
 $temp=[IO.Path]::GetFullPath($temp)
 if(-not $temp.StartsWith([IO.Path]::GetFullPath([IO.Path]::GetTempPath()).TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)){throw 'Unsafe topology fixture path.'}

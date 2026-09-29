@@ -7,6 +7,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# Fixture deployments must never edit the real Documents configuration.
+$PSDefaultParameterValues = @{ '*:SettingsScope' = 'DefaultFiles' }
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $packager = Join-Path $repoRoot 'tools/Package-FrameworkCandidate.ps1'
 $temporaryRoot = [System.IO.Path]::GetFullPath(
