@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$PackageRoot,
-    [Parameter(Mandatory = $true)][string]$OutputPath
+    [Parameter(Mandatory = $true)][string]$OutputPath,
+    [string]$RuntimeDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,7 +18,7 @@ if (Test-Path -LiteralPath $outputPath) {
     throw "Output archive already exists: $outputPath"
 }
 if ($buildCurrentProduct) {
-    & (Join-Path $PSScriptRoot 'Build-OvertureProduct.ps1') -Package
+    & (Join-Path $PSScriptRoot 'Build-OvertureProduct.ps1') -Package -RuntimeDirectory $RuntimeDirectory
 }
 
 $manifest = Join-Path $packageRoot 'SHA256SUMS.txt'

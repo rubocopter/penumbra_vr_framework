@@ -13,7 +13,8 @@ param(
 
     # Force the conservative full rebuild even when no header or project input
     # changed since the last successful build.
-    [switch]$Full
+    [switch]$Full,
+    [string]$RuntimeDirectory
 )
 
 Set-StrictMode -Version Latest
@@ -38,15 +39,17 @@ $frameworkRoot = [System.IO.Path]::GetFullPath((Join-Path $repositoryRoot '..\..
 # as long as the headers they saw did not change.
 function Get-BuildInputFingerprint([string]$RepositoryRoot, [string]$FrameworkRoot) {
     $excludedRoots = @('.git', '.vs', 'build')
-    $productInputFiles = Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp', '*.vcxproj' |
+    # Windows PowerShell 5.1 ignores -Include with -LiteralPath. Filter the
+    # extensions explicitly so packaging/scripts do not invalidate the ABI guard.
+    $productInputFiles = Get-ChildItem -LiteralPath $RepositoryRoot -Recurse -File |
         Where-Object {
             $firstSegment = $_.FullName.Substring($RepositoryRoot.Length + 1).Split('\')[0]
-            $firstSegment -notin $excludedRoots
+            $firstSegment -notin $excludedRoots -and $_.Extension -in @('.h','.hpp','.inl','.ipp','.vcxproj')
         }
     $frameworkInputFiles = @(
-        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\runtime') -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp'
-        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\backends\overture') -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp'
-        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\adapters\overture_source') -Recurse -File -Include '*.h', '*.hpp', '*.inl', '*.ipp', '*.props'
+        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\runtime') -Recurse -File | Where-Object {$_.Extension -in @('.h','.hpp','.inl','.ipp')}
+        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\backends\overture') -Recurse -File | Where-Object {$_.Extension -in @('.h','.hpp','.inl','.ipp')}
+        Get-ChildItem -LiteralPath (Join-Path $FrameworkRoot 'src\adapters\overture_source') -Recurse -File | Where-Object {$_.Extension -in @('.h','.hpp','.inl','.ipp','.props')}
     )
     $inputFiles = @($productInputFiles) + @($frameworkInputFiles) | Sort-Object FullName
 
@@ -152,7 +155,7 @@ if ($LASTEXITCODE -ne 0) {
 Write-Host 'Unit tests passed.' -ForegroundColor Green
 
 if ($Package -or $Deploy) {
-    & (Join-Path $PSScriptRoot 'package.ps1') -Configuration $Configuration
+    & (Join-Path $PSScriptRoot 'package.ps1') -Configuration $Configuration -RuntimeDirectory $RuntimeDirectory
 }
 
 if ($Deploy) {

@@ -25,7 +25,8 @@ using namespace hpl;
 
 // Release identifier written into hpl.log at boot; bump on every tagged
 // release so support requests are answerable from the log alone.
-#define PENUMBRA_VR_VERSION "v0.1.0"
+#include "pvr_version.hpp"
+#define PENUMBRA_VR_VERSION PVR_VERSION_TEXT
 
 class cMapHandler;
 class cButtonHandler;

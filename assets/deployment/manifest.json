@@ -6,6 +6,12 @@
       "installRoot": "redist",
       "payloads": [
         {
+          "id": "openal_soft",
+          "source": { "kind": "repository-file", "path": "products/overture/dependencies/bin/win32/OpenAL32.dll" },
+          "destination": "OpenAL32.dll",
+          "restorePolicy": "backup-if-present"
+        },
+        {
           "id": "bootstrap_proxy",
           "source": {
             "kind": "build-output",

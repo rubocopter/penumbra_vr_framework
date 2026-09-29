@@ -1,9 +1,12 @@
 # Release history
 
-## Unreleased
+## v1.0.0 — Framework release candidate
 
-No changes beyond the stable baseline yet. A push to `master` produces a CI
-package, not a new GitHub release.
+The Framework product consumes the shared runtime and release identity.
+The unified installer handles optional textures/translations, targeted settings,
+verification and managed repair/removal. This candidate requires its own
+clean-user and current-build headset acceptance; the older baseline evidence
+does not establish public support for this release.
 
 ## v0.1.0 — 2 September 2026
 

@@ -99,6 +99,12 @@ try {
     }
 
     $supportFiles = @(
+        'release.json',
+        'tools/PenumbraVrPrerequisites.psm1',
+        'tools/PenumbraVrConfiguration.psm1',
+        'assets/settings/installer-game-profile.json',
+        'assets/deployment/prerequisites.json',
+        'products/overture/dependencies/bin/win32/OpenALSoft-COPYING',
         'assets/deployment/manifest.json',
         'assets/localization/manifest.json',
         'assets/localization/black_plague/leeme.txt',

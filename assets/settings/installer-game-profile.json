@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "common": {
+    "Graphics": { "LimitFPS": "false", "FSAA": "0", "MotionBlur": "false", "DepthOfField": "false", "NoiseFilter": "false" },
+    "Screen": { "Vsync": "false" }
+  },
+  "games": {
+    "overture": { "Graphics": { "PostEffects": "false", "Refractions": "false" } },
+    "black_plague": { "Graphics": { "PostEffects": "true", "Refractions": "true" } },
+    "requiem": { "Graphics": { "PostEffects": "true", "Refractions": "true" } }
+  }
+}

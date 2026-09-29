@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "openal_soft",
+      "version": "1.25.2",
+      "filename": "openal-soft-1.25.2.tar.bz2",
+      "url": "https://openal-soft.org/openal-releases/openal-soft-1.25.2.tar.bz2",
+      "sha256": "1DBAAC44E7579D5BC8847CA8DB4B2E8B9FD3961041F35EE20DEF4958301E1089",
+      "binaryUrl": "https://github.com/kcat/openal-soft/releases/download/1.25.2/openal-soft-1.25.2-bin.zip",
+      "binarySha256": "606CF8B4C22C7AE00813585279AC045115907BC66D1483EB26355907021EA4B0",
+      "license": "LGPL-2.0-or-later; upstream PFFFT notice retained"
+    },
+    {
+      "id": "angelscript",
+      "version": "2.7.1b",
+      "filename": "angelscript_2.7.1b.zip",
+      "url": "https://www.angelcode.com/angelscript/sdk/files/angelscript_2.7.1b.zip",
+      "sha256": "FE3C8AFDFCB3D5F352DB6DED75C2F9EE8B2F8E72ED14E02466A1D992FE80D20F",
+      "license": "Zlib; upstream header notice retained",
+      "evidence": "Official SDK header matches the vendored 2.7.1b header after newline normalization. Legacy static library build flags are not recovered."
+    }
+  ]
+}

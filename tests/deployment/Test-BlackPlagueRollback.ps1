@@ -34,7 +34,7 @@ try {
         [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
     $failure = $null
     try {
-        & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+        & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     } catch { $failure = $_.Exception.Message } finally { $lock.Dispose() }
     if (-not $failure -or $failure -notlike 'Deployment failed and original managed files were restored:*') {
         throw "Locked localization did not reach verified rollback: $failure"
@@ -52,7 +52,7 @@ try {
             throw "Failed deployment left managed payload: $relative"
         }
     }
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     $state = Join-Path $gameRoot 'PenumbraVR.BlackPlague.install.json'
     $beforeUpgrade = (Get-FileHash -LiteralPath $state -Algorithm SHA256).Hash
     $beforeProxy = (Get-FileHash -LiteralPath $alut -Algorithm SHA256).Hash
@@ -61,7 +61,7 @@ try {
         [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
     $failure = $null
     try {
-        & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+        & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     } catch { $failure = $_.Exception.Message } finally { $lock.Dispose() }
     if (-not $failure -or $failure -notlike 'Deployment failed and original managed files were restored:*' -or
         (Get-FileHash -LiteralPath $state -Algorithm SHA256).Hash -ne $beforeUpgrade -or

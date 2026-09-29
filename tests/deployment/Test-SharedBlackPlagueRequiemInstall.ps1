@@ -27,6 +27,7 @@ try {
     Copy-Item -LiteralPath $BlackPlagueExe -Destination $bpTarget
     Copy-Item -LiteralPath $RequiemExe -Destination $requiemTarget
     Copy-Item -LiteralPath $RetailAlut -Destination $alut
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $redist
     [System.IO.File]::WriteAllText($language, 'original Requiem language')
     $originalAlut = (Get-FileHash -LiteralPath $alut -Algorithm SHA256).Hash
     $originalLanguage = (Get-FileHash -LiteralPath $language -Algorithm SHA256).Hash
@@ -35,7 +36,7 @@ try {
     $lock = [System.IO.File]::Open($language, [System.IO.FileMode]::Open,
         [System.IO.FileAccess]::Read, [System.IO.FileShare]::Read)
     $failure = $null
-    try { & $installer -GamePath $bpTarget -BuildRoot $BuildRoot | Out-Null }
+    try { & $installer -GamePath $bpTarget -BuildRoot $BuildRoot -CommunityTranslations | Out-Null }
     catch { $failure = $_.Exception.Message }
     finally { $lock.Dispose() }
     if (-not $failure -or
@@ -45,7 +46,7 @@ try {
         throw "Shared transaction did not roll back a locked Requiem localization: $failure"
     }
 
-    & $installer -GamePath $bpTarget -BuildRoot $BuildRoot | Out-Null
+    & $installer -GamePath $bpTarget -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     $probe = Join-Path $redist 'PenumbraVR.Requiem.Probe.dll'
     $backup = Join-Path $redist 'PenumbraVR_Espanol_exp_original.lang'
     $statePath = Join-Path $redist 'PenumbraVR.BlackPlague.install.json'

@@ -1,12 +1,12 @@
-# Penumbra: Overture VR Rework
+# Penumbra: Overture — Framework product
 
 A community-made PCVR rework that brings **Penumbra: Overture** to full room-scale VR with motion-controlled hands, physical interactions, and a complete spatial-audio chain built for horror.
 
-> First stable — current release: **v0.1.0** (2 September 2026). You must own **Penumbra: Overture** on Steam; the original game is not included.
+> Framework candidate — current release: **v1.0.0** (release candidate, clean-user acceptance pending). You must own **Penumbra: Overture** on Steam; the original game is not included.
 
-This directory documents the stable Overture product baseline. For the current trilogy/framework state, see the root [README](../../README.md), [ROADMAP](../../docs/ROADMAP.md), [trilogy parity plan](../../docs/TRILOGY_PARITY_PLAN.md), and [supported builds](../../docs/SUPPORTED_BUILDS.md).
+This directory contains the Framework-owned Overture product derived from the accepted Rework baseline. For the current trilogy/framework state, see the root [README](../../README.md), [ROADMAP](../../docs/ROADMAP.md), [trilogy parity plan](../../docs/TRILOGY_PARITY_PLAN.md), and [supported builds](../../docs/SUPPORTED_BUILDS.md).
 
-**[Download v0.1.0](https://github.com/rubocopter/penumbra_vr_rework/releases/tag/v0.1.0)** · [Controls and VR settings](docs/INPUT.md)
+**[Framework releases](https://github.com/rubocopter/penumbra_vr_framework/releases)** · [Controls and VR settings](docs/INPUT.md). The separately published [Rework v0.1.0 baseline](https://github.com/rubocopter/penumbra_vr_rework/releases/tag/v0.1.0) belongs to that project.
 
 ## Why try it?
 

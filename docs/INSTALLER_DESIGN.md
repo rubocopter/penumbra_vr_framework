@@ -121,12 +121,92 @@ support and final UI acceptance remain separate gates.
 
 ## Remaining production work
 
+The release-engineering scope and finite acceptance gate are owned by
+[CLOSURE_STATUS.md](CLOSURE_STATUS.md). Inspected dependency and packaging gaps
+are in [RUNTIME_DEPENDENCIES.md](RUNTIME_DEPENDENCIES.md) and
+[RELEASE_PREPARATION_AUDIT.md](RELEASE_PREPARATION_AUDIT.md).
+
 - exercise the graphical install/repair/uninstall flow on a clean user setup;
-- finish production OpenVR registration/versioning/rollback;
-- finish optional recommended-settings transactions; localization already has
-  shared-root install/repair/restore host evidence;
+- validate runtime readiness independently of passive OpenVR registration checks;
 - complete the dependency/redistribution license audit; packaged notices already include both translations;
 - validate clean install, upgrade, repair, interruption recovery, external
   modification handling and exact restore for every supported product; and
 - accept the existing graphical product selection/UI on a clean user setup
   before production distribution.
+
+## v1.0 extension — approved and implemented, acceptance pending
+
+Keep the existing PowerShell transactions and Windows Forms front end. Extend
+their inputs/verification rather than introduce another ownership engine.
+An MSI/Inno wrapper adds tooling while still needing the exact-build
+transactions; a native rewrite duplicates their recovery logic. Recommend the
+established ZIP equivalent, `PenumbraVR-Setup-1.0.0.zip`, with one obvious
+graphical launcher. A future EXE wrapper can reuse this contract.
+
+### Components and validation
+
+Represent shared framework, O support, B support and R support explicitly.
+Shared policy remains linked into each product; shared payloads install once
+per consuming root. R requires validated B plus expansion content. Expose it
+as a layer under B: add/remove R while retaining B; removing B also removes
+dependent R. O stays independent. Record component versions and original/
+installed hashes. Do not introduce a global game DLL directory.
+
+Core excludes community translations and selected enhancement textures by
+default; retain them only as explicit optional selections with their notices.
+Preserve indispensable O VR shaders/models/map adaptations. Directory location
+alone does not distinguish required overlays from texture enhancements.
+
+Resolve Steam roots from registry/metadata/fallback and all library folders;
+read app manifests for actual installation directories. Validate manual root,
+redist and EXE choices with exact hashes, local dependencies and essential
+game config/content. Show incomplete and unknown builds with actionable reasons.
+Recognition must not become an unearned public-support claim.
+
+### Dependencies and final-state verification
+
+Consume a machine-readable dependency inventory with pinned distributable
+inputs. Supply app-local OpenAL Soft to B/R after exact redistribution
+obligations are satisfied; preserve verified originals and stop on unknown
+conflicts. Retain O CRT pins. Detect SteamVR and game-owned legacy dependencies,
+including dynamic codecs, with precise guidance. Never copy system DLLs or
+switch OpenXR. Removal/recovery must work without SteamVR.
+
+Preflight all selected roots before writes; retain independent root commits
+and explicit partial-result reporting. Extend existing journals. Verify final
+component graph, owned hashes, backups, dependencies, actions/bindings and
+configuration. Expose read-only structured per-game verification. Say
+"installation files verified"; headset readiness and manual gameplay acceptance
+remain separate results.
+
+### Settings, recovery and diagnostics
+
+Preview an optional targeted game XML patch using an allowlist from existing
+recommendations. Exclude language, resolution, personal calibration and
+experimental mirror choices. Back up changed attributes, stage/parse and
+journal changes. Removal restores only values still equal to installer-applied
+values; preserve later user edits. Keep corrected B/R post-effects/refractions.
+
+Integrate GUI recovery and preview what explicit repair replaces. Preserve
+SteamVR custom bindings and expose conflicts. Log version, plan, dependencies,
+files/config, backups, failures/rollback and verification without debug spam.
+
+Provide a bounded diagnostic ZIP: version, Windows/GPU, runtime detection,
+candidate/game hashes, components/dependencies/verification, allowlisted VR
+settings and redacted Framework log tails. Absent headset/controllers are
+unknown. Exclude saves, dumps, credentials, unrelated files/logs and raw
+user-path identifiers.
+
+### Release and acceptance
+
+Use one checked-in identity for build/PE metadata, installer, logs, diagnostics
+and artifacts; schema versions stay separate. Build documented inputs from
+the checkout with an explicit pinned CRT source; deliver notices, corresponding
+source and SHA-256. Fixed-input ZIP determinism and full binary reproducibility
+are separate checks.
+
+Expand fixtures across A–F, dependency failures, unknown/damaged files,
+add/remove layers, repeat operations and interrupted/locked-write rollback.
+Run the finite clean-machine/manual-headset matrix in `CLOSURE_STATUS.md`.
+Rewrite the README to actual download/hardware/settings/known-issue evidence.
+Fixture success alone cannot justify a final release claim.

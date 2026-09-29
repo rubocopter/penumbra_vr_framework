@@ -5,6 +5,21 @@ This file owns the current work order. Capability state lives in
 `SUPPORTED_BUILDS.md`, and stable ownership rules in `ARCHITECTURE.md` and
 `DESIGN_DECISIONS.md`.
 
+## Current priority — v1.0 release engineering
+
+The current user request accepts gameplay as the working baseline and promotes
+unified installation, dependencies, packaging and clean-user validation to the
+active work order. Use `CLOSURE_STATUS.md` for the finite release gate,
+`RUNTIME_DEPENDENCIES.md` for deployment dependencies and
+`RELEASE_PREPARATION_AUDIT.md` for the inspected installer baseline. The proposed
+installer extension is implemented in `INSTALLER_DESIGN.md`; current-candidate
+clean-machine/headset acceptance and public-publication review remain pending.
+
+The runtime milestones below retain their evidence but non-blocking polish,
+broader parity and optional improvements do not displace this release task.
+Reopen runtime work only for a concrete release blocker, including the documented
+intermittent Requiem startup crash. Do not automatically launch games.
+
 ## Foundation already in place
 
 - [x] Framework-owned Overture source/build/package product independent of the
@@ -91,7 +106,7 @@ automatically validate a newer candidate.
   package/install/repair fixtures verify all eight by hash. Device hardware
   validation and the documented Vive/WMR layout limitations remain separate.
 
-The next focused runtime issue is Black Plague's vertical mini-hops while
+The deferred focused runtime issue is Black Plague's vertical mini-hops while
 touching ventilation walls. Investigate accepted motion, native stepping and
 crouch/body contact together; the cause is not yet established.
 

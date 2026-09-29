@@ -55,6 +55,7 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $redist 'vr') -Force | Out-Null
     Write-FixtureFile $blocked 'original blocked file'
     Write-FixtureFile (Join-Path $package 'Penumbra_vr.exe') 'candidate executable'
+    Write-FixtureFile (Join-Path $package 'release.json') '{"schemaVersion":1,"version":"1.0.0","channel":"release-candidate"}'
     Write-FixtureFile (Join-Path $package 'openvr_api.dll') 'candidate OpenVR'
     Write-FixtureFile (Join-Path $package 'vr/actions.json') '{}'
     Write-FixtureFile (Join-Path $package 'z-block.bin') 'candidate blocked file'

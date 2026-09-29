@@ -36,18 +36,18 @@ try {
     $originalLocalizationHash = (Get-FileHash -LiteralPath $originalLocalization -Algorithm SHA256).Hash
 
     $rejectedFreshRepair = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null }
     catch { $rejectedFreshRepair = $_.Exception.Message -like '*requires an existing managed installation record*' }
     if (-not $rejectedFreshRepair) { throw 'Black Plague repair accepted an unowned installation.' }
 
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     $probe = Join-Path $fixture 'PenumbraVR.BlackPlague.Probe.dll'
     $localization = Join-Path $fixture 'config/Espanol.lang'
     if (-not (Test-Path -LiteralPath $probe -PathType Leaf) -or
         -not (Test-Path -LiteralPath $localization -PathType Leaf)) {
         throw 'Fixture installation did not create its expected payloads.'
     }
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     Write-Host 'Black Plague clean upgrade completed.'
 
     $audioConfig = Join-Path $fixture 'alsoft.ini'
@@ -55,16 +55,16 @@ try {
     $audioConfigHash = (Get-FileHash -LiteralPath $audioConfig -Algorithm SHA256).Hash
     Remove-Item -LiteralPath $audioConfig
     $rejectedAudioUpgrade = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null }
     catch { $rejectedAudioUpgrade = $true }
     if (-not $rejectedAudioUpgrade) { throw 'Ordinary upgrade accepted a missing managed OpenAL configuration.' }
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null
     if ((Get-FileHash -LiteralPath $audioConfig -Algorithm SHA256).Hash -ne $audioConfigHash) {
         throw 'Black Plague repair did not regenerate the recorded OpenAL configuration.'
     }
     [System.IO.File]::WriteAllText($audioConfig, 'personal audio settings')
     $rejectedAudioRepair = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null }
     catch { $rejectedAudioRepair = $true }
     if (-not $rejectedAudioRepair -or (Get-Content -LiteralPath $audioConfig -Raw) -ne 'personal audio settings') {
         throw 'Black Plague repair accepted or changed personal audio settings.'
@@ -77,10 +77,10 @@ try {
     [System.IO.File]::WriteAllText($probe, 'damaged managed probe')
     Remove-Item -LiteralPath $openVrBinding
     $rejectedUpgrade = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null }
     catch { $rejectedUpgrade = $true }
     if (-not $rejectedUpgrade) { throw 'Ordinary Black Plague upgrade accepted damaged managed payload.' }
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null
     if ((Get-FileHash -LiteralPath $probe -Algorithm SHA256).Hash -ne $probeHash -or
         (Get-FileHash -LiteralPath $openVrBinding -Algorithm SHA256).Hash -ne $bindingHash) {
         throw 'Black Plague repair did not restore the managed payload.'
@@ -91,19 +91,19 @@ try {
     [System.IO.File]::WriteAllText($probe, 'second damaged probe')
     $damagedProbeHash = (Get-FileHash -LiteralPath $probe -Algorithm SHA256).Hash
     $rejectedBackup = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null }
     catch { $rejectedBackup = $true }
     if (-not $rejectedBackup -or
         (Get-FileHash -LiteralPath $probe -Algorithm SHA256).Hash -ne $damagedProbeHash) {
         throw 'Black Plague repair accepted a corrupt retail backup or modified the probe before rejection.'
     }
     Copy-Item -LiteralPath $RetailAlut -Destination $alutBackup -Force
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null
 
     $foreignVrFile = Join-Path $fixture 'vr/foreign-user-file.txt'
     [System.IO.File]::WriteAllText($foreignVrFile, 'unrelated data')
     $rejectedRepair = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null }
     catch { $rejectedRepair = $true }
     if (-not $rejectedRepair -or -not (Test-Path -LiteralPath $foreignVrFile -PathType Leaf)) {
         throw 'Black Plague repair accepted or deleted an unrelated OpenVR file.'
@@ -119,7 +119,7 @@ try {
 
     $rejected = $false
     try {
-        & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+        & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     } catch {
         $rejected = $true
     }
@@ -138,7 +138,7 @@ try {
     $alut = Join-Path $fixture 'alut.dll'
     $alutBefore = (Get-FileHash -LiteralPath $alut -Algorithm SHA256).Hash
     try {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -Restore 2>&1 | Out-Null
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Restore 2>&1 | Out-Null
     } catch {
         # Windows PowerShell promotes native stderr to an error under Stop.
     }
@@ -156,7 +156,7 @@ try {
     $foreignAsset = Join-Path $fixture 'vr/foreign-user-file.txt'
     [System.IO.File]::WriteAllText($foreignAsset, 'unrelated file')
     try {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -Restore 2>&1 | Out-Null
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Restore 2>&1 | Out-Null
     } catch {
         # Windows PowerShell promotes native stderr to an error under Stop.
     }
@@ -172,7 +172,7 @@ try {
     $localizationBackup = Join-Path $fixture 'PenumbraVR_Espanol_original.lang'
     [System.IO.File]::AppendAllText($localizationBackup, 'external change')
     try {
-        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -Restore 2>&1 | Out-Null
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Restore 2>&1 | Out-Null
     } catch {
         # Windows PowerShell promotes native stderr to an error under Stop.
     }
@@ -183,7 +183,7 @@ try {
     }
     [System.IO.File]::WriteAllText($localizationBackup, 'retail localization fixture')
 
-    & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -Restore | Out-Null
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Restore | Out-Null
     if ($LASTEXITCODE -ne 0 -or
         (Get-FileHash -LiteralPath $alut -Algorithm SHA256).Hash -ne $expectedAlut -or
         (Get-FileHash -LiteralPath $originalLocalization -Algorithm SHA256).Hash -ne $originalLocalizationHash -or
@@ -196,17 +196,17 @@ try {
     Write-Host 'Black Plague clean restore returned the fixture to its original state.'
 
     [System.IO.File]::WriteAllText($audioConfig, 'user-owned OpenAL settings')
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     Remove-Item -LiteralPath $audioConfig
     $userAudioStateHash = (Get-FileHash -LiteralPath $state -Algorithm SHA256).Hash
     $rejectedUserAudioRepair = $false
-    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Repair | Out-Null }
+    try { & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Repair | Out-Null }
     catch { $rejectedUserAudioRepair = $_.Exception.Message -like '*user-owned OpenAL configuration*' }
     if (-not $rejectedUserAudioRepair -or (Test-Path -LiteralPath $audioConfig) -or
         (Get-FileHash -LiteralPath $state -Algorithm SHA256).Hash -ne $userAudioStateHash) {
         throw 'Black Plague repair replaced a missing user-owned OpenAL configuration.'
     }
-    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -Restore | Out-Null
+    & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations -Restore | Out-Null
 
     $foreignVrRoot = Join-Path $fixture 'vr'
     New-Item -ItemType Directory -Path $foreignVrRoot | Out-Null
@@ -214,7 +214,7 @@ try {
     [System.IO.File]::WriteAllText($foreignFile, 'unrelated actions')
     $rejected = $false
     try {
-        & $installer -GamePath $gameExe -BuildRoot $BuildRoot | Out-Null
+        & $installer -GamePath $gameExe -BuildRoot $BuildRoot -CommunityTranslations | Out-Null
     } catch {
         $rejected = $true
     }

@@ -19,8 +19,8 @@ if (-not (Test-Path -LiteralPath $selector -PathType Leaf) -or
 
 $form = [System.Windows.Forms.Form]::new()
 $form.Text = 'Penumbra VR Framework'
-$form.Size = [System.Drawing.Size]::new(680, 430)
-$form.MinimumSize = [System.Drawing.Size]::new(620, 380)
+$form.Size = [System.Drawing.Size]::new(780, 635)
+$form.MinimumSize = [System.Drawing.Size]::new(760, 610)
 $form.StartPosition = 'CenterScreen'
 $form.Font = [System.Drawing.Font]::new('Segoe UI', 10)
 
@@ -32,16 +32,16 @@ $form.Controls.Add($heading)
 
 $list = [System.Windows.Forms.CheckedListBox]::new()
 $list.Location = [System.Drawing.Point]::new(18, 48)
-$list.Size = [System.Drawing.Size]::new(625, 205)
-$list.Anchor = 'Top,Left,Right,Bottom'
+$list.Size = [System.Drawing.Size]::new(725, 205)
+$list.Anchor = 'Top,Left,Right'
 $list.CheckOnClick = $true
 $list.HorizontalScrollbar = $true
 $form.Controls.Add($list)
 
 $status = [System.Windows.Forms.Label]::new()
 $status.Text = 'Se comprobarán las versiones exactas antes de modificar archivos.'
-$status.Location = [System.Drawing.Point]::new(18, 264)
-$status.Size = [System.Drawing.Size]::new(625, 43)
+$status.Location = [System.Drawing.Point]::new(18, 409)
+$status.Size = [System.Drawing.Size]::new(725, 70)
 $status.Anchor = 'Left,Right,Bottom'
 $form.Controls.Add($status)
 
@@ -79,6 +79,18 @@ $browseButton.Location = [System.Drawing.Point]::new(562, 322)
 $browseButton.Size = [System.Drawing.Size]::new(90, 34)
 $browseButton.Anchor = 'Left,Bottom'
 $form.Controls.Add($browseButton)
+foreach($button in @($installButton,$repairButton,$restoreButton,$refreshButton,$browseButton)){$button.Location=[Drawing.Point]::new($button.Location.X,490)}
+function Option([string]$text,[int]$y,[bool]$checked=$false){$c=[Windows.Forms.CheckBox]::new();$c.Text=$text;$c.Location=[Drawing.Point]::new(18,$y);$c.Size=[Drawing.Size]::new(725,26);$c.Checked=$checked;$form.Controls.Add($c);$c}
+$requiemOption=Option 'Incluir soporte de Requiem donde exista una expansion valida' 268 $true
+$translationOption=Option 'Traducciones comunitarias al espanol (opcional)' 296
+$textureOption=Option 'Texturas mejoradas de Overture (opcional)' 324
+foreach($option in @($translationOption,$textureOption)){$option.ThreeState=$true;$option.CheckState='Indeterminate';$option.Text+='; gris: conservar seleccion anterior'}
+$settingsOption=Option 'Ajustes graficos recomendados: cambios concretos en defaults y perfil actual' 352
+function Action([string]$text,[int]$x){$b=[Windows.Forms.Button]::new();$b.Text=$text;$b.Location=[Drawing.Point]::new($x,537);$b.Size=[Drawing.Size]::new(155,34);$b.Anchor='Left,Bottom';$form.Controls.Add($b);$b}
+$recoverButton=Action 'Recuperar' 18
+$verifyButton=Action 'Verificar archivos' 184
+$diagnosticsButton=Action 'Diagnostico ZIP' 350
+$removeRequiemButton=Action 'Quitar solo Requiem' 516
 
 $script:groups = @()
 $script:manualPaths = @($ManualPaths)
@@ -92,9 +104,9 @@ function Refresh-Games {
     $list.Items.Clear()
     $script:groups = @()
     foreach ($entry in $found) {
-        if (-not $entry.Installable -or $entry.Game -eq 'Requiem') { continue }
-        if ($entry.Game -notin @('Overture', 'Black Plague')) { continue }
-        $label = $entry.Game
+        if ($entry.Game -eq 'Requiem') { continue }
+        $product=if($entry.Game -in @('Overture','Black Plague')){$entry.Game}elseif($entry.ManagedProduct){$entry.ManagedProduct}else{'Unknown'}
+        $label = $product
         if ($entry.Game -eq 'Black Plague' -and
             @($found | Where-Object {
                 $_.Game -eq 'Requiem' -and $_.Installable -and
@@ -103,11 +115,16 @@ function Refresh-Games {
             $label = 'Black Plague + Requiem'
         }
         $script:groups += [PSCustomObject]@{
-            Game = if ($entry.Game -eq 'Overture') { 'Overture' } else { 'BlackPlague' }
+            Game = if ($product -eq 'Overture') { 'Overture' } elseif($product -eq 'Black Plague'){'BlackPlague'}else{$null}
             Path = $entry.Path
             Label = $label
+            Installable = $entry.Installable
+            Managed = $entry.Managed
+            NeedsRecovery = $entry.NeedsRecovery
+            Issues = @($entry.Issues)
+            Status = $entry.Status
         }
-        [void]$list.Items.Add("$label  —  $($entry.InstallRoot)", $true)
+        [void]$list.Items.Add("$label [$($entry.Status)] - $($entry.InstallRoot)", [bool]$entry.Installable)
     }
     if (-not $script:groups.Count) {
         $status.Text = 'No se encontró ninguna versión compatible. No se ha modificado ningún juego.'
@@ -123,30 +140,69 @@ function Invoke-Selected([string]$Operation) {
             'Selecciona al menos un juego.', 'Penumbra VR')
         return
     }
+    if(@($selected | Where-Object {-not $_.Game}).Count){[void][Windows.Forms.MessageBox]::Show('Version desconocida: no se puede modificar. Revisa la ruta y los archivos en Steam.','Penumbra VR');return}
+    if($Operation -eq 'Install' -and @($selected | Where-Object {-not $_.Installable}).Count){[void][Windows.Forms.MessageBox]::Show(($selected.Issues -join "`n"),'Destino incompleto');return}
     $verb = switch ($Operation) {
         'Restore' { 'desinstalar' }
         'Repair' { 'reparar' }
+        'Recover' { 'recuperar' }
+        'RemoveRequiem' { 'quitar solo Requiem de' }
         default { 'instalar' }
     }
     $names = ($selected | ForEach-Object { $_.Label }) -join ', '
-    $answer = [System.Windows.Forms.MessageBox]::Show(
-        "¿Quieres $verb $names?", 'Penumbra VR',
-        [System.Windows.Forms.MessageBoxButtons]::YesNo,
-        [System.Windows.Forms.MessageBoxIcon]::Question)
-    if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+    if($Operation -in @('Verify','Diagnostics')){
+        try{
+            foreach($item in $selected){
+                if($Operation -eq 'Verify'){$report=& $selector -Verify -Game $item.Game -GamePath $item.Path;[void][Windows.Forms.MessageBox]::Show(($report.Checks | ForEach-Object {"$($_.Name): $($_.Status). $($_.Remediation)"}) -join "`n",'Verificacion de archivos')}
+                else{$dialog=[Windows.Forms.SaveFileDialog]::new();$dialog.Filter='ZIP (*.zip)|*.zip';$dialog.FileName='PenumbraVR-diagnostics.zip';try{if($dialog.ShowDialog($form) -eq 'OK'){& $selector -Game $item.Game -GamePath $item.Path -DiagnosticOutputPath $dialog.FileName | Out-Null}}finally{$dialog.Dispose()}}
+            }
+        }catch{[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Penumbra VR')}
+        return
+    }
+    $batchArgs=$null;$preview=@()
+    try{
+        if($Operation -in @('Install','Restore')){
+            $manual=@($selected.Path)
+            $isolated=Join-Path $PSScriptRoot 'no-steam-discovery'
+            $rows=@(& $discovery -SteamRoot $isolated -ManualPaths $manual)
+            $indices=@();for($i=0;$i -lt $rows.Count;$i++){if($rows[$i].Path -in $manual){$indices+=([string]($i+1))}}
+            $batchArgs=@{SteamRoot=$isolated;ManualPaths=$manual;Selections=$indices}
+            if($Operation -eq 'Restore'){$batchArgs.Restore=$true}else{
+                $batchArgs.RequiemMode=if($requiemOption.Checked){'Auto'}else{'Disable'}
+                if($translationOption.CheckState -ne 'Indeterminate'){$batchArgs.CommunityTranslations=$translationOption.Checked}
+                if($textureOption.CheckState -ne 'Indeterminate'){$batchArgs.TextureEnhancements=$textureOption.Checked}
+                $batchArgs.RecommendedSettings=$settingsOption.Checked
+            }
+            $preview=@(& $selector @batchArgs -Plan)
+        }elseif($Operation -ne 'Recover'){
+            foreach($item in $selected){$a=@{Game=$item.Game;GamePath=$item.Path;Plan=$true};if($Operation -eq 'Repair'){$a.Repair=$true}else{if($item.Game -ne 'BlackPlague'){throw 'Quitar Requiem requiere seleccionar su base Black Plague.'};$a.Game='Requiem';$a.Restore=$true};$preview+=@(& $selector @a)}
+        }
+    }catch{[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Preflight: no se modifico ningun juego');return}
+    $review=[Windows.Forms.Form]::new();$review.Text="Revisar: $verb $names";$review.Size=[Drawing.Size]::new(760,540);$review.StartPosition='CenterParent'
+    $details=[Windows.Forms.TextBox]::new();$details.Multiline=$true;$details.ReadOnly=$true;$details.ScrollBars='Both';$details.WordWrap=$false;$details.Dock='Fill'
+    $lines=@('Archivos y cambios previstos. Partidas, idioma, resolucion y calibracion quedan fuera del ajuste recomendado.','')
+    foreach($p in $preview){$lines+="$($p.Game): $($p.Path)";$lines+=@($p.Payload.Files | ForEach-Object {"  $_"});foreach($cfg in @($p.Payload.Configuration)){$lines+="  Ajustes: $($cfg.Path)";$lines+=@($cfg.Changes | ForEach-Object {"    $($_.Section).$($_.Attribute): $($_.Original) -> $($_.Applied)"})};$lines+=''}
+    if($Operation -eq 'Recover'){$lines+='Restaurar la instantanea verificada de la operacion interrumpida.'}
+    $details.Text=$lines -join "`r`n";$review.Controls.Add($details)
+    $buttons=[Windows.Forms.FlowLayoutPanel]::new();$buttons.Dock='Bottom';$buttons.Height=45
+    foreach($choice in @('OK','Cancel')){$b=[Windows.Forms.Button]::new();$b.Text=if($choice -eq 'OK'){'Aplicar'}else{'Cancelar'};$b.DialogResult=$choice;$buttons.Controls.Add($b)}
+    $review.Controls.Add($buttons);try{$answer=$review.ShowDialog($form)}finally{$review.Dispose()}
+    if($answer -ne 'OK'){return}
     $controls = @($list, $installButton, $repairButton, $restoreButton,
-        $refreshButton, $browseButton)
+        $refreshButton, $browseButton,$requiemOption,$translationOption,$textureOption,$settingsOption,$recoverButton,$verifyButton,$diagnosticsButton,$removeRequiemButton)
     foreach ($control in $controls) { $control.Enabled = $false }
     $form.UseWaitCursor = $true
     $status.Text = "Procesando $names..."
     [System.Windows.Forms.Application]::DoEvents()
     try {
-        foreach ($item in $selected) {
+        if($batchArgs){& $selector @batchArgs | Out-Null}else{foreach ($item in $selected) {
             $arguments = @{ Game = $item.Game; GamePath = $item.Path }
             if ($Operation -eq 'Restore') { $arguments.Restore = $true }
             if ($Operation -eq 'Repair') { $arguments.Repair = $true }
+            if ($Operation -eq 'Recover') { $arguments.Recover = $true }
+            if ($Operation -eq 'RemoveRequiem') { $arguments.Game='Requiem';$arguments.Restore=$true }
             & $selector @arguments | Out-Null
-        }
+        }}
         Refresh-Games
         $status.Text = "Operación completada: $names."
         [void][System.Windows.Forms.MessageBox]::Show(
@@ -165,9 +221,15 @@ function Invoke-Selected([string]$Operation) {
     }
 }
 
+$list.Add_SelectedIndexChanged({if($list.SelectedIndex -ge 0){$row=$script:groups[$list.SelectedIndex];$status.Text=($row.Issues -join ' ');if(-not $status.Text){$status.Text=$row.Status}}})
+$list.Add_ItemCheck({param($sender,$eventArgs) if($eventArgs.Index -lt $script:groups.Count){$row=$script:groups[$eventArgs.Index];if(-not $row.Installable -and -not $row.Managed -and -not $row.NeedsRecovery){$eventArgs.NewValue='Unchecked'}}})
 $installButton.Add_Click({ Invoke-Selected 'Install' })
 $repairButton.Add_Click({ Invoke-Selected 'Repair' })
 $restoreButton.Add_Click({ Invoke-Selected 'Restore' })
+$recoverButton.Add_Click({Invoke-Selected 'Recover'})
+$verifyButton.Add_Click({Invoke-Selected 'Verify'})
+$diagnosticsButton.Add_Click({Invoke-Selected 'Diagnostics'})
+$removeRequiemButton.Add_Click({Invoke-Selected 'RemoveRequiem'})
 $refreshButton.Add_Click({
     try { Refresh-Games }
     catch {

@@ -19,11 +19,18 @@ param(
     [switch]$Repair,
 
     # Also restores these textures from deployment backups when already installed.
-    [switch]$SkipTexturePack
+    [switch]$SkipTexturePack,
+    [switch]$CommunityTranslations,
+    [switch]$Preflight,
+    [switch]$RecommendedSettings,
+    [ValidateSet('DefaultFiles','DefaultAndUserFiles')][string]$SettingsScope='DefaultAndUserFiles'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+$supportRoot=if(Test-Path -LiteralPath (Join-Path $PSScriptRoot 'tools/PenumbraVrConfiguration.psm1')){$PSScriptRoot}else{[IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../../..'))}
+Import-Module (Join-Path $supportRoot 'tools/PenumbraVrConfiguration.psm1') -Force
+$personalConfiguration=(Get-PvrConfigurationPaths -Game overture -RedistRoot $PSScriptRoot)[1]
 if ($Repair -and ($Restore -or $Recover)) {
     throw 'Overture repair cannot be combined with restore or interrupted-deployment recovery.'
 }
@@ -136,7 +143,7 @@ function Resolve-GamePaths([string]$requestedRoot) {
             $redistRoot = Join-Path $gameRoot 'redist'
         }
 
-        $hasManagedState = $Repair -and
+        $hasManagedState = ($Repair -or $Restore) -and
             (Test-Path -LiteralPath (Join-Path $gameRoot '.penumbravr/deploy-state.json') -PathType Leaf)
         if (((Test-Path -LiteralPath (Join-Path $redistRoot 'Penumbra.exe') -PathType Leaf) -or $hasManagedState) -and
             ((Test-Path -LiteralPath (Join-Path $redistRoot 'config\English.lang') -PathType Leaf) -or $hasManagedState)) {
@@ -216,7 +223,7 @@ function Assert-ManagedTarget([string]$target, [string]$gameRoot) {
     }
     $normalizedTarget = [System.IO.Path]::GetFullPath($target)
     $prefix = $normalizedGame + [System.IO.Path]::DirectorySeparatorChar
-    if (-not $normalizedTarget.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase)) {
+    if (-not $normalizedTarget.StartsWith($prefix, [System.StringComparison]::OrdinalIgnoreCase) -and $normalizedTarget -ine $personalConfiguration) {
         throw "Deployment path escapes the game root: $normalizedTarget"
     }
     $cursor = $normalizedTarget
@@ -327,7 +334,7 @@ function Read-DeploymentSnapshot([string]$gameRoot) {
         $target = Assert-ManagedTarget ([string]$entry.Target) $gameRoot
         $copy = Assert-ManagedTarget ([string]$entry.Copy) $gameRoot
         if (($target -ine $stateRoot -and
-             -not $target.StartsWith($redistPrefix, [System.StringComparison]::OrdinalIgnoreCase)) -or
+             -not $target.StartsWith($redistPrefix, [System.StringComparison]::OrdinalIgnoreCase) -and $target -ine $personalConfiguration) -or
             $target -ieq $root -or
             $target.StartsWith($root + [System.IO.Path]::DirectorySeparatorChar,
                 [System.StringComparison]::OrdinalIgnoreCase) -or
@@ -336,6 +343,7 @@ function Read-DeploymentSnapshot([string]$gameRoot) {
             $entry.Kind -notin @('absent', 'file', 'directory')) {
             throw "Invalid Overture recovery journal entry: $target"
         }
+        if($target -ieq $personalConfiguration -and $entry.Kind -eq 'directory'){throw 'A settings recovery target cannot be a directory.'}
         foreach ($prior in $seen) {
             if ($prior -ieq $target) { continue }
             if ($target.StartsWith($prior + [System.IO.Path]::DirectorySeparatorChar,
@@ -475,6 +483,9 @@ if (Test-Path -LiteralPath $statePath -PathType Leaf) {
 if ($Repair -and $null -eq $previousState) {
     throw 'Overture repair requires an existing managed deployment state.'
 }
+$configurationProperty=if($previousState){$previousState.PSObject.Properties['Configuration']}else{$null}
+$previousConfiguration=if($configurationProperty){@($configurationProperty.Value)}else{@()}
+$previousConfiguration=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration)
 
 if ($Restore) {
     if ($null -eq $previousState) {
@@ -505,9 +516,12 @@ if ($Restore) {
 
     $restoreTargets = @($previousState.Files | ForEach-Object {
         Get-PathUnderRoot $redistRoot ([string]$_.Path)
-    }) + @($stateRoot)
+    }) + @($stateRoot) + @($previousConfiguration | ForEach-Object {$_.Path})
+    foreach($plan in $previousConfiguration){Test-PvrConfigurationPlan -Plan $plan -Restore}
+    if($Preflight) { [pscustomobject]@{Files=@($restoreTargets);Configuration=@($previousConfiguration);Operation='restore'}; return }
     $deploymentSnapshot = New-DeploymentSnapshot $restoreTargets $gameRoot
     try {
+    foreach($plan in $previousConfiguration){Restore-PvrConfiguration -Plan $plan}
     foreach ($entry in $previousState.Files) {
         $relativePath = [string]$entry.Path
         $targetPath = Get-PathUnderRoot $redistRoot $relativePath
@@ -574,12 +588,24 @@ if ($SteamLauncher) {
         SourcePath = Join-Path $resolvedPackageRoot 'Penumbra_vr.exe'
     }
 }
+if(-not $CommunityTranslations) { $mappings.Remove('config/Espanol.lang') }
+if($Repair) {
+    # Repair the recorded component set; the GUI's optional defaults must not
+    # change ownership or accidentally adopt newly introduced package files.
+    $recorded=@{}
+    foreach($entry in $previousState.Files) { $recorded[[string]$entry.Path]=$true }
+    foreach($key in @($mappings.Keys)) { if(-not $recorded.ContainsKey($key)) { $mappings.Remove($key) } }
+    if($recorded.ContainsKey('config/Espanol.lang')) { $mappings['config/Espanol.lang']=[pscustomobject]@{Path='config/Espanol.lang';SourcePath=(Join-Path $resolvedPackageRoot 'config/Espanol.lang')} }
+}
 
-if ($SkipTexturePack) {
-    $textureManifest = Join-Path $resolvedPackageRoot 'docs\TEXTURE_SELECTION.json'
-    if (-not (Test-Path -LiteralPath $textureManifest)) { throw 'Texture selection manifest is missing.' }
+$textureManifest = Join-Path $resolvedPackageRoot 'docs\TEXTURE_SELECTION.json'
+$selectedTexturePaths=@()
+if(Test-Path -LiteralPath $textureManifest){
     $selection = Get-Content -Raw -LiteralPath $textureManifest | ConvertFrom-Json
     if ($selection.Version -notin @(1,2)) { throw 'Unsupported texture selection manifest.' }
+    $selectedTexturePaths=@($selection.Files.Path)
+}elseif($SkipTexturePack){throw 'Texture selection manifest is missing.'}
+if ($SkipTexturePack) {
     foreach ($texture in $selection.Files) {
         $texturePath = [string]$texture.Path
         if ($texturePath -notmatch '^(textures|models)/([a-z0-9_]+/)+[a-z0-9_]+\.jpg$' -or
@@ -641,8 +667,14 @@ foreach ($relativePath in @($previousEntries.Keys) + @($mappings.Keys)) {
     $installTargets.Add((Get-PathUnderRoot $redistRoot ([string]$relativePath)))
 }
 $installTargets.Add($stateRoot)
+$configurationPlans=@(Get-PvrConfigurationRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration -Apply:$RecommendedSettings -SettingsScope $SettingsScope)
+if($RecommendedSettings){foreach($plan in $configurationPlans){Test-PvrConfigurationPlan -Plan $plan}}
+foreach($plan in $configurationPlans){$installTargets.Add([string]$plan.Path)}
+foreach($path in $installTargets){Assert-ManagedTarget $path $gameRoot | Out-Null}
+if($Preflight) { [pscustomobject]@{Files=@($mappings.Keys | Sort-Object);RetiredFiles=@($previousEntries.Keys | Where-Object {-not $mappings.ContainsKey($_)});Configuration=@($configurationPlans);Operation=$(if($Repair){'repair'}else{'install'})}; return }
 $deploymentSnapshot = New-DeploymentSnapshot $installTargets.ToArray() $gameRoot
 try {
+if($RecommendedSettings){foreach($plan in $configurationPlans){Set-PvrConfiguration -Plan $plan}}
 foreach ($previousPath in @($previousEntries.Keys)) {
     if ($mappings.ContainsKey($previousPath)) {
         continue
@@ -728,6 +760,9 @@ foreach ($mapping in @($mappings.Values | Sort-Object Path)) {
 New-Item -ItemType Directory -Path $stateRoot -Force | Out-Null
 $newState = [ordered]@{
     Version = 1
+    FrameworkVersion = (Get-Content -LiteralPath (Join-Path $resolvedPackageRoot 'release.json') -Raw | ConvertFrom-Json).version
+    Components = @('shared','overture') + @(if($mappings.ContainsKey('config/Espanol.lang')){'spanish_translation'}) + @(if(@($mappings.Keys | Where-Object {$_ -in $selectedTexturePaths}).Count){'texture_enhancements'})
+    Configuration = @($configurationPlans)
     RedistRoot = $redistRoot
     PackageRoot = $resolvedPackageRoot
     SteamLauncher = $SteamLauncher

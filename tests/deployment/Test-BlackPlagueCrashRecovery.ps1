@@ -77,9 +77,9 @@ function Remove-Item {
 if ($global:CrashOnRestore) {
     & $InstallerPath -GamePath $GameExe -Restore 6>$null | Out-Null
 } elseif ($LaaValue -eq 'true') {
-    & $InstallerPath -GamePath $GameExe -BuildRoot $BuildRoot -LargeAddressAware 6>$null | Out-Null
+    & $InstallerPath -GamePath $GameExe -BuildRoot $BuildRoot -CommunityTranslations -LargeAddressAware 6>$null | Out-Null
 } else {
-    & $InstallerPath -GamePath $GameExe -BuildRoot $BuildRoot 6>$null | Out-Null
+    & $InstallerPath -GamePath $GameExe -BuildRoot $BuildRoot -CommunityTranslations 6>$null | Out-Null
 }
 '@ | Set-Content -LiteralPath $childScript -Encoding UTF8
 
@@ -87,7 +87,7 @@ if ($global:CrashOnRestore) {
     if ((Get-Sha256 $alut) -eq $originalAlut) { throw 'Install did not change ALUT before crash.' }
     $beforePendingRefusal = Get-Sha256 $alut
     $rejectedPending = $false
-    try { & $installer -GamePath $exe -BuildRoot $BuildRoot 6>$null | Out-Null }
+    try { & $installer -GamePath $exe -BuildRoot $BuildRoot -CommunityTranslations 6>$null | Out-Null }
     catch { $rejectedPending = $_.Exception.Message -like '*needs -Recover*' }
     if (-not $rejectedPending -or (Get-Sha256 $alut) -ne $beforePendingRefusal) {
         throw 'Black Plague started another deployment while recovery was pending.'
@@ -109,7 +109,7 @@ if ($global:CrashOnRestore) {
     Assert-Hash $localization $originalLocalization
     if (Test-Path -LiteralPath $state) { throw 'Fresh install recovery left deployment state.' }
 
-    & $installer -GamePath $exe -BuildRoot $BuildRoot 6>$null | Out-Null
+    & $installer -GamePath $exe -BuildRoot $BuildRoot -CommunityTranslations 6>$null | Out-Null
     $installedAlut = Get-Sha256 $alut
     $installedState = Get-Sha256 $state
     Invoke-CrashedDeployment 'LAA upgrade' $childScript $exe $BuildRoot $localization $loader $false $true
@@ -133,7 +133,7 @@ if ($global:CrashOnRestore) {
     Assert-Hash $alut $installedAlut
     Assert-Hash $state $installedState
 
-    & $installer -GamePath $exe -BuildRoot $BuildRoot -LargeAddressAware 6>$null | Out-Null
+    & $installer -GamePath $exe -BuildRoot $BuildRoot -CommunityTranslations -LargeAddressAware 6>$null | Out-Null
     $laaExe = Get-Sha256 $exe
     $laaState = Get-Sha256 $state
     Invoke-CrashedDeployment 'restore' $childScript $exe $BuildRoot $localization $loader $true $false

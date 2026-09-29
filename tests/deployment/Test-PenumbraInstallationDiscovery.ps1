@@ -25,6 +25,8 @@ try {
     Copy-Item -LiteralPath $OvertureCheckpointExe -Destination (Join-Path $overtureRedist 'Penumbra.exe')
     & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $redist
     & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $overtureRedist -Games overture
+    & (Join-Path $PSScriptRoot 'New-GameRuntimeFixture.ps1') -Root $redist -Game black_plague
+    & (Join-Path $PSScriptRoot 'New-GameRuntimeFixture.ps1') -Root $overtureRedist -Game overture
     $steamRoot = Join-Path $temporaryRoot 'Steam'
     New-Item -ItemType Directory -Path (Join-Path $steamRoot 'steamapps') -Force | Out-Null
     $libraryPath = (Join-Path $temporaryRoot 'Library').Replace('\', '\\')
@@ -47,6 +49,10 @@ try {
     Remove-Item -LiteralPath (Join-Path $redist 'expansion01/maps/fixture.dae')
     $incomplete=@(& $discover -SteamRoot $steamRoot | Where-Object {$_.Game -eq 'Requiem'})
     if ($incomplete.Count -ne 1 -or $incomplete[0].Installable -or $incomplete[0].Status -ne 'incomplete') { throw 'EXE-only or damaged Requiem was accepted.' }
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $redist
+    Remove-Item -LiteralPath (Join-Path $redist 'config/default_settings.cfg')
+    $invalidBase=@(& $discover -SteamRoot $steamRoot | Where-Object {$_.Game -eq 'Requiem'})
+    if($invalidBase.Count -ne 1 -or $invalidBase[0].Installable){throw 'Requiem accepted an incomplete Black Plague base.'}
     & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $redist
     $custom=Join-Path $temporaryRoot 'Library/steamapps/common/Custom folder with spaces'
     Move-Item -LiteralPath (Split-Path -Parent $overtureRedist) -Destination $custom

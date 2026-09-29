@@ -4,6 +4,7 @@ if ($script:Prerequisites.schemaVersion -ne 1) { throw 'Unsupported prerequisite
 
 function Get-PvrPeInfo {
     [CmdletBinding()]param([Parameter(Mandatory=$true,Position=0)][string]$Path)
+    if((Get-Item -LiteralPath $Path).Length -gt 134217728){throw 'PE exceeds the 128 MiB inspection limit.'}
     $b=[IO.File]::ReadAllBytes($Path)
     function U16([int64]$offset) { if ($offset -lt 0 -or $offset+2 -gt $b.Length) { throw 'Truncated PE.' }; [BitConverter]::ToUInt16($b,[int]$offset) }
     function U32([int64]$offset) { if ($offset -lt 0 -or $offset+4 -gt $b.Length) { throw 'Truncated PE.' }; [BitConverter]::ToUInt32($b,[int]$offset) }
@@ -85,6 +86,7 @@ function Test-PvrGameContent {
 }
 function Get-PvrPrerequisites {
     [CmdletBinding()]param([ValidateSet('overture','black_plague','requiem')][string]$Game,[string]$RedistRoot,[string]$PackageRoot,[string]$OpenVrPathsPath,[switch]$SkipSteamVr,[switch]$ForInstall)
+    $resolved=@{}
     foreach($library in @($script:Prerequisites.gameLibraries)+@($script:Prerequisites.bundledLibraries)) {
         if ($library.games -and $Game -notin $library.games) { continue }
         $path=Join-Path $RedistRoot $library.path; $status='missing'
@@ -96,14 +98,55 @@ function Get-PvrPrerequisites {
             } catch { $status='invalid' }
         }
         if ($ForInstall -and $library.source -and $PackageRoot) {
-            $source=Join-Path $PackageRoot $library.source
+            $sources=@($library.source,('products/overture/'+$library.path),('products/black_plague/'+$library.source),('products/overture/build/package/Release/PenumbraVR/'+$library.path))
+            foreach($relativeSource in $sources) {
+            $source=Join-Path $PackageRoot $relativeSource
             if ((Test-Path -LiteralPath $source -PathType Leaf) -and (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ieq $library.sha256) {
                 # Ownership/conflict policy is enforced by the transaction, not relaxed here.
                 $status='provided'
+                $path=$source
+                break
+            }
             }
         }
         $remedy=if($library.source){'Repair using the complete Penumbra VR installer package.'}else{'Verify the game files in Steam to restore its x86 libraries.'}
         New-PvrCheck $library.name $status $library.path $remedy
+        if($status -in @('present','provided')){$resolved[$library.path.ToLowerInvariant()]=$path}
+    }
+    # Inspect direct and delay imports recursively without loading code or
+    # searching PATH/global third-party DLL installations. Dynamic codecs are
+    # listed separately in the manifest; OS APIs stay owned by Windows.
+    $exeName=if($Game -eq 'requiem'){'Requiem.exe'}else{'Penumbra.exe'}
+    $exe=Join-Path $RedistRoot $exeName
+    if($ForInstall -and $Game -eq 'black_plague' -and (Test-Path -LiteralPath (Join-Path $RedistRoot 'PenumbraVR_Penumbra_original.exe') -PathType Leaf)){$exe=Join-Path $RedistRoot 'PenumbraVR_Penumbra_original.exe'}
+    if($ForInstall -and $Game -eq 'overture' -and $PackageRoot){
+        foreach($relative in @('products/overture/Penumbra_vr.exe','products/overture/build/bin/Release/Penumbra_vr.exe')){if(Test-Path -LiteralPath (Join-Path $PackageRoot $relative)){$exe=Join-Path $PackageRoot $relative;break}}
+    }
+    if(Test-Path -LiteralPath $exe -PathType Leaf){$resolved[$exeName.ToLowerInvariant()]=$exe}
+    $originalAlut=Join-Path $RedistRoot 'PenumbraVR_alut_original.dll'
+    if($Game -ne 'overture' -and (Test-Path -LiteralPath $originalAlut -PathType Leaf)){$resolved['original-alut.dll']=$originalAlut}
+    $queue=[Collections.Generic.Queue[string]]::new()
+    foreach($path in $resolved.Values){$queue.Enqueue($path)}
+    $seen=@{};$reported=@{}
+    $osNames=@('kernel32.dll','user32.dll','gdi32.dll','advapi32.dll','shell32.dll','ole32.dll','oleaut32.dll','comdlg32.dll','comctl32.dll','winmm.dll','msvcrt.dll','opengl32.dll','glu32.dll','ws2_32.dll','wsock32.dll','version.dll','dsound.dll','msacm32.dll','imm32.dll','setupapi.dll','winspool.drv','shlwapi.dll','rpcrt4.dll','ntdll.dll','crypt32.dll','bcrypt.dll','bcryptprimitives.dll','winhttp.dll','dwmapi.dll','uxtheme.dll','secur32.dll','iphlpapi.dll','powrprof.dll','cfgmgr32.dll','avrt.dll','hid.dll','psapi.dll','dbghelp.dll','ucrtbase.dll')
+    while($queue.Count){
+        $path=$queue.Dequeue();if($seen.ContainsKey($path)){continue};$seen[$path]=$true
+        if($seen.Count -gt 128){New-PvrCheck 'Import closure' 'invalid' 'More than 128 dependency files.';break}
+        try{$peInfo=Get-PvrPeInfo $path}catch{New-PvrCheck ('Import closure '+(Split-Path -Leaf $path)) 'invalid' 'Cannot inspect dependency.';continue}
+        foreach($name in @($peInfo.Imports)+@($peInfo.DelayImports)){
+            $key=$name.ToLowerInvariant();if($reported.ContainsKey($key)){continue};$reported[$key]=$true
+            if($key -in $osNames -or $key -match '^(api|ext)-ms-'){
+                $systemDir=if([Environment]::Is64BitOperatingSystem){Join-Path $env:WINDIR 'SysWOW64'}else{Join-Path $env:WINDIR 'System32'}
+                $osPath=Join-Path $systemDir $(if($key -match '^(api|ext)-ms-'){'ucrtbase.dll'}else{$name})
+                New-PvrCheck ('Windows API '+$name) $(if(Test-Path -LiteralPath $osPath -PathType Leaf){'present'}else{'missing'}) 'Windows x86 system component' 'Use supported Windows 10/11 and repair Windows components; never copy system DLLs into the game.'
+                continue
+            }
+            $child=if($resolved.ContainsKey($key)){$resolved[$key]}else{Join-Path $RedistRoot $name}
+            $status='missing'
+            if(Test-Path -LiteralPath $child -PathType Leaf){try{$childInfo=Get-PvrPeInfo $child;$status=if($childInfo.Architecture -eq 'x86'){'present'}else{'invalid'}}catch{$status='invalid'}}
+            New-PvrCheck ('Import '+$name) $status ('Required by '+(Split-Path -Leaf $path)) 'Verify game files in Steam or repair the pinned installer payload; do not download individual DLLs.'
+            if($status -eq 'present'){$queue.Enqueue($child)}
+        }
     }
     if (-not $SkipSteamVr) {
         if (-not $OpenVrPathsPath) { $OpenVrPathsPath=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'openvr/openvrpaths.vrpath' }

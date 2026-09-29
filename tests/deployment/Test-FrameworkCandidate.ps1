@@ -74,11 +74,16 @@ try {
     Copy-Item -LiteralPath $BlackPlagueExe -Destination $blackPlagueGame
     Copy-Item -LiteralPath $RequiemExe -Destination $requiemGame
     Copy-Item -LiteralPath $RetailAlut -Destination $alut
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $overtureRedist -Games overture
+    & (Join-Path $PSScriptRoot 'New-GameContentFixture.ps1') -Root $blackPlagueRedist
+    $vrpath=Join-Path $temporaryRoot 'openvrpaths.vrpath'
+    & (Join-Path $PSScriptRoot 'New-GameRuntimeFixture.ps1') -Root $overtureRedist -Game overture -OpenVrPathsPath $vrpath
+    & (Join-Path $PSScriptRoot 'New-GameRuntimeFixture.ps1') -Root $blackPlagueRedist -Game black_plague
     Copy-Item -LiteralPath (Join-Path $repoRoot 'products/overture/data/config/English.lang') -Destination (Join-Path $overtureRedist 'config/English.lang')
     $overtureOriginal = (Get-FileHash -LiteralPath $overtureGame -Algorithm SHA256).Hash
     $alutOriginal = (Get-FileHash -LiteralPath $alut -Algorithm SHA256).Hash
     $logPath = Join-Path $temporaryRoot 'installer.jsonl'
-    $logArgs = @{ LogPath = $logPath }
+    $logArgs = @{ LogPath = $logPath;OpenVrPathsPath=$vrpath }
 
     $guiRows = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $gui -SmokeTest -SteamRoot $steam)
     if ($LASTEXITCODE -ne 0 -or $guiRows -notcontains 'Overture' -or
@@ -87,6 +92,15 @@ try {
     }
     & $installer -SteamRoot $steam -List 6>$null | Out-Null
     if (Test-Path -LiteralPath $logPath) { throw 'Read-only discovery created an installer log.' }
+    $codec=Join-Path $overtureRedist 'libpng12.dll'
+    $codecBytes=[IO.File]::ReadAllBytes($codec)
+    Remove-Item -LiteralPath $codec
+    $rejectedPreflight=$false
+    try{& $installer -SteamRoot $steam -Selections 1,2,3 @logArgs 6>$null | Out-Null}catch{$rejectedPreflight=$_.Exception.Message -like '*Preflight failed; no selected root was changed*'}
+    if(-not $rejectedPreflight -or (Test-Path (Join-Path $blackPlagueRedist 'PenumbraVR.BlackPlague.install.json')) -or (Test-Path (Join-Path (Split-Path -Parent $overtureRedist) '.penumbravr'))){throw 'A later root failed preflight after an earlier root was changed.'}
+    [IO.File]::WriteAllBytes($codec,$codecBytes)
+    $plans=@(& $installer -SteamRoot $steam -Selections 1,2,3 -Plan @logArgs 6>$null)
+    if($plans.Count -ne 2 -or @($plans | Where-Object {-not $_.PreflightPassed}).Count -or (Test-Path $logPath)){throw 'Read-only plan failed to deduplicate roots or changed state.'}
     & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame @logArgs 6>$null | Out-Null
     $requiemProbe = Join-Path $blackPlagueRedist 'PenumbraVR.Requiem.Probe.dll'
     if (-not (Test-Path -LiteralPath $requiemProbe)) {
@@ -97,6 +111,7 @@ try {
     if (Test-Path -LiteralPath $requiemProbe) {
         throw 'Requiem selection did not restore the shared redist transaction.'
     }
+    & $installer -Game BlackPlague -GamePath $blackPlagueGame -Restore @logArgs 6>$null | Out-Null
     $rejected = $false
     try { & $installer -SteamRoot $steam -Game Overture -GamePath $overtureGame -LargeAddressAware 6>$null | Out-Null }
     catch { $rejected = $_.Exception.Message -like '*LAA transform option applies only*' }
@@ -132,6 +147,13 @@ try {
     }
     $bpProbe = Join-Path $blackPlagueRedist 'PenumbraVR.BlackPlague.Probe.dll'
     $bpProbeHash = (Get-FileHash -LiteralPath $bpProbe -Algorithm SHA256).Hash
+    $codec=Join-Path $blackPlagueRedist 'libpng12.dll'
+    $codecBytes=[IO.File]::ReadAllBytes($codec)
+    Remove-Item -LiteralPath $codec
+    $rejectedRepair=$false
+    try {& $installer -Game BlackPlague -GamePath $blackPlagueRedist -Repair -Plan @logArgs 6>$null | Out-Null}catch{$rejectedRepair=$true}
+    if(-not $rejectedRepair -or (Get-FileHash $bpProbe).Hash -ne $bpProbeHash){throw 'Repair preflight accepted missing game runtime or changed payload.'}
+    [IO.File]::WriteAllBytes($codec,$codecBytes)
     [System.IO.File]::WriteAllText($bpProbe, 'damaged managed probe')
     Remove-Item -LiteralPath (Join-Path $blackPlagueRedist 'vr/bindings/vive_controller.json')
     [System.IO.File]::WriteAllText((Join-Path $blackPlagueRedist 'vr/bindings/psvr2_sense.json'), 'damaged managed binding')

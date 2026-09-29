@@ -6,7 +6,12 @@ param(
     [switch]$LargeAddressAware,
     [switch]$Restore,
     [switch]$Recover,
-    [switch]$Repair
+    [switch]$Repair,
+    [ValidateSet('Auto','Enable','Disable')][string]$RequiemMode='Auto',
+    [switch]$CommunityTranslations,
+    [switch]$Preflight,
+    [switch]$RecommendedSettings,
+    [ValidateSet('DefaultFiles','DefaultAndUserFiles')][string]$SettingsScope='DefaultAndUserFiles'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -88,6 +93,13 @@ $RequiemGamePath = Join-Path $GameRoot 'Requiem.exe'
 $RequiemProbePath = Get-DeploymentDestination 'requiem_probe' $GameRoot
 $RequiemLocalizationPath = Get-DeploymentDestination 'requiem_spanish_localization' $GameRoot
 $RequiemLocalizationBackupPath = Join-Path $GameRoot 'PenumbraVR_Espanol_exp_original.lang'
+$OpenAlPath = Join-Path $GameRoot 'OpenAL32.dll'
+$OriginalOpenAlPath = Join-Path $GameRoot 'PenumbraVR_OpenAL_original.dll'
+$OpenAlHash = '606CF8B4C22C7AE00813585279AC045115907BC66D1483EB26355907021EA4B0'
+Import-Module (Join-Path $PSScriptRoot 'PenumbraVrConfiguration.psm1') -Force
+$ConfigurationPaths=@(Get-PvrConfigurationPaths -Game black_plague -RedistRoot $GameRoot)+@(Get-PvrConfigurationPaths -Game requiem -RedistRoot $GameRoot)
+$PersonalConfigurationPaths=@($ConfigurationPaths | Where-Object {-not $_.StartsWith($GameRoot.TrimEnd('\')+'\',[StringComparison]::OrdinalIgnoreCase)})
+$ActiveConfigurationPaths=@()
 
 function Get-Sha256([string]$Path) {
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return $null }
@@ -177,10 +189,15 @@ function Assert-SupportedGame {
 # Requiem shares the native ALUT loader and OpenVR action directory with BP.
 # When present, its exact executable must be recognized before the joint
 # transaction writes either game's files.
-$InstallRequiem = Test-Path -LiteralPath $RequiemGamePath -PathType Leaf
-if ($InstallRequiem -and
+$InstallRequiem = $RequiemMode -eq 'Enable' -or ($RequiemMode -eq 'Auto' -and (Test-Path -LiteralPath $RequiemGamePath -PathType Leaf))
+if (-not $Restore -and -not $Recover -and -not $Repair -and $InstallRequiem -and
     $ExpectedRequiemHashes -notcontains (Get-Sha256 $RequiemGamePath)) {
     throw "Unsupported Requiem executable SHA-256: $(Get-Sha256 $RequiemGamePath)"
+}
+if(-not $Restore -and -not $Recover -and -not $Repair -and $InstallRequiem) {
+    Import-Module (Join-Path $PSScriptRoot 'PenumbraVrPrerequisites.psm1') -Force
+    $missing=@(Test-PvrGameContent -Game requiem -RedistRoot $GameRoot | Where-Object {$_.Status -ne 'present'})
+    if($missing.Count) { throw "Requiem data is incomplete: $($missing.Name -join ', '). Verify the expansion in Steam." }
 }
 
 $ManagedTransactionPaths = @(
@@ -189,14 +206,14 @@ $ManagedTransactionPaths = @(
     $HandTexturePath, $LocalizationPath, $LocalizationBackupPath,
     $AudioConfigPath, $InstallStatePath,
     $RequiemProbePath, $RequiemLocalizationPath,
-    $RequiemLocalizationBackupPath
-)
+    $RequiemLocalizationBackupPath, $OpenAlPath, $OriginalOpenAlPath
+) + $ConfigurationPaths
 
 function Assert-ManagedTransactionPath([string]$path) {
     $target = [System.IO.Path]::GetFullPath($path)
     $game = [System.IO.Path]::GetFullPath($GameRoot).TrimEnd('\')
     $prefix = $game + '\'
-    if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase)) {
+    if (-not $target.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -and $target -notin $PersonalConfigurationPaths) {
         throw "Managed deployment path escapes game root: $target"
     }
     $rootItem = Get-Item -LiteralPath $game -Force -ErrorAction SilentlyContinue
@@ -226,11 +243,11 @@ function New-DeploymentSnapshot {
         for ($i = 0; $i -lt $ManagedTransactionPaths.Count; $i++) {
             $target = Assert-ManagedTransactionPath $ManagedTransactionPaths[$i]
             $item = Get-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
-            $kind = if ($null -eq $item) { 'absent' } elseif ($item.PSIsContainer) { 'directory' } else { 'file' }
+            $kind = if ($target -in $ConfigurationPaths -and $target -notin $ActiveConfigurationPaths) {'untouched'} elseif ($null -eq $item) { 'absent' } elseif ($item.PSIsContainer) { 'directory' } else { 'file' }
             $copy = Join-Path $staging ("item-$i")
             $snapshotHash = $null
             $snapshotDirectory = $null
-            if ($kind -ne 'absent') {
+            if ($kind -notin @('absent','untouched')) {
                 Copy-Item -LiteralPath $target -Destination $copy -Recurse -Force
                 if ($kind -eq 'file') { $snapshotHash = Get-Sha256 $copy }
                 if ($kind -eq 'file' -and (Get-Sha256 $target) -ne $snapshotHash) {
@@ -282,8 +299,7 @@ function Read-DeploymentSnapshot {
     $entries = @($record.Entries)
     # Journals created by the earlier BP-only installer contain the original
     # 12 paths. Their recovery remains valid after adding the shared product.
-    if ($entries.Count -notin @($ManagedTransactionPaths.Count,
-                                 ($ManagedTransactionPaths.Count - 3))) {
+    if ($entries.Count -notin @(12,15,17,21)) {
         throw "Black Plague recovery journal has the wrong managed set: $manifest"
     }
     for ($i = 0; $i -lt $entries.Count; $i++) {
@@ -292,9 +308,11 @@ function Read-DeploymentSnapshot {
         $copy = Assert-ManagedTransactionPath ([string]$entry.Copy)
         if ($target -ine [System.IO.Path]::GetFullPath($ManagedTransactionPaths[$i]) -or
             $copy -ine (Join-Path $root ("item-$i")) -or
-            $entry.Kind -notin @('absent', 'file', 'directory')) {
+            $entry.Kind -notin @('absent', 'file', 'directory','untouched')) {
             throw "Invalid Black Plague recovery journal entry: $target"
         }
+        if($target -in $PersonalConfigurationPaths -and $entry.Kind -eq 'directory'){throw 'A settings recovery target cannot be a directory.'}
+        if($entry.Kind -eq 'untouched' -and $target -notin $ConfigurationPaths){throw 'Only inactive settings can be excluded from a recovery snapshot.'}
         if ($entry.Kind -eq 'file' -and
             ([string]$entry.SnapshotHash -notmatch '^[0-9A-Fa-f]{64}$' -or
              (Get-Sha256 $copy) -ne [string]$entry.SnapshotHash)) {
@@ -306,7 +324,7 @@ function Read-DeploymentSnapshot {
                 ($entry.SnapshotDirectory | ConvertTo-Json -Depth 5 -Compress))) {
             throw "Black Plague recovery directory failed verification: $copy"
         }
-        if ($entry.Kind -eq 'absent' -and (Test-Path -LiteralPath $copy)) {
+        if ($entry.Kind -in @('absent','untouched') -and (Test-Path -LiteralPath $copy)) {
             throw "Unexpected Black Plague recovery copy: $copy"
         }
     }
@@ -326,6 +344,7 @@ function Complete-DeploymentSnapshot($Snapshot) {
 
 function Restore-DeploymentSnapshot($Snapshot) {
     foreach ($entry in @($Snapshot.Entries)) {
+        if($entry.Kind -eq 'untouched'){continue}
         $entry.Target = Assert-ManagedTransactionPath ([string]$entry.Target)
         $entry.Copy = Assert-ManagedTransactionPath ([string]$entry.Copy)
         $current = Get-Item -LiteralPath $entry.Target -Force -ErrorAction SilentlyContinue
@@ -394,13 +413,29 @@ $PreviousState = $null
 if (Test-Path -LiteralPath $InstallStatePath -PathType Leaf) {
     $PreviousState = Get-Content -LiteralPath $InstallStatePath -Raw | ConvertFrom-Json
 }
+if($PreviousState -and -not $Restore -and -not $Recover) {
+    if(-not $PSBoundParameters.ContainsKey('CommunityTranslations')) { $CommunityTranslations=[bool](Get-OptionalProperty $PreviousState 'spanishLocalizationSha256') }
+    if($Repair -and -not $PSBoundParameters.ContainsKey('RequiemMode')) { $InstallRequiem=[bool](Get-OptionalProperty $PreviousState 'requiemProbeSha256') }
+}
+$PreviousConfiguration=@(Get-OptionalProperty $PreviousState 'configuration' | Where-Object {$null -ne $_})
+if($Repair){
+    if($RequiemMode -ne 'Auto'){throw 'Repair preserves the recorded component set; use install/update to change Requiem selection.'}
+    $InstallRequiem=[bool](Get-OptionalProperty $PreviousState 'requiemProbeSha256')
+    if($InstallRequiem -and ($ExpectedRequiemHashes -notcontains (Get-Sha256 $RequiemGamePath) -or
+        (Get-Sha256 $RequiemGamePath) -ne [string](Get-OptionalProperty $PreviousState 'requiemExeSha256'))){
+        throw 'The managed Requiem executable is missing or changed. Verify expansion files in Steam before repair.'
+    }
+}
+foreach($gameId in @('black_plague','requiem')) {
+    Get-PvrConfigurationRecords -Game $gameId -RedistRoot $GameRoot -Previous @($PreviousConfiguration | Where-Object {$_.Game -eq $gameId}) | Out-Null
+}
 $RepairLaaExecutable = $Repair -and $PreviousState -and
     [bool](Get-OptionalProperty $PreviousState 'laaApplied') -and
     (Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1] -and
     (Get-OptionalProperty $PreviousState 'gameExeSha256') -eq $ExpectedGameHashes[1] -and
     (Get-OptionalProperty $PreviousState 'originalGameExeSha256') -eq $ExpectedGameHashes[0] -and
     (Get-Sha256 $OriginalGamePath) -eq $ExpectedGameHashes[0]
-if (-not $RepairLaaExecutable) { Assert-SupportedGame }
+if (-not $RepairLaaExecutable -and -not $Restore) { Assert-SupportedGame }
 
 if ($Restore) {
     if (-not (Test-Path -LiteralPath $OriginalAlutPath -PathType Leaf)) {
@@ -414,7 +449,8 @@ if ($Restore) {
     if (Test-Path -LiteralPath $InstallStatePath -PathType Leaf) {
         $state = Get-Content -LiteralPath $InstallStatePath -Raw | ConvertFrom-Json
         if ((Get-OptionalProperty $state 'schema') -ne 1 -or
-            (Get-OptionalProperty $state 'gameExeSha256') -ne (Get-Sha256 $GamePath)) {
+            (Get-OptionalProperty $state 'gameExeSha256') -notin $ExpectedGameHashes -or
+            ((Get-Sha256 $GamePath) -and (Get-OptionalProperty $state 'gameExeSha256') -ne (Get-Sha256 $GamePath))) {
             throw 'The Black Plague installation record does not match this game; restore aborted.'
         }
         if (-not (Get-OptionalProperty $state 'probeSha256') -or
@@ -422,10 +458,6 @@ if ($Restore) {
             throw 'The managed probe changed after installation; restore aborted.'
         }
         $managedRequiemHash = Get-OptionalProperty $state 'requiemProbeSha256'
-        if ($managedRequiemHash -and
-            (Get-Sha256 $RequiemGamePath) -ne [string](Get-OptionalProperty $state 'requiemExeSha256')) {
-            throw 'The managed Requiem executable changed; restore aborted.'
-        }
         if ($managedRequiemHash -and
             (Get-Sha256 $RequiemProbePath) -ne [string]$managedRequiemHash) {
             throw 'The managed Requiem probe changed after installation; restore aborted.'
@@ -471,7 +503,7 @@ if ($Restore) {
             throw 'The managed OpenAL configuration changed after installation; restore aborted.'
         }
         if ([bool](Get-OptionalProperty $state 'laaApplied')) {
-            if ((Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1] -or
+            if (((Get-Sha256 $GamePath) -and (Get-Sha256 $GamePath) -ne $ExpectedGameHashes[1]) -or
                 (Get-Sha256 $OriginalGamePath) -ne $ExpectedGameHashes[0]) {
                 throw 'The managed LAA executable or canonical backup changed; restore aborted.'
             }
@@ -482,10 +514,21 @@ if ($Restore) {
         throw 'No installation record exists; restore aborted.'
     }
 
+    $managedOpenAl=Get-OptionalProperty $state 'openAlSha256'
+    if($managedOpenAl -and (Get-Sha256 $OpenAlPath) -ne $managedOpenAl) { throw 'Managed OpenAL changed; repair before removal.' }
+    if([bool](Get-OptionalProperty $state 'openAlHadOriginal') -and (Get-Sha256 $OriginalOpenAlPath) -ne [string](Get-OptionalProperty $state 'originalOpenAlSha256')) { throw 'Original OpenAL backup failed verification.' }
+    foreach($plan in $PreviousConfiguration){Test-PvrConfigurationPlan -Plan $plan -Restore}
+    $ActiveConfigurationPaths=@($PreviousConfiguration | ForEach-Object {$_.Path})
+    if($Preflight) { [pscustomobject]@{Files=@($ManagedTransactionPaths | Where-Object {$_ -notin $ConfigurationPaths -or $_ -in $ActiveConfigurationPaths});Configuration=@($PreviousConfiguration);Operation='restore'}; return }
     $deploymentSnapshot = New-DeploymentSnapshot
     try {
+    foreach($plan in $PreviousConfiguration){Restore-PvrConfiguration -Plan $plan}
     Copy-Item -LiteralPath $OriginalAlutPath -Destination $AlutPath -Force
     Remove-Item -LiteralPath $OriginalAlutPath -Force
+    if($managedOpenAl) {
+        if([bool](Get-OptionalProperty $state 'openAlHadOriginal')) { Copy-Item -LiteralPath $OriginalOpenAlPath -Destination $OpenAlPath -Force; Remove-Item -LiteralPath $OriginalOpenAlPath -Force }
+        else { Remove-Item -LiteralPath $OpenAlPath -Force }
+    }
     foreach ($managedFile in @($ProbePath, $OpenVrPath, $HandTexturePath)) {
         if (Test-Path -LiteralPath $managedFile) {
             Remove-Item -LiteralPath $managedFile -Force
@@ -565,6 +608,8 @@ $VrAssetsSource = Get-DeploymentSource 'openvr_actions'
 $HandTextureSource = Get-DeploymentSource 'hand_texture'
 $LocalizationSource = Get-DeploymentSource 'spanish_localization'
 $RequiemLocalizationSource = Get-DeploymentSource 'requiem_spanish_localization'
+$OpenAlSource = Join-Path $RepoRoot 'products/overture/dependencies/bin/win32/OpenAL32.dll'
+if((Get-Sha256 $OpenAlSource) -ne $OpenAlHash) { throw 'Pinned OpenAL Soft payload is missing or invalid.' }
 
 foreach ($required in @($ProxySource, $ProbeSource, $OpenVrSource)) {
     if (-not (Test-Path -LiteralPath $required -PathType Leaf)) {
@@ -577,12 +622,12 @@ if (-not (Test-Path -LiteralPath $VrAssetsSource -PathType Container)) {
 if (-not (Test-Path -LiteralPath $HandTextureSource -PathType Leaf)) {
     throw "Rework hand texture not found: $HandTextureSource"
 }
-if (-not (Test-Path -LiteralPath $LocalizationSource -PathType Leaf)) {
+if ($CommunityTranslations -and -not (Test-Path -LiteralPath $LocalizationSource -PathType Leaf)) {
     throw "Spanish localization not found: $LocalizationSource"
 }
 if ($InstallRequiem -and
     (-not (Test-Path -LiteralPath $RequiemProbeSource -PathType Leaf) -or
-     -not (Test-Path -LiteralPath $RequiemLocalizationSource -PathType Leaf))) {
+     ($CommunityTranslations -and -not (Test-Path -LiteralPath $RequiemLocalizationSource -PathType Leaf)))) {
     throw 'Requiem probe or localization is missing from this package.'
 }
 
@@ -592,11 +637,7 @@ if ($PreviousState) {
     if ((Get-OptionalProperty $PreviousState 'schema') -ne 1) {
         throw 'Unsupported Black Plague installation record schema.'
     }
-    if ((Get-OptionalProperty $PreviousState 'requiemProbeSha256') -and
-        -not $InstallRequiem) {
-        throw 'The previously managed Requiem executable is missing; redeploy aborted.'
-    }
-    if ((Get-OptionalProperty $PreviousState 'requiemProbeSha256') -and
+    if ($InstallRequiem -and (Get-OptionalProperty $PreviousState 'requiemProbeSha256') -and
         (Get-Sha256 $RequiemGamePath) -ne
             [string](Get-OptionalProperty $PreviousState 'requiemExeSha256')) {
         throw 'The managed Requiem executable changed; redeploy aborted.'
@@ -608,7 +649,7 @@ if ($PreviousState) {
     }
     if ($Repair) {
         foreach ($name in @('installedProxySha256', 'probeSha256', 'openVrSha256',
-                            'handTextureSha256', 'spanishLocalizationSha256')) {
+                            'handTextureSha256')) {
             if ([string](Get-OptionalProperty $PreviousState $name) -notmatch '^[0-9A-Fa-f]{64}$') {
                 throw "Black Plague repair requires a recorded hash for $name."
             }
@@ -699,7 +740,7 @@ if ($previousLocalizationSha256) {
         }
     }
 } else {
-    $LocalizationHadOriginal = Test-Path -LiteralPath $LocalizationPath -PathType Leaf
+    $LocalizationHadOriginal = $CommunityTranslations -and (Test-Path -LiteralPath $LocalizationPath -PathType Leaf)
     if ($LocalizationHadOriginal) {
         if (Test-Path -LiteralPath $LocalizationBackupPath -PathType Leaf) {
             throw 'A Spanish localization backup exists without install state; redeploy aborted.'
@@ -711,7 +752,7 @@ if ($previousLocalizationSha256) {
 $RequiemLocalizationHadOriginal = $false
 $RequiemLocalizationOriginalSha256 = $null
 $previousRequiemLocalizationSha256 = Get-OptionalProperty $PreviousState 'requiemSpanishLocalizationSha256'
-if ($InstallRequiem) {
+    if ($InstallRequiem -and $CommunityTranslations) {
     if ($previousRequiemLocalizationSha256) {
         $RequiemLocalizationHadOriginal = [bool](Get-OptionalProperty $PreviousState 'requiemSpanishLocalizationHadOriginal')
         $RequiemLocalizationOriginalSha256 = [string](Get-OptionalProperty $PreviousState 'requiemSpanishLocalizationOriginalSha256')
@@ -744,8 +785,57 @@ $LaaTool = Join-Path $BuildRoot 'bin/Release/PenumbraVR.LaaTransform.exe'
 if (($ApplyLaa -or $RepairLaaExecutable) -and -not (Test-Path -LiteralPath $LaaTool -PathType Leaf)) {
     throw "LAA transform tool not found: $LaaTool"
 }
+$OpenAlHadOriginal = [bool](Get-OptionalProperty $PreviousState 'openAlHadOriginal')
+$OriginalOpenAlHash = Get-OptionalProperty $PreviousState 'originalOpenAlSha256'
+if(Get-OptionalProperty $PreviousState 'openAlSha256') {
+    if(-not $Repair -and (Get-Sha256 $OpenAlPath) -ne [string]$PreviousState.openAlSha256) { throw 'Managed OpenAL changed; redeploy aborted.' }
+    if($OpenAlHadOriginal -and (Get-Sha256 $OriginalOpenAlPath) -ne $OriginalOpenAlHash) { throw 'Original OpenAL backup failed verification.' }
+} else {
+    if(Test-Path -LiteralPath $OriginalOpenAlPath) { throw 'Unowned OpenAL backup exists.' }
+    $OriginalOpenAlHash=Get-Sha256 $OpenAlPath
+    if($OriginalOpenAlHash -and $OriginalOpenAlHash -ne $OpenAlHash) { throw 'Unknown existing OpenAL DLL; no files changed. Move or remove that modification explicitly before installing.' }
+    $OpenAlHadOriginal=[bool]$OriginalOpenAlHash
+}
+if($PreviousState) {
+    if((Get-Sha256 $OriginalAlutPath) -ne $ExpectedOriginalAlutHash) { throw 'Original ALUT backup failed verification.' }
+} elseif((Get-Sha256 $AlutPath) -ne $ExpectedOriginalAlutHash -or (Test-Path -LiteralPath $OriginalAlutPath)) { throw 'Unknown ALUT or unowned backup; no files changed.' }
+foreach($pair in @(@($LocalizationBackupPath,'spanishLocalizationOriginalSha256'),@($RequiemLocalizationBackupPath,'requiemSpanishLocalizationOriginalSha256'))) {
+    $recorded=Get-OptionalProperty $PreviousState $pair[1]
+    if($recorded -and (Get-Sha256 $pair[0]) -ne $recorded) { throw 'Optional localization backup failed verification.' }
+}
+$Configuration=@()
+$ConfigurationToRestore=@()
+foreach($gameId in @('black_plague','requiem')) {
+    $previous=@($PreviousConfiguration | Where-Object {$_.Game -eq $gameId})
+    if($gameId -eq 'requiem' -and -not $InstallRequiem){$ConfigurationToRestore+=$previous;continue}
+    $records=@(Get-PvrConfigurationRecords -Game $gameId -RedistRoot $GameRoot -Previous $previous -Apply:$RecommendedSettings -SettingsScope $SettingsScope)
+    $Configuration+=$records
+}
+foreach($path in $ManagedTransactionPaths){Assert-ManagedTransactionPath $path | Out-Null}
+foreach($plan in $ConfigurationToRestore){Test-PvrConfigurationPlan -Plan $plan -Restore}
+if($RecommendedSettings){foreach($plan in $Configuration){Test-PvrConfigurationPlan -Plan $plan}}
+$ActiveConfigurationPaths=@($ConfigurationToRestore | ForEach-Object {$_.Path})+@(if($RecommendedSettings){$Configuration | ForEach-Object {$_.Path}})
+if($Preflight) {
+    [pscustomobject]@{Components=@('shared','black_plague')+@(if($InstallRequiem){'requiem'})+@(if($CommunityTranslations){'spanish_translation'});Files=@($AlutPath,$ProbePath,$OpenAlPath,$OpenVrPath,$VrAssetsPath,$HandTexturePath)+@(if($InstallRequiem){$RequiemProbePath})+@(if($CommunityTranslations){$LocalizationPath})+@(if($CommunityTranslations -and $InstallRequiem){$RequiemLocalizationPath});Configuration=@($Configuration);RetiredConfiguration=@($ConfigurationToRestore);Operation=$(if($Repair){'repair'}else{'install'})}
+    return
+}
 $deploymentSnapshot = New-DeploymentSnapshot
 try {
+foreach($plan in $ConfigurationToRestore){Restore-PvrConfiguration -Plan $plan}
+if($RecommendedSettings){foreach($plan in $Configuration){Set-PvrConfiguration -Plan $plan}}
+if($OpenAlHadOriginal -and -not (Get-OptionalProperty $PreviousState 'openAlSha256')) { Copy-Item -LiteralPath $OpenAlPath -Destination $OriginalOpenAlPath }
+Copy-Item -LiteralPath $OpenAlSource -Destination $OpenAlPath -Force
+if((Get-Sha256 $OpenAlPath) -ne $OpenAlHash) { throw 'Installed OpenAL failed verification.' }
+if(-not $InstallRequiem -and (Get-OptionalProperty $PreviousState 'requiemProbeSha256')) { Remove-Item -LiteralPath $RequiemProbePath -Force }
+foreach($selection in @(
+    @($CommunityTranslations,$LocalizationPath,$LocalizationBackupPath,'spanishLocalizationSha256','spanishLocalizationHadOriginal'),
+    @(($CommunityTranslations -and $InstallRequiem),$RequiemLocalizationPath,$RequiemLocalizationBackupPath,'requiemSpanishLocalizationSha256','requiemSpanishLocalizationHadOriginal')
+)) {
+    if(-not $selection[0] -and (Get-OptionalProperty $PreviousState $selection[3])) {
+        if([bool](Get-OptionalProperty $PreviousState $selection[4])) { Copy-Item -LiteralPath $selection[2] -Destination $selection[1] -Force; Remove-Item -LiteralPath $selection[2] -Force }
+        else { Remove-Item -LiteralPath $selection[1] -Force }
+    }
+}
 if ($RepairLaaExecutable) {
     $preparedLaa = Join-Path $deploymentSnapshot.Root 'prepared-laa.exe'
     & $LaaTool $OriginalGamePath $preparedLaa | Out-Null
@@ -800,13 +890,15 @@ Copy-Item -LiteralPath $VrAssetsSource -Destination $VrAssetsPath -Recurse
 New-Item -ItemType Directory -Path $HandAssetsPath -Force | Out-Null
 Copy-Item -LiteralPath $HandTextureSource -Destination $HandTexturePath -Force
 
+if($CommunityTranslations) {
 if ($LocalizationHadOriginal -and -not $previousLocalizationSha256) {
     Copy-Item -LiteralPath $LocalizationPath -Destination $LocalizationBackupPath
 }
 $LocalizationDirectory = Split-Path -Parent $LocalizationPath
 New-Item -ItemType Directory -Path $LocalizationDirectory -Force | Out-Null
 Copy-Item -LiteralPath $LocalizationSource -Destination $LocalizationPath -Force
-if ($InstallRequiem) {
+}
+if ($InstallRequiem -and $CommunityTranslations) {
     if ($RequiemLocalizationHadOriginal -and -not $previousRequiemLocalizationSha256) {
         Copy-Item -LiteralPath $RequiemLocalizationPath -Destination $RequiemLocalizationBackupPath
     }
@@ -830,18 +922,14 @@ foreach ($copy in @(
     @($ProxySource, $AlutPath),
     @($ProbeSource, $ProbePath),
     @($OpenVrSource, $OpenVrPath),
-    @($HandTextureSource, $HandTexturePath),
-    @($LocalizationSource, $LocalizationPath)
+    @($HandTextureSource, $HandTexturePath)
 )) {
     if ((Get-Sha256 $copy[0]) -ne (Get-Sha256 $copy[1])) {
         throw "Deployment verification failed for '$($copy[1])'."
     }
 }
 if ($InstallRequiem) {
-    foreach ($copy in @(
-        @($RequiemProbeSource, $RequiemProbePath),
-        @($RequiemLocalizationSource, $RequiemLocalizationPath)
-    )) {
+    foreach ($copy in @(@($RequiemProbeSource, $RequiemProbePath))) {
         if ((Get-Sha256 $copy[0]) -ne (Get-Sha256 $copy[1])) {
             throw "Deployment verification failed for '$($copy[1])'."
         }
@@ -864,6 +952,12 @@ foreach ($sourceVrFile in $sourceVrFiles) {
 
 $state = [ordered]@{
     schema = 1
+    frameworkVersion = (Get-Content -LiteralPath (Join-Path $RepoRoot 'release.json') -Raw | ConvertFrom-Json).version
+    components = @('shared','black_plague') + @(if($InstallRequiem){'requiem'}) + @(if($CommunityTranslations){'spanish_translation'})
+    configuration = @($Configuration)
+    openAlSha256 = Get-Sha256 $OpenAlPath
+    openAlHadOriginal = $OpenAlHadOriginal
+    originalOpenAlSha256 = $OriginalOpenAlHash
     gameExeSha256 = Get-Sha256 $GamePath
     laaApplied = ($PreviousLaaApplied -or $ApplyLaa)
     originalGameExeSha256 = if ($PreviousLaaApplied -or $ApplyLaa) {
@@ -877,12 +971,12 @@ $state = [ordered]@{
     openVrSha256 = Get-Sha256 $OpenVrPath
     vrAssetsSnapshot = Get-DirectorySnapshot $VrAssetsPath
     handTextureSha256 = Get-Sha256 $HandTexturePath
-    spanishLocalizationSha256 = Get-Sha256 $LocalizationPath
-    spanishLocalizationHadOriginal = $LocalizationHadOriginal
-    spanishLocalizationOriginalSha256 = $LocalizationOriginalSha256
-    requiemSpanishLocalizationSha256 = if ($InstallRequiem) { Get-Sha256 $RequiemLocalizationPath } else { $null }
-    requiemSpanishLocalizationHadOriginal = if ($InstallRequiem) { $RequiemLocalizationHadOriginal } else { $false }
-    requiemSpanishLocalizationOriginalSha256 = if ($InstallRequiem) { $RequiemLocalizationOriginalSha256 } else { $null }
+    spanishLocalizationSha256 = if($CommunityTranslations){ Get-Sha256 $LocalizationPath }else{$null}
+    spanishLocalizationHadOriginal = $CommunityTranslations -and $LocalizationHadOriginal
+    spanishLocalizationOriginalSha256 = if($CommunityTranslations){$LocalizationOriginalSha256}else{$null}
+    requiemSpanishLocalizationSha256 = if ($InstallRequiem -and $CommunityTranslations) { Get-Sha256 $RequiemLocalizationPath } else { $null }
+    requiemSpanishLocalizationHadOriginal = $InstallRequiem -and $CommunityTranslations -and $RequiemLocalizationHadOriginal
+    requiemSpanishLocalizationOriginalSha256 = if ($InstallRequiem -and $CommunityTranslations) { $RequiemLocalizationOriginalSha256 } else { $null }
     audioConfigCreated = $AudioConfigCreated
     audioConfigSha256 = if ($AudioConfigCreated) { Get-Sha256 $AudioConfigPath } else { $null }
 }

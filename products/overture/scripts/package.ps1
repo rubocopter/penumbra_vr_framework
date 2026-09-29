@@ -82,6 +82,11 @@ if (Test-Path -LiteralPath $packageRoot) {
 New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
 
 Copy-Item -LiteralPath $executablePath -Destination $packageRoot
+Copy-Item -LiteralPath (Join-Path $frameworkRoot 'release.json') -Destination $packageRoot
+New-Item -ItemType Directory -Path (Join-Path $packageRoot 'tools'),(Join-Path $packageRoot 'assets/settings'),(Join-Path $packageRoot 'assets/deployment') -Force | Out-Null
+foreach($module in @('PenumbraVrConfiguration.psm1','PenumbraVrPrerequisites.psm1')) { Copy-Item -LiteralPath (Join-Path $frameworkRoot "tools/$module") -Destination (Join-Path $packageRoot 'tools') }
+Copy-Item -LiteralPath (Join-Path $frameworkRoot 'assets/settings/installer-game-profile.json') -Destination (Join-Path $packageRoot 'assets/settings')
+Copy-Item -LiteralPath (Join-Path $frameworkRoot 'assets/deployment/prerequisites.json') -Destination (Join-Path $packageRoot 'assets/deployment')
 Copy-Item -LiteralPath (Join-Path $repositoryRoot 'dependencies\openvr-2.15.6\bin\win32\openvr_api.dll') -Destination $packageRoot
 # App-local OpenAL Soft: guarantees EFX (filters/reverb) and HRTF support on
 # every machine regardless of which legacy OpenAL runtime is installed. The

@@ -11,7 +11,8 @@ param(
 
     [switch]$NoSteamLauncher,
 
-    [switch]$Full
+    [switch]$Full,
+    [string]$RuntimeDirectory
 )
 
 Set-StrictMode -Version Latest
@@ -34,5 +35,6 @@ foreach ($switchName in @('Package', 'Deploy', 'NoSteamLauncher', 'Full')) {
 if ($PSBoundParameters.ContainsKey('InstallRoot')) {
     $arguments.InstallRoot = $InstallRoot
 }
+if($RuntimeDirectory){$arguments.RuntimeDirectory=$RuntimeDirectory}
 
 & $productBuild @arguments

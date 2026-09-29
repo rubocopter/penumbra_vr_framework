@@ -893,10 +893,10 @@ foreach ($defaultBinding in $actionManifest.default_bindings) {
 $initText = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\Init.h')
 $readmeText = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'readme.md')
 $releaseHistoryText = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'docs\RELEASES.md')
-if ($initText -notmatch '#define\s+PENUMBRA_VR_VERSION\s+"([^"]+)"') {
+if ($initText -notmatch '#define\s+PENUMBRA_VR_VERSION\s+PVR_VERSION_TEXT' -or $initText -notmatch '#include "pvr_version.hpp"') {
     throw 'PENUMBRA_VR_VERSION is missing from PenumbraOverture\Init.h.'
 }
-$releaseVersion = $Matches[1]
+$releaseVersion = 'v'+(Get-Content -LiteralPath (Join-Path $frameworkRoot 'release.json') -Raw | ConvertFrom-Json).version
 if ($readmeText -notmatch [regex]::Escape("current release: **$releaseVersion**")) {
     throw "README current release does not match $releaseVersion."
 }
