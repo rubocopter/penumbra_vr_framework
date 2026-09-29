@@ -5,15 +5,14 @@ This file owns the current work order. Capability state lives in
 `SUPPORTED_BUILDS.md`, and stable ownership rules in `ARCHITECTURE.md` and
 `DESIGN_DECISIONS.md`.
 
-## Current priority — v1.0 release engineering
+## Current priority — post-v1.0 validation and maintenance
 
-The current user request accepts gameplay as the working baseline and promotes
-unified installation, dependencies, packaging and clean-user validation to the
-active work order. Use `CLOSURE_STATUS.md` for the finite release gate,
+Framework v1.0.0 is published. Use `CLOSURE_STATUS.md` for the release evidence
+and remaining deployment-validation matrix,
 `RUNTIME_DEPENDENCIES.md` for deployment dependencies and
-`RELEASE_PREPARATION_AUDIT.md` for the inspected installer baseline. The proposed
-installer extension is implemented in `INSTALLER_DESIGN.md`; current-candidate
-clean-machine/headset acceptance and public-publication review remain pending.
+`RELEASE_PREPARATION_AUDIT.md` for the inspected installer baseline. The unified
+installer contract is implemented in `INSTALLER_DESIGN.md`; independent clean-PC,
+broader headset and non-Sense controller coverage remain post-release work.
 
 The runtime milestones below retain their evidence but non-blocking polish,
 broader parity and optional improvements do not displace this release task.
@@ -120,7 +119,7 @@ crouch/body contact together; the cause is not yet established.
 ### Black Plague
 
 - [ ] Revalidate continuous presentation, focus/Alt+Tab, mirror and map
-  transitions on the current candidate.
+  transitions on the current release.
 - [ ] Revalidate wall/tunnel pressure, mixed stick + room-scale contact, Hybrid
   crouch recovery and accepted-motion footsteps. A new headset run reproduces
   vertical mini-hops in a ventilation duct while in contact with its walls.
@@ -156,8 +155,8 @@ The repeatable Black Plague hardware procedure is in
 
 The user requested this work alongside the remaining runtime gates. The
 shared Black Plague/Requiem redist transaction, combined selector and graphical
-front end have host evidence. The candidate remains a prototype; broader runtime
-regression, production UI acceptance and release audit are still separate gates.
+front end are shipped in v1.0.0. Broader runtime regression and hardware breadth
+remain separate evidence tracks.
 
 - [x] Host-test the shared Black Plague/Requiem deployment transaction,
   three-game selector and Overture ownership/upgrade integration.
@@ -166,21 +165,26 @@ regression, production UI acceptance and release audit are still separate gates.
   Overture and the shared root, including the verified BP LAA transform.
 - [x] Package and verify all eight controller defaults for each root and both
   Spanish localizations under the shared transaction.
-- [ ] Finish production OpenVR registration/versioning/rollback and optional
-  recommended settings. Preserve user calibration and custom bindings.
-- [ ] Complete redistribution license audit and clean-user acceptance of
-  install, upgrade, repair, interrupted-operation recovery and exact restore.
+- [x] Finish production versioning/rollback, dependency verification and optional
+  recommended settings while preserving user calibration and custom bindings.
+- [x] Complete the release provenance/source-notice audit and maintainer
+  install/update/repair/uninstall acceptance. Independent clean-PC breadth remains
+  tracked separately.
 - [x] Provide and host-test the graphical launcher with a hidden PowerShell
   console, exact-build detection, manual folders, install, repair and uninstall.
   Packaged discovery includes pristine and managed Overture and the shared BP/
-  Requiem root. Final user acceptance remains part of the release gate.
+  Requiem root. The published EXE has maintainer real-install acceptance.
 
 ## Hito 5 — release
 
-- [ ] Run the final automated suite and the required headset/controller matrix.
-- [ ] Produce a reproducible release candidate from a clean checkout.
-- [ ] Update the landing page, known issues and support table to match only the
+- [x] Run final automated release verification for the published artifact/tree.
+- [x] Produce the versioned v1.0.0 installer/source/checksum/report artifact set
+  from a clean committed checkout and promote the tested EXE unchanged.
+- [x] Update the landing page, known issues and support table to match the
   evidence actually obtained.
+- [x] Publish `v1.0.0` and the matching release artifacts.
+- [ ] Extend independent clean-PC, headset and non-Sense controller coverage
+  after release without retroactively inflating v1.0 evidence.
 
 Exit criterion: one package safely handles any supported combination of the
 three games and restores original installations exactly.

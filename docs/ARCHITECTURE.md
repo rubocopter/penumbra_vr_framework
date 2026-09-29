@@ -168,7 +168,7 @@ Shared policy provides:
 Black Plague owns the exact body/collision boundary, native step behavior,
 movement-state restrictions and player lifecycle checks. Physical HMD motion
 must never credit lateral/backward collision correction as accepted head motion;
-the current candidate projects actual body motion onto the requested physical
+the current release projects actual body motion onto the requested physical
 direction and clamps it to the request length.
 
 ### Hands and interaction
@@ -197,7 +197,7 @@ through the verified Options UI boundary. Input/presentation settings that are
 safe to refresh apply live; render-scale/audio startup settings keep their
 restart semantics.
 
-Inventory/notebook activation reuses mapped native actions. The current candidate
+Inventory/notebook activation reuses mapped native actions. The current release
 keeps drag, default-use and contextual item actions distinct at their verified
 native query boundaries, and redirects the native `UseItem=4` pick through the
 active controller aim while preserving the game's red/green usability result.

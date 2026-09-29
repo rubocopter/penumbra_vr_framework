@@ -1,6 +1,6 @@
 # Controls
 
-This is the Framework quick reference for the bundled right-handed PS VR2 Sense layout. The action maps are included in all three games, but their presence does not establish that every game/action has passed current-candidate headset regression. The [trilogy ledger](TRILOGY_PARITY_PLAN.md) owns those validation states.
+This is the Framework quick reference for the bundled right-handed PS VR2 Sense layout. The action maps are included in all three games, but their presence does not establish that every game/action has passed current-release headset regression. The [trilogy ledger](TRILOGY_PARITY_PLAN.md) owns those validation states.
 
 ## PS VR2 Sense
 

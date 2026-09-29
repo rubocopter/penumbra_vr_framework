@@ -10,7 +10,7 @@ release.
 | --- | --- | --- | --- |
 | Overture retail baseline | x86 | `95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448` | Recognized retail baseline only |
 | Overture VR Rework v0.1.0 | x86, LAA | `A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71` | Proven historical/public Rework reference |
-| Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Initial Framework headset regression pass; no public Framework release |
+| Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Included in public Framework v1.0.0; earlier headset regression plus v1.0 maintainer install/game-entry acceptance |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
 | Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative interaction, first transition, portal refraction and final flashlight alignment headset-validated; broader regression open |
@@ -27,10 +27,10 @@ Use these states consistently:
 
 Current product-level evidence:
 
-- **Overture:** Rework v0.1.0 remains the proven public reference. The
-  Framework-owned product builds and deploys autonomously and has an earlier
-  functional headset/controller regression pass, but the current Framework
-  candidate needs a new regression before release.
+- **Overture:** Rework v0.1.0 remains the proven behavioral reference. The
+  Framework-owned product builds and deploys autonomously, has an earlier
+  functional headset/controller regression pass, and is included in public
+  Framework v1.0.0. Broader current-build headset regression remains follow-up.
 - **Black Plague:** tracked stereo, head/camera tracking and several body/input
   paths have real headset evidence; the managed Steam bootstrap has reached
   gameplay VR from Steam **Play**. Later host-tested changes still require the
@@ -47,7 +47,7 @@ Current product-level evidence:
   The exact-build refraction-copy correction removed the portal's large
   rectangular/striped artifact with Refractions enabled in a headset clip;
   runtime telemetry confirmed the full-eye copy path and about 90 FPS, and HPL
-  logged a successful exit on that candidate. Subtle motion ghosting remains
+  logged a successful exit on that tested build. Subtle motion ghosting remains
   unclassified. Stacked `Grab=6` blocks could shift during climbing and
   monolith turning felt resistant. Flashlight, glowstick and flare now stay
   with the visible hand during stick locomotion in a headset clip; the matching
@@ -61,8 +61,9 @@ Current product-level evidence:
   progression still need independent headset evidence. The representative
   interaction milestone is concluded; this does not imply full-game support.
 
-None of the Framework-owned trilogy products is currently a supported public
-Framework release.
+Framework v1.0.0 is the first public trilogy release for the allowlisted builds.
+That publication state does not promote every capability, controller family or
+game path to `supported`; the evidence levels above remain authoritative.
 
 ## Support rules
 
@@ -79,7 +80,7 @@ Framework release.
 - LAA transformation is permitted only for the recorded canonical build and
   belongs inside a verified transactional backup/rollback path.
 
-Inspect a candidate executable without modifying it with:
+Inspect an executable without modifying it with:
 
 ```powershell
 .\tools\Get-PenumbraBuildInfo.ps1 "C:\path\to\Penumbra.exe"

@@ -1,10 +1,10 @@
 # Unified installer design
 
-Penumbra VR should install as one product while preserving the integration model
+Penumbra VR installs as one product while preserving the integration model
 required by each game. The combined Overture and shared Black Plague/Requiem
-candidate passes deterministic packaging, install/repair/restore and GUI
-fixture checks. Production user acceptance and the release audit remain open. This file
-owns the durable installer contract, not incremental packaging history.
+v1.0.0 installer passes deterministic packaging, install/repair/restore and GUI
+fixture checks and has maintainer real-install acceptance. This file owns the
+durable installer contract, not incremental packaging history.
 
 ## User-facing flow
 
@@ -87,18 +87,18 @@ payloads and hashes. `assets/openvr` owns shared action/binding assets.
 machine-specific resolution, saves, key bindings and personal VR calibration
 remain user state.
 
-## Current prototype baseline
+## v1.0 implementation baseline
 
-The existing host-tested packaging code provides the implementation baseline to
-preserve while the final installer is built:
+The published v1.0 packaging code provides the implementation baseline to
+preserve for maintenance releases:
 
-- deterministic Overture and Black Plague candidate ZIPs with payload hash
+- deterministic Overture and Black Plague internal ZIPs with payload hash
   verification;
 - exact-build discovery/selection and opt-in verified LAA transformation;
 - transactional install/upgrade/restore with preflight validation and rollback;
 - durable recovery journals for interrupted Overture and Black Plague writes;
 - explicit repair of recorded owned payloads while rejecting foreign changes;
-- a combined candidate that can select/install/repair/recover/restore Overture
+- a combined installer that can select/install/repair/recover/restore Overture
   and the shared Black Plague/Requiem root and logs operations as JSONL;
 - complete package verification before discovery or writes.
 
@@ -117,24 +117,23 @@ its selector deduplicates the shared root. The VBS launcher starts the Windows
 Forms GUI with a hidden PowerShell console; packaged control creation and
 read-only discovery of pristine Overture plus BP/Requiem pass host checks.
 The GUI blocks repeated operations while a transaction runs. Runtime/headset
-support and final UI acceptance remain separate gates.
+support remains a separate evidence track from installer verification.
 
-## Remaining production work
+## Post-release validation and maintenance
 
-The release-engineering scope and finite acceptance gate are owned by
+The published release evidence and remaining finite validation matrix are owned by
 [CLOSURE_STATUS.md](CLOSURE_STATUS.md). Inspected dependency and packaging gaps
 are in [RUNTIME_DEPENDENCIES.md](RUNTIME_DEPENDENCIES.md) and
 [RELEASE_PREPARATION_AUDIT.md](RELEASE_PREPARATION_AUDIT.md).
 
-- exercise the graphical install/repair/uninstall flow on a clean user setup;
-- validate runtime readiness independently of passive OpenVR registration checks;
-- complete the dependency/redistribution license audit; packaged notices already include both translations;
-- validate clean install, upgrade, repair, interruption recovery, external
-  modification handling and exact restore for every supported product; and
-- accept the existing graphical product selection/UI on a clean user setup
-  before production distribution.
+- extend independent clean-PC install/repair/uninstall coverage;
+- extend runtime/headset and non-Sense controller validation independently of
+  passive file/runtime checks;
+- preserve the dependency/source/notices audit for every redistributed update;
+- keep clean install, upgrade, repair, interruption recovery, external
+  modification handling and exact restore in regression coverage.
 
-## v1.0 extension — approved and implemented, acceptance pending
+## v1.0 extension — shipped
 
 Keep the existing PowerShell transactions and Windows Forms front end. Extend
 their inputs/verification rather than introduce another ownership engine.
@@ -280,6 +279,7 @@ are separate checks.
 
 Expand fixtures across A–F, dependency failures, unknown/damaged files,
 add/remove layers, repeat operations and interrupted/locked-write rollback.
-Run the finite clean-machine/manual-headset matrix in `CLOSURE_STATUS.md`.
-Rewrite the README to actual download/hardware/settings/known-issue evidence.
-Fixture success alone cannot justify a final release claim.
+Continue the finite clean-machine/manual-headset matrix in `CLOSURE_STATUS.md`
+as post-release evidence. Keep the README aligned with actual download,
+hardware, settings and known-issue evidence. Fixture success alone must not be
+described as headset certification.

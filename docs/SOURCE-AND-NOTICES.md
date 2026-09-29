@@ -1,7 +1,8 @@
-# Candidate source and notices
+# Release source and notices
 
-Framework v1.0.0 is a release candidate. Public release acceptance remains in
-[CLOSURE_STATUS.md](CLOSURE_STATUS.md); a successful package build does not close it.
+Framework v1.0.0 is the first public Framework release. Its acceptance record
+and remaining validation limits are documented in
+[CLOSURE_STATUS.md](CLOSURE_STATUS.md).
 
 The versioned release builder supplies `PenumbraVR-Source-1.0.0.zip` alongside
 the installer. It contains the exact committed Framework/Overture/HPL source,
@@ -36,9 +37,10 @@ Studio redist directory by pinned hashes. It is a build input, not a DLL copied
 from Windows. Distribution remains subject to that toolchain's redistribution
 terms. The historical mixed dependency bundle is retained in the source tree
 as build/provenance input; it does not establish blanket relicensing rights.
-Review `THIRD_PARTY.md` and the recorded provenance before public publication.
+Review `THIRD_PARTY.md` and the recorded provenance before any future
+redistribution update.
 
-## Building the versioned candidate
+## Building the versioned release
 
 Use a clean committed checkout, Visual Studio 2022 C++ Win32 tools, CMake
 3.25+, Windows PowerShell 5.1, .NET SDK 9.0.317 (stable servicing patches
@@ -51,7 +53,7 @@ The builder validates every input before creating artifacts.
 
 ```powershell
 .\tools\Build-PenumbraVrRelease.ps1 `
-  -OutputDirectory .\dist\v1.0.0-candidate `
+  -OutputDirectory .\dist\v1.0.0-release `
   -RuntimeDirectory 'C:\path\to\official\x86\Microsoft.VC143.CRT' `
   -SourceDirectory 'C:\path\to\pinned-source-inputs'
 ```

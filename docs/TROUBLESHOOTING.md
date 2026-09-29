@@ -4,7 +4,7 @@ This guide covers the current combined Framework development candidate. Installa
 
 ## Game detection and dependencies
 
-- **Game not listed:** use **Carpeta...** in the candidate GUI to choose the original installation. Requiem must be installed inside the Black Plague base. Incomplete targets show essential content/dependency failures; this checks launch prerequisites, not every purchased game asset.
+- **Game not listed:** use **Carpeta...** in the release installer to choose the original installation. Requiem must be installed inside the Black Plague base. Incomplete targets show essential content/dependency failures; this checks launch prerequisites, not every purchased game asset.
 - **Unknown executable:** obtain its identity with the read-only command below and compare it with the recognized builds. A renamed executable is not sufficient. Restore an original recognized build rather than attempting to bypass the check.
 - **Missing DLL:** restore game-supplied files through Steam file verification. Both products supply pinned app-local OpenVR/OpenAL Soft; Overture also supplies its x86 Visual C++ files. Installer errors identify the dependency and remedy. See the [dependency inventory](RUNTIME_DEPENDENCIES.md).
 - **Steam file verification:** it can replace managed Framework files. After verifying the base game, inspect the installer state and use the matching package to reinstall or repair. Keep the original backups.
@@ -13,7 +13,7 @@ This guide covers the current combined Framework development candidate. Installa
 
 Start SteamVR and confirm the headset and both controllers are ready before launching the game manually through Steam Play. Launch from the installed game, not the extracted package directory. No OpenXR runtime switch is needed.
 
-If the game launches flat, check that the candidate installation completed for that root and inspect its installer/bootstrap/runtime logs. Unknown builds are deliberately rejected.
+If the game launches flat, check that the release installation completed for that root and inspect its installer/bootstrap/runtime logs. Unknown builds are deliberately rejected.
 
 If controllers track but an action is missing, inspect the active SteamVR binding for that game/controller. Repair restores owned bundled defaults; saved SteamVR custom mappings remain separate. Vive/WMR layouts have documented omissions, and only Sense has physical-device evidence. See [controls](CONTROLS.md) and the [controller ledger](TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
 

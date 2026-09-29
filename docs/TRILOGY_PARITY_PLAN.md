@@ -30,7 +30,7 @@ boundary and also awaits headset confirmation. See
 
 | Capability family | Shared/framework state | Black Plague | Requiem | Remaining evidence/work |
 | --- | --- | --- | --- | --- |
-| Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-candidate presentation/focus/transition regression per game |
+| Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-release presentation/focus/transition regression per game |
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
 | Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed; held Grab body remained attached through one headset snap turn | Transition/tracking-loss and BP held-object continuity regression |
 | Controller actions/bindings | 42 actions, 6 sets, 8 graphs; all three consumers and package/install/repair distribution host-verified | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Device hardware regression; Vive compatibility and WMR holster omissions remain |
@@ -42,7 +42,7 @@ boundary and also awaits headset confirmation. See
 | VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
 | Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; observed special effects now render correctly in headset with native full-eye copy/resize telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Coverage of all smoke/material variants and subtle ghosting remains unestablished |
-| Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | Combined deterministic package/selector and GUI discovery/control creation host-tested; final user acceptance pending |
+| Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | v1.0.0 package/selector/GUI host-tested with maintainer real-install, uninstall and game-entry acceptance; independent clean-PC breadth remains open |
 
 ## Controller profiles and distribution
 
@@ -82,8 +82,9 @@ it does not establish device compatibility or public support.
 ## Black Plague release-regression state
 
 Black Plague is the established second backend and has real headset evidence,
-including gameplay VR from Steam's ordinary **Play** path. It is not supported
-yet. Current-candidate regression still covers presentation/focus, mixed
+including gameplay VR from Steam's ordinary **Play** path. Publication in
+v1.0.0 does not promote every capability to `supported`. Current-release
+regression still covers presentation/focus, mixed
 physical motion, crouch recovery, hands, free-body/mechanism interaction, UI,
 audio, visual effects, transitions and shutdown. Exact work order belongs in
 `ROADMAP.md`; the hardware procedure belongs in

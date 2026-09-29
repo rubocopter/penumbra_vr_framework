@@ -1,8 +1,8 @@
 # Release dependency audit
 
-This owns the deployment dependency inventory for the existing candidate, not
-a completed v1.0 distribution. Release gates are in
-[CLOSURE_STATUS.md](CLOSURE_STATUS.md); provenance remains in
+This owns the deployment dependency inventory for the public v1.0.0 release.
+Remaining validation limits are in [CLOSURE_STATUS.md](CLOSURE_STATUS.md);
+provenance remains in
 [THIRD_PARTY.md](THIRD_PARTY.md).
 
 ## Architecture and evidence
@@ -41,9 +41,9 @@ prove that a codec/audio device works in gameplay.
 | Newton: snapshot README 1.53, no DLL resource version | x86 | Native physics, all games | Game supplied; no new redistribution permission established | Local PE/import closure; do not replace game's physics DLL |
 | ALUT: snapshot 1.1, no DLL resource version | x86 | Audio startup, all games | O game supplied; B/R proxy forwards to backed-up retail DLL | Existing B/R original SHA-256 allowlist; OpenAL dependency also needs checking |
 | Vorbisfile/Vorbis/Ogg: snapshot README 1.1/1.0, versionless DLLs | x86 | Audio decoding, all games | Game supplied; vendored link inputs; exact notices need normalization if ever shipped | Recursive imports/local architecture; hashes identify versionless files |
-| Theora: snapshot README 1.0 | x86 | Legacy media support | Game supplied; vendored input, not copied by candidate | Identify active consumer before requiring or shipping DLL |
+| Theora: snapshot README 1.0 | x86 | Legacy media support | Game supplied; vendored input, not copied by the release | Identify active consumer before requiring or shipping DLL |
 | JPEG, PNG12 1.2.10 in observed B/R root, zlib 1.2.1 | x86 | Dynamic image decoding | Game supplied; not bundled as replacements | Actual codec load/decode; PNG recursively imports zlib |
-| PNG13 1.2.7 | x86 | Present in vendored bundle and observed game root | Not copied by candidate; does not satisfy a PNG12 request | Identify actual consumer before requiring/bundling |
+| PNG13 1.2.7 | x86 | Present in vendored bundle and observed game root | Not copied by the release; does not satisfy a PNG12 request | Identify actual consumer before requiring/bundling |
 
 The inspected `SDL_image.dll` dynamically names `jpeg.dll`, `libpng12.dll`
 and `libtiff.dll`. TIFF is conditional: determine whether supported assets need
@@ -75,7 +75,7 @@ implementation. This removes system-router dependence while preserving game
 audio policy. Empty device names also use the default; explicit modern names
 are passed through.
 
-The candidate supplies both app-local files to B/R, with host-tested
+The v1.0.0 release supplies both app-local files to B/R, with host-tested
 install/repair/upgrade/backup/rollback and an actual x86 loader test using null
 audio. Independent audible gameplay validation remains pending. Unknown existing
 audio DLLs must be preserved or cause an actionable conflict, never silently

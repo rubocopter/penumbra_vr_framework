@@ -5,7 +5,12 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
-## Unreleased — Framework integration line
+## 1.0.0 — 2026-09-29
+
+First public Penumbra VR Framework release for Overture, Black Plague and
+Requiem. The published installer is the exact v1.0.0 artifact promoted from the
+recorded release candidate after automated package/topology acceptance and the
+maintainer's repeated real install/uninstall and game-entry checks.
 
 ### Trilogy framework
 
@@ -76,9 +81,13 @@ Product-specific Overture release history is retained under
 - Added `assets/deployment/manifest.json` as the shared deploy/installer payload
   contract. The shared Black Plague/Requiem deploy covers bootstrap/probe DLLs,
   OpenVR assets, hand texture, both Spanish localizations and generated HRTF config.
-- Added the combined deterministic development package and hidden-console
-  graphical installer prototype, with host-tested discovery, install, repair,
-  recovery and exact restore. Production acceptance and release audit remain open.
+- Added the unified bilingual `PenumbraVR-Setup-1.0.0.exe` with Steam/manual
+  discovery, exact-build validation, optional components/settings, transactional
+  install/update/repair/recovery/removal and exact restore for Overture and the
+  shared Black Plague/Requiem root.
+- Published matching source, checksums and build report. Automated topology A–F
+  coverage validates isolated and combined game layouts; independent clean-PC
+  and non-Sense hardware coverage remain intentionally separate evidence.
 - Added `assets/settings/recommended.json` with maintainer-tested per-game
   configuration data for future reversible installer presets.
 

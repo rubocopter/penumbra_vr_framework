@@ -1,9 +1,11 @@
 # Release preparation audit
 
-This records the inspected baseline and gaps for release engineering. It is
-not a completed v1.0 audit. Dependencies are owned by
-[RUNTIME_DEPENDENCIES.md](RUNTIME_DEPENDENCIES.md); remaining release gates by
-[CLOSURE_STATUS.md](CLOSURE_STATUS.md). Temporary investigation belongs in `work/`.
+This is the historical starting snapshot for the v1.0 release-engineering work.
+The gaps below describe the repository before the implementation that later
+shipped as v1.0.0; they are not current release status. Current dependencies are
+owned by [RUNTIME_DEPENDENCIES.md](RUNTIME_DEPENDENCIES.md), release evidence by
+[CLOSURE_STATUS.md](CLOSURE_STATUS.md), and the published release record by
+[releases/1.0.0.md](releases/1.0.0.md). Temporary investigation belongs in `work/`.
 
 ## Starting state
 
@@ -93,8 +95,9 @@ repair, shared-root deduplication and multi-root selection/logging. Its
 Overture build ran **289 checks, zero failures**. This is one combined fixture
 script, not proof that every A–F clean-machine scenario was executed.
 
-The two fixture archives were removed by the test's temporary-directory cleanup;
-no v1 release artifact was retained or published. Clean-machine/manual launch/
-VR/save-load acceptance and final v1 artifact size/hash/tag remain pending.
-No game was automatically launched. Subsequent release implementation is
-recorded in the branch commits and the versioned artifact build report.
+At the time of this audit, the two fixture archives were removed by the test's
+temporary-directory cleanup and no v1 release artifact had been retained or
+published. Clean-machine/manual launch/VR/save-load acceptance and final v1
+artifact size/hash/tag were still pending at that snapshot. v1.0.0 was later
+published with the evidence and limitations recorded in `CLOSURE_STATUS.md` and
+`releases/1.0.0.md`. No game was automatically launched during this audit.

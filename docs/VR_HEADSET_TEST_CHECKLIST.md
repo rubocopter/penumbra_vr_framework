@@ -190,6 +190,6 @@ video evidence in the project tree as historical archive.
 ## Promotion rule
 
 A capability moves up the evidence ladder only when the session actually
-exercised that capability on the documented build/current candidate. Positive
+exercised that capability on the documented build/current release. Positive
 results in one gate do not promote unrelated gates, and an old run does not
 validate a later host-only fix.
