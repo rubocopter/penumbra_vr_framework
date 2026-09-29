@@ -35,7 +35,7 @@ destructive repair/uninstall and undocumented machine dependencies block v1.0.
 
 ## Implemented host gates
 
-The [current single-EXE candidate acceptance record](releases/1.0.0-startup-regression-candidate.md) identifies
+The [current single-EXE candidate acceptance record](releases/1.0.0-installer-ui-candidate.md) identifies
 the tested artifact/source commit, checksums, toolchain and passed A–F fixtures.
 
 The 1.0.0 candidate supplies manifest-based Steam/manual discovery, essential

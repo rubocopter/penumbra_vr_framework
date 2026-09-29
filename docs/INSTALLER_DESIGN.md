@@ -188,9 +188,11 @@ Both explicit and numbered selector routes preserve that base selection.
 No standalone technical removal button is
 shown on Install.
 
-Every selected root preflights before the first write, even when different
+Install, update, repair and uninstall preflight every selected root before the
+first write, even when different
 copies of a game have different optional choices. Execution still consists of
 independent root transactions; a later failure reports earlier completions.
+Recovery validates each recorded snapshot at its owning transaction boundary.
 Installation completion is followed by a read-only VR check of bindings,
 dependencies, owned files and configuration. A failed check shows the affected
 items instead of claiming complete readiness. The installer never launches a
