@@ -101,7 +101,11 @@ function Get-PvrPrerequisites {
             $sources=@($library.source,('products/overture/'+$library.path),('products/black_plague/'+$library.source),('products/overture/build/package/Release/PenumbraVR/'+$library.path))
             foreach($relativeSource in $sources) {
             $source=Join-Path $PackageRoot $relativeSource
-            if ((Test-Path -LiteralPath $source -PathType Leaf) -and (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ieq $library.sha256) {
+            $validSource=$false
+            if(Test-Path -LiteralPath $source -PathType Leaf){
+                try{$validSource=(Get-PvrPeInfo $source).Architecture -eq 'x86' -and (-not $library.sha256 -or (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -ieq $library.sha256)}catch{}
+            }
+            if ($validSource) {
                 # Ownership/conflict policy is enforced by the transaction, not relaxed here.
                 $status='provided'
                 $path=$source

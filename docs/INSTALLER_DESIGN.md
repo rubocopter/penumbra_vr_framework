@@ -138,10 +138,21 @@ are in [RUNTIME_DEPENDENCIES.md](RUNTIME_DEPENDENCIES.md) and
 
 Keep the existing PowerShell transactions and Windows Forms front end. Extend
 their inputs/verification rather than introduce another ownership engine.
-An MSI/Inno wrapper adds tooling while still needing the exact-build
-transactions; a native rewrite duplicates their recovery logic. Recommend the
-established ZIP equivalent, `PenumbraVR-Setup-1.0.0.zip`, with one obvious
-graphical launcher. A future EXE wrapper can reuse this contract.
+The public download is one `PenumbraVR-Setup-1.0.0.exe`. The self-contained
+Windows bootstrapper embeds the private combined package and project banner,
+verifies its checksums, starts the existing Forms GUI with a hidden PowerShell
+process, and removes the extracted temporary directory after the UI exits.
+No separate .NET runtime or repository checkout is required. ZIPs remain
+internal packaging inputs; source archives and reports are maintainer artifacts.
+`Package-PenumbraVrSetup.ps1` builds the standalone EXE, while the versioned
+release builder also exports matching source, notices, checksums and a report.
+
+English is the default UI language. The three optional Spanish translations
+start unchecked. Choosing Español selects them automatically; their checkboxes
+remain editable. Each product records its own localization ownership. Repair
+uses recorded selections. The main Install button preflights all selected roots
+and applies them; maintenance operations retain their review step. Games are
+launched manually through Steam after installation.
 
 ### Components and validation
 
@@ -166,9 +177,14 @@ Recognition must not become an unearned public-support claim.
 ### Dependencies and final-state verification
 
 Consume a machine-readable dependency inventory with pinned distributable
-inputs. Supply app-local OpenAL Soft to B/R after exact redistribution
+inputs. Supply an app-local `OpenAL32.dll` compatibility proxy and private pinned
+`PenumbraVR_OpenALSoft.dll` to B/R after exact redistribution
 obligations are satisfied; preserve verified originals and stop on unknown
-conflicts. Retain O CRT pins. Detect SteamVR and game-owned legacy dependencies,
+conflicts. The proxy maps empty, Generic Software and Generic Hardware playback
+device requests to the default device, following Overture's proven fallback
+boundary; explicit modern device names remain unchanged. Keep original OpenAL
+backup filenames stable so prior ZIP ownership and recovery journals can upgrade
+and restore safely. Retain O CRT pins. Detect SteamVR and game-owned legacy dependencies,
 including dynamic codecs, with precise guidance. Never copy system DLLs or
 switch OpenXR. Removal/recovery must work without SteamVR.
 

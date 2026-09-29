@@ -341,6 +341,17 @@ set_target_properties(pvr_black_plague_bootstrap PROPERTIES
 )
 pvr_enable_warnings(pvr_black_plague_bootstrap)
 
+add_library(pvr_black_plague_openal_proxy SHARED
+    src/bootstrap/black_plague_openal_proxy.cpp
+)
+target_include_directories(pvr_black_plague_openal_proxy PRIVATE
+    src/bootstrap
+    products/overture/dependencies/include)
+set_target_properties(pvr_black_plague_openal_proxy PROPERTIES
+    OUTPUT_NAME "PenumbraVR.BlackPlague.OpenALProxy"
+)
+pvr_enable_warnings(pvr_black_plague_openal_proxy)
+
 add_custom_target(pvr_openvr_assets ALL
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets/openvr"
@@ -458,6 +469,14 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_black_plague_audio_environment_test)
     add_test(NAME black_plague_audio_environment
         COMMAND pvr_black_plague_audio_environment_test)
+
+    add_executable(pvr_black_plague_openal_device_compat_test
+        tests/black_plague_audio/openal_device_compat_test.cpp)
+    target_include_directories(pvr_black_plague_openal_device_compat_test PRIVATE
+        src/bootstrap)
+    pvr_enable_warnings(pvr_black_plague_openal_device_compat_test)
+    add_test(NAME black_plague_openal_device_compat
+        COMMAND pvr_black_plague_openal_device_compat_test)
     add_executable(pvr_vr_grab_pose_test tests/vr_math/vr_grab_pose_test.cpp)
     target_link_libraries(pvr_vr_grab_pose_test PRIVATE pvr_vr_math)
     pvr_enable_warnings(pvr_vr_grab_pose_test)
@@ -777,6 +796,6 @@ if(BUILD_TESTING)
     add_test(NAME camera_matrix_override COMMAND pvr_camera_matrix_override_test)
 endif()
 
-foreach(pvr_release_target IN ITEMS pvr_black_plague_probe pvr_requiem_probe pvr_black_plague_bootstrap pvr_laa_transform)
+foreach(pvr_release_target IN ITEMS pvr_black_plague_probe pvr_requiem_probe pvr_black_plague_bootstrap pvr_black_plague_openal_proxy pvr_laa_transform)
     target_sources(${pvr_release_target} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated/pvr_version.rc")
 endforeach()

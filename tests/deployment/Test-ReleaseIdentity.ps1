@@ -22,7 +22,7 @@ try {
     try { & $generator -OutputDirectory $temp -ReleaseManifestPath $bad } catch { $rejected = $true }
     if (-not $rejected -or (Get-Content (Join-Path $temp 'pvr_version.hpp') -Raw) -cne $header) { throw 'Invalid identity was not rejected before writes.' }
     if ($Built) {
-        foreach ($relative in @('build/bin/Release/PenumbraVR.BlackPlague.Probe.dll','build/bin/Release/PenumbraVR.Requiem.Probe.dll','build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll','build/bin/Release/PenumbraVR.LaaTransform.exe','products/overture/build/bin/Release/Penumbra_vr.exe')) {
+        foreach ($relative in @('build/bin/Release/PenumbraVR.BlackPlague.Probe.dll','build/bin/Release/PenumbraVR.Requiem.Probe.dll','build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll','build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll','build/bin/Release/PenumbraVR.LaaTransform.exe','products/overture/build/bin/Release/Penumbra_vr.exe')) {
             $info = (Get-Item -LiteralPath (Join-Path $repo $relative)).VersionInfo
             if ($info.ProductVersion -cne '1.0.0' -or $info.FileVersion -cne '1.0.0.0') { throw "Wrong PE version: $relative" }
         }

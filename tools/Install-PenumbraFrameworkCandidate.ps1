@@ -16,6 +16,9 @@ param(
     [string]$DiagnosticOutputPath,
     [ValidateSet('Auto','Enable','Disable')][string]$RequiemMode='Auto',
     [switch]$CommunityTranslations,
+    [switch]$InstallSpanishOverture,
+    [switch]$InstallSpanishBlackPlague,
+    [switch]$InstallSpanishRequiem,
     [switch]$TextureEnhancements,
     [switch]$RecommendedSettings,
     [ValidateSet('DefaultFiles','DefaultAndUserFiles')][string]$SettingsScope='DefaultAndUserFiles',
@@ -334,7 +337,7 @@ foreach($selected in $selectedEntries){
                 $texturePaths=(Get-Content -LiteralPath (Join-Path $packageRoot 'products/overture/docs/TEXTURE_SELECTION.json') -Raw | ConvertFrom-Json).Files.Path
                 $args.SkipTexturePack=-not @($state.Files | Where-Object {$_.Path -in $texturePaths}).Count
             }
-            $args.CommunityTranslations=if($PSBoundParameters.ContainsKey('CommunityTranslations')){[bool]$CommunityTranslations}else{[bool]@($state.Files | Where-Object {$_.Path -eq 'config/Espanol.lang'}).Count}
+            $args.CommunityTranslations=if($PSBoundParameters.ContainsKey('InstallSpanishOverture')){[bool]$InstallSpanishOverture}elseif($PSBoundParameters.ContainsKey('CommunityTranslations')){[bool]$CommunityTranslations}else{[bool]@($state.Files | Where-Object {$_.Path -eq 'config/Espanol.lang'}).Count}
             $args.RecommendedSettings=[bool]$RecommendedSettings;$args.SettingsScope=$SettingsScope
         }
         $installer=$overtureInstaller;$label='Overture';$target=$selected.Path;$id='overture'
@@ -347,7 +350,11 @@ foreach($selected in $selectedEntries){
         if(-not $Restore){
             if($label -eq 'Requiem' -and $RequiemMode -eq 'Disable'){throw 'Selected Requiem cannot be disabled in the same install plan.'}
             $args.RequiemMode=if($label -eq 'Requiem'){'Enable'}else{$RequiemMode}
-            if($PSBoundParameters.ContainsKey('CommunityTranslations')){$args.CommunityTranslations=[bool]$CommunityTranslations}
+            if($PSBoundParameters.ContainsKey('InstallSpanishBlackPlague')){$args.InstallSpanishBlackPlague=[bool]$InstallSpanishBlackPlague}
+            if($PSBoundParameters.ContainsKey('InstallSpanishRequiem')){$args.InstallSpanishRequiem=[bool]$InstallSpanishRequiem}
+            if($CommunityTranslations -and
+               -not $PSBoundParameters.ContainsKey('InstallSpanishBlackPlague') -and
+               -not $PSBoundParameters.ContainsKey('InstallSpanishRequiem')){$args.CommunityTranslations=$true}
             $args.RecommendedSettings=[bool]$RecommendedSettings;$args.SettingsScope=$SettingsScope
             $args.LargeAddressAware=[bool]$LargeAddressAware
         }

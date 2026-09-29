@@ -48,7 +48,7 @@ try {
         $installedGames=@('black_plague')+@(if($components -contains 'requiem'){'requiem'})
         $requiemDeclared=$components -contains 'requiem'
         Check 'Requiem component ownership' (($requiemDeclared -eq [bool]$state.requiemProbeSha256) -and ($requiemDeclared -eq [bool]$state.requiemExeSha256) -and ($requiemDeclared -or -not $state.requiemSpanishLocalizationSha256) -and ($requiemDeclared -or -not (Test-Path -LiteralPath (SafePath $redist 'PenumbraVR.Requiem.Probe.dll')))) 'Expansion payload and executable records must agree with the component graph.'
-        $owned=@{ 'alut.dll'='installedProxySha256';'PenumbraVR.BlackPlague.Probe.dll'='probeSha256';'openvr_api.dll'='openVrSha256';'OpenAL32.dll'='openAlSha256';'assets/rework/HAND_Low_C.jpg'='handTextureSha256' }
+        $owned=@{ 'alut.dll'='installedProxySha256';'PenumbraVR.BlackPlague.Probe.dll'='probeSha256';'openvr_api.dll'='openVrSha256';'OpenAL32.dll'='openAlProxySha256';'PenumbraVR_OpenALSoft.dll'='openAlImplementationSha256';'assets/rework/HAND_Low_C.jpg'='handTextureSha256' }
         if($components -contains 'requiem'){$owned['PenumbraVR.Requiem.Probe.dll']='requiemProbeSha256'}
         if($state.spanishLocalizationSha256){$owned['config/Espanol.lang']='spanishLocalizationSha256'}
         if($state.requiemSpanishLocalizationSha256){$owned['expansion01/config/Espanol_exp.lang']='requiemSpanishLocalizationSha256'}
@@ -56,7 +56,7 @@ try {
         foreach($relative in $owned.Keys){$hash=$state.($owned[$relative]);Check ('Owned '+$relative) ([string]$hash -match '^[0-9a-fA-F]{64}$' -and (Hash (SafePath $redist $relative)) -ieq $hash) $relative}
         Check 'Original ALUT backup' ((Hash (SafePath $redist 'PenumbraVR_alut_original.dll')) -eq 'D81DEA8E88E35C319F7F2D8AAEB14C63A4986131492D3DF860D1F2C18B844590') 'Original retail library'
         if($state.laaApplied){Check 'Original game backup' ((Hash (SafePath $redist 'PenumbraVR_Penumbra_original.exe')) -eq 'FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF') 'Canonical executable'}
-        foreach($backup in @(@($state.openAlHadOriginal,'PenumbraVR_OpenAL_original.dll',$state.originalOpenAlSha256),@($state.spanishLocalizationHadOriginal,'PenumbraVR_Espanol_original.lang',$state.spanishLocalizationOriginalSha256),@($state.requiemSpanishLocalizationHadOriginal,'PenumbraVR_Espanol_exp_original.lang',$state.requiemSpanishLocalizationOriginalSha256))){if($backup[0]){Check ('Backup '+$backup[1]) ([string]$backup[2] -match '^[0-9a-fA-F]{64}$' -and (Hash (SafePath $redist $backup[1])) -ieq $backup[2]) $backup[1]}}
+        foreach($backup in @(@($state.openAlOriginalHadFile,'PenumbraVR_OpenAL_original.dll',$state.openAlOriginalSha256),@($state.spanishLocalizationHadOriginal,'PenumbraVR_Espanol_original.lang',$state.spanishLocalizationOriginalSha256),@($state.requiemSpanishLocalizationHadOriginal,'PenumbraVR_Espanol_exp_original.lang',$state.requiemSpanishLocalizationOriginalSha256))){if($backup[0]){Check ('Backup '+$backup[1]) ([string]$backup[2] -match '^[0-9a-fA-F]{64}$' -and (Hash (SafePath $redist $backup[1])) -ieq $backup[2]) $backup[1]}}
         foreach($entry in @($state.vrAssetsSnapshot.files)){Check ('Binding '+$entry.path) ((Hash (SafePath (Join-Path $redist 'vr') $entry.path)) -ieq $entry.sha256) $entry.path}
         $configuration=@($state.configuration)
         foreach($exeName in @('Penumbra.exe')+@(if($components -contains 'requiem'){'Requiem.exe'})){

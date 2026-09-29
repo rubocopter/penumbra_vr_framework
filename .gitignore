@@ -7,6 +7,8 @@
 /dependencies/
 /_deps/
 /products/overture/build/
+/installer/**/bin/
+/installer/**/obj/
 
 # CMake and Visual Studio
 CMakeUserPresets.json

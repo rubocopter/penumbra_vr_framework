@@ -38,7 +38,7 @@ game-content/local x86 dependency checks, all-root install preflight, optional
 packs/settings, independent O and shared B/R transactions, R-layer removal,
 repair/recovery and passive final verification. Targeted settings restoration
 preserves subsequent user edits. Diagnostics are bounded and redacted.
-Release identity, pinned upstream sources/notices, versioned Setup/Source ZIPs
+Release identity, pinned upstream sources/notices, a standalone Setup EXE and matching Source ZIP
 and checksum/build-report generation are implemented. The automated fixtures
 cover component transitions, tamper/conflict rejection, repair and exact restore;
 they use synthetic runtime/content fixtures and do not close clean-machine or

@@ -52,18 +52,18 @@ Feature coverage and validation differ by game; see the [trilogy capability ledg
 
 ### Development candidate
 
-For testers who have a maintainer-provided or locally built **combined candidate ZIP**:
+For testers who have a maintainer-provided or locally built **PenumbraVR-Setup-1.0.0.exe**:
 
 1. Install the original games and close them. Use recognized, clean game files.
-2. Extract the entire candidate ZIP. It is an overlay for installed games, not a standalone game.
-3. Open `tools\Instalar-Penumbra-VR.vbs` inside the extracted package.
-4. Review the detected games. Use **Carpeta...** to select a folder if necessary.
-5. Select the installation roots and optional components, choose **Instalar / actualizar**, and review the files/settings preview. Requiem is an optional layer of the validated Black Plague base.
+2. Double-click the Setup EXE and accept Windows elevation. It contains the installer and mod payload for your installed games.
+3. Choose English or Español. English is the default; Español automatically selects the optional translations, which remain editable.
+4. Review the detected games. Use **Folder... / Carpeta...** to select a folder if necessary.
+5. Select the games and optional components, then choose **Install / update**. Requiem is an optional layer of the validated Black Plague base.
 6. Start SteamVR and confirm the headset/controllers are ready, then launch the selected game manually through its normal Steam **Play** button.
 
 You do not need the whole trilogy. The candidate handles Overture only, Black Plague only, Black Plague + Requiem, Overture + Black Plague, or all three. Clean-user acceptance for these combinations is still pending.
 
-Spanish localization, Overture texture enhancements and targeted recommended graphics settings are optional and default off. Settings changes preserve language, resolution and personal calibration; removal preserves subsequent user edits. Keep the extracted package for repair and removal. See [installer behavior](docs/INSTALLER_DESIGN.md) for recovery and ownership rules.
+Spanish localization, Overture texture enhancements and targeted recommended graphics settings are optional. English starts with translations off; selecting Español checks the translation options. Settings changes preserve language, resolution and personal calibration; removal preserves subsequent user edits. Reopen the same EXE for repair and removal. See [installer behavior](docs/INSTALLER_DESIGN.md) for recovery and ownership rules.
 
 For the separately released Overture baseline, see [Overture VR Rework](https://github.com/rubocopter/penumbra_vr_rework). Its release and installation instructions belong to that project.
 
@@ -73,7 +73,7 @@ For the separately released Overture baseline, see [Overture VR Rework](https://
 - Licensed original game installations matching the [recognized builds](docs/SUPPORTED_BUILDS.md). Black Plague/Requiem target the recorded Steam builds; other editions are not established as compatible.
 - **SteamVR**, a PCVR headset and two tracked controllers. The project uses OpenVR; no OpenXR runtime switch is required.
 - A GPU with working vendor OpenGL drivers. No measured minimum CPU/GPU specification is published.
-- The candidate GUI uses Windows PowerShell 5.1, .NET Windows Forms and Windows Script Host.
+- Windows PowerShell 5.1 and .NET Framework Windows Forms are supplied by Windows. The EXE bundles its own bootstrapper runtime; no .NET SDK/runtime installation is required.
 
 Both products bundle pinned app-local OpenVR and OpenAL Soft; Overture also bundles its pinned x86 Visual C++ runtime. Preflight checks game-owned x86 libraries, essential configuration/content and SteamVR before installation. Missing game files must be restored through Steam. The [dependency audit](docs/RUNTIME_DEPENDENCIES.md) owns the exact inventory and validation limits.
 
@@ -171,7 +171,7 @@ ctest --preset release --output-on-failure
 .\tools\Package-FrameworkCandidate.ps1 -OutputPath .\artifacts\PenumbraVR-Framework-candidate.zip
 ```
 
-Root binaries appear in `build/bin/Release`; Overture builds under `products/overture/build`. The last command produces a development ZIP. For versioned Setup/Source ZIPs, notices, checksums and a build report from a clean committed checkout, use [the release procedure](docs/SOURCE-AND-NOTICES.md#building-the-versioned-candidate). It requires explicit pinned official CRT and upstream source inputs. Candidate packages do not imply public support.
+Root binaries appear in `build/bin/Release`; Overture builds under `products/overture/build`. The last command produces an internal development ZIP. For the versioned Setup EXE, matching Source ZIP, notices, checksums and build report from a clean committed checkout, use [the release procedure](docs/SOURCE-AND-NOTICES.md#building-the-versioned-candidate). It requires explicit pinned official CRT and upstream source inputs. Candidate packages do not imply public support.
 
 ## Credits
 

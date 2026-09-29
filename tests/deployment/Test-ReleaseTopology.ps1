@@ -28,7 +28,11 @@ function Verify([string]$game,[string]$root){
 function Assert-Original([string]$root,[string]$original){Assert ((Get-FileHash (Join-Path $root 'Penumbra.exe')).Hash -eq (Get-FileHash $original).Hash) 'Original executable not restored'}
 try{
     New-Item -ItemType Directory -Path $temp | Out-Null
-    $package=Join-Path $temp 'package';Expand-Archive -LiteralPath $PackagePath -DestinationPath $package
+    $package=Join-Path $temp 'package'
+    if([IO.Path]::GetExtension($PackagePath) -ieq '.exe'){
+        & $PackagePath --extract-to $package | Out-Null
+        if($LASTEXITCODE -ne 0){throw 'Standalone Setup extraction failed.'}
+    }else{Expand-Archive -LiteralPath $PackagePath -DestinationPath $package}
     $selector=Join-Path $package 'tools/Install-PenumbraFrameworkCandidate.ps1';$verifier=Join-Path $package 'tools/Test-PenumbraVrInstallation.ps1'
     $vrpath=Join-Path $temp 'openvrpaths.vrpath'
     $o=New-Root A overture

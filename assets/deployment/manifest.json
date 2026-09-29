@@ -6,12 +6,6 @@
       "installRoot": "redist",
       "payloads": [
         {
-          "id": "openal_soft",
-          "source": { "kind": "repository-file", "path": "products/overture/dependencies/bin/win32/OpenAL32.dll" },
-          "destination": "OpenAL32.dll",
-          "restorePolicy": "backup-if-present"
-        },
-        {
           "id": "bootstrap_proxy",
           "source": {
             "kind": "build-output",
@@ -19,6 +13,24 @@
           },
           "destination": "alut.dll",
           "restorePolicy": "backup-required"
+        },
+        {
+          "id": "openal_proxy",
+          "source": {
+            "kind": "build-output",
+            "path": "PenumbraVR.BlackPlague.OpenALProxy.dll"
+          },
+          "destination": "OpenAL32.dll",
+          "restorePolicy": "backup-if-present"
+        },
+        {
+          "id": "openal_implementation",
+          "source": {
+            "kind": "repository-file",
+            "path": "products/overture/dependencies/bin/win32/OpenAL32.dll"
+          },
+          "destination": "PenumbraVR_OpenALSoft.dll",
+          "restorePolicy": "remove-if-owned"
         },
         {
           "id": "probe",

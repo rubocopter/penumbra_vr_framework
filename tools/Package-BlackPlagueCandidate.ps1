@@ -42,7 +42,8 @@ if ($configuredSdk.Count -ne 1 -or
 # older DLL from a previous release build.
 & cmake --build $buildRoot --config Release --target `
     pvr_black_plague_probe pvr_requiem_probe `
-    pvr_black_plague_bootstrap pvr_laa_transform --parallel 4
+    pvr_black_plague_bootstrap pvr_black_plague_openal_proxy `
+    pvr_laa_transform --parallel 4
 if ($LASTEXITCODE -ne 0) {
     throw 'Black Plague Release build failed; candidate package was not created.'
 }
@@ -98,6 +99,12 @@ try {
         Copy-PackageItem $source $target
     }
 
+    $pinnedOpenAl = Join-Path $repoRoot 'products/overture/dependencies/bin/win32/OpenAL32.dll'
+    $expectedOpenAlHash = '606CF8B4C22C7AE00813585279AC045115907BC66D1483EB26355907021EA4B0'
+    if ((Get-FileHash -LiteralPath $pinnedOpenAl -Algorithm SHA256).Hash -ne $expectedOpenAlHash) {
+        throw 'Pinned OpenAL Soft x86 implementation failed SHA-256 validation.'
+    }
+
     $supportFiles = @(
         'release.json',
         'tools/PenumbraVrPrerequisites.psm1',
@@ -105,6 +112,7 @@ try {
         'assets/settings/installer-game-profile.json',
         'assets/deployment/prerequisites.json',
         'products/overture/dependencies/bin/win32/OpenALSoft-COPYING',
+        'products/overture/dependencies/bin/win32/OpenALSoft-readme.txt',
         'assets/deployment/manifest.json',
         'assets/localization/manifest.json',
         'assets/localization/black_plague/leeme.txt',
@@ -130,7 +138,7 @@ try {
         throw 'Built OpenVR loader does not match the pinned SDK.'
     }
 
-    @'
+    $packageReadme = @'
 # Black Plague VR candidate
 
 This package contains a development candidate for the allowlisted Steam x86
@@ -152,7 +160,11 @@ A damaged managed LAA executable can be rebuilt from its canonical backup.
 inside the managed installation and restores the canonical executable on uninstall.
 
 See `COPYING` and `docs/THIRD_PARTY.md` for licenses.
-'@ | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
+'@
+    [System.IO.File]::WriteAllText(
+        (Join-Path $stage 'PACKAGE-README.md'),
+        $packageReadme,
+        [System.Text.UTF8Encoding]::new($false))
 
     Add-Type -AssemblyName System.IO.Compression
     $outputDirectory = Split-Path -Parent $outputPath

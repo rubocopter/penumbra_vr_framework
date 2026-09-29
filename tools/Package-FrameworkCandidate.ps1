@@ -40,6 +40,8 @@ try {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $toolsRoot
     }
     Copy-Item -LiteralPath (Join-Path $repoRoot 'release.json') -Destination $stage
+    New-Item -ItemType Directory -Path (Join-Path $stage 'assets/banner') -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/banner/penumbra-vr-framework.png') -Destination (Join-Path $stage 'assets/banner')
     New-Item -ItemType Directory -Path (Join-Path $stage 'assets/deployment'),(Join-Path $stage 'assets/settings') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/deployment/prerequisites.json') -Destination (Join-Path $stage 'assets/deployment')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/deployment/manifest.json') -Destination (Join-Path $stage 'assets/deployment')
@@ -47,6 +49,7 @@ try {
     New-Item -ItemType Directory -Path (Join-Path $stage 'licenses') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/licenses/OpenALSoft-LICENSE-pffft.txt') -Destination (Join-Path $stage 'licenses')
     Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/licenses/AngelScript-NOTICE.h') -Destination (Join-Path $stage 'licenses')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/licenses/dotnet') -Destination (Join-Path $stage 'licenses/dotnet') -Recurse
     if($SourceDirectory){
         $sources=(Get-Content -LiteralPath (Join-Path $repoRoot 'assets/deployment/redistribution.json') -Raw | ConvertFrom-Json).sources
         New-Item -ItemType Directory -Path (Join-Path $stage 'sources') -Force | Out-Null
@@ -61,8 +64,9 @@ This archive contains host-tested Overture and shared Black Plague/Requiem
 deployment candidates. Requiem's runtime has representative headset evidence;
 the full game and this installer are not yet headset validated or supported.
 
-Double-click `tools\Instalar-Penumbra-VR.vbs` for the graphical installer.
-It hides the PowerShell console, detects exact builds, and presents install,
+This ZIP is the private payload of `PenumbraVR-Setup-1.0.0.exe`. End users
+open the EXE; it embeds this package, its dependencies and the project banner.
+The graphical installer hides the PowerShell console, detects exact builds, and presents install,
 repair and uninstall actions. For diagnostics, run
 `tools\Install-PenumbraFrameworkCandidate.cmd` to list installations and
 select one or more compatible games by entering their numbers separated by commas.
@@ -94,8 +98,9 @@ OpenVR; Overture also supplies its pinned x86 Visual C++ runtime. Missing
 game-owned libraries/content must be restored through Steam file verification.
 
 Translations and Overture texture enhancements default off for new installs.
-The GUI's gray optional checkbox preserves the previous selection; an empty
-checkbox removes that optional component. Recommended graphics settings are
+English is the default UI language and Spanish translations start unchecked.
+Choosing Espanol checks each translation; those options remain editable.
+The gray texture checkbox preserves its previous selection. Recommended graphics settings are
 opt-in and preview only targeted attributes; later user edits survive removal.
 Use Quitar solo Requiem to keep Black Plague, Recuperar for an interruption,
 Verificar archivos for passive file/dependency verification and Diagnostico ZIP
@@ -104,7 +109,8 @@ CLI equivalents include -Plan, -RequiemMode Disable, -CommunityTranslations,
 -TextureEnhancements, -RecommendedSettings, -Verify and -DiagnosticOutputPath.
 Repair/removal/recovery do not require SteamVR to be running or registered.
 Installation-file verification does not demonstrate headset/gameplay readiness.
-Keep the matching Source ZIP and outer SHA256SUMS together with this Setup ZIP.
+Maintainers retain the matching Source ZIP, build report and outer SHA256SUMS
+alongside the public Setup EXE. The EXE needs no adjacent repository files.
 '@ | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
 
     $checksums = @(

@@ -31,8 +31,10 @@ Import-Module (Join-Path $PSScriptRoot 'PenumbraVrArchive.psm1') -Force
 Import-Module (Join-Path $PSScriptRoot 'PenumbraVrPrerequisites.psm1') -Force
 try{
     New-Item -ItemType Directory -Path $temp | Out-Null
-    $setup=Join-Path $temp "PenumbraVR-Setup-$($release.version).zip"
-    & (Join-Path $PSScriptRoot 'Package-FrameworkCandidate.ps1') -OutputPath $setup -RuntimeDirectory $RuntimeDirectory -SourceDirectory $SourceDirectory | Out-Host
+    $payload=Join-Path $temp 'payload.zip'
+    & (Join-Path $PSScriptRoot 'Package-FrameworkCandidate.ps1') -OutputPath $payload -RuntimeDirectory $RuntimeDirectory -SourceDirectory $SourceDirectory | Out-Host
+    $setup=Join-Path $temp "PenumbraVR-Setup-$($release.version).exe"
+    & (Join-Path $PSScriptRoot 'Package-PenumbraVrSetup.ps1') -OutputPath $setup -PayloadPath $payload | Out-Host
     & (Join-Path $repo 'tests/deployment/Test-ReleaseIdentity.ps1') -Built
     $baseSource=Join-Path $temp 'committed-source.zip'
     & git -C $repo archive --format=zip "--output=$baseSource" HEAD
@@ -44,7 +46,7 @@ try{
     $sourceZip=Join-Path $temp "PenumbraVR-Source-$($release.version).zip"
     Write-PvrArchive -Root $sourceStage -OutputPath $sourceZip
     $pe=@()
-    foreach($relative in @('build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll','build/bin/Release/PenumbraVR.BlackPlague.Probe.dll','build/bin/Release/PenumbraVR.Requiem.Probe.dll','build/bin/Release/PenumbraVR.LaaTransform.exe','products/overture/build/bin/Release/Penumbra_vr.exe')){
+    foreach($relative in @('build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll','build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll','build/bin/Release/PenumbraVR.BlackPlague.Probe.dll','build/bin/Release/PenumbraVR.Requiem.Probe.dll','build/bin/Release/PenumbraVR.LaaTransform.exe','products/overture/build/bin/Release/Penumbra_vr.exe')){
         $path=Join-Path $repo $relative;$info=Get-PvrPeInfo $path;$versionInfo=(Get-Item -LiteralPath $path).VersionInfo
         if($info.Architecture -ne 'x86' -or $versionInfo.ProductVersion -ne $release.version){throw "Shipped PE identity mismatch: $relative"}
         $pe+=[pscustomobject]@{file=$relative;architecture=$info.Architecture;productVersion=$versionInfo.ProductVersion;sha256=(Get-FileHash -LiteralPath $path).Hash;imports=$info.Imports;delayImports=$info.DelayImports}

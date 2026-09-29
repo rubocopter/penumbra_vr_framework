@@ -453,8 +453,9 @@ if (($blackPlaguePayloadIds | Sort-Object -Unique).Count -ne $blackPlaguePayload
     throw 'Black Plague deployment payload metadata contains duplicate payload IDs.'
 }
 $requiredBlackPlaguePayloadIds = @(
-    'openal_soft',
     'bootstrap_proxy',
+    'openal_proxy',
+    'openal_implementation',
     'probe',
     'requiem_probe',
     'openvr_loader',
@@ -469,8 +470,9 @@ if (@(Compare-Object -ReferenceObject ($requiredBlackPlaguePayloadIds | Sort-Obj
 }
 
 $expectedBlackPlagueDestinations = @{
-    openal_soft = 'OpenAL32.dll'
     bootstrap_proxy = 'alut.dll'
+    openal_proxy = 'OpenAL32.dll'
+    openal_implementation = 'PenumbraVR_OpenALSoft.dll'
     probe = 'PenumbraVR.BlackPlague.Probe.dll'
     requiem_probe = 'PenumbraVR.Requiem.Probe.dll'
     openvr_loader = 'openvr_api.dll'

@@ -41,7 +41,8 @@ Review `THIRD_PARTY.md` and the recorded provenance before public publication.
 ## Building the versioned candidate
 
 Use a clean committed checkout, Visual Studio 2022 C++ Win32 tools, CMake
-3.25+, Windows PowerShell 5.1, the vendored OpenVR SDK, and an official VS
+3.25+, Windows PowerShell 5.1, .NET SDK 9.0.317 (stable servicing patches
+accepted), the vendored OpenVR SDK, and an official VS
 `VC/Redist/MSVC/<version>/x86/Microsoft.VC143.CRT` directory whose two DLLs
 match `products/overture/runtime-dependencies.json`. Do not supply system DLLs.
 Download the two official source inputs named and SHA-256 pinned by
@@ -57,7 +58,7 @@ The builder validates every input before creating artifacts.
 
 The output directory must be new. The builder compiles/tests root Release and
 the autonomous Overture product, then exports exact committed source, upstream
-sources, notices, `PenumbraVR-Setup-1.0.0.zip`, `PenumbraVR-Source-1.0.0.zip`,
+sources, notices, `PenumbraVR-Setup-1.0.0.exe`, `PenumbraVR-Source-1.0.0.zip`,
 `build-report.json` and `SHA256SUMS.txt`. `-PackageOnly` skips repeating root
 build/tests and records that limitation; it still builds/tests Overture.
 The report records commit, toolchain, x86 PE imports/version/hash, pinned inputs
