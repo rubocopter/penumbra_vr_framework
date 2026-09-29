@@ -148,11 +148,54 @@ internal packaging inputs; source archives and reports are maintainer artifacts.
 release builder also exports matching source, notices, checksums and a report.
 
 English is the default UI language. The three optional Spanish translations
-start unchecked. Choosing Español selects them automatically; their checkboxes
-remain editable. Each product records its own localization ownership. Repair
-uses recorded selections. The main Install button preflights all selected roots
+start unchecked for new installations. Recorded installed components remain
+selected when the installer opens. Choosing Español selects translations
+automatically; their checkboxes remain editable. Each product records its own
+localization ownership. Repair uses recorded selections.
+Returning to English changes interface copy without deselecting owned or
+explicitly selected translations. Maintenance selection survives refresh and
+language changes; Modify components transfers those target roots to Install.
+The main Install button preflights all selected roots
 and applies them; maintenance operations retain their review step. Games are
 launched manually through Steam after installation.
+
+### Installation and maintenance presentation
+
+The title and discreet language selector precede a full-width project banner.
+The default Install tab shows one card per detected Overture or Black Plague
+root, its path, detection result and recorded Framework version/status. Spanish
+translations and Overture enhancement textures belong to their game's card.
+Requiem detection and its VR/translation selections are nested inside the
+matching Black Plague card; they never share selections across separate copies.
+
+Recommended VR graphics settings are checked by default, with the existing
+configuration backup explained alongside them. Advanced options contain the
+default/current-user configuration scope. Refresh and Locate game remain
+secondary; one primary button reads Install, Update, Apply changes or Repair
+installation according to the selected roots. Repair restores recorded
+components before they can be modified. Interrupted installations block the
+normal action and direct users to maintenance.
+
+The Maintenance tab reports installed components separately from draft choices.
+It provides Modify components, Verify VR installation, Repair installation and
+Uninstall, with diagnostics ZIP, installation log and Restore interrupted
+installation under troubleshooting. The latter restores the verified snapshot
+before an interrupted transaction; it is not a general backup browser.
+Uninstall opens component selection. Removing Black Plague includes dependent
+Requiem, while selecting only Requiem uses the internal expansion-removal
+transaction and keeps Black Plague, including its recorded Spanish translation.
+Both explicit and numbered selector routes preserve that base selection.
+No standalone technical removal button is
+shown on Install.
+
+Every selected root preflights before the first write, even when different
+copies of a game have different optional choices. Execution still consists of
+independent root transactions; a later failure reports earlier completions.
+Installation completion is followed by a read-only VR check of bindings,
+dependencies, owned files and configuration. A failed check shows the affected
+items instead of claiming complete readiness. The installer never launches a
+game. Read-only fixture previews and live WinForms event checks exercise both
+languages, nested selection, refresh, page changes and primary-button layout.
 
 ### Components and validation
 

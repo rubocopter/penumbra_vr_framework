@@ -11,18 +11,21 @@ $temporaryRoot = Join-Path ([IO.Path]::GetTempPath()) ('PenumbraVrSetupSmoke-' +
 try {
     $english = (& powershell -NoProfile -ExecutionPolicy Bypass -File $gui -UiContract -Language en | Out-String).Trim() | ConvertFrom-Json
     if ($english.language -ne 'en' -or
-        $english.installText -ne 'Install / update' -or
+        $english.installText -ne 'Install' -or
         $english.spanishOverture -or
         $english.spanishBlackPlague -or
         $english.spanishRequiem -or
         -not $english.translationsEditable -or
-        -not $english.bannerPresent) {
+        -not $english.bannerPresent -or -not $english.recommendedSettings -or
+        ($english.tabs -join ',') -ne 'Install,Maintenance' -or
+        -not $english.bannerFullWidth -or $english.primaryActions -ne 1 -or
+        -not $english.primaryVisible) {
         throw 'English UI defaults do not match the v1.0 installer contract.'
     }
 
     $spanish = (& powershell -NoProfile -ExecutionPolicy Bypass -File $gui -UiContract -Language es | Out-String).Trim() | ConvertFrom-Json
     if ($spanish.language -ne 'es' -or
-        $spanish.installText -ne 'Instalar / actualizar' -or
+        $spanish.installText -ne 'Instalar' -or
         -not $spanish.spanishOverture -or
         -not $spanish.spanishBlackPlague -or
         -not $spanish.spanishRequiem -or
@@ -39,6 +42,7 @@ try {
     $toolsRoot = Join-Path $payloadRoot 'tools'
     New-Item -ItemType Directory -Path $toolsRoot -Force | Out-Null
     Copy-Item -LiteralPath $gui -Destination (Join-Path $toolsRoot 'Install-PenumbraFrameworkGui.ps1')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/PenumbraVrInstallerUi.psm1') -Destination $toolsRoot
     [IO.File]::WriteAllText((Join-Path $toolsRoot 'Install-PenumbraFrameworkCandidate.ps1'), '# smoke payload')
     [IO.File]::WriteAllText((Join-Path $toolsRoot 'Get-PenumbraInstallations.ps1'), '# smoke payload')
     $sums=@(Get-ChildItem -LiteralPath $payloadRoot -Recurse -File | ForEach-Object { '{0}  {1}' -f (Get-FileHash $_.FullName).Hash,$_.FullName.Substring($payloadRoot.Length+1).Replace('\','/') })

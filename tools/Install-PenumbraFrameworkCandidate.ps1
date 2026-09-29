@@ -196,6 +196,17 @@ if ($Recover) {
     return
 }
 
+function Set-RequiemRemovalArguments([hashtable]$Arguments) {
+    # Expansion removal is a component update of the shared root. Preserve the
+    # base's recorded extras instead of treating omitted install switches as false.
+    $statePath=Join-Path (Split-Path -Parent $Arguments.GamePath) 'PenumbraVR.BlackPlague.install.json'
+    $state=Get-Content -LiteralPath $statePath -Raw | ConvertFrom-Json
+    if($state.schema -ne 1){throw 'Requiem removal requires a valid shared installation record.'}
+    $Arguments.Restore=$false
+    $Arguments.RequiemMode='Disable'
+    $Arguments.InstallSpanishBlackPlague=[bool]$state.spanishLocalizationSha256
+}
+
 if ($Repair -or ($Restore -and $Game -and $GamePath)) {
     if ($Game -notin @('Overture', 'BlackPlague', 'Requiem') -or -not $GamePath -or
         $LargeAddressAware -or $List) {
@@ -228,7 +239,7 @@ if ($Repair -or ($Restore -and $Game -and $GamePath)) {
         }
         $operation=if($Restore){'restore'}else{'repair'}
         $label=if($Game -eq 'Requiem'){'Requiem'}else{'Black Plague'}
-        if($Restore -and $Game -eq 'Requiem'){$maintenanceArgs.Restore=$false;$maintenanceArgs.RequiemMode='Disable';$operation='remove-requiem';$label='Black Plague'}
+        if($Restore -and $Game -eq 'Requiem'){Set-RequiemRemovalArguments $maintenanceArgs;$operation='remove-requiem';$label='Black Plague'}
         Invoke-LoggedInstaller $operation $label $executable $blackPlagueInstaller $maintenanceArgs
     }
     return
@@ -346,7 +357,7 @@ foreach($selected in $selectedEntries){
         $members=@($selectedEntries | Where-Object {(Split-Path -Parent $_.Path) -ieq $redist})
         $label=if(@($members | Where-Object {$_.Game -eq 'Requiem'}).Count){'Requiem'}else{'Black Plague'}
         $args=@{GamePath=(Join-Path $redist 'Penumbra.exe');BuildRoot=(Join-Path $packageRoot 'products/black_plague/build');Restore=[bool]$Restore}
-        if($Restore -and $label -eq 'Requiem' -and -not @($members | Where-Object {$_.Game -eq 'Black Plague'}).Count){$args.Restore=$false;$args.RequiemMode='Disable';$operation='remove-requiem';$label='Black Plague'}
+        if($Restore -and $label -eq 'Requiem' -and -not @($members | Where-Object {$_.Game -eq 'Black Plague'}).Count){Set-RequiemRemovalArguments $args;$operation='remove-requiem';$label='Black Plague'}
         if(-not $Restore){
             if($label -eq 'Requiem' -and $RequiemMode -eq 'Disable'){throw 'Selected Requiem cannot be disabled in the same install plan.'}
             $args.RequiemMode=if($label -eq 'Requiem'){'Enable'}else{$RequiemMode}

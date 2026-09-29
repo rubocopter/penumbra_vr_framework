@@ -103,16 +103,19 @@ try {
     [IO.File]::WriteAllBytes($codec,$codecBytes)
     $plans=@(& $installer -SteamRoot $steam -Selections 1,2,3 -Plan @logArgs 6>$null)
     if($plans.Count -ne 2 -or @($plans | Where-Object {-not $_.PreflightPassed}).Count -or (Test-Path $logPath)){throw 'Read-only plan failed to deduplicate roots or changed state.'}
-    & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame @logArgs 6>$null | Out-Null
+    & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame -InstallSpanishBlackPlague -InstallSpanishRequiem @logArgs 6>$null | Out-Null
     $requiemProbe = Join-Path $blackPlagueRedist 'PenumbraVR.Requiem.Probe.dll'
     if (-not (Test-Path -LiteralPath $requiemProbe)) {
         throw 'Requiem selection did not install the shared redist transaction.'
     }
     Assert-ControllerProfiles $sharedProfiles (Join-Path $blackPlagueRedist 'vr') 'Requiem install'
+    $bpSpanish=Join-Path $blackPlagueRedist 'config/Espanol.lang'
+    $bpSpanishHash=(Get-FileHash -LiteralPath $bpSpanish).Hash
     & $installer -SteamRoot $steam -Game Requiem -GamePath $requiemGame -Restore @logArgs 6>$null | Out-Null
     if (Test-Path -LiteralPath $requiemProbe) {
         throw 'Requiem selection did not restore the shared redist transaction.'
     }
+    if(-not (Test-Path -LiteralPath $bpSpanish) -or (Get-FileHash -LiteralPath $bpSpanish).Hash -ne $bpSpanishHash){throw 'Requiem-only removal changed the installed Black Plague Spanish translation.'}
     & $installer -Game BlackPlague -GamePath $blackPlagueGame -Restore @logArgs 6>$null | Out-Null
     $rejected = $false
     try { & $installer -SteamRoot $steam -Game Overture -GamePath $overtureGame -LargeAddressAware 6>$null | Out-Null }

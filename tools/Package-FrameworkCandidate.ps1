@@ -35,7 +35,7 @@ try {
                         'Install-PenumbraFrameworkGui.ps1',
                         'Instalar-Penumbra-VR.vbs',
                         'Get-PenumbraInstallations.ps1', 'Get-PenumbraBuildInfo.ps1',
-                        'PenumbraVrPrerequisites.psm1','PenumbraVrConfiguration.psm1',
+                        'PenumbraVrPrerequisites.psm1','PenumbraVrConfiguration.psm1','PenumbraVrInstallerUi.psm1',
                         'Test-PenumbraVrInstallation.ps1','Collect-PenumbraVrDiagnostics.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $toolsRoot
     }
