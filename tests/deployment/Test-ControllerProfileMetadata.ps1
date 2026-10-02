@@ -16,6 +16,7 @@ try {
         Copy-Item -LiteralPath (Join-Path $repoRoot $relative) -Destination $destination -Recurse
     }
     foreach ($relative in @('tools/Test-PenumbraVrMetadata.ps1', 'src/common/build_catalog.cpp',
+                           'products/overture/dependencies/bin/win32/OpenAL32.dll',
                            'products/overture/data/models/hud_objects/HAND_Low_C.jpg')) {
         $destination = Join-Path $fixture $relative
         New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
