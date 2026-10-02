@@ -28,6 +28,22 @@ try{
     $form.StartPosition='Manual';$form.Location=[Drawing.Point]::new(-32000,-32000);$form.Show();[Windows.Forms.Application]::DoEvents();Resize-Content;Update-Actions
     Assert ($script:views.Count -eq 2 -and $script:views[1].Requiem.Parent -eq $script:views[1].Spanish.Parent) 'Requiem must be inside its Black Plague card.'
     Assert ($banner.Width -eq $form.ClientSize.Width -and $installButton.Visible -and $installButton.Enabled) 'Full-width banner and visible primary action required.'
+    # Exercise the actual worker with a slow task. Timer callbacks must keep
+    # running on the UI thread while work uses a separate runspace/thread.
+    $script:heartbeats=0;$heartbeat=[Windows.Forms.Timer]::new();$heartbeat.Interval=30
+    $heartbeat.Add_Tick({$script:heartbeats++})
+    try{
+        $heartbeat.Start()
+        $workerResult=Invoke-PvrUiBackground -Owner $form -Title 'Test' -Message 'Working' -Work {
+            param($data)
+            Start-Sleep -Milliseconds 500
+            [pscustomobject]@{Thread=[Threading.Thread]::CurrentThread.ManagedThreadId;Value=$data.Value}
+        } -Data @{Value=42}
+        Assert ($script:heartbeats -ge 3 -and $workerResult.Value -eq 42 -and $workerResult.Thread -ne [Threading.Thread]::CurrentThread.ManagedThreadId) 'Long operation must keep the UI timer running and return worker results.'
+        $workerFailed=$false
+        try{Invoke-PvrUiBackground -Owner $form -Title 'Test' -Message 'Working' -Work {throw 'Injected worker failure'} -Data @{} | Out-Null}catch{$workerFailed=$_.Exception.Message.Contains('Injected worker failure')}
+        Assert $workerFailed 'Worker failure must propagate to transaction outcome handling.'
+    }finally{$heartbeat.Stop();$heartbeat.Dispose()}
     Assert ($script:views[0].Panel.Width -gt 750 -and $script:views[1].Panel.Width -eq $script:views[0].Panel.Width) 'Cards must span the page width.'
     Assert (-not $script:views[0].Spanish.Checked -and $settingsOption.Checked) 'Fresh English selections must exclude translations and include recommended settings.'
     $languageBox.SelectedIndex=1
@@ -84,13 +100,17 @@ if($List){throw 'No fixture discovery after an injected write failure.'}
 $verb=if($Plan){'Plan'}else{'Apply'}
 Add-Content -LiteralPath '__TRACE__' -Value ($verb+' '+$Game)
 if($Game -eq 'BlackPlague' -and ((-not $Plan) -or (Test-Path -LiteralPath '__REJECT__'))){throw 'Injected later-root failure.'}
+Start-Sleep -Milliseconds 150
 if($Plan){[pscustomobject]@{Game=$Game;Path=$GamePath;Payload=[pscustomobject]@{Files=@();Configuration=@()}}}
 '@
     [IO.File]::WriteAllText($stub,$stubText.Replace('__TRACE__',$trace.Replace("'","''")).Replace('__REJECT__',$reject.Replace("'","''")))
     function Show-Text([string]$title,[string]$text,[switch]$Review){$script:lastDialog=[pscustomobject]@{Title=$title;Text=$text};'Cancel'}
     $selector=$stub;$PreviewDataPath=$null
     foreach($v in $script:views){$v.Select.Checked=$true}
-    Invoke-Operation 'Install'
+    $script:operationTicks=0;$operationTimer=[Windows.Forms.Timer]::new();$operationTimer.Interval=30
+    $operationTimer.Add_Tick({$script:operationTicks++;Invoke-Operation 'Install'})
+    try{$operationTimer.Start();Invoke-Operation 'Install'}finally{$operationTimer.Stop();$operationTimer.Dispose()}
+    Assert ($script:operationTicks -ge 3 -and -not $script:busy -and $shell.Enabled) 'Real operation must keep pumping events, reject reentrant Apply, and restore controls after failure.'
     Assert ((@(Get-Content $trace) -join ',') -eq 'Plan Overture,Plan BlackPlague,Apply Overture,Apply BlackPlague') 'All roots must pass preflight before the first write.'
     Assert ($script:lastDialog.Title -eq 'Operation stopped' -and $script:lastDialog.Text.Contains('C:\Games\Overture') -and $script:lastDialog.Text.Contains('C:\Games\BP')) 'Partial failure must identify both the completed root and the failed root.'
     $PreviewDataPath=$fixture;$script:cards=@();Refresh-Games;$PreviewDataPath=$null

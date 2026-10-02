@@ -18,6 +18,14 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
+## 1.0.1 patch candidate
+
+The local 1.0.1 candidate addresses Overture physical acquisition and installer
+startup/Apply responsiveness. Its changes and validation limits are recorded in
+[the patch notes](releases/1.0.1.md). Published v1.0.0 remains the public baseline
+until the new artifact is accepted and published; earlier acceptance does not
+certify the new drawer behavior or installer timing.
+
 ## Remaining validation and release limitations
 
 - Requiem's intermittent startup crash remains unresolved and unattributed. Do

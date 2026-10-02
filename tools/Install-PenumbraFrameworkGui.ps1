@@ -3,7 +3,7 @@ param(
     [switch]$SmokeTest,[switch]$UiContract,[string]$RenderPath,
     [ValidateSet('en','es')][string]$Language='en',
     [ValidateSet('Install','Maintenance')][string]$RenderPage='Install',
-    [string]$PreviewDataPath,[string]$SteamRoot,[string[]]$ManualPaths=@()
+    [string]$PreviewDataPath,[string]$SteamRoot,[string[]]$ManualPaths=@(),[string]$ReadySignalPath
 )
 $ErrorActionPreference='Stop'
 if($PreviewDataPath -and -not ($RenderPath -or $UiContract -or $SmokeTest)){throw 'Preview data is only allowed for read-only UI previews.'}
@@ -16,7 +16,7 @@ $discovery=Join-Path $PSScriptRoot 'Get-PenumbraInstallations.ps1'
 if(-not (Test-Path $selector) -or -not (Test-Path $discovery)){throw 'Installer package is incomplete.'}
 $packageRoot=Split-Path -Parent $PSScriptRoot
 $releasePath=Join-Path $packageRoot 'release.json'
-$script:version=if(Test-Path $releasePath){(Get-Content $releasePath -Raw | ConvertFrom-Json).version}else{'1.0.0'}
+$script:version=if(Test-Path $releasePath){(Get-Content $releasePath -Raw | ConvertFrom-Json).version}else{'1.0.1'}
 $script:cards=@();$script:views=@();$script:maintenanceViews=@();$script:manualPaths=@($ManualPaths);$script:busy=$false
 $script:Language=$Language
 $logPath=Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'PenumbraVR/installer.jsonl'
@@ -200,22 +200,33 @@ function Set-UiLanguage([bool]$selectTranslations=$false){
 }
 function Refresh-Games {
     Sync-Cards;$previous=@{};foreach($c in $script:cards){$previous[$c.Path]=$c}
-    if($PreviewDataPath){$preview=Get-Content -LiteralPath $PreviewDataPath -Raw | ConvertFrom-Json;$found=@($preview.Entries)}else{
-        $search=@{};if($SteamRoot){$search.SteamRoot=$SteamRoot};if($script:manualPaths.Count){$search.ManualPaths=$script:manualPaths}
-        & $selector -List @search | Out-Null;$found=@(& $discovery @search)
+    if($PreviewDataPath){
+        $snapshot=Get-Content -LiteralPath $PreviewDataPath -Raw | ConvertFrom-Json
+    }else{
+        $search=@{};if($SteamRoot){$search.SteamRoot=$SteamRoot};if($script:manualPaths.Count){$search.ManualPaths=@($script:manualPaths)}
+        $snapshot=Invoke-PvrUiBackground -Owner $form -Title 'Penumbra VR Framework' -Message (T 'Checking installed games…' 'Comprobando los juegos instalados…') -Data @{
+            Search=$search;Selector=$selector;Discovery=$discovery;Verifier=(Join-Path $PSScriptRoot 'Test-PenumbraVrInstallation.ps1')
+        } -Work {
+            param($data)
+            $search=$data.Search
+            & $data.Selector -List @search | Out-Null
+            $found=@(& $data.Discovery @search);$reports=@()
+            foreach($entry in $found){
+                if(-not $entry.Managed -or $entry.NeedsRecovery -or (Split-Path -Leaf $entry.Path) -ieq 'Requiem.exe'){continue}
+                $owner=if($entry.ManagedProduct){$entry.ManagedProduct}else{$entry.Game}
+                $product=if($owner -eq 'Overture'){'overture'}else{'black_plague'}
+                try{$report=& $data.Verifier -Game $product -GamePath $entry.Path -SkipSteamVr}catch{$report=[pscustomobject]@{Version='';Components=@();InstallationVerified=$false;Checks=@()}}
+                $reports+=[pscustomobject]@{Path=$entry.Path;Report=$report}
+            }
+            [pscustomobject]@{Entries=$found;Reports=$reports}
+        }
     }
+    $found=@($snapshot.Entries)
     $script:cards=@()
     foreach($entry in $found){
         if((Split-Path -Leaf $entry.Path) -ieq 'Requiem.exe'){continue}
         $expansion=@($found | Where-Object {(Split-Path -Leaf $_.Path) -ieq 'Requiem.exe' -and (Split-Path -Parent $_.Path) -ieq (Split-Path -Parent $entry.Path)}) | Select-Object -First 1
-        $report=$null
-        if($entry.Managed -and -not $entry.NeedsRecovery){
-            if($PreviewDataPath){$report=($preview.Reports | Where-Object {$_.Path -ieq $entry.Path} | Select-Object -First 1).Report}else{
-                $owner=if($entry.ManagedProduct){$entry.ManagedProduct}else{$entry.Game}
-                $product=if($owner -eq 'Overture'){'overture'}else{'black_plague'}
-                try{$report=& (Join-Path $PSScriptRoot 'Test-PenumbraVrInstallation.ps1') -Game $product -GamePath $entry.Path -SkipSteamVr}catch{$report=[pscustomobject]@{Version='';Components=@();InstallationVerified=$false;Checks=@()}}
-            }
-        }
+        $report=($snapshot.Reports | Where-Object {$_.Path -ieq $entry.Path} | Select-Object -First 1).Report
         $card=ConvertTo-PvrUiGame -Entry $entry -Expansion $expansion -Report $report -PackageVersion $script:version -Language $script:Language
         if($previous.ContainsKey($card.Path)){$old=$previous[$card.Path];foreach($field in @('Selected','MaintenanceSelected','SpanishBase','SpanishRequiem','Textures','RequiemSelected')){$card.$field=$old.$field}}
         $script:cards+=$card
@@ -270,23 +281,32 @@ function Check-Summary($report){
     }
     $lines+='';$lines+=if($report.InstallationVerified){T 'No problems found.' 'No se encontraron problemas.'}else{T 'Problems found. Review the items above.' 'Se encontraron problemas. Revisa los elementos anteriores.'};$lines -join "`r`n"
 }
+function Invoke-SelectorWork([hashtable]$Arguments,[switch]$Plan){
+    Invoke-PvrUiBackground -Owner $form -Title 'Penumbra VR Framework' -Message $(if($Plan){T 'Checking changes…' 'Comprobando los cambios…'}else{T 'Processing the selected game. Please wait…' 'Procesando el juego seleccionado. Espera un momento…'}) -Data @{Selector=$selector;Arguments=$Arguments;Plan=[bool]$Plan} -Work {
+        param($data)
+        $arguments=$data.Arguments
+        if($data.Plan){& $data.Selector @arguments -Plan}else{& $data.Selector @arguments}
+    }
+}
 function Invoke-Operation([string]$operation){
     if($script:busy -or $PreviewDataPath){return}
     Sync-Cards
+    $script:busy=$true;$shell.Enabled=$false;$form.UseWaitCursor=$true
+    try{
     try{
         $cards=if($operation -eq 'Install'){@($script:cards)}elseif($operation -eq 'Uninstall'){@(Select-Removal)}else{@(Maintenance-Cards $operation)}
         $scope=if($scopeOption.Checked){'DefaultAndUserFiles'}else{'DefaultFiles'}
         $requests=@(New-PvrUiRequests -Cards $cards -Operation $operation -RecommendedSettings $settingsOption.Checked -SettingsScope $scope)
         if(-not $requests.Count){return}
         if($operation -eq 'Verify'){
-            $text=@();foreach($r in $requests){$a=$r.Arguments;$report=& $selector @a;$text+=(Format-PvrUiOutcomes -Requests @($r));$text+=(Check-Summary $report);$text+=''}
+            $text=@();foreach($r in $requests){$a=$r.Arguments;$report=Invoke-SelectorWork -Arguments $a;$text+=(Format-PvrUiOutcomes -Requests @($r));$text+=(Check-Summary $report);$text+=''}
             [void](Show-Text (T 'VR installation check' 'Comprobación de la instalación VR') ($text -join "`r`n"));return
         }
         if($operation -eq 'Diagnostics'){
-            foreach($r in $requests){$save=[Windows.Forms.SaveFileDialog]::new();$save.Filter='ZIP (*.zip)|*.zip';$save.FileName='PenumbraVR-'+$r.Card.Game+'-diagnostics.zip';try{if($save.ShowDialog($form) -eq 'OK'){$a=$r.Arguments;$a.DiagnosticOutputPath=$save.FileName;& $selector @a | Out-Null}}finally{$save.Dispose()}};return
+            foreach($r in $requests){$save=[Windows.Forms.SaveFileDialog]::new();$save.Filter='ZIP (*.zip)|*.zip';$save.FileName='PenumbraVR-'+$r.Card.Game+'-diagnostics.zip';try{if($save.ShowDialog($form) -eq 'OK'){$a=$r.Arguments;$a.DiagnosticOutputPath=$save.FileName;Invoke-SelectorWork -Arguments $a | Out-Null}}finally{$save.Dispose()}};return
         }
         # Preflight every root before the first write, even when optional choices differ.
-        $previews=@();if($operation -ne 'Recover'){foreach($r in $requests){$a=$r.Arguments;$previews+=@(& $selector @a -Plan)}}
+        $previews=@();if($operation -ne 'Recover'){foreach($r in $requests){$a=$r.Arguments;$previews+=@(Invoke-SelectorWork -Arguments $a -Plan)}}
         if($operation -ne 'Install' -or @($requests | Where-Object {$_.RequiresReview}).Count){
             $review=@((T 'Close the selected games before continuing.' 'Cierra los juegos seleccionados antes de continuar.'),'')
             if($operation -eq 'Recover'){$review+=(T 'Restore the verified snapshot from before the interrupted operation.' 'Restaurar la copia verificada anterior a la operación interrumpida.')}
@@ -295,10 +315,9 @@ function Invoke-Operation([string]$operation){
             if((Show-Text (T 'Review changes' 'Revisar cambios') ($review -join "`r`n") -Review) -ne 'OK'){return}
         }
     }catch{[void](Show-Text (T 'Check failed — no games changed' 'Comprobación fallida — ningún juego modificado') $_.Exception.Message);return}
-    $script:busy=$true;$shell.Enabled=$false;$form.UseWaitCursor=$true;$form.Text=T 'Penumbra VR Framework — Processing…' 'Penumbra VR Framework — Procesando…';[Windows.Forms.Application]::DoEvents()
     $completed=@();$current=$null
     try{
-        foreach($r in $requests){$current=$r;$a=$r.Arguments;& $selector @a | Out-Null;$completed+=$r;$current=$null}
+        foreach($r in $requests){$current=$r;$a=$r.Arguments;Invoke-SelectorWork -Arguments $a | Out-Null;$completed+=$r;$current=$null}
         $script:cards=@();Refresh-Games
         $message=@();foreach($r in $completed){$result=if($operation -eq 'Install'){if($r.Operation -eq 'Repair'){T 'VR repaired' 'VR reparado'}else{T 'VR installed / updated' 'VR instalado / actualizado'}}elseif($operation -eq 'Uninstall'){if($r.Arguments.Game -eq 'Requiem'){T 'Requiem VR removed' 'VR de Requiem eliminado'}else{T 'VR components removed' 'Componentes VR eliminados'}}elseif($operation -eq 'Recover'){T 'Previous installation restored' 'Instalación anterior restaurada'}else{T 'VR repaired' 'VR reparado'}
             $message+='✓ '+(Format-PvrUiOutcomes -Requests @($r) -Label $result)
@@ -309,7 +328,7 @@ function Invoke-Operation([string]$operation){
         }
         if($operation -in @('Install','Repair')){
             $verified=$true
-            foreach($r in $completed){$current=$r;$a=@{Game=$r.Card.Game;GamePath=$r.Card.Path;Verify=$true};$report=& $selector @a;if(-not $report.InstallationVerified){$verified=$false;$message+=(Format-PvrUiOutcomes -Requests @($r) -Label (T 'Check needs attention' 'Revisa la comprobación'));$message+=(Check-Summary $report)};$current=$null}
+            foreach($r in $completed){$current=$r;$a=@{Game=$r.Card.Game;GamePath=$r.Card.Path;Verify=$true};$report=Invoke-SelectorWork -Arguments $a;if(-not $report.InstallationVerified){$verified=$false;$message+=(Format-PvrUiOutcomes -Requests @($r) -Label (T 'Check needs attention' 'Revisa la comprobación'));$message+=(Check-Summary $report)};$current=$null}
             if($verified){$message+='✓ '+(T 'Controller bindings and required dependencies verified' 'Asignaciones de controles y dependencias necesarias verificadas');$message+='';$message+=(T 'Start SteamVR. You can now launch the games normally through Steam.' 'Inicia SteamVR. Ya puedes abrir los juegos normalmente desde Steam.')}
             $caption=if($verified){T 'Installation complete' 'Instalación completada'}else{T 'Changes applied — installation needs attention' 'Cambios aplicados — revisa la instalación'}
         }else{$caption=T 'Operation complete' 'Operación completada'}
@@ -320,6 +339,7 @@ function Invoke-Operation([string]$operation){
         if($completed.Count){$detail=(T 'These installations completed before the operation stopped:' 'Estas instalaciones se completaron antes de detenerse la operación:')+"`r`n"+(Format-PvrUiOutcomes -Requests $completed -Label (T 'Completed' 'Completado'))+"`r`n`r`n"+$detail}
         [void](Show-Text (T 'Operation stopped' 'Operación detenida') $detail)
         try{$script:cards=@();Refresh-Games}catch{}
+    }
     }finally{$script:busy=$false;$shell.Enabled=$true;$form.UseWaitCursor=$false;$form.Text='Penumbra VR Framework';Update-Actions}
 }
 $languageBox.Add_SelectedIndexChanged({Set-UiLanguage $true})
@@ -334,7 +354,13 @@ $modifyButton.Add_Click({
 $refreshButton.Add_Click({try{Refresh-Games}catch{[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Penumbra VR')}})
 $browseButton.Add_Click({$folder=[Windows.Forms.FolderBrowserDialog]::new();$folder.Description=T 'Select the game folder or its redist folder.' 'Selecciona la carpeta del juego o su directorio redist.';try{if($folder.ShowDialog($form) -eq 'OK'){$script:manualPaths+=$folder.SelectedPath;Refresh-Games}}catch{[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Penumbra VR')}finally{$folder.Dispose()}})
 try{
-    if($PreviewDataPath -or (-not $UiContract -and -not $RenderPath -and (-not $SmokeTest -or $SteamRoot -or $ManualPaths.Count))){Refresh-Games}
+    if($PreviewDataPath -or ($SmokeTest -and ($SteamRoot -or $ManualPaths.Count))){Refresh-Games}
+    elseif(-not $UiContract -and -not $RenderPath -and -not $SmokeTest){
+        $form.Add_Shown({
+            if($ReadySignalPath){[IO.File]::WriteAllText($ReadySignalPath,'ready')}
+            try{Refresh-Games}catch{[void][Windows.Forms.MessageBox]::Show($_.Exception.Message,'Penumbra VR')}
+        })
+    }
     if($RenderPage -eq 'Maintenance'){$tabs.SelectedIndex=1}
     if($UiContract -or $RenderPath){
         $form.StartPosition='Manual';$form.Location=[Drawing.Point]::new(-32000,-32000);$form.Show();[Windows.Forms.Application]::DoEvents();Resize-Content;Update-Actions;[Windows.Forms.Application]::DoEvents()

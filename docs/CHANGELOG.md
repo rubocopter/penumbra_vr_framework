@@ -5,6 +5,31 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.1 — patch candidate, 2026-10-03
+
+- Corrected Overture acquisition of multi-body mechanisms: a sibling body from
+  the same entity no longer hides the selected wheel/handle. The maintainer
+  confirmed the outside hatch wheel and later iron-bar crank in headset on the
+  preceding local candidate; the latest drawer change needs retest.
+- Corrected nearest-overlap ranking: an occluded target can no longer suppress
+  another accessible drawer/prop or inventory item. Physical reach, collision
+  dimensions and sight barriers retain their established limits.
+- Oculus Touch pointing uses SteamVR's tip pose in both binding trees; Quest 3
+  alignment remains a focused hardware retest.
+- Setup shows a bilingual preparation window during payload extraction and
+  checksum validation, retained until the installer window appears. Disabled
+  redundant single-file compression so the already zipped payload does not
+  delay entry into the bootstrap UI.
+- Installer discovery, preflight, installation, maintenance and verification
+  run in background PowerShell runspaces with an animated waiting dialog.
+  Controls and outcomes stay on the UI thread; checksums, all-root preflight,
+  transactions, rollback and partial-failure reporting remain enforced.
+- Black Plague render-thread telemetry drops and counts samples when its
+  diagnostic lock is busy, avoiding a VR-frame stall.
+- Updated executable/installer/package identity to 1.0.1 and added
+  [patch notes](releases/1.0.1.md). This candidate is separate from published
+  v1.0.0 and does not imply broader headset or clean-machine acceptance.
+
 ## 1.0.0 â€” 2026-09-29
 
 First public Penumbra VR Framework release for Overture, Black Plague and

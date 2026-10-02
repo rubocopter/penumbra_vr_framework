@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][string]$OutputPath,
     [string]$RuntimeDirectory,
@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent $PSScriptRoot
+$release=Get-Content (Join-Path $repoRoot 'release.json') -Raw | ConvertFrom-Json
 & (Join-Path $PSScriptRoot 'Test-PenumbraVrMetadata.ps1')
 $outputPath = [System.IO.Path]::GetFullPath($OutputPath)
 if (Test-Path -LiteralPath $outputPath) {
@@ -58,13 +59,13 @@ try {
     Copy-Item -LiteralPath (Join-Path $repoRoot 'docs/SOURCE-AND-NOTICES.md') -Destination $stage
     foreach($document in @('CLOSURE_STATUS.md','THIRD_PARTY.md','RUNTIME_DEPENDENCIES.md','TRILOGY_PARITY_PLAN.md')){Copy-Item -LiteralPath (Join-Path $repoRoot ('docs/'+$document)) -Destination $stage}
     @'
-# Penumbra VR Framework 1.0.0 release candidate
+# Penumbra VR Framework @VERSION@ release candidate
 
 This archive contains host-tested Overture and shared Black Plague/Requiem
 deployment candidates. Requiem's runtime has representative headset evidence;
 the full game and this installer are not yet headset validated or supported.
 
-This ZIP is the private payload of `PenumbraVR-Setup-1.0.0.exe`. End users
+This ZIP is the private payload of `PenumbraVR-Setup-@VERSION@.exe`. End users
 open the EXE; it embeds this package, its dependencies and the project banner.
 The graphical installer hides the PowerShell console, detects exact builds, and presents install,
 repair and uninstall actions. For diagnostics, run
@@ -111,7 +112,7 @@ Repair/removal/recovery do not require SteamVR to be running or registered.
 Installation-file verification does not demonstrate headset/gameplay readiness.
 Maintainers retain the matching Source ZIP, build report and outer SHA256SUMS
 alongside the public Setup EXE. The EXE needs no adjacent repository files.
-'@ | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
+'@.Replace('@VERSION@',$release.version) | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
 
     $checksums = @(
         foreach ($file in @(Get-ChildItem -LiteralPath $stage -Recurse -File | Sort-Object FullName)) {

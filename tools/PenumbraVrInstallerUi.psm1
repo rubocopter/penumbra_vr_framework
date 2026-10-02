@@ -88,4 +88,34 @@ function Format-PvrUiOutcomes {
     param([object[]]$Requests,[string]$Label)
     (@($Requests | ForEach-Object {$_.Card.Title+' — '+$_.Card.InstallRoot+$(if($Label){' — '+$Label})}) -join "`r`n")
 }
-Export-ModuleMember -Function ConvertTo-PvrUiGame,Get-PvrUiAction,New-PvrUiRequests,Get-PvrUiCheckGroups,Format-PvrUiOutcomes
+function Invoke-PvrUiBackground {
+    param([Windows.Forms.Form]$Owner,[string]$Title,[string]$Message,
+          [scriptblock]$Work,[hashtable]$Data)
+    # Only data crosses the runspace boundary. All controls, dialog events and
+    # completion/error handling stay on the owning WinForms thread.
+    $progress=[Windows.Forms.Form]::new();$progress.Text=$Title;$progress.ClientSize=[Drawing.Size]::new(480,130)
+    $progress.StartPosition='CenterParent';$progress.FormBorderStyle='FixedDialog';$progress.ControlBox=$false;$progress.Font=$Owner.Font
+    $label=[Windows.Forms.Label]::new();$label.Text=$Message;$label.Location=[Drawing.Point]::new(20,18);$label.Size=[Drawing.Size]::new(440,50);$progress.Controls.Add($label)
+    $bar=[Windows.Forms.ProgressBar]::new();$bar.Style='Marquee';$bar.MarqueeAnimationSpeed=25;$bar.Location=[Drawing.Point]::new(20,83);$bar.Size=[Drawing.Size]::new(440,20);$progress.Controls.Add($bar)
+    $worker=[Management.Automation.PowerShell]::Create()
+    [void]$worker.AddScript('param($work,$data) $ErrorActionPreference="Stop"; & ([scriptblock]::Create($work)) $data').AddArgument($Work.ToString()).AddArgument($Data)
+    $state=@{Handle=$null;Finished=$false;Output=$null;Error=$null}
+    $poll=[Windows.Forms.Timer]::new();$poll.Interval=50
+    $progress.Add_FormClosing({param($sender,$eventArgs) if(-not $state.Finished){$eventArgs.Cancel=$true}})
+    $progress.Add_Shown({$state.Handle=$worker.BeginInvoke();$poll.Start()})
+    $poll.Add_Tick({
+        if(-not $state.Handle.IsCompleted){return}
+        $poll.Stop()
+        try{
+            $state.Output=$worker.EndInvoke($state.Handle)
+            if($worker.HadErrors){$state.Error=$worker.Streams.Error[0]}
+        }catch{$state.Error=$_}
+        $state.Finished=$true;$progress.Close()
+    })
+    try{
+        [void]$progress.ShowDialog($Owner)
+        if($state.Error){throw $state.Error}
+        $state.Output
+    }finally{$poll.Stop();$poll.Dispose();$worker.Dispose();$progress.Dispose()}
+}
+Export-ModuleMember -Function ConvertTo-PvrUiGame,Get-PvrUiAction,New-PvrUiRequests,Get-PvrUiCheckGroups,Format-PvrUiOutcomes,Invoke-PvrUiBackground

@@ -176,6 +176,26 @@ also distinguishes snap turning from physical palm jumps: free bodies follow
 that rebase without a one-frame force impulse, while mechanisms rebase their
 hand offset without teleporting the joint.
 
+## Overture acquisition correction after Rework
+
+Rework `23c890f` and Framework's Overture `PlayerState_Misc_VR.cpp` reduce
+physical overlaps to one nearest candidate per priority class before testing
+visibility. The Framework multi-body sight correction already excludes target
+siblings as occluders while retaining unrelated solid barriers. A remaining
+ranking defect exists in both implementations: if the nearest overlap is hidden
+by unrelated geometry, a farther reachable contact in the same volume is never
+considered. This can prevent acquisition around drawer fronts/frames.
+
+Overture now checks the established head/palm sight rule before accepting a
+nearer candidate into its class. An occluded overlap cannot replace a visible
+winner, in either portal iteration order. Existing item priority, physical reach,
+contact skin, shape dimensions and native Move lifecycle stay unchanged; no
+universal reach or collision retuning was introduced. The bounded adapter
+correction is justified by the inherited defect, rather than an invented
+replacement for Rework's contact behavior. The host regression protects both
+orders and avoids sight queries for candidates farther than an accepted winner.
+The initial drawer still requires an independent headset retest.
+
 ## Validation rule
 
 Extraction, target implementation and target validation are different facts.

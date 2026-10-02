@@ -198,6 +198,25 @@ items instead of claiming complete readiness. The installer never launches a
 game. Read-only fixture previews and live WinForms event checks exercise both
 languages, nested selection, refresh, page changes and primary-button layout.
 
+### Responsiveness in the 1.0.1 candidate
+
+The self-contained Setup displays preparation before extracting and validating
+its embedded payload on a worker task. Single-file compression is disabled for
+the already compressed payload. Preparation remains visible until PowerShell's
+form signals that it is shown; the temporary signal is outside the checksum
+covered payload tree. Setup retains the payload until its child actually exits,
+then removes both payload and signal.
+
+Discovery, managed-installation inspection, all-root preflight, Apply and
+maintenance/verification use background PowerShell runspaces. A modal marquee
+waiting dialog keeps WinForms events/repainting active and prevents closing or
+starting overlapping operations during the transaction. Only task data crosses
+the runspace boundary; controls, language, prompts and result/error handling
+remain on the UI thread. The interface reports completion after the existing
+final verification. Live WinForms tests exercise timer responsiveness, worker
+results/errors, all-root preflight and partial failure. These are host checks;
+independent clean-PC timing and user acceptance remain separate.
+
 ### Components and validation
 
 Represent shared framework, O support, B support and R support explicitly.

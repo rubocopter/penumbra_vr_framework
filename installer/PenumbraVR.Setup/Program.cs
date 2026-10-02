@@ -41,20 +41,25 @@ internal static class Program
             int result = 0;
             try
             {
-                Extract(root);
+                bool preparationShown = false;
+                int preparationTicks = 0;
+                if (!smoke || args.Contains("--show-preparation"))
+                    (result, preparationShown, preparationTicks) = RunPrepared(root, language, smoke);
+                else
+                    Extract(root);
                 if (smoke)
                 {
                     report = new { language, spanishTranslations = language == "es",
                         payloadEmbedded = true, bannerEmbedded = true,
                         payloadExtracted = File.Exists(Path.Combine(root, "tools", "Install-PenumbraFrameworkGui.ps1")),
-                        tempCleaned = true };
-                }
-                else
-                {
-                    result = RunGui(root, language);
+                        tempCleaned = true, preparationShown, preparationTicks };
                 }
             }
-            finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+            finally
+            {
+                if (Directory.Exists(root)) Directory.Delete(root, true);
+                File.Delete(root + ".ready");
+            }
             if (report is not null) Console.WriteLine(JsonSerializer.Serialize(report));
             return result;
         }
@@ -64,6 +69,69 @@ internal static class Program
             else MessageBox.Show(ex.Message, "Penumbra VR Setup", MessageBoxButtons.OK, MessageBoxIcon.Error);
             return 1;
         }
+    }
+
+    private static (int ExitCode, bool Shown, int PumpTicks) RunPrepared(
+        string root, string language, bool smoke)
+    {
+        using var window = new Form
+        {
+            Text = "Penumbra VR Setup",
+            ClientSize = new System.Drawing.Size(480, 145),
+            StartPosition = FormStartPosition.CenterScreen,
+            FormBorderStyle = FormBorderStyle.FixedDialog,
+            ControlBox = false
+        };
+        if (smoke)
+        {
+            window.StartPosition = FormStartPosition.Manual;
+            window.Location = new System.Drawing.Point(-32000, -32000);
+            window.ShowInTaskbar = false;
+        }
+        window.Controls.Add(new Label
+        {
+            Text = language == "es"
+                ? "Preparando la instalación…\nExtrayendo y verificando los archivos."
+                : "Preparing installation…\nExtracting and verifying files.",
+            Location = new System.Drawing.Point(20, 20),
+            Size = new System.Drawing.Size(440, 60)
+        });
+        window.Controls.Add(new ProgressBar
+        {
+            Style = ProgressBarStyle.Marquee, MarqueeAnimationSpeed = 25,
+            Location = new System.Drawing.Point(20, 100),
+            Size = new System.Drawing.Size(440, 20)
+        });
+        // Keep transient UI state outside the checksum-covered payload tree.
+        string ready = root + ".ready";
+        Task<int>? work = null;
+        bool shown = false, finished = false;
+        int ticks = 0;
+        using var poll = new System.Windows.Forms.Timer { Interval = 50 };
+        window.Shown += (_, _) =>
+        {
+            shown = true;
+            work = Task.Run(() =>
+            {
+                Extract(root);
+                return smoke ? 0 : RunGui(root, language, ready);
+            });
+            poll.Start();
+        };
+        window.FormClosing += (_, e) => e.Cancel = !finished;
+        poll.Tick += (_, _) =>
+        {
+            ++ticks;
+            if (work is null || (!work.IsCompleted && !File.Exists(ready))) return;
+            finished = true;
+            poll.Stop();
+            window.Close();
+        };
+        // The preparation window paints before extraction starts and stays up
+        // until the PowerShell form signals that it is visible. Payload cleanup
+        // remains owned by Main, after the child has actually exited.
+        Application.Run(window);
+        return (work!.GetAwaiter().GetResult(), shown, ticks);
     }
 
     private static string? Value(string[] args, string key)
@@ -119,7 +187,7 @@ internal static class Program
         }
     }
 
-    private static int RunGui(string root, string language)
+    private static int RunGui(string root, string language, string ready)
     {
         string powershell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System),
             "WindowsPowerShell", "v1.0", "powershell.exe");
@@ -127,7 +195,8 @@ internal static class Program
         { UseShellExecute = false, CreateNoWindow = true, WorkingDirectory = root,
             RedirectStandardError = true, RedirectStandardOutput = true };
         foreach (string arg in new[] { "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass", "-File",
-            Path.Combine(root, "tools", "Install-PenumbraFrameworkGui.ps1"), "-Language", language })
+            Path.Combine(root, "tools", "Install-PenumbraFrameworkGui.ps1"), "-Language", language,
+            "-ReadySignalPath", ready })
             info.ArgumentList.Add(arg);
         using var process = Process.Start(info) ?? throw new IOException("Could not start installer UI.");
         var output = process.StandardOutput.ReadToEndAsync();

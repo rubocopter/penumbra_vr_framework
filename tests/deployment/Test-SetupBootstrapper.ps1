@@ -68,6 +68,10 @@ try {
 
     $defaultSmoke = (& $exe --smoke-test | Out-String).Trim() | ConvertFrom-Json
     $spanishSmoke = (& $exe --smoke-test --language es | Out-String).Trim() | ConvertFrom-Json
+    $preparationSmoke = (& $exe --smoke-test --show-preparation --language es | Out-String).Trim() | ConvertFrom-Json
+    if ($LASTEXITCODE -ne 0 -or -not $preparationSmoke.preparationShown -or
+        $preparationSmoke.preparationTicks -lt 1 -or -not $preparationSmoke.payloadExtracted -or
+        -not $preparationSmoke.tempCleaned) { throw 'Preparation window/extraction lifecycle failed.' }
     if ($defaultSmoke.language -ne 'en' -or $defaultSmoke.spanishTranslations -or
         -not $defaultSmoke.payloadEmbedded -or -not $defaultSmoke.bannerEmbedded -or
         -not $defaultSmoke.payloadExtracted -or -not $defaultSmoke.tempCleaned -or

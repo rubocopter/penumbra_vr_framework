@@ -7,7 +7,9 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework v1.0.0 is published. Use `CLOSURE_STATUS.md` for the release evidence
+Framework v1.0.0 is published. The [1.0.1 patch candidate](releases/1.0.1.md)
+addresses Overture acquisition and installer responsiveness; the new drawer,
+Quest 3 pointer and exact-installer acceptance remain focused retests. Use `CLOSURE_STATUS.md` for the release evidence
 and remaining deployment-validation matrix,
 `RUNTIME_DEPENDENCIES.md` for deployment dependencies and
 `RELEASE_PREPARATION_AUDIT.md` for the inspected installer baseline. The unified

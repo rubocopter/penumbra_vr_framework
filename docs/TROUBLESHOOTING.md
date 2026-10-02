@@ -2,6 +2,12 @@
 
 This guide covers the public **Penumbra VR Framework v1.0.0** installer and the current main-branch support documentation. Installation steps live in the root [README](../README.md#installation); recognized build identities live in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
+The 1.0.1 patch candidate shows **Preparing installation / Preparando la
+instalaci�n** while files are extracted and verified, then an animated waiting
+dialog during checks and changes. The window keeps responding while these run;
+wait for the final result before launching a game. Published 1.0.0 retains its
+older startup/Apply interface.
+
 ## Game detection and dependencies
 
 - **Game not listed:** use **Locate game… / Buscar juego…** in the release installer to choose the original game folder or its `redist` folder. Requiem must be installed inside the Black Plague base. Incomplete targets show essential content/dependency failures; this checks launch prerequisites, not every purchased game asset.

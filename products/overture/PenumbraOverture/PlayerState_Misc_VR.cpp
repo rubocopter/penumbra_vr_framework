@@ -520,6 +520,26 @@ void cPlayerState_Normal_VR::OnUpdate(float afTimeStep)
           touchedObject *bestOtherTarget = NULL;
           float fBestOtherDistSq = 9999.0f;
 
+          // The overlap volume is intentionally forgiving, but it must not
+          // select through a thin wall. A short ray from the resolved palm to
+          // the candidate preserves drawer/key interactions while rejecting
+          // geometry between the hand and the object.
+          auto HandHasLineOfSight = [&](touchedObject *apTarget) -> bool
+          {
+            if (apTarget == NULL || apTarget->physicsBody == NULL) return false;
+            const cVector3f& vTarget = apTarget->touchPoint;
+            // Only bypass the ray for genuine collision-resolved palm contact.
+            // Once acquisition has followed the raw controller, even a nearby
+            // point may actually be on the far side of a thin closed door.
+            if (fInteractionReach <= 0.015f &&
+              (vTarget - handCenter).Length() <= 0.055f)
+              return true;
+
+            cVector3f vHitPoint;
+            return CastVRSolidSight(pPhysicsWorld, handCenter,
+              apTarget->physicsBody, vTarget, vHitPoint);
+          };
+
           cPortalContainerEntityIterator it =
             pWorld->GetPortalContainer()->GetEntityIterator(&handBV);
           cCollideData collideData;
@@ -587,14 +607,25 @@ void cPlayerState_Normal_VR::OnUpdate(float afTimeStep)
                 const bool bIsItemClass =
                   target.crosshair == eCrossHairState_PickUp ||
                   target.crosshair == eCrossHairState_Item;
-                if(bIsItemClass && target.touchDistanceSq < fBestItemDistSq)
+                if(bIsItemClass &&
+                  OvertureVRInteractionSightPolicy::IsBetterVisibleCandidate(
+                    target.touchDistanceSq, fBestItemDistSq, [&]() {
+                      cVector3f vHeadHit;
+                      const cVector3f vHeadOrigin = mpInit->mpGame->GetScene()
+                        ->GetVRWorldSpaceHeadMatrix().GetTranslation();
+                      return CastVRSolidSight(pPhysicsWorld, vHeadOrigin,
+                        target.physicsBody, target.touchPoint, vHeadHit) ||
+                        HandHasLineOfSight(&target);
+                    }))
                 {
                   fBestItemDistSq = target.touchDistanceSq;
                   bestItem = target;
                   bestItemTarget = &bestItem;
                 }
                 else if(!bIsItemClass &&
-                  target.touchDistanceSq < fBestOtherDistSq)
+                  OvertureVRInteractionSightPolicy::IsBetterVisibleCandidate(
+                    target.touchDistanceSq, fBestOtherDistSq,
+                    [&]() { return HandHasLineOfSight(&target); }))
                 {
                   fBestOtherDistSq = target.touchDistanceSq;
                   bestOther = target;
@@ -608,51 +639,19 @@ void cPlayerState_Normal_VR::OnUpdate(float afTimeStep)
           cVector3f vPickedPos;
           iPhysicsBody* pPickedBody = NULL;
 
-          // The overlap volume is intentionally forgiving, but it must not
-          // select through a thin wall. A short ray from the resolved palm to
-          // the candidate preserves drawer/key interactions while rejecting
-          // geometry between the hand and the object.
-          auto HandHasLineOfSight = [&](touchedObject *apTarget) -> bool
-          {
-            if (apTarget == NULL || apTarget->physicsBody == NULL) return false;
-            const cVector3f& vTarget = apTarget->touchPoint;
-            // Only bypass the ray for genuine collision-resolved palm contact.
-            // Once acquisition has followed the raw controller, even a nearby
-            // point may actually be on the far side of a thin closed door.
-            if (fInteractionReach <= 0.015f &&
-              (vTarget - handCenter).Length() <= 0.055f)
-              return true;
-
-            cVector3f vHitPoint;
-            return CastVRSolidSight(pPhysicsWorld, handCenter,
-              apTarget->physicsBody, vTarget, vHitPoint);
-          };
-
           bool bSelected = false;
 
           if (bestItemTarget != NULL) {
-            // Items normally need line-of-sight, but when the hand is
-            // physically touching the item (e.g. a key lying inside an open
-            // drawer whose geometry occludes the camera ray) touch wins.
-            cVector3f vHeadHit;
-            const cVector3f vHeadOrigin = mpInit->mpGame->GetScene()
-              ->GetVRWorldSpaceHeadMatrix().GetTranslation();
-            bool bHasLOS = CastVRSolidSight(pPhysicsWorld, vHeadOrigin,
-              bestItemTarget->physicsBody, bestItemTarget->touchPoint,
-              vHeadHit);
-            if (bHasLOS || HandHasLineOfSight(bestItemTarget))
-            {
-              mpPlayer->GetPickRay()->Clear();
-              mpPlayer->GetPickRay()->mpPickedBody = bestItemTarget->physicsBody;
-               mpPlayer->GetPickRay()->mfPickedDist = bestItemTarget->planeDistance;
-               mpPlayer->GetPickRay()->mvPickedPos =
-                 bestItemTarget->touchPoint;
-              bSelected = true;
-            }
+            // Visibility was validated before ranking, so a hidden nearer
+            // overlap cannot suppress an accessible drawer or inventory item.
+            mpPlayer->GetPickRay()->Clear();
+            mpPlayer->GetPickRay()->mpPickedBody = bestItemTarget->physicsBody;
+            mpPlayer->GetPickRay()->mfPickedDist = bestItemTarget->planeDistance;
+            mpPlayer->GetPickRay()->mvPickedPos = bestItemTarget->touchPoint;
+            bSelected = true;
           }
 
-          if (!bSelected && !useTraceResults && bestOtherTarget != NULL &&
-              HandHasLineOfSight(bestOtherTarget)) {
+          if (!bSelected && !useTraceResults && bestOtherTarget != NULL) {
             vPickedPos = bestOtherTarget->touchPoint;
             fPickedDist = bestOtherTarget->planeDistance;
             pPickedBody = bestOtherTarget->physicsBody;

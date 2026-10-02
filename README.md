@@ -22,6 +22,10 @@ One PCVR project for the trilogy. You must own and install the original games; R
 
 **v1.0.0 is the first public Framework release.** One graphical installer covers Overture and the shared Black Plague/Requiem installation. The published Setup EXE has been exercised through repeated real install/uninstall flows and successful game-entry checks on all three games, with automated coverage for the supported installation topologies, repair, recovery and removal.
 
+A [v1.0.1 patch candidate](docs/releases/1.0.1.md) adds Overture interaction
+corrections, Oculus Touch aim and a responsive preparation/installation UI. It is
+pending acceptance and publication; the public download above remains v1.0.0.
+
 Validation breadth still differs by game and hardware. PS VR2 + Sense is the controller setup validated end to end by the maintainer; other bundled controller profiles still need device-specific feedback. Independent clean-PC coverage also remains limited. See the [release status](docs/CLOSURE_STATUS.md), [recognized builds](docs/SUPPORTED_BUILDS.md) and known issues below for the evidence boundaries.
 
 ## Supported Games
