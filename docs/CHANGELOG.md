@@ -5,7 +5,7 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
-## 1.0.1 — patch candidate, 2026-10-03
+## 1.0.1 â€” patch candidate, 2026-10-03
 
 - Corrected Overture acquisition of multi-body mechanisms: a sibling body from
   the same entity no longer hides the selected wheel/handle. The maintainer

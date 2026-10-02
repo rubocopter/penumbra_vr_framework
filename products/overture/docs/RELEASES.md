@@ -1,6 +1,6 @@
 # Release history
 
-## v1.0.1 — Framework patch candidate (2026-10-03)
+## v1.0.1 â€” Framework patch candidate (2026-10-03)
 
 Overture physical acquisition now handles multi-body mechanisms and ranks only
 visible hand-volume candidates. Oculus Touch aim consumes the tip pose. The
