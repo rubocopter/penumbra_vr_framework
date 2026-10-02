@@ -4,8 +4,10 @@
 #include <windows.h>
 
 #include <array>
+#include <atomic>
 #include <iostream>
 #include <string>
+#include <thread>
 
 #if defined(_M_IX86)
 #pragma comment(linker, "/alternatename:__imp__glMatrixMode@4=__imp_glMatrixMode")
@@ -43,6 +45,32 @@ int main() {
     if (!penumbra_vr::hooks::InstallOpenGlMatrixTelemetry(error)) {
         std::cerr << "Idempotent telemetry installation failed: " << error << '\n';
         return 6;
+    }
+
+    penumbra_vr::hooks::testing::AcquireOpenGlTelemetryLock();
+    std::atomic<bool> contended_hook_returned{false};
+    std::thread contended_hook([&]() {
+        glMatrixMode(kGlProjection);
+        contended_hook_returned.store(true, std::memory_order_release);
+    });
+    constexpr DWORD kNonBlockingDeadlineMilliseconds = 250;
+    DWORD waited = 0;
+    while (!contended_hook_returned.load(std::memory_order_acquire) &&
+           waited < kNonBlockingDeadlineMilliseconds) {
+        Sleep(1);
+        ++waited;
+    }
+    penumbra_vr::hooks::testing::ReleaseOpenGlTelemetryLock();
+    contended_hook.join();
+    if (waited == kNonBlockingDeadlineMilliseconds) {
+        std::cerr << "OpenGL telemetry hook blocked on diagnostic lock contention\n";
+        return 8;
+    }
+    const penumbra_vr::hooks::OpenGlFrameTelemetry contended =
+        penumbra_vr::hooks::ConsumeOpenGlFrameTelemetry();
+    if (contended.matrix_mode_calls != 0 || contended.dropped_updates != 1) {
+        std::cerr << "OpenGL telemetry contention was not dropped and counted\n";
+        return 9;
     }
 
     const std::array<float, 16> projection{
@@ -83,6 +111,7 @@ int main() {
         telemetry.projection_call_stack_depth == 0 ||
         telemetry.unique_model_view_matrices != 2 ||
         telemetry.dropped_model_view_matrices != 0 ||
+        telemetry.dropped_updates != 0 ||
         telemetry.dominant_model_view_loads != 2 ||
         !telemetry.has_dominant_model_view ||
         telemetry.dominant_model_view != model_view) {
@@ -97,6 +126,7 @@ int main() {
         consumed.ortho_calls != 0 || consumed.has_projection ||
         consumed.unique_model_view_matrices != 0 ||
         consumed.dropped_model_view_matrices != 0 ||
+        consumed.dropped_updates != 0 ||
         consumed.dominant_model_view_loads != 0 ||
         consumed.has_dominant_model_view) {
         std::cerr << "Telemetry was not reset after consumption\n";
@@ -113,7 +143,7 @@ int main() {
     }
 
     CallOpenGlAfterUnhook(projection);
-    if (OpenGlStub_MatrixModeCalls() != 4 || OpenGlStub_LoadMatrixCalls() != 6 ||
+    if (OpenGlStub_MatrixModeCalls() != 5 || OpenGlStub_LoadMatrixCalls() != 6 ||
         OpenGlStub_OrthoCalls() != 1) {
         std::cerr << "OpenGL calls were not forwarded or restored correctly\n";
         return 5;

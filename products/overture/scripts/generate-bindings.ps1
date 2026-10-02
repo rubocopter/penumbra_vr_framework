@@ -47,6 +47,7 @@ function New-Controller {
         [string]$Name,
         [string]$Description,
         [string]$GripPose,            # device path suffix used for /pose/grip actions
+        [string]$AimPose = 'pose/aim',# device path suffix used for the application aim action
         [bool]$Skeletal,              # bind the skeleton actions
         [string]$FamilyKey,           # family key into $families
         [hashtable]$InputMap             # logical input name -> @{ path = suffix; mode = SteamVR mode }
@@ -58,6 +59,7 @@ function New-Controller {
         Name           = $Name
         Description    = $Description
         GripPose       = $GripPose
+        AimPose        = $AimPose
         Skeletal       = $Skeletal
         Family         = $FamilyKey
         Input          = $InputMap
@@ -434,7 +436,7 @@ $controllers = @(
     (New-Controller -FileName 'oculus_touch.json' -ControllerType 'oculus_touch' `
         -Name 'Penumbra VR - Touch' `
         -Description 'Default Meta Quest and Oculus Rift Touch bindings for Penumbra: Overture VR Rework' `
-        -GripPose 'pose/grip' -Skeletal $true -FamilyKey 'oculus'  -InputMap $inputOculus),
+        -GripPose 'pose/grip' -AimPose 'pose/tip' -Skeletal $true -FamilyKey 'oculus'  -InputMap $inputOculus),
     (New-Controller -FileName 'pico4_controller.json' -ControllerType 'pico4_controller' `
         -Name 'Penumbra VR - Pico 4' `
         -Description 'Default Pico 4 and Pico 4 Ultra bindings for Penumbra: Overture VR Rework' `
@@ -515,7 +517,7 @@ function Get-BindingDocument {
     foreach ($hand in @('left', 'right')) {
         $poses += [ordered]@{
             output = "/actions/global/in/${hand}_aim"
-            path   = "/user/hand/$hand/pose/aim"
+            path   = "/user/hand/$hand/" + $controller.AimPose
         }
     }
     $skeleton = @()

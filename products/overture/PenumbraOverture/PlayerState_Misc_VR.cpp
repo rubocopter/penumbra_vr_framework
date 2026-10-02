@@ -33,6 +33,7 @@
 #include "VRHaptics.h"
 #include "VRHandCollisionPolicy.h"
 #include "VRHandNudgePolicy.h"
+#include "VRInteractionSightPolicy.h"
 #include "vr_magnetic_pickup_policy.hpp"
 
 namespace
@@ -133,7 +134,9 @@ namespace
   {
   public:
     cVRSolidSightCallback(iPhysicsBody *apCandidate)
-      : mpCandidate(apCandidate), mpNearestBody(NULL),
+      : mpCandidate(apCandidate),
+        mpCandidateEntity(apCandidate != NULL ? apCandidate->GetUserData() : NULL),
+        mpNearestBody(NULL),
         mfNearestDistance(9999.0f), mvNearestPoint(0, 0, 0) {}
 
     bool BeforeIntersect(iPhysicsBody *apBody)
@@ -144,7 +147,13 @@ namespace
 
       // Non-colliding area/helper bodies are not visible barriers. The target
       // itself is retained defensively even if map data changes its flag.
-      return apBody == mpCandidate || apBody->GetCollide();
+      // Multi-body mechanisms such as the outside hatch expose the lid and
+      // wheel as sibling physics bodies with the same game-entity owner. Do
+      // not let one sibling hide another from physical hand acquisition.
+      const bool bSharesCandidateEntity = mpCandidateEntity != NULL &&
+        apBody->GetUserData() == mpCandidateEntity;
+      return OvertureVRInteractionSightPolicy::ShouldRayTestBody(
+        apBody == mpCandidate, bSharesCandidateEntity, apBody->GetCollide());
     }
 
     bool OnIntersect(iPhysicsBody *apBody, cPhysicsRayParams *apParams)
@@ -161,6 +170,7 @@ namespace
     }
 
     iPhysicsBody *mpCandidate;
+    void *mpCandidateEntity;
     iPhysicsBody *mpNearestBody;
     float mfNearestDistance;
     cVector3f mvNearestPoint;

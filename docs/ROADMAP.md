@@ -111,8 +111,11 @@ crouch/body contact together; the cause is not yet established.
 
 ### Overture
 
-- [ ] Rebuild the Framework-owned product and repeat the core headset/controller
-  regression against the current shared runtime.
+- [x] Rebuild the Framework-owned product and complete the host regression
+  against the current shared runtime. The Release build and 51-test auxiliary
+  suite pass with the Overture interaction-sight and Touch aim-binding guards.
+- [ ] Repeat the core headset/controller regression on Quest 3, including Touch
+  pointer posture/alignment and crouched reach to the outside hatch wheel.
 - [ ] Confirm boot/gameplay, stereo/tracking, locomotion/crouch, hands,
   interaction, UI, transition and shutdown.
 

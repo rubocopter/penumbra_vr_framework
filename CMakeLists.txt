@@ -392,6 +392,8 @@ add_custom_target(pvr_overture_package
     VERBATIM)
 
 if(BUILD_TESTING)
+    target_compile_definitions(pvr_opengl_telemetry PUBLIC
+        PVR_OPENGL_TELEMETRY_TEST_ACCESS=1)
     target_compile_definitions(pvr_black_plague_backend_probe PRIVATE
         PVR_NATIVE_INPUT_BRIDGE_TEST_ACCESS=1)
 
@@ -486,6 +488,17 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_vr_interaction_policy_test PRIVATE pvr_vr_math)
     pvr_enable_warnings(pvr_vr_interaction_policy_test)
     add_test(NAME vr_interaction_policy COMMAND pvr_vr_interaction_policy_test)
+    add_executable(pvr_overture_interaction_sight_test
+        tests/overture_interaction_sight/overture_interaction_sight_test.cpp)
+    target_include_directories(pvr_overture_interaction_sight_test PRIVATE
+        products/overture/PenumbraOverture)
+    pvr_enable_warnings(pvr_overture_interaction_sight_test)
+    add_test(NAME overture_interaction_sight
+        COMMAND pvr_overture_interaction_sight_test)
+    add_test(NAME overture_touch_aim_binding
+        COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_SOURCE_DIR}/tests/overture_bindings/overture_touch_aim_binding_test.ps1"
+            -RepositoryRoot "${CMAKE_SOURCE_DIR}")
     add_executable(pvr_vr_native_intents_test tests/vr_input_state/vr_native_intents_test.cpp)
     target_include_directories(pvr_vr_native_intents_test PRIVATE src/adapters/hpl1)
     target_link_libraries(pvr_vr_native_intents_test PRIVATE pvr_vr_native_intents pvr_iat_hook)

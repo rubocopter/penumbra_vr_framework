@@ -21,10 +21,18 @@ struct OpenGlFrameTelemetry {
     std::uint32_t dominant_model_view_loads = 0;
     bool has_dominant_model_view = false;
     std::array<float, 16> dominant_model_view{};
+    std::uint64_t dropped_updates = 0;
 };
 
 [[nodiscard]] bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept;
 [[nodiscard]] bool RemoveOpenGlMatrixTelemetry(std::string& error) noexcept;
 [[nodiscard]] OpenGlFrameTelemetry ConsumeOpenGlFrameTelemetry() noexcept;
+
+#if defined(PVR_OPENGL_TELEMETRY_TEST_ACCESS)
+namespace testing {
+void AcquireOpenGlTelemetryLock() noexcept;
+void ReleaseOpenGlTelemetryLock() noexcept;
+} // namespace testing
+#endif
 
 } // namespace penumbra_vr::hooks

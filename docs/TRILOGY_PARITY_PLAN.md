@@ -66,6 +66,11 @@ device validation. Vive's omitted actions matter to the binary backends, which
 do not supply a raw-input fallback. Missing skeletons use the existing hand-pose
 fallback. SteamVR permits custom remapping.
 
+Oculus Touch aim output now uses SteamVR's `pose/tip` source in both Overture
+and the shared binding tree. The generated-binding check and host regression
+cover this mapping; Quest 3 pointer alignment still requires a physical-device
+retest before the change can advance beyond host-tested.
+
 `products/overture/scripts/generate-bindings.ps1` owns the physical layouts;
 `assets/openvr/overture` supplies Overture and `assets/openvr` supplies the
 shared Black Plague/Requiem root. Metadata checks enforce functional parity

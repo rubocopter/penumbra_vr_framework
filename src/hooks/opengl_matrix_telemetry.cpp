@@ -40,6 +40,7 @@ OpenGlFrameTelemetry g_telemetry;
 std::array<ModelViewObservation, kMaxTrackedModelViewMatrices> g_model_view_observations;
 std::size_t g_model_view_observation_count = 0;
 std::uint32_t g_dropped_model_view_matrices = 0;
+std::atomic<std::uint64_t> g_telemetry_dropped_updates{0};
 
 class ActiveCall final {
 public:
@@ -125,11 +126,21 @@ void RecordModelViewMatrix(const float* matrix) noexcept {
     observation.loads = 1;
 }
 
+template <typename Callback>
+void TryRecordTelemetry(Callback&& callback) noexcept {
+    if (TryAcquireSRWLockExclusive(&g_telemetry_lock) == 0) {
+        g_telemetry_dropped_updates.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    callback();
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
 void APIENTRY HookedGlMatrixMode(unsigned int mode) noexcept {
     ActiveCall active_call;
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.matrix_mode_calls;
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([]() noexcept {
+        ++g_telemetry.matrix_mode_calls;
+    });
     g_current_matrix_mode.store(mode, std::memory_order_relaxed);
     const auto original = reinterpret_cast<GlMatrixMode>(
         g_original_matrix_mode.load(std::memory_order_acquire));
@@ -141,36 +152,36 @@ void APIENTRY HookedGlMatrixMode(unsigned int mode) noexcept {
 void APIENTRY HookedGlLoadMatrixf(const float* matrix) noexcept {
     ActiveCall active_call;
     const unsigned int mode = g_current_matrix_mode.load(std::memory_order_relaxed);
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    if (mode == kGlProjection) {
-        ++g_telemetry.projection_loads;
-        if (matrix != nullptr) {
-            std::memcpy(
-                g_telemetry.last_projection.data(),
-                matrix,
-                g_telemetry.last_projection.size() * sizeof(float));
-            g_telemetry.has_projection = true;
-        }
-        if (g_telemetry.projection_call_stack_depth == 0) {
-            std::array<void*, 8> frames{};
-            const USHORT depth = RtlCaptureStackBackTrace(
-                0,
-                static_cast<ULONG>(frames.size()),
-                frames.data(),
-                nullptr);
-            g_telemetry.projection_call_stack_depth = depth;
-            for (USHORT index = 0; index < depth; ++index) {
-                g_telemetry.projection_call_stack[index] =
-                    reinterpret_cast<std::uintptr_t>(frames[index]);
+    TryRecordTelemetry([&]() noexcept {
+        if (mode == kGlProjection) {
+            ++g_telemetry.projection_loads;
+            if (matrix != nullptr) {
+                std::memcpy(
+                    g_telemetry.last_projection.data(),
+                    matrix,
+                    g_telemetry.last_projection.size() * sizeof(float));
+                g_telemetry.has_projection = true;
             }
+            if (g_telemetry.projection_call_stack_depth == 0) {
+                std::array<void*, 8> frames{};
+                const USHORT depth = RtlCaptureStackBackTrace(
+                    0,
+                    static_cast<ULONG>(frames.size()),
+                    frames.data(),
+                    nullptr);
+                g_telemetry.projection_call_stack_depth = depth;
+                for (USHORT index = 0; index < depth; ++index) {
+                    g_telemetry.projection_call_stack[index] =
+                        reinterpret_cast<std::uintptr_t>(frames[index]);
+                }
+            }
+        } else if (mode == kGlModelView) {
+            ++g_telemetry.model_view_loads;
+            RecordModelViewMatrix(matrix);
+        } else if (mode == kGlTexture) {
+            ++g_telemetry.texture_loads;
         }
-    } else if (mode == kGlModelView) {
-        ++g_telemetry.model_view_loads;
-        RecordModelViewMatrix(matrix);
-    } else if (mode == kGlTexture) {
-        ++g_telemetry.texture_loads;
-    }
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    });
     const auto original = reinterpret_cast<GlLoadMatrixf>(
         g_original_load_matrix.load(std::memory_order_acquire));
     if (original != nullptr) {
@@ -186,9 +197,9 @@ void APIENTRY HookedGlOrtho(
     double near_value,
     double far_value) noexcept {
     ActiveCall active_call;
-    AcquireSRWLockExclusive(&g_telemetry_lock);
-    ++g_telemetry.ortho_calls;
-    ReleaseSRWLockExclusive(&g_telemetry_lock);
+    TryRecordTelemetry([]() noexcept {
+        ++g_telemetry.ortho_calls;
+    });
     const auto original = reinterpret_cast<GlOrtho>(
         g_original_ortho.load(std::memory_order_acquire));
     if (original != nullptr) {
@@ -212,6 +223,7 @@ bool InstallOpenGlMatrixTelemetry(std::string& error) noexcept {
     g_telemetry = {};
     g_model_view_observation_count = 0;
     g_dropped_model_view_matrices = 0;
+    g_telemetry_dropped_updates.store(0, std::memory_order_release);
     ReleaseSRWLockExclusive(&g_telemetry_lock);
 
     if (!InstallIatHook(
@@ -282,6 +294,8 @@ OpenGlFrameTelemetry ConsumeOpenGlFrameTelemetry() noexcept {
     result.unique_model_view_matrices =
         static_cast<std::uint32_t>(g_model_view_observation_count);
     result.dropped_model_view_matrices = g_dropped_model_view_matrices;
+    result.dropped_updates =
+        g_telemetry_dropped_updates.exchange(0, std::memory_order_acq_rel);
     for (std::size_t index = 0; index < g_model_view_observation_count; ++index) {
         const ModelViewObservation& observation = g_model_view_observations[index];
         if (observation.loads > result.dominant_model_view_loads) {
@@ -296,5 +310,19 @@ OpenGlFrameTelemetry ConsumeOpenGlFrameTelemetry() noexcept {
     ReleaseSRWLockExclusive(&g_telemetry_lock);
     return result;
 }
+
+#if defined(PVR_OPENGL_TELEMETRY_TEST_ACCESS)
+namespace testing {
+
+void AcquireOpenGlTelemetryLock() noexcept {
+    AcquireSRWLockExclusive(&g_telemetry_lock);
+}
+
+void ReleaseOpenGlTelemetryLock() noexcept {
+    ReleaseSRWLockExclusive(&g_telemetry_lock);
+}
+
+} // namespace testing
+#endif
 
 } // namespace penumbra_vr::hooks
