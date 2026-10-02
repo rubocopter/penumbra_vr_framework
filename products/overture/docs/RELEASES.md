@@ -1,13 +1,14 @@
 # Release history
 
-## v1.0.1 — Framework patch candidate (2026-10-03)
+## v1.0.1 — Framework patch (2026-10-03)
 
 Overture physical acquisition now handles multi-body mechanisms and ranks only
 visible hand-volume candidates. Oculus Touch aim consumes the tip pose. The
 Framework installer adds responsive preparation, installation and verification.
 See the authoritative [Framework patch notes](../../../docs/releases/1.0.1.md)
-for artifacts, validation evidence and pending headset checks. This candidate
-has not yet replaced the published v1.0.0 release.
+for artifacts, validation evidence and remaining headset checks. The exact
+candidate was published unchanged after maintainer installation and Overture
+headset gameplay acceptance, including the initial drawer and crank interactions.
 
 ## v1.0.0 — Framework release candidate
 

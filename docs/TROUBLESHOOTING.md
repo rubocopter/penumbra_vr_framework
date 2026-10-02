@@ -1,8 +1,8 @@
 # Troubleshooting
 
-This guide covers the public **Penumbra VR Framework v1.0.0** installer and the current main-branch support documentation. Installation steps live in the root [README](../README.md#installation); recognized build identities live in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
+This guide covers the public **Penumbra VR Framework v1.0.1** installer and the current main-branch support documentation. Installation steps live in the root [README](../README.md#installation); recognized build identities live in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-The 1.0.1 patch candidate shows **Preparing installation / Preparando la
+The 1.0.1 installer shows **Preparing installation / Preparando la
 instalación** while files are extracted and verified, then an animated waiting
 dialog during checks and changes. The window keeps responding while these run;
 wait for the final result before launching a game. Published 1.0.0 retains its
@@ -29,7 +29,7 @@ Requiem's intermittent startup crash remains unresolved. If it occurs, capture t
 
 ## Repair, recovery and removal
 
-Close the affected games before every installer operation. Reopen the same **PenumbraVR-Setup-1.0.0.exe** used for the release installation.
+Close the affected games before every installer operation. Reopen the same **PenumbraVR-Setup-1.0.1.exe** used for the release installation.
 
 Use the **Maintenance / Mantenimiento** tab for installed roots:
 

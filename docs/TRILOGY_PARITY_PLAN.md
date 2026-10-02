@@ -44,12 +44,12 @@ boundary and also awaits headset confirmation. See
 | Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; observed special effects now render correctly in headset with native full-eye copy/resize telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Coverage of all smoke/material variants and subtle ghosting remains unestablished |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | v1.0.0 package/selector/GUI host-tested with maintainer real-install, uninstall and game-entry acceptance; independent clean-PC breadth remains open |
 
-Overture's post-v1.0 physical-interaction correction has focused maintainer
-headset acceptance for the outside hatch wheel and later crank with the iron
-bar on local candidate `3a9e239`. The initial drawer remained difficult to acquire.
-The 1.0.1 visibility-before-ranking correction is host-tested and still needs
-that drawer retest; this evidence does not certify every Overture mechanism or
-Quest 3 pointer alignment.
+Overture's post-v1.0 physical-interaction correction has maintainer headset
+acceptance on the exact 1.0.1 installer: the maintainer played beyond the initial
+drawer, repeated crank/mechanism interactions and accepted the result. The
+installed executable matches the candidate build hash. This validates the
+observed acquisition/gameplay sequence, including visibility-before-ranking;
+it does not certify every Overture mechanism or Quest 3 pointer alignment.
 
 ## Controller profiles and distribution
 

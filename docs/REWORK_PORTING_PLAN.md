@@ -194,7 +194,9 @@ universal reach or collision retuning was introduced. The bounded adapter
 correction is justified by the inherited defect, rather than an invented
 replacement for Rework's contact behavior. The host regression protects both
 orders and avoids sight queries for candidates farther than an accepted winner.
-The initial drawer still requires an independent headset retest.
+The maintainer accepted the initial drawer and repeated crank/mechanism use in
+an Overture headset session installed with the exact 1.0.1 candidate. Broader
+progression remains a separate regression gate.
 
 ## Validation rule
 

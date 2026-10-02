@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.1",
+  "acceptedOn": "2026-10-03",
+  "releaseTag": "v1.0.1",
+  "buildSourceCommit": "2b07f6dcec49bdc2b25ad67c0cb2a3c0a77ead8c",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.1",
+  "promotedWithoutRebuild": true,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "sha256": "A995B2253F77C36A1E56AA760A091BBB9FB597F46A128DC1C647A9B5816AE12F",
+      "bytes": 5319
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.1.exe",
+      "sha256": "43EAFD5FB6A508E4D45ABCB3C64E4560924EE8BD8B84F57A4EE23E1D7B346662",
+      "bytes": 193088662
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.1.zip",
+      "sha256": "5B8F9AF1003BA69F0831425C2CE7C7438AC8689208A82FF36A24801C2FFB8F92",
+      "bytes": 81895273
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "sha256": "6C0E889C8D42D5F973079B4B77959A7051B92B8C6CD943074691D36C9C900156",
+      "bytes": 274
+    }
+  ],
+  "installedOvertureExecutableSha256": "5DCCCD1EBCEACFBA10D12C964F7B529A711331915930B2D85ADD3FA29E429097",
+  "publicationAuthorizedByMaintainer": true,
+  "validation": {
+    "frameworkHostTests": {
+      "passed": 51,
+      "failed": 0
+    },
+    "overtureHostChecks": {
+      "passed": 289,
+      "failed": 0
+    },
+    "installationTopology": "A-F passed with synthetic content/runtime fixtures; exact restore verified",
+    "installerBootstrap": "embedded payload, checksums, preparation window and cleanup smoke passed",
+    "installerUi": "bilingual controls, worker responsiveness, preflight and partial failure host-tested",
+    "maintainerInstallerUse": "installed the accepted 1.0.1 Setup and launched Overture",
+    "overtureHeadset": "maintainer played beyond the initial drawer, repeated crank/mechanism interaction and accepted the result",
+    "quest3PointerAlignment": "host-tested binding change; focused device retest pending",
+    "blackPlaguePatch": "render telemetry contention correction host-tested; no new headset evidence",
+    "independentCleanMachine": "pending"
+  }
+}

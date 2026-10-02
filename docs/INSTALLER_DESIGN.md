@@ -198,7 +198,7 @@ items instead of claiming complete readiness. The installer never launches a
 game. Read-only fixture previews and live WinForms event checks exercise both
 languages, nested selection, refresh, page changes and primary-button layout.
 
-### Responsiveness in the 1.0.1 candidate
+### Responsiveness in 1.0.1
 
 The self-contained Setup displays preparation before extracting and validating
 its embedded payload on a worker task. Single-file compression is disabled for
