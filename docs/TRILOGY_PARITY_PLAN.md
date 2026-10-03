@@ -73,12 +73,19 @@ device validation. Vive's omitted actions matter to the binary backends, which
 do not supply a raw-input fallback. Missing skeletons use the existing hand-pose
 fallback. SteamVR permits custom remapping.
 
-External Index feedback reports dead sticks in all three games and an
-index/pinky finger mismatch. The inherited Index component-path correction is
-host-tested in the generator and both payload roots, including movement, turn,
-sprint/crouch clicks and UI drag for both handedness layouts. Index hardware
-confirmation remains pending. The finger mismatch is unresolved: current
-consumers preserve OpenVR's Thumb/Index/Middle/Ring/Pinky channel order and map
+The inherited Index component-path correction is host-tested in the generator
+and both payload roots, including movement, turn, sprint/crouch clicks and UI
+drag for both handedness layouts. An external Index retest after the v1.0.2
+update reports working Overture turning but no left-stick movement despite an
+apparently correct binding; Requiem worked for the reporter; Black Plague
+movement and turning work, but the viewpoint stays low, rises while turning
+and drops again when the stick is released. These are scoped user reports,
+without an exact installed-build hash, matching logs or posture settings;
+they do not establish full controller or game acceptance. Overture movement
+and Black Plague posture/turn continuity remain open regressions.
+
+The finger mismatch is unresolved and the reporter considers it non-blocking.
+Current consumers preserve OpenVR's Thumb/Index/Middle/Ring/Pinky channel order and map
 it to the named rig chains; host conditioning/articulation/render tests pass
 but do not establish physical sensor-to-visible-finger identity. No channel
 reversal has been applied without discriminating hardware evidence.

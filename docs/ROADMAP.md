@@ -108,10 +108,13 @@ automatically validate a newer candidate.
   three games. Host guards reject dropped profiles/actions and type drift;
   package/install/repair fixtures verify all eight by hash. Device hardware
   validation and the documented Vive/WMR layout limitations remain separate.
-- [ ] Follow up the external Valve Index report: validate corrected default
-  stick bindings in each game, distinguish Overture's reported remapping
-  difficulty from the invalid default component path, and compare isolated
-  finger movements in SteamVR and the game using Gate 5 of the headset checklist.
+- [ ] Follow up the external Valve Index retest: distinguish missing Overture
+  left-stick action values from unapplied body movement, and investigate Black
+  Plague's low viewpoint that rises during turning and drops on stick release.
+  Obtain matching logs and standing/seated/crouch settings; keep the reported
+  Overture turning and Black Plague/Requiem stick successes scoped as recorded
+  in `TRILOGY_PARITY_PLAN.md`. Overture remapping and isolated finger comparison
+  in Gate 5 remain follow-up; the reporter considers fingers non-blocking.
 
 The deferred focused runtime issue is Black Plague's vertical mini-hops while
 touching ventilation walls. Investigate accepted motion, native stepping and
