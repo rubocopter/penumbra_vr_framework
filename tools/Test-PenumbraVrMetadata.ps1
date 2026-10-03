@@ -404,6 +404,9 @@ foreach ($defaultBinding in $actionManifest.default_bindings) {
         ForEach-Object { $_.Value.skeleton } |
         ForEach-Object { if ($null -ne $_) { $_.output } })
     $unassigned = switch ($defaultBinding.controller_type) {
+        'oculus_touch' { @('/actions/global/in/recenter') }
+        'pico4_controller' { @('/actions/global/in/recenter') }
+        'pico_neo3_controller' { @('/actions/global/in/recenter') }
         'vive_controller' { $legacyVive }
         'microsoft/motion_controller' { $legacyWmr }
         'holographic_controller' { $legacyWmr }

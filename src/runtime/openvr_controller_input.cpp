@@ -123,6 +123,17 @@ bool OpenVrSession::TriggerHaptic(VrHand hand, float duration, float frequency,
     return actions_.TriggerHaptic(backend, hand, duration, frequency, amplitude, error);
 }
 
+bool OpenVrSession::OpenControllerBindings(std::string& error) noexcept {
+    if (!initialized() || input_ == nullptr) {
+        error = "OpenVR controller input is unavailable";
+        return false;
+    }
+    error.clear();
+    return Check(static_cast<vr::IVRInput*>(input_)->OpenBindingUI(nullptr,
+        vr::k_ulInvalidActionSetHandle, vr::k_ulInvalidInputValueHandle, false),
+        "OpenBindingUI", error);
+}
+
 void OpenVrSession::SetControllerMoveDeadZone(float dead_zone) noexcept {
     actions_.SetMoveDeadZone(dead_zone);
 }

@@ -164,6 +164,28 @@ void TestWorldYawWraps()
                "AddWorldYaw wraps too");
 }
 
+void TestInactiveStickFallback()
+{
+    bool active = false;
+    float x = 0.0f, y = 0.0f;
+    ExpectTrue(ApplyInactiveStickFallback(active, x, y, true, true, 0.0f, 1.0f, 0.15f),
+           "missing move action accepts a live physical stick independently of turn");
+    ExpectTrue(active, "physical fallback publishes analog intent");
+    ExpectNear(y, 1.0f, 1e-6f, "fallback preserves full forward input");
+    active = true; x = y = 0.0f;
+    ExpectTrue(!ApplyInactiveStickFallback(active, x, y, true, true, 0.0f, 1.0f, 0.15f),
+           "active neutral custom binding is authoritative");
+    ExpectNear(y, 0.0f, 1e-6f, "fallback cannot override a neutral action");
+    active = false;
+    ExpectTrue(!ApplyInactiveStickFallback(active, x, y, false, true, 0.0f, 1.0f, 0.15f),
+           "disconnected legacy state cannot move the body");
+    ExpectTrue(!ApplyInactiveStickFallback(active, x, y, true, false, 0.0f, 1.0f, 0.15f),
+           "no physical analog contact cannot move the body");
+    ExpectTrue(ApplyInactiveStickFallback(active, x, y, true, true, 0.05f, 0.0f, 0.15f),
+           "live neutral fallback remains active");
+    ExpectNear(x, 0.0f, 1e-6f, "fallback applies movement dead zone");
+}
+
 void TestDeadZone()
 {
     const float dz = 0.15f;
@@ -481,6 +503,7 @@ int main()
     TestTransformRoundTrip();
     TestWorldYawWraps();
     TestDeadZone();
+    TestInactiveStickFallback();
     TestVRHandCollisionPolicyKeepsFullPalm();
     TestVRHandCannotCrossWall();
     TestVRHandCannotCrossClosedDoorAtSpeed();

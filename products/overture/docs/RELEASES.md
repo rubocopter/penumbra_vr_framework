@@ -1,5 +1,14 @@
 # Release history
 
+## v1.0.3 — Controller defaults and missing-stick recovery (2026-10-03)
+
+Overture recovers an inactive stick action independently without overriding an
+active custom action or importing legacy button clicks. Updated controller
+defaults remove demonstrated overlaps and invalid inputs. Options > Controls
+opens the actual SteamVR bindings. See the [Framework patch notes](../../../docs/releases/1.0.3.md)
+and [generated defaults reference](../../../docs/CONTROLLER_BINDINGS.md).
+These changes are host-tested; current-build hardware acceptance remains open.
+
 ## v1.0.2 — Valve Index bindings (2026-10-03)
 
 Corrected Index thumbstick paths for movement, turning and stick clicks in both

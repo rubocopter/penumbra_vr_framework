@@ -31,6 +31,7 @@ public:
         VrHand hand, float duration, float frequency, float amplitude,
         std::string& error) noexcept;
     void SetControllerMoveDeadZone(float dead_zone) noexcept;
+    [[nodiscard]] bool OpenControllerBindings(std::string& error) noexcept;
     [[nodiscard]] bool controller_input_initialized() const noexcept;
 
     [[nodiscard]] bool ReadEyeConfiguration(

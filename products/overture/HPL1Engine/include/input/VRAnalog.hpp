@@ -6,6 +6,8 @@
 #ifndef HPL_VR_ANALOG_H
 #define HPL_VR_ANALOG_H
 
+#include <cmath>
+
 namespace hpl {
 
 	/**
@@ -27,6 +29,19 @@ namespace hpl {
 		afX = (afX / magnitude) * scaledMagnitude;
 		afY = (afY / magnitude) * scaledMagnitude;
 	}
+
+    inline bool ApplyInactiveStickFallback(bool& active, float& x, float& y,
+        bool legacyValid, bool physicalContact, float legacyX, float legacyY,
+        float deadZone)
+    {
+        if (active || !legacyValid || !physicalContact ||
+            !std::isfinite(legacyX) || !std::isfinite(legacyY)) return false;
+        active = true;
+        x = legacyX;
+        y = legacyY;
+        ApplyStickDeadZone(x, y, deadZone);
+        return true;
+    }
 
 }
 

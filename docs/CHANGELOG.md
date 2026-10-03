@@ -5,6 +5,19 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.3 — 2026-10-03
+
+- Preserve Black Plague's calibrated eye height across turning before the next
+  native body sample; suppress only prediction from the previous yaw basis.
+- Recover each missing Overture stick action independently through its existing
+  legacy analog path, preserving active custom actions and excluding raw clicks.
+- Correct Index light/interaction overlap, grip/trackpad force-click semantics
+  and pause placement; remove invalid/duplicate Touch/Pico recenter defaults and
+  WMR's mirrored pause/recenter overlap. Use declared SteamVR tip pointing poses.
+- Add shortcuts to the active SteamVR bindings in Overture controls and Black
+  Plague VR settings, plus a checked reference for all eight controller defaults.
+  These changes are host-tested; hardware acceptance remains separate.
+
 ## 1.0.2 — 2026-10-03
 
 - Corrected Valve Index thumbstick components in all three games' bundled

@@ -7,8 +7,8 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework [v1.0.2](releases/1.0.2.md) publishes the host-tested Index thumbstick
-correction for external retesting. The exact v1.0.1 installer retains its
+Framework [v1.0.3](releases/1.0.3.md) bundles the host-tested controller defaults,
+Overture stick recovery and Black Plague turning-height correction. The exact v1.0.1 installer retains its
 maintainer installation and Overture gameplay acceptance. Index input/finger
 feedback, Quest 3 pointer alignment and broader per-game
 regressions remain focused follow-up. Use `CLOSURE_STATUS.md` for the release evidence
@@ -111,10 +111,12 @@ automatically validate a newer candidate.
 - [ ] Follow up the external Valve Index retest: distinguish missing Overture
   left-stick action values from unapplied body movement, and investigate Black
   Plague's low viewpoint that rises during turning and drops on stick release.
-  Obtain matching logs and standing/seated/crouch settings; keep the reported
-  Overture turning and Black Plague/Requiem stick successes scoped as recorded
-  in `TRILOGY_PARITY_PLAN.md`. Overture remapping and isolated finger comparison
-  in Gate 5 remain follow-up; the reporter considers fingers non-blocking.
+  The offline analog fallback, BP yaw/height continuity correction, profile
+  conflict guards and controls reference are host-tested. Keep these together
+  for the next update rather than requiring repeated diagnostic releases or
+  reporter test rounds. Hardware acceptance and the low baseline's cause remain
+  open; the scoped evidence is in `TRILOGY_PARITY_PLAN.md`. Finger comparison is
+  non-blocking and deferred.
 
 The deferred focused runtime issue is Black Plague's vertical mini-hops while
 touching ventilation walls. Investigate accepted motion, native stepping and

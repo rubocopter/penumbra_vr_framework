@@ -25,11 +25,11 @@
         },
         {
           "output": "/actions/global/in/left_aim",
-          "path": "/user/hand/left/pose/aim"
+          "path": "/user/hand/left/pose/tip"
         },
         {
           "output": "/actions/global/in/right_aim",
-          "path": "/user/hand/right/pose/aim"
+          "path": "/user/hand/right/pose/tip"
         }
       ],
       "skeleton": [
@@ -106,8 +106,13 @@
               "output": "/actions/gameplay/in/quick_light"
             }
           },
-          "mode": "trigger",
-          "path": "/user/hand/left/input/trigger"
+          "mode": "button",
+          "path": "/user/hand/left/input/grip",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -161,7 +166,12 @@
             }
           },
           "mode": "button",
-          "path": "/user/hand/right/input/grip"
+          "path": "/user/hand/right/input/grip",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -170,7 +180,12 @@
             }
           },
           "mode": "button",
-          "path": "/user/hand/left/input/system"
+          "path": "/user/hand/right/input/trackpad",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -178,8 +193,13 @@
               "output": "/actions/global/in/recenter"
             }
           },
-          "mode": "trackpad",
-          "path": "/user/hand/left/input/trackpad"
+          "mode": "button",
+          "path": "/user/hand/left/input/trackpad",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         }
       ]
     },
@@ -232,7 +252,12 @@
             }
           },
           "mode": "button",
-          "path": "/user/hand/right/input/grip"
+          "path": "/user/hand/right/input/grip",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -249,8 +274,13 @@
               "output": "/actions/global/in/recenter"
             }
           },
-          "mode": "trackpad",
-          "path": "/user/hand/left/input/trackpad"
+          "mode": "button",
+          "path": "/user/hand/left/input/trackpad",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         }
       ]
     },
@@ -290,8 +320,13 @@
               "output": "/actions/gameplay_left/in/quick_light"
             }
           },
-          "mode": "trigger",
-          "path": "/user/hand/right/input/trigger"
+          "mode": "button",
+          "path": "/user/hand/right/input/grip",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -345,7 +380,12 @@
             }
           },
           "mode": "button",
-          "path": "/user/hand/left/input/grip"
+          "path": "/user/hand/left/input/grip",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -354,7 +394,12 @@
             }
           },
           "mode": "button",
-          "path": "/user/hand/left/input/system"
+          "path": "/user/hand/right/input/trackpad",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -362,17 +407,13 @@
               "output": "/actions/global/in/recenter"
             }
           },
-          "mode": "trackpad",
-          "path": "/user/hand/left/input/trackpad"
-        },
-        {
-          "inputs": {
-            "click": {
-              "output": "/actions/global/in/recenter"
-            }
-          },
-          "mode": "trackpad",
-          "path": "/user/hand/right/input/trackpad"
+          "mode": "button",
+          "path": "/user/hand/left/input/trackpad",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         }
       ]
     },
@@ -425,7 +466,12 @@
             }
           },
           "mode": "button",
-          "path": "/user/hand/left/input/grip"
+          "path": "/user/hand/left/input/grip",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         },
         {
           "inputs": {
@@ -442,8 +488,13 @@
               "output": "/actions/global/in/recenter"
             }
           },
-          "mode": "trackpad",
-          "path": "/user/hand/left/input/trackpad"
+          "mode": "button",
+          "path": "/user/hand/left/input/trackpad",
+          "parameters": {
+            "force_input": "force",
+            "click_deactivate_threshold": "0.6",
+            "click_activate_threshold": "0.65"
+          }
         }
       ]
     }

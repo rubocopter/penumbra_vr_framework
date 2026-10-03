@@ -1,4 +1,5 @@
 #include "native_vr_settings_menu.hpp"
+#include "native_input_bridge.hpp"
 
 #include "iat_hook.hpp"
 #include "vr_settings_capabilities.hpp"
@@ -56,6 +57,7 @@ constexpr int kSafeRemovedTargetState = kOptionsState;
 constexpr int kRootSentinel = 0x70000000;
 constexpr int kRowSentinelBase = 0x70000100;
 constexpr int kBackSentinel = 0x70000200;
+constexpr int kBindingsSentinel = 0x70000300;
 
 struct NativeVec2 { float x; float y; };
 struct NativeVec3 { float x; float y; float z; };
@@ -81,6 +83,7 @@ CommitNativeVrSettings g_commit = nullptr;
 void* g_menu = nullptr;
 void* g_root = nullptr;
 void* g_back = nullptr;
+void* g_bindings = nullptr;
 void* g_native_back = nullptr;
 float g_native_back_y = 0.0F;
 float g_native_back_draw_y = 0.0F;
@@ -116,7 +119,7 @@ void Write(void* base, std::ptrdiff_t offset, const T& value) noexcept {
 }
 
 [[nodiscard]] bool IsCustomWidget(void* widget) noexcept {
-    if (widget == g_root || widget == g_back) return widget != nullptr;
+    if (widget == g_root || widget == g_back || widget == g_bindings) return widget != nullptr;
     for (void* row : g_rows) {
         if (widget == row && row != nullptr) return true;
     }
@@ -184,6 +187,11 @@ void ForEachStateWidget(void* menu, int state, Callback&& callback) noexcept {
 
 [[nodiscard]] const wchar_t* BackText() noexcept {
     return g_language == MenuLanguage::spanish ? L"Volver" : L"Back";
+}
+
+[[nodiscard]] const wchar_t* BindingsText() noexcept {
+    return g_language == MenuLanguage::spanish
+        ? L"Bindings del mando (SteamVR)" : L"Controller bindings (SteamVR)";
 }
 
 [[nodiscard]] const wchar_t* SettingName(runtime::VrSettingId id) noexcept {
@@ -316,6 +324,7 @@ void RefreshLocalizedText() noexcept {
     if (next_language != g_language) g_language = next_language;
     if (g_root != nullptr) AssignButtonText(g_root, RootText());
     if (g_back != nullptr) AssignButtonText(g_back, BackText());
+    if (g_bindings != nullptr) AssignButtonText(g_bindings, BindingsText());
     RefreshRows();
 }
 
@@ -391,7 +400,9 @@ void MoveNativeBackForVrEntry(void* menu) noexcept {
         RootText(), kRootSentinel, 25.0F);
     void* back = CreateButton(init, NativeVec3{400.0F, 500.0F, 40.0F},
         BackText(), kBackSentinel, 23.0F);
-    bool complete = root != nullptr && back != nullptr;
+    void* bindings = CreateButton(init, NativeVec3{600.0F, 449.0F, 40.0F},
+        BindingsText(), kBindingsSentinel, 17.0F);
+    bool complete = root != nullptr && back != nullptr && bindings != nullptr;
     const auto& settings = BlackPlagueVrMenuSettings();
     for (std::size_t index = 0; complete && index < settings.size(); ++index) {
         const bool right = index >= 9;
@@ -407,6 +418,7 @@ void MoveNativeBackForVrEntry(void* menu) noexcept {
     if (!complete) {
         DestroyUnownedButton(root);
         DestroyUnownedButton(back);
+        DestroyUnownedButton(bindings);
         for (void* row : rows) DestroyUnownedButton(row);
         g_injecting = false;
         return false;
@@ -415,6 +427,7 @@ void MoveNativeBackForVrEntry(void* menu) noexcept {
     g_menu = menu;
     g_root = root;
     g_back = back;
+    g_bindings = bindings;
     g_rows = rows;
     g_page_active = false;
     MoveNativeBackForVrEntry(menu);
@@ -428,6 +441,8 @@ void MoveNativeBackForVrEntry(void* menu) noexcept {
     }
     Write<std::uint8_t>(g_back, kWidgetActiveOffset, 0);
     add(menu, kOptionsState, g_back);
+    Write<std::uint8_t>(g_bindings, kWidgetActiveOffset, 0);
+    add(menu, kOptionsState, g_bindings);
     SetWidgetActive(g_root, true);
     g_injecting = false;
     return true;
@@ -441,7 +456,7 @@ void ApplyPageState(bool page_active) noexcept {
         if (widget == nullptr) return;
         bool desired = !page_active;
         if (widget == g_root) desired = !page_active;
-        else if (widget == g_back || RowIndex(widget) >= 0) desired = page_active;
+        else if (widget == g_back || widget == g_bindings || RowIndex(widget) >= 0) desired = page_active;
         SetWidgetActive(widget, desired);
     });
 }
@@ -457,6 +472,16 @@ void __fastcall HookedButtonMouseDown(void* widget, void*, int button) noexcept 
     }
     if (widget == g_back) {
         if (button == kLeftMouse) ApplyPageState(false);
+        return;
+    }
+    if (widget == g_bindings) {
+        if (button == kLeftMouse) {
+            std::string error;
+            if (!OpenNativeControllerBindings(error)) {
+                AssignButtonText(widget, g_language == MenuLanguage::spanish
+                    ? L"Abre los bindings desde SteamVR" : L"Open bindings from SteamVR");
+            }
+        }
         return;
     }
     const int index = RowIndex(widget);
@@ -506,7 +531,7 @@ void __fastcall HookedButtonActiveChanged(void* widget, void*) noexcept {
         } else if (widget == g_root) {
             Write<std::uint8_t>(widget, kWidgetActiveOffset,
                 g_page_active ? 0 : 1);
-        } else if (widget == g_back || RowIndex(widget) >= 0) {
+        } else if (widget == g_back || widget == g_bindings || RowIndex(widget) >= 0) {
             Write<std::uint8_t>(widget, kWidgetActiveOffset,
                 g_page_active ? 1 : 0);
         } else if (g_page_active) {
@@ -584,6 +609,7 @@ bool RemoveNativeVrSettingsMenu(std::string& error) noexcept {
         RestoreNativeBackPosition();
         if (g_root != nullptr) Write<int>(g_root, kButtonTargetStateOffset, kSafeRemovedTargetState);
         if (g_back != nullptr) Write<int>(g_back, kButtonTargetStateOffset, kSafeRemovedTargetState);
+        if (g_bindings != nullptr) Write<int>(g_bindings, kButtonTargetStateOffset, kSafeRemovedTargetState);
         for (void* row : g_rows) {
             if (row != nullptr) Write<int>(row, kButtonTargetStateOffset, kSafeRemovedTargetState);
         }
@@ -604,6 +630,7 @@ bool RemoveNativeVrSettingsMenu(std::string& error) noexcept {
         g_menu = nullptr;
         g_root = nullptr;
         g_back = nullptr;
+        g_bindings = nullptr;
         g_native_back = nullptr;
         g_rows.fill(nullptr);
         g_page_active = false;

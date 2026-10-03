@@ -28,6 +28,20 @@ SteamVR's controller binding interface can inspect and customize the active game
 
 The [controller ledger](TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution) owns exact coverage and device-validation limits. Vive lacks assigned turn, button crouch, holster and pause; WMR/Holographic layouts lack holster and skeletal outputs. Non-Sense families still need physical-device validation.
 
-The imported [Overture controls guide](../products/overture/docs/INPUT.md#controller-profiles) documents detailed physical layouts for the eight families. Use it as a layout reference, not as proof that every Overture-specific feature or UI behavior is available in Black Plague/Requiem.
+The [generated controller reference](CONTROLLER_BINDINGS.md) lists the actual
+default gameplay/UI bindings for all eight families and both handedness modes.
+It is checked against the distributed graphs. In Overture, **Options → Controls
+→ Controller bindings (SteamVR)** opens the active controller layout; Black
+Plague provides the same shortcut in **Options → VR Settings**. Requiem uses the
+SteamVR dashboard editor. These shortcuts are v1.0.3 changes and still
+need headset presentation validation. Saved custom bindings are shown by
+SteamVR and can differ from the bundled defaults.
+
+Index uses offhand grip squeeze for quick light, leaving the offhand trigger
+for interaction. Its left force trackpad recenters; its right force trackpad
+pauses. Touch/Pico recenter is deliberately unassigned, avoiding a duplicate
+notebook/jump click and a nonexistent face button. WMR's mirrored pause no
+longer recenters simultaneously. Vive/WMR retain the compatibility exceptions
+listed in the generated reference.
 
 If actions are missing or controllers do not respond, follow [input troubleshooting](TROUBLESHOOTING.md#vr-and-controller-input).

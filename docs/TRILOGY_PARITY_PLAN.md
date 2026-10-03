@@ -61,9 +61,9 @@ including the mirrored dominant-hand layouts. The bundled defaults are:
 | PS VR2 Sense | `playstation_vr2_sense` | All 42 actions |
 | HTC Vive | `vive_controller` | Compatibility layout: no turn, button crouch, holster, pause or skeletons |
 | Valve Index | `knuckles` | All 42 actions |
-| Oculus Touch | `oculus_touch` | All 42 actions |
-| Pico 4 | `pico4_controller` | All 42 actions |
-| Pico Neo 3 | `pico_neo3_controller` | All 42 actions |
+| Oculus Touch | `oculus_touch` | 41 actions; recenter deliberately unassigned |
+| Pico 4 | `pico4_controller` | 41 actions; recenter deliberately unassigned |
+| Pico Neo 3 | `pico_neo3_controller` | 41 actions; recenter deliberately unassigned |
 | Windows Mixed Reality | `microsoft/motion_controller` | No holster or skeletons |
 | Holographic/WMR | `holographic_controller` | No holster or skeletons |
 
@@ -83,6 +83,26 @@ and drops again when the stick is released. These are scoped user reports,
 without an exact installed-build hash, matching logs or posture settings;
 they do not establish full controller or game acceptance. Overture movement
 and Black Plague posture/turn continuity remain open regressions.
+
+The offline follow-up host-tests independent Overture analog fallback when
+only move or turn is inactive, preserving an active neutral custom binding and
+excluding legacy stick-press bits. Black Plague's renderer reproduced dropping
+the calibrated height when a yaw epoch changes before the next body tick; it now
+keeps the fresh same-origin feet/world anchor and height, while suppressing old
+horizontal prediction. Origin discontinuities, invalid/stale body samples and
+excessive physical deltas still reject placement. This is a host-tested camera
+continuity correction, not proof of the reporter's native crouch state or a
+headset fix for their low baseline viewpoint.
+
+Index defaults now separate offhand interaction from quick light, use explicit
+force clicks for grip/trackpad and put pause on the spare right trackpad. The
+pointing sources use SteamVR's declared tip poses. Touch/Pico no longer bind
+recenter to a duplicate/nonexistent face-button click; WMR's mirrored pause no
+longer also recenters. The generated [binding reference](CONTROLLER_BINDINGS.md)
+and Overture/BP shortcuts to SteamVR's active binding editor are host-tested;
+new mapping/pointer/dashboard headset acceptance remains pending. Vive/WMR
+compatibility exceptions are retained and documented. These source changes
+follow the published v1.0.2 and do not retroactively change that artifact.
 
 The finger mismatch is unresolved and the reporter considers it non-blocking.
 Current consumers preserve OpenVR's Thumb/Index/Middle/Ring/Pinky channel order and map

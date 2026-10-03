@@ -25,11 +25,11 @@
         },
         {
           "output": "/actions/global/in/left_aim",
-          "path": "/user/hand/left/pose/aim"
+          "path": "/user/hand/left/pose/tip"
         },
         {
           "output": "/actions/global/in/right_aim",
-          "path": "/user/hand/right/pose/aim"
+          "path": "/user/hand/right/pose/tip"
         }
       ],
       "skeleton": [],

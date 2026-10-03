@@ -238,6 +238,7 @@ add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/movement_ownership_probe.cpp
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
+    src/backends/black_plague/room_scale_camera.cpp
     src/backends/black_plague/native_input_bridge.cpp
     src/backends/black_plague/native_vr_settings_menu.cpp
     src/backends/black_plague/spatial_interaction.cpp
@@ -503,6 +504,13 @@ if(BUILD_TESTING)
         COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_SOURCE_DIR}/tests/overture_bindings/overture_index_thumbstick_binding_test.ps1"
             -RepositoryRoot "${CMAKE_SOURCE_DIR}")
+    add_test(NAME controller_binding_conflicts
+        COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_SOURCE_DIR}/tests/overture_bindings/controller_binding_conflicts_test.ps1"
+            -RepositoryRoot "${CMAKE_SOURCE_DIR}")
+    add_test(NAME controller_controls_reference
+        COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_SOURCE_DIR}/tools/Write-ControllerControlsReference.ps1" -Check)
     add_executable(pvr_vr_native_intents_test tests/vr_input_state/vr_native_intents_test.cpp)
     target_include_directories(pvr_vr_native_intents_test PRIVATE src/adapters/hpl1)
     target_link_libraries(pvr_vr_native_intents_test PRIVATE pvr_vr_native_intents pvr_iat_hook)
@@ -699,6 +707,16 @@ if(BUILD_TESTING)
     add_test(
         NAME black_plague_spawn_yaw_rebase
         COMMAND pvr_black_plague_spawn_yaw_rebase_test)
+
+    add_executable(pvr_black_plague_room_scale_camera_test
+        tests/black_plague_tracking/room_scale_camera_test.cpp
+        src/backends/black_plague/room_scale_camera.cpp)
+    target_include_directories(pvr_black_plague_room_scale_camera_test PRIVATE
+        src/backends/black_plague src/adapters/hpl1)
+    target_link_libraries(pvr_black_plague_room_scale_camera_test PRIVATE pvr_vr_math)
+    pvr_enable_warnings(pvr_black_plague_room_scale_camera_test)
+    add_test(NAME black_plague_room_scale_camera
+        COMMAND pvr_black_plague_room_scale_camera_test)
 
     add_executable(pvr_vr_panel_policy_test
         tests/vr_panel_policy/vr_panel_policy_test.cpp

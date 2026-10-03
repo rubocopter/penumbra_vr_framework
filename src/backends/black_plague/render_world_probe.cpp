@@ -1,4 +1,5 @@
 #include "render_world_probe.hpp"
+#include "room_scale_camera.hpp"
 #include "black_plague_body_adapter.hpp"
 #include "hand_contact_probe.hpp"
 
@@ -189,112 +190,6 @@ struct StereoProcessingResult {
             anchor_forward_z * game_forward_z);
 }
 
-[[nodiscard]] bool ResolveBlackPlagueRoomScalePlacement(
-    const runtime::VrMatrix44& game_head_view,
-    const runtime::VrMatrix34& tracking_anchor,
-    const runtime::VrMatrix34& current_tracking_pose,
-    const runtime::VrTrackingSampleIdentity& current_identity,
-    const BlackPlagueRoomScaleCameraSample& room_scale,
-    bool& placement_available,
-    std::array<float, 3>& world_translation,
-    std::array<float, 3>& render_prediction,
-    std::array<float, 3>& render_head_anchor,
-    std::string& error) noexcept {
-    world_translation = {};
-    render_prediction = {};
-    render_head_anchor = {};
-    placement_available = false;
-    if (!room_scale.enabled || !room_scale.valid) return true;
-    if (room_scale.tracking_identity.sequence != 0 &&
-        !runtime::SameTrackingEpoch(
-            room_scale.tracking_identity, current_identity)) {
-        return true;
-    }
-
-    const float tracking_delta_x = current_tracking_pose.values[3] -
-        room_scale.observed_tracking_pose.values[3];
-    const float tracking_delta_z = current_tracking_pose.values[11] -
-        room_scale.observed_tracking_pose.values[11];
-    const float tracking_delta_length =
-        std::hypot(tracking_delta_x, tracking_delta_z);
-    if (!std::isfinite(tracking_delta_length) || tracking_delta_length >
-            runtime::vr_locomotion_policy::kMaximumHeadBodySeparation) {
-        // A recenter/tracking discontinuity must not be extrapolated into the
-        // world before the body owner has rebased the reconciliation sample.
-        return true;
-    }
-
-    // Black Plague's character body advances at ~60 Hz while the HMD can be
-    // sampled faster. PID 14212 showed that withholding all between-tick X/Z
-    // made rejected wall pressure feel like a force pulling the head back.
-    // Restore the previously headset-exercised continuation and remove only
-    // the component that continues into the last rejected physical direction.
-    // Tangential slide and retreat remain render-rate responsive.
-    const float world_yaw = TrackingWorldYaw(game_head_view, tracking_anchor);
-    const float cosine = std::cos(world_yaw);
-    const float sine = std::sin(world_yaw);
-    render_prediction = {
-        cosine * tracking_delta_x + sine * tracking_delta_z,
-        0.0F,
-        -sine * tracking_delta_x + cosine * tracking_delta_z,
-    };
-    render_prediction = runtime::FilterPhysicalRenderPrediction(
-        render_prediction, room_scale.physical_reconciliation);
-    render_head_anchor = room_scale.predicted_head_anchor;
-    render_head_anchor[0] += render_prediction[0];
-    render_head_anchor[2] += render_prediction[2];
-
-    // Rework's player-world pose is the reconciled feet anchor. Its shared
-    // tracking transform supplies the physical HMD height continuously and
-    // zeroes raw horizontal translation because X/Z is already integrated in
-    // render_head_anchor. This also prevents Black Plague's full native
-    // crouch-camera drop from being added to a real physical crouch.
-    runtime::VrTrackingSpace tracking_space;
-    tracking_space.SetHeadTrackingPose(current_tracking_pose);
-    tracking_space.SetPlayerWorldPosition(render_head_anchor);
-    tracking_space.SetHeightCalibration(
-        g_tracking_height_offset.load(std::memory_order_acquire));
-    AcquireSRWLockExclusive(&g_play_mode_lock);
-    const auto play_mode = g_play_mode_policy.Update(
-        g_tracking_play_mode.load(std::memory_order_acquire),
-        current_tracking_pose.values[7],
-        g_tracking_player_height.load(std::memory_order_acquire));
-    ReleaseSRWLockExclusive(&g_play_mode_lock);
-    tracking_space.SetSeatedOffset(play_mode.seated_offset);
-    const auto crouch = ReadNativePhysicalCrouchStatus();
-    if (crouch.native_crouched && !crouch.policy.physical_crouch) {
-        tracking_space.SetPostureOffset(
-            -g_tracking_crouch_depth.load(std::memory_order_acquire));
-    }
-    runtime::VrMatrix44 tracked_head_world;
-    if (!tracking_space.HeadWorldPose(tracked_head_world, error)) {
-        error = "Could not compose Rework tracking height for Black Plague: " +
-            error;
-        return false;
-    }
-    render_head_anchor[1] = tracked_head_world.values[7];
-
-    runtime::VrMatrix44 game_head_pose;
-    if (!runtime::InvertRigidTransform(
-            CollapseMatrix(game_head_view), game_head_pose, error)) {
-        error = "The native Black Plague camera view is not rigid: " + error;
-        return false;
-    }
-    world_translation = {
-        render_head_anchor[0] - game_head_pose.values[3],
-        render_head_anchor[1] - game_head_pose.values[7],
-        render_head_anchor[2] - game_head_pose.values[11],
-    };
-    if (!std::isfinite(world_translation[0]) ||
-        !std::isfinite(world_translation[1]) ||
-        !std::isfinite(world_translation[2])) {
-        error = "The predicted Black Plague room-scale placement is non-finite";
-        return false;
-    }
-    placement_available = true;
-    return true;
-}
-
 [[nodiscard]] bool ComposeBlackPlagueTrackedHeadView(
     const runtime::VrMatrix44& game_head_view,
     const runtime::VrMatrix34& anchor,
@@ -318,12 +213,21 @@ struct StereoProcessingResult {
     }
     if (!room_scale.enabled || !room_scale.valid) return true;
     bool placement_available = false;
-    if (!ResolveBlackPlagueRoomScalePlacement(game_head_view, anchor, current,
-            current_identity,
-            room_scale, placement_available, world_translation, render_prediction,
-            render_head_anchor, error)) {
-        return false;
+    BlackPlagueRoomScaleViewSettings settings;
+    settings.height_offset = g_tracking_height_offset.load(std::memory_order_acquire);
+    settings.play_mode = g_tracking_play_mode.load(std::memory_order_acquire);
+    settings.player_height = g_tracking_player_height.load(std::memory_order_acquire);
+    const auto crouch = ReadNativePhysicalCrouchStatus();
+    if (crouch.native_crouched && !crouch.policy.physical_crouch) {
+        settings.posture_offset = -g_tracking_crouch_depth.load(std::memory_order_acquire);
     }
+    AcquireSRWLockExclusive(&g_play_mode_lock);
+    const bool resolved = ResolveBlackPlagueRoomScalePlacement(
+        game_head_view, anchor, current, current_identity, room_scale,
+        settings, g_play_mode_policy, placement_available, world_translation,
+        render_prediction, render_head_anchor, error);
+    ReleaseSRWLockExclusive(&g_play_mode_lock);
+    if (!resolved) return false;
     if (!placement_available) return true;
     runtime::VrMatrix44 translated;
     if (!runtime::ApplyWorldTranslationToView(

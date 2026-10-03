@@ -397,7 +397,7 @@
     <Entry Name="VRPhysical">Physical</Entry>
     <Entry Name="VRButton">Button</Entry>
     <Entry Name="VRHybrid">Hybrid</Entry>
-    <Entry Name="TipVRAdjust">R2 increases or selects the next value. R3 decreases or selects the previous value.</Entry>
+    <Entry Name="TipVRAdjust">Select increases or chooses the next value. Drag/alternate decreases or chooses the previous value. See Controller bindings for your buttons.</Entry>
     <Entry Name="VRHandedness">Dominant hand:</Entry>
     <Entry Name="VRPlayMode">Play mode:</Entry>
     <Entry Name="VRPlayerHeight">Player height:</Entry>
@@ -408,6 +408,9 @@
     <Entry Name="VRSeated">Seated</Entry>
     <Entry Name="TipVRCalibrateHeight">Stand up straight and press Calibrate to set your standing height.</Entry>
     <Entry Name="VRControls">CONTROLS</Entry>
+    <Entry Name="VRControllerBindings">Controller bindings (SteamVR)</Entry>
+    <Entry Name="TipVRControllerBindings">View or change the active bindings for your controller in SteamVR. Includes saved custom layouts.</Entry>
+    <Entry Name="VRControllerBindingsUnavailable">Open SteamVR's controller bindings from its dashboard.</Entry>
     <Entry Name="VRMovement">MOVEMENT</Entry>
     <Entry Name="VRCalibration">CALIBRATION</Entry>
     <Entry Name="VRDisplay">DISPLAY</Entry>
@@ -427,7 +430,7 @@
     <Entry Name="VRPresetQuality">Quality</Entry>
     <Entry Name="VRPresetCustom">Custom</Entry>
     <Entry Name="VRRecenter">Recenter</Entry>
-    <Entry Name="TipVRRecenter">Recenter the horizontal view. Same as pressing Create.</Entry>
+    <Entry Name="TipVRRecenter">Recenter the horizontal view. Controller shortcuts depend on your SteamVR bindings.</Entry>
     <Entry Name="ActionMode Camera Speed:">Action Mode Camera Speed:</Entry>
     <Entry Name="InteractMode Camera Speed:">Interaction Mode Camera Speed:</Entry>
     <Entry Name="Output Device:">Output Device:</Entry>

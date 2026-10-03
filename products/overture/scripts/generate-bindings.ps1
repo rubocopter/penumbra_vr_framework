@@ -47,7 +47,7 @@ function New-Controller {
         [string]$Name,
         [string]$Description,
         [string]$GripPose,            # device path suffix used for /pose/grip actions
-        [string]$AimPose = 'pose/aim',# device path suffix used for the application aim action
+        [string]$AimPose = 'pose/tip',# declared SteamVR pointing pose (OpenXR's aim is a different path)
         [bool]$Skeletal,              # bind the skeleton actions
         [string]$FamilyKey,           # family key into $families
         [hashtable]$InputMap             # logical input name -> @{ path = suffix; mode = SteamVR mode }
@@ -87,14 +87,19 @@ $inputGeneric = @{
 $inputIndex = $inputGeneric.Clone()
 $inputIndex.stickLeft  = @{ path = 'input/thumbstick'; mode = 'joystick' }
 $inputIndex.stickRight = @{ path = 'input/thumbstick'; mode = 'joystick' }
+# Valve's Moondust example uses an explicit squeeze threshold for boolean grip
+# actions. Index has force/value sensors, not a physical grip click.
+$indexForceClick = @{ force_input = 'force'; click_activate_threshold = '0.65'; click_deactivate_threshold = '0.6' }
+foreach ($taskControl in @('gripLeft','gripRight','trackpadLeft','trackpadRight')) {
+    $inputIndex[$taskControl] = @{ path = $inputGeneric[$taskControl].path; mode = 'button'; parameters = $indexForceClick }
+}
 
 # Touch-family controllers split the face buttons per hand. The shipped
-# recenter binding also uses X on the right hand, which physically has A/B;
-# SteamVR accepts the path, so it is reproduced verbatim.
+# no spare recenter button exists without duplicating another gameplay click.
+# Leave that optional action unassigned rather than binding a nonexistent X.
 $inputOculus = $inputGeneric.Clone()
 $inputOculus.primaryLeft   = @{ path = 'input/x'; mode = 'button' }
 $inputOculus.secondaryLeft = @{ path = 'input/y'; mode = 'button' }
-$inputOculus.recenterRight = @{ path = 'input/x'; mode = 'button' }
 
 # Vive wands: the trackpad is the only analog surface, so it hosts movement;
 # the system button is reserved by SteamVR, leaving pause unbound there.
@@ -178,9 +183,7 @@ $gameplayOculus = @(
     (New-Row 'right' 'secondaryRight' @{ click = 'examine' }),
     (New-Row 'right' 'triggerRight'   @{ click = 'interact' }),
     (New-Row 'right' 'gripRight'      @{ click = 'inventory' }),
-    (New-Row 'left'  'systemLeft'     @{ click = 'pause' }),
-    (New-Row 'left'  'primaryLeft'    @{ click = 'global/in/recenter' }),
-    (New-Row 'right' 'recenterRight'  @{ click = 'global/in/recenter' })
+    (New-Row 'left'  'systemLeft'     @{ click = 'pause' })
 )
 
 $gameplayWmr = @(
@@ -298,9 +301,7 @@ $gameplayOculusLeft = @(
     (New-Row 'left'  'secondaryLeft'  @{ click = 'examine' }),
     (New-Row 'left'  'triggerLeft'    @{ click = 'interact' }),
     (New-Row 'left'  'gripLeft'       @{ click = 'inventory' }),
-    (New-Row 'left'  'systemLeft'     @{ click = 'pause' }),
-    (New-Row 'left'  'primaryLeft'    @{ click = 'global/in/recenter' }),
-    (New-Row 'right' 'recenterRight'  @{ click = 'global/in/recenter' })
+    (New-Row 'left'  'systemLeft'     @{ click = 'pause' })
 )
 
 $gameplayWmrLeft = @(
@@ -313,8 +314,7 @@ $gameplayWmrLeft = @(
     (New-Row 'left'  'gripLeft'       @{ click = 'inventory' }),
     (New-Row 'left'  'menuLeft'       @{ click = 'examine' }),
     (New-Row 'right' 'trackpadRight'  @{ click = 'pause' }),
-    (New-Row 'left'  'trackpadLeft'   @{ click = 'global/in/recenter' }),
-    (New-Row 'right' 'trackpadRight'  @{ click = 'global/in/recenter' })
+    (New-Row 'left'  'trackpadLeft'   @{ click = 'global/in/recenter' })
 )
 
 $gameplayViveLeft = @(
@@ -391,7 +391,27 @@ $uiPsvr2Left = @(
     (New-Row 'right' 'menuRight'      @{ click = 'close' })
 )
 
+# Index keeps the Sense-style division: offhand grip = light, trigger =
+# interaction. Its spare force trackpads supply pause/recenter; the system
+# button belongs to SteamVR. Preserve those physical sides in mirrored mode.
+$gameplayIndex = @($gameplayGeneric | ForEach-Object { $_.Clone() })
+$gameplayIndexLeft = @($gameplayGenericLeft | Where-Object {
+    -not ($_.hand -eq 'right' -and $_.input -eq 'trackpadRight')
+} | ForEach-Object { $_.Clone() })
+foreach ($rows in @(@{ rows = $gameplayIndex; grip = 'gripLeft' }, @{ rows = $gameplayIndexLeft; grip = 'gripRight' })) {
+    foreach ($row in $rows.rows) {
+        if ($row.behaviors.click -eq 'quick_light') { $row.input = $rows.grip }
+        if ($row.behaviors.click -eq 'pause') { $row.hand = 'right'; $row.input = 'trackpadRight' }
+    }
+}
+
 $families = @{
+    index = @{
+        Gameplay = $gameplayIndex
+        GameplayLeft = $gameplayIndexLeft
+        Ui = $uiGeneric
+        UiLeft = $uiGenericLeft
+    }
     generic = @{
         Gameplay     = $gameplayGeneric
         GameplayLeft = $gameplayGenericLeft
@@ -438,7 +458,7 @@ $controllers = @(
     (New-Controller -FileName 'knuckles.json' -ControllerType 'knuckles' `
         -Name 'Penumbra VR - Valve Index' `
         -Description 'Default Valve Index bindings for Penumbra: Overture VR Rework' `
-        -GripPose 'pose/grip' -Skeletal $true -FamilyKey 'generic'  -InputMap $inputIndex),
+        -GripPose 'pose/grip' -Skeletal $true -FamilyKey 'index'  -InputMap $inputIndex),
     (New-Controller -FileName 'oculus_touch.json' -ControllerType 'oculus_touch' `
         -Name 'Penumbra VR - Touch' `
         -Description 'Default Meta Quest and Oculus Rift Touch bindings for Penumbra: Overture VR Rework' `
@@ -495,11 +515,13 @@ function Get-SourceObject {
     }
 
     $mode = if ($row.mode) { $row.mode } else { $physical.mode }
-    return [ordered]@{
+    $source = [ordered]@{
         inputs = $inputs
         mode   = $mode
         path   = '/user/hand/' + $row.hand + '/' + $physical.path
     }
+    if ($physical.ContainsKey('parameters')) { $source.parameters = $physical.parameters }
+    return $source
 }
 
 function Get-BindingDocument {

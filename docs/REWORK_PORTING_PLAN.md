@@ -99,6 +99,38 @@ other controller families retain their own paths. The regression generates
 fresh graphs and checks the two distributed Index graphs against that physical
 contract.
 
+The follow-up compares the exact reference graphs with installed SteamVR Index,
+Sense, Touch and Vive profiles. `pose/tip` is the declared pointing source;
+Index grip/trackpad expose force rather than physical grip clicks. Index light
+was assigned to the offhand interaction trigger, and Touch/Pico recenter named
+a wrong-hand X and duplicated a gameplay click. These profile boundaries cannot
+retain the reference verbatim. Index now follows Sense's grip/light division,
+uses force clicks following [Valve's Moondust example](https://github.com/ValveSoftware/Moondust/blob/master/bindings_knuckles.json),
+and puts pause on the spare right trackpad. Touch/Pico recenter remains
+deliberately unassigned; WMR's mirrored pause/recenter collision is removed.
+Vive/WMR's other compatibility limitations are documented rather than broadly
+redesigning their layouts. Physical component semantics follow
+[Valve's input-profile contract](https://github.com/ValveSoftware/openvr/wiki/Input-Profiles).
+
+Overture's inherited fallback only entered when the entire action context was
+inactive. A valid turn action therefore prevented legacy movement recovery when
+move alone was missing. The source consumer now applies the existing legacy
+analog/dead-zone behavior per inactive stick, preserves any active action
+(including neutral custom bindings), and never imports legacy button bits.
+SteamVR's Index legacy graph can synthesize a pad press from stick position, so
+using that press for crouch would be an incorrect adaptation of this boundary.
+
+Rework retains its calibrated tracking height when world yaw changes. BP's
+renderer instead rejected the whole room-scale placement on a yaw-epoch
+mismatch and fell back to native camera height. The actual camera-composition
+host regression reproduced that loss. BP now keeps the fresh same-origin
+world/feet anchor and height while rejecting prediction from the old yaw basis.
+Tracking-origin discontinuities retain the original rejection; the body adapter
+still owns sample freshness/generation and the one native physics update.
+The composition lives in a BP-owned, game-call-free source module so that its
+real consumer math is testable offline. This does not prove the reporter's low
+baseline or native crouch state, and headset acceptance remains open.
+
 The Overture door-nudge report was compared against Rework `23c890f`:
 Framework retained the same contact-speed limits and `delta-v * mass` call.
 The bundled Newton 1.x header declares `NewtonAddBodyImpulse` with

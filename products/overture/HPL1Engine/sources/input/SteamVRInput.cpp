@@ -243,6 +243,7 @@ namespace hpl {
     // re-aim). Count it as an active action, otherwise an idle frame drops to
     // legacy polling below and the press is lost.
     bool anyActionActive = nextState.recenter.active;
+    bool offhandButtonsUpdated = false;
 
     if (context == eSteamVRInputContext_Gameplay) {
       AnalogState move = ReadAnalog(ActionFor(mMoveAction, mMoveActionLeft));
@@ -276,6 +277,7 @@ namespace hpl {
         // ButtonHandler will poll both controllers for the legacy fallback.
         if (!offInteract.active && (anyActionActive || domInteract.active)) {
           offHand.UpdateButtonState();
+          offhandButtonsUpdated = true;
           const TrackedController::ButtonState& offButtons = offHand.GetButtonState();
           bOffValid = offButtons.valid_;
           bOffPressed = offButtons.triggerPressed;
@@ -343,6 +345,29 @@ namespace hpl {
         nextState.examine.active || nextState.holster.active || nextState.inventory.active ||
         nextState.notebook.active || nextState.quickLight.active || nextState.jump.active ||
         nextState.crouch.active || nextState.pause.active;
+
+      // Rework's legacy analog path remains available when one action is
+      // unbound, even if the other stick/buttons keep the action context alive.
+      // Never override an active custom binding, and never import raw stick
+      // press bits: SteamVR's Index legacy map can synthesize those on deflection.
+      if (anyActionActive && (!nextState.moveActive || !nextState.turnActive)) {
+        TrackedController& moveHand = bLeftHanded ? rightHand : leftHand;
+        TrackedController& turnHand = bLeftHanded ? leftHand : rightHand;
+        if (!nextState.moveActive && moveHand.IsPoseValid()) {
+          if (!offhandButtonsUpdated) moveHand.UpdateButtonState();
+          const TrackedController::ButtonState raw = moveHand.GetButtonState();
+          ApplyInactiveStickFallback(nextState.moveActive, nextState.moveX,
+            nextState.moveY, raw.valid_, raw.touchContact, raw.touchX, raw.touchY,
+            mfMoveDeadZone);
+        }
+        if (!nextState.turnActive && turnHand.IsPoseValid()) {
+          turnHand.UpdateButtonState();
+          const TrackedController::ButtonState raw = turnHand.GetButtonState();
+          float unusedY = 0.0f;
+          ApplyInactiveStickFallback(nextState.turnActive, nextState.turnX,
+            unusedY, raw.valid_, raw.touchContact, raw.touchX, raw.touchY, 0.0f);
+        }
+      }
 
       // Stale-binding signature: a controller profile saved by an older alpha
       // can leave the joystick actions unbound while every other control works
@@ -831,6 +856,15 @@ bool cSteamVRInput::UpdatePoseAction(vr::VRActionHandle_t handle, TrackedControl
     state.justPressed = data.bActive && data.bChanged && data.bState;
     state.justReleased = data.bActive && data.bChanged && !data.bState;
     return state;
+  }
+
+  bool cSteamVRInput::OpenControllerBindings() {
+    if (!mbAvailable) return false;
+    const vr::EVRInputError error = vr::VRInput()->OpenBindingUI(nullptr,
+      vr::k_ulInvalidActionSetHandle, vr::k_ulInvalidInputValueHandle, false);
+    if (error != vr::VRInputError_None)
+      Log(" SteamVR controller binding UI failed with error %d.\n", (int)error);
+    return error == vr::VRInputError_None;
   }
 
   cSteamVRInput::AnalogState cSteamVRInput::ReadAnalog(vr::VRActionHandle_t handle) const {

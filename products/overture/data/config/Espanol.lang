@@ -393,7 +393,7 @@
     <Entry Name="VRPhysical">Físico</Entry>
     <Entry Name="VRButton">Botón</Entry>
     <Entry Name="VRHybrid">Híbrido</Entry>
-    <Entry Name="TipVRAdjust">R2 aumenta o elige el valor siguiente. R3 reduce o elige el valor anterior.</Entry>
+    <Entry Name="TipVRAdjust">Seleccionar aumenta o elige el valor siguiente. Arrastrar/alternativo reduce o elige el anterior. Consulta los botones en Bindings del mando.</Entry>
     <Entry Name="VRHandedness">Mano dominante:</Entry>
     <Entry Name="VRPlayMode">Modo de juego:</Entry>
     <Entry Name="VRPlayerHeight">Altura del jugador:</Entry>
@@ -404,6 +404,9 @@
     <Entry Name="VRSeated">Sentado</Entry>
     <Entry Name="TipVRCalibrateHeight">Ponte de pie y pulsa Calibrar para fijar tu altura de pie.</Entry>
     <Entry Name="VRControls">CONTROLES</Entry>
+    <Entry Name="VRControllerBindings">Bindings del mando (SteamVR)</Entry>
+    <Entry Name="TipVRControllerBindings">Consulta o cambia los bindings activos de tu mando en SteamVR. Incluye tus mapeados personalizados.</Entry>
+    <Entry Name="VRControllerBindingsUnavailable">Abre los bindings del mando desde el panel de SteamVR.</Entry>
     <Entry Name="VRMovement">MOVIMIENTO</Entry>
     <Entry Name="VRCalibration">CALIBRACIÓN</Entry>
     <Entry Name="VRDisplay">PANTALLA</Entry>
@@ -423,7 +426,7 @@
     <Entry Name="VRPresetQuality">Calidad</Entry>
     <Entry Name="VRPresetCustom">Personalizado</Entry>
     <Entry Name="VRRecenter">Re-centrar</Entry>
-    <Entry Name="TipVRRecenter">Recentra la vista horizontal. Igual que pulsar Create.</Entry>
+    <Entry Name="TipVRRecenter">Recentra la vista horizontal. El atajo del mando depende de tus bindings de SteamVR.</Entry>
     <Entry Name="ActionMode Camera Speed:">Velocidad de cámara en modo acción:</Entry>
     <Entry Name="InteractMode Camera Speed:">Velocidad de cámara en modo interacción:</Entry>
     <Entry Name="Output Device:">Dispositivo de salida:</Entry>

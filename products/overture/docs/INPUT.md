@@ -97,7 +97,12 @@ Turn, button crouch, holster and pause are not assigned in this compatibility pr
 
 ### Valve Index
 
-The bundled `knuckles` profile follows the PS VR2 scheme. Recenter and pause stay on the left trackpad and left system button in both handedness modes.
+The current source `knuckles` profile follows the PS VR2 division of grip and
+trigger actions. Recenter and pause stay on the left and right force trackpads
+respectively in both handedness modes; SteamVR owns the system button. Grip and
+trackpad actions use an explicit squeeze threshold. These corrections follow
+v1.0.2; the [generated reference](../../../docs/CONTROLLER_BINDINGS.md) owns the
+complete current mapping for all families and both layouts.
 
 #### Gameplay
 
@@ -107,15 +112,15 @@ The bundled `knuckles` profile follows the PS VR2 scheme. Recenter and pause sta
 | L3 (left stick click) | Sprint |
 | Right stick | Snap or smooth turn |
 | R3 (right stick click) | Toggle crouch |
-| Left trigger | Toggle the current quick light |
+| Left grip squeeze | Toggle the current quick light |
 | Right A | Jump |
 | Left B | Notebook |
 | Left A | Holster the equipped tool or weapon |
 | Right B | Examine |
 | Right trigger | Interact, or use the equipped tool or weapon |
-| Right grip | Inventory |
-| Left system | Pause menu |
-| Left trackpad click | Recenter horizontal view |
+| Right grip squeeze | Inventory |
+| Right trackpad squeeze | Pause menu |
+| Left trackpad squeeze | Recenter horizontal view |
 
 #### Menus and inventory
 

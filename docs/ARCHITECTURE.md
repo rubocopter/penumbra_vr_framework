@@ -151,6 +151,12 @@ camera state is restored. Camera-facing particles have a separate per-eye refres
 boundary because geometry generated for one eye cannot be reused blindly for the
 other.
 
+Black Plague's `room_scale_camera` composition consumes backend-owned fresh
+feet/reconciliation samples without native game calls. A yaw change suppresses
+old horizontal prediction while preserving calibrated height and the accepted
+world anchor. A tracking-origin change still rejects the placement. The native
+body adapter retains freshness/generation and physics-update ownership.
+
 ### Body and locomotion
 
 The native physics loop remains the single owner of `iCharacterBody::Update`.

@@ -25,11 +25,11 @@
         },
         {
           "output": "/actions/global/in/left_aim",
-          "path": "/user/hand/left/pose/aim"
+          "path": "/user/hand/left/pose/tip"
         },
         {
           "output": "/actions/global/in/right_aim",
-          "path": "/user/hand/right/pose/aim"
+          "path": "/user/hand/right/pose/tip"
         }
       ],
       "skeleton": [],
@@ -337,15 +337,6 @@
           },
           "mode": "trackpad",
           "path": "/user/hand/left/input/trackpad"
-        },
-        {
-          "inputs": {
-            "click": {
-              "output": "/actions/global/in/recenter"
-            }
-          },
-          "mode": "trackpad",
-          "path": "/user/hand/right/input/trackpad"
         }
       ]
     },

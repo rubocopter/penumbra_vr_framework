@@ -1358,6 +1358,13 @@ runtime::VrControllerFrame ReadNativeControllerFrame() noexcept {
     ReleaseSRWLockShared(&g_session_lock);
     return frame;
 }
+bool OpenNativeControllerBindings(std::string& error) noexcept {
+    AcquireSRWLockShared(&g_session_lock);
+    const bool opened = g_session != nullptr && g_session->OpenControllerBindings(error);
+    ReleaseSRWLockShared(&g_session_lock);
+    return opened;
+}
+
 BlackPlagueNativeCrouchStatus ReadNativePhysicalCrouchStatus() noexcept {
     AcquireSRWLockShared(&g_crouch_lock);
     const auto status = g_crouch_status;
