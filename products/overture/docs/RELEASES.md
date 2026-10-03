@@ -1,5 +1,12 @@
 # Release history
 
+## v1.0.2 — Valve Index bindings (2026-10-03)
+
+Corrected Index thumbstick paths for movement, turning and stick clicks in both
+handedness layouts. See the [Framework patch notes](../../../docs/releases/1.0.2.md)
+for download, saved-binding reset instructions and validation limits. The
+reported finger mismatch remains unresolved; Index hardware retesting is pending.
+
 ## v1.0.1 — Framework patch (2026-10-03)
 
 Overture physical acquisition now handles multi-body mechanisms and ranks only

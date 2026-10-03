@@ -296,11 +296,24 @@ If one controller loses tracking, its hand and pointer disappear and any held in
 
 ### Sticks dead but buttons working (Valve Index and others)
 
-SteamVR remembers the controller binding it selected for this game on first launch. If that binding was stored by an older alpha, updating the mod does not replace it: every button keeps working while the joystick actions stay unbound, and movement plus turning die silently. The log calls this out after ~20 seconds of gameplay:
+Earlier bundled Index bindings used `/input/joystick`, while Index exposes
+`/input/thumbstick`. The corrected defaults use the physical thumbstick for
+movement, turning and stick clicks. This correction requires the updated binding
+files; resetting to an older default will retain the wrong path.
+
+SteamVR remembers the controller binding it selected for this game on first launch.
+Updating the mod preserves saved custom bindings, so buttons can keep working
+while movement and turning remain unbound. The log calls this out after ~20 seconds
+of gameplay:
 
 - `[VR input] move/turn actions never activate while other controls do; ...`
 
-Fix it once per controller type in SteamVR: **Settings ▸ Controllers ▸ Penumbra: Overture ▸ Reset to default**, then restart the game. The same reset also applies after manually editing any binding.
+After installing corrected files, select the bundled default again in SteamVR's
+controller bindings for Penumbra: Overture, then restart the game. If preserving
+a custom layout, edit only the affected stick bindings instead. Movement and
+turning are `vector2` actions: use **Joystick** mode and its **Position** binding
+for **Move** and **Turn** in the active gameplay set, rather than the stick's
+boolean **Click** binding. The left-handed gameplay set mirrors their hands.
 
 ### PS VR2 Bluetooth stability
 

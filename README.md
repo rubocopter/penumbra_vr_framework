@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="COPYING"><img alt="License: GPL v3+" src="https://img.shields.io/badge/license-GPL%20v3%2B-blue?style=flat-square"></a>
-  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.1"><img alt="Release: v1.0.1" src="https://img.shields.io/badge/release-v1.0.1-brightgreen?style=flat-square"></a>
+  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.2"><img alt="Release: v1.0.2" src="https://img.shields.io/badge/release-v1.0.2-brightgreen?style=flat-square"></a>
   <a href="#requirements"><img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-blue?style=flat-square"></a>
   <a href="#vr-hardware"><img alt="Runtime: SteamVR / OpenVR" src="https://img.shields.io/badge/runtime-SteamVR%20%2F%20OpenVR-1b2838?style=flat-square"></a>
 </p>
@@ -16,13 +16,13 @@
 
 One PCVR project for the trilogy. You must own and install the original games; Requiem uses the Black Plague base installation.
 
-[**Download v1.0.1**](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.1) · [Installation](#installation) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Report an issue](https://github.com/rubocopter/penumbra_vr_framework/issues)
+[**Download v1.0.2**](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.2) · [Installation](#installation) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Report an issue](https://github.com/rubocopter/penumbra_vr_framework/issues)
 
 ## Status
 
-**v1.0.1 is the current public Framework release.** This patch improves Overture object/mechanism acquisition, Oculus Touch aim and installer responsiveness. The maintainer installed the exact released EXE and accepted an Overture headset play session including the initial drawer and repeated crank/mechanism interaction. See the [patch notes](docs/releases/1.0.1.md).
+**v1.0.2 is the current public Framework release.** This patch corrects Valve Index thumbstick bindings for all three games. After updating, reselect the bundled default in SteamVR if an older binding is still active. The reported index/pinky finger mismatch remains unresolved. See the [patch notes](docs/releases/1.0.2.md).
 
-The v1.0.0 foundation retains its install/uninstall and game-entry evidence for all three games. The new release also passed automated installation topologies, repair, removal and exact restoration; current Black Plague changes and Quest 3 pointer alignment retain their separate validation limits.
+The v1.0.0 foundation retains its install/uninstall and game-entry evidence for all three games. The exact v1.0.1 installer and Overture drawer/crank gameplay have maintainer acceptance. The v1.0.2 binding correction is host-tested and needs physical Index confirmation; prior headset acceptance does not automatically validate this new artifact.
 
 Validation breadth still differs by game and hardware. PS VR2 + Sense is the controller setup validated end to end by the maintainer; other bundled controller profiles still need device-specific feedback. Independent clean-PC coverage also remains limited. See the [release status](docs/CLOSURE_STATUS.md), [recognized builds](docs/SUPPORTED_BUILDS.md) and known issues below for the evidence boundaries.
 
@@ -50,7 +50,7 @@ Feature coverage and validation differ by game; see the [trilogy capability ledg
 
 ## Installation
 
-Download **PenumbraVR-Setup-1.0.1.exe** from the [v1.0.1 release](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.1). The matching source archive, checksums and build report are published alongside it.
+Download **PenumbraVR-Setup-1.0.2.exe** from the [v1.0.2 release](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.2). The matching source archive, checksums and build report are published alongside it.
 
 1. Install the original games and close them. Use recognized, clean game files.
 2. Double-click the Setup EXE and accept Windows elevation. It contains the installer and mod payload for your installed games.
@@ -143,7 +143,7 @@ Use [GitHub Issues](https://github.com/rubocopter/penumbra_vr_framework/issues) 
 
 ## Uninstallation
 
-Close the games and reopen the same **PenumbraVR-Setup-1.0.1.exe**. Use the **Maintenance / Mantenimiento** tab and choose **Uninstall… / Desinstalar…**. The removal dialog lets you select which installed VR components to remove while the installer verifies backups and restores owned original files.
+Close the games and reopen the same **PenumbraVR-Setup-1.0.2.exe**. Use the **Maintenance / Mantenimiento** tab and choose **Uninstall… / Desinstalar…**. The removal dialog lets you select which installed VR components to remove while the installer verifies backups and restores owned original files.
 
 Overture can be removed independently. Black Plague and Requiem share one installation root: selecting only the Requiem layer removes its VR support while keeping Black Plague, while removing Black Plague also removes its dependent Requiem layer. Preserve the installer backups and follow [recovery guidance](docs/TROUBLESHOOTING.md#repair-recovery-and-removal) if an operation was interrupted or reports modified files.
 

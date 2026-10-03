@@ -1,8 +1,8 @@
 # Troubleshooting
 
-This guide covers the public **Penumbra VR Framework v1.0.1** installer and the current main-branch support documentation. Installation steps live in the root [README](../README.md#installation); recognized build identities live in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
+This guide covers the public **Penumbra VR Framework v1.0.2** installer and the current main-branch support documentation. Installation steps live in the root [README](../README.md#installation); recognized build identities live in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-The 1.0.1 installer shows **Preparing installation / Preparando la
+The 1.0.2 installer shows **Preparing installation / Preparando la
 instalación** while files are extracted and verified, then an animated waiting
 dialog during checks and changes. The window keeps responding while these run;
 wait for the final result before launching a game. Published 1.0.0 retains its
@@ -23,13 +23,20 @@ If the game launches flat, check that the release installation completed for tha
 
 If controllers track but an action is missing, inspect the active SteamVR binding for that game/controller. Repair restores owned bundled defaults; saved SteamVR custom mappings remain separate. Vive/WMR layouts have documented omissions, and only Sense has physical-device evidence. See [controls](CONTROLS.md) and the [controller ledger](TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
 
+For Valve Index, v1.0.2 corrects the bundled thumbstick component paths. After
+updating, reselect the bundled default in SteamVR for each game if an older
+binding is still active. To retain a custom layout, bind **Move** and **Turn**
+to the stick's **Position** output in **Joystick** mode; `Vector2` is their
+expected action type. The reported index/pinky finger mismatch remains
+unresolved. See [the patch instructions](releases/1.0.2.md#download-and-update).
+
 For performance, begin with [recommended configuration](VR_CONFIGURATION.md) and reduce render scale where configurable. Current Black Plague/Requiem recommendations keep PostEffects/Refractions enabled; disabling them is not a general workaround for the corrected effects path.
 
 Requiem's intermittent startup crash remains unresolved. If it occurs, capture the affected build identity and available logs/dump. A successful retry does not establish that the defect is fixed.
 
 ## Repair, recovery and removal
 
-Close the affected games before every installer operation. Reopen the same **PenumbraVR-Setup-1.0.1.exe** used for the release installation.
+Close the affected games before every installer operation. Reopen the same **PenumbraVR-Setup-1.0.2.exe** used for the release installation.
 
 Use the **Maintenance / Mantenimiento** tab for installed roots:
 

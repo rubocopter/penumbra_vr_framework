@@ -18,7 +18,16 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.1
+## Current release — 1.0.2
+
+Framework v1.0.2 is published on 2026-10-03 to let Index users retest the corrected
+thumbstick defaults in all three games. [Patch notes](releases/1.0.2.md) describe
+the update/reset procedure, host evidence and unresolved finger mismatch.
+The matching source, checksums and build report identify this new artifact.
+Index hardware and new-installer headset acceptance remain pending; publication
+does not transfer the exact v1.0.1 headset acceptance to the new build.
+
+## Previous release — 1.0.1
 
 Framework v1.0.1 is published on 2026-10-03. The accepted installer is promoted
 unchanged from build source `2b07f6dcec49bdc2b25ad67c0cb2a3c0a77ead8c`.

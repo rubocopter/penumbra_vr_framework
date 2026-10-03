@@ -73,6 +73,16 @@ device validation. Vive's omitted actions matter to the binary backends, which
 do not supply a raw-input fallback. Missing skeletons use the existing hand-pose
 fallback. SteamVR permits custom remapping.
 
+External Index feedback reports dead sticks in all three games and an
+index/pinky finger mismatch. The inherited Index component-path correction is
+host-tested in the generator and both payload roots, including movement, turn,
+sprint/crouch clicks and UI drag for both handedness layouts. Index hardware
+confirmation remains pending. The finger mismatch is unresolved: current
+consumers preserve OpenVR's Thumb/Index/Middle/Ring/Pinky channel order and map
+it to the named rig chains; host conditioning/articulation/render tests pass
+but do not establish physical sensor-to-visible-finger identity. No channel
+reversal has been applied without discriminating hardware evidence.
+
 Oculus Touch aim output now uses SteamVR's `pose/tip` source in both Overture
 and the shared binding tree. The generated-binding check and host regression
 cover this mapping; Quest 3 pointer alignment still requires a physical-device

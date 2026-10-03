@@ -109,6 +109,14 @@ With production palm collision enabled:
 Aim/pointer behavior should follow raw tracking while the visible palm remains
 collision-resolved. Acquisition assistance must remain bounded.
 
+For the reported Index finger mismatch, test bare hands away from geometry with
+no tool attached. On each hand, start open and curl thumb, index, middle, ring
+and pinky separately, then reopen between gestures. Record which visible finger
+responds to each physical gesture. Repeat the same sequence in SteamVR's own
+skeletal-hand display and record the controller type and game/mod version.
+This distinguishes device/runtime curl data from the game's rig mapping;
+an attached tool intentionally overrides measured curl with its handle pose.
+
 ## Gate 6 — constrained mechanisms and tools
 
 Exercise representative mapped mechanisms:

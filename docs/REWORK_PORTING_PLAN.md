@@ -86,6 +86,19 @@ statistics, authored rig/socket data and source-game UI/gameplay mechanics.
 
 ### Release-blocking native boundary corrections
 
+Rework `23c890f` generates Index (`knuckles`) bindings from the generic
+Touch-style `/input/joystick` component. Framework inherited that graph in
+both payload roots. SteamVR's installed
+`indexcontroller/resources/input/index_controller_profile.json` instead
+declares `/input/thumbstick` with joystick type, position and click; it has
+no `/input/joystick` component. Retaining the reference path is incorrect at
+this controller-profile boundary. The generator now gives Index its own
+physical input map, preserving the logical vector2 actions and joystick mode.
+Both dominant-hand layouts and their UI stick clicks consume that correction;
+other controller families retain their own paths. The regression generates
+fresh graphs and checks the two distributed Index graphs against that physical
+contract.
+
 The Overture door-nudge report was compared against Rework `23c890f`:
 Framework retained the same contact-speed limits and `delta-v * mass` call.
 The bundled Newton 1.x header declares `NewtonAddBodyImpulse` with

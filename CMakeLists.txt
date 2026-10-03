@@ -499,6 +499,10 @@ if(BUILD_TESTING)
         COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
             -File "${CMAKE_SOURCE_DIR}/tests/overture_bindings/overture_touch_aim_binding_test.ps1"
             -RepositoryRoot "${CMAKE_SOURCE_DIR}")
+    add_test(NAME overture_index_thumbstick_binding
+        COMMAND "${PVR_POWERSHELL_EXECUTABLE}" -NoProfile -ExecutionPolicy Bypass
+            -File "${CMAKE_SOURCE_DIR}/tests/overture_bindings/overture_index_thumbstick_binding_test.ps1"
+            -RepositoryRoot "${CMAKE_SOURCE_DIR}")
     add_executable(pvr_vr_native_intents_test tests/vr_input_state/vr_native_intents_test.cpp)
     target_include_directories(pvr_vr_native_intents_test PRIVATE src/adapters/hpl1)
     target_link_libraries(pvr_vr_native_intents_test PRIVATE pvr_vr_native_intents pvr_iat_hook)

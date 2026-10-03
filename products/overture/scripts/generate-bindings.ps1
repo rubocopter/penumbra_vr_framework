@@ -82,6 +82,12 @@ $inputGeneric = @{
     trackpadRight  = @{ path = 'input/trackpad'; mode = 'trackpad' }
 }
 
+# Index uses joystick mode on a component named thumbstick. The Touch-style
+# /input/joystick path is absent from SteamVR's Index controller profile.
+$inputIndex = $inputGeneric.Clone()
+$inputIndex.stickLeft  = @{ path = 'input/thumbstick'; mode = 'joystick' }
+$inputIndex.stickRight = @{ path = 'input/thumbstick'; mode = 'joystick' }
+
 # Touch-family controllers split the face buttons per hand. The shipped
 # recenter binding also uses X on the right hand, which physically has A/B;
 # SteamVR accepts the path, so it is reproduced verbatim.
@@ -432,7 +438,7 @@ $controllers = @(
     (New-Controller -FileName 'knuckles.json' -ControllerType 'knuckles' `
         -Name 'Penumbra VR - Valve Index' `
         -Description 'Default Valve Index bindings for Penumbra: Overture VR Rework' `
-        -GripPose 'pose/grip' -Skeletal $true -FamilyKey 'generic'  -InputMap $inputGeneric),
+        -GripPose 'pose/grip' -Skeletal $true -FamilyKey 'generic'  -InputMap $inputIndex),
     (New-Controller -FileName 'oculus_touch.json' -ControllerType 'oculus_touch' `
         -Name 'Penumbra VR - Touch' `
         -Description 'Default Meta Quest and Oculus Rift Touch bindings for Penumbra: Overture VR Rework' `

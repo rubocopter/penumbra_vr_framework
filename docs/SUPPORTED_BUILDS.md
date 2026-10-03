@@ -65,7 +65,9 @@ Current product-level evidence:
   interaction milestone is concluded; this does not imply full-game support.
 
 Framework v1.0.0 is the first public trilogy release for the allowlisted builds;
-v1.0.1 is the current public patch. Publication does not promote every capability, controller family or
+v1.0.2 is the current public patch. Its Index thumbstick correction is host-tested;
+Index hardware and new-build headset acceptance remain pending. Publication does
+not promote every capability, controller family or
 game path to `supported`; the evidence levels above remain authoritative.
 
 ## Support rules

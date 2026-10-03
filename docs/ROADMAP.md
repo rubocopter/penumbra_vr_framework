@@ -7,8 +7,10 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework [v1.0.1](releases/1.0.1.md) is published after maintainer installer
-and Overture gameplay acceptance. Quest 3 pointer alignment and broader per-game
+Framework [v1.0.2](releases/1.0.2.md) publishes the host-tested Index thumbstick
+correction for external retesting. The exact v1.0.1 installer retains its
+maintainer installation and Overture gameplay acceptance. Index input/finger
+feedback, Quest 3 pointer alignment and broader per-game
 regressions remain focused follow-up. Use `CLOSURE_STATUS.md` for the release evidence
 and remaining deployment-validation matrix,
 `RUNTIME_DEPENDENCIES.md` for deployment dependencies and
@@ -106,6 +108,10 @@ automatically validate a newer candidate.
   three games. Host guards reject dropped profiles/actions and type drift;
   package/install/repair fixtures verify all eight by hash. Device hardware
   validation and the documented Vive/WMR layout limitations remain separate.
+- [ ] Follow up the external Valve Index report: validate corrected default
+  stick bindings in each game, distinguish Overture's reported remapping
+  difficulty from the invalid default component path, and compare isolated
+  finger movements in SteamVR and the game using Gate 5 of the headset checklist.
 
 The deferred focused runtime issue is Black Plague's vertical mini-hops while
 touching ventilation walls. Investigate accepted motion, native stepping and
