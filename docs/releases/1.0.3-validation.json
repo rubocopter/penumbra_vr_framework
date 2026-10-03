@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.3",
+  "validatedOn": "2026-10-03",
+  "releaseTag": "v1.0.3",
+  "buildSourceCommit": "0016b52bf51576c4e28a778418307910eef0ddbc",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.3",
+  "publishedWithoutRebuildAfterHostValidation": true,
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "One consolidated offline update following external Index feedback",
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "sha256": "F2C44F27070A2E638B060D14B55B10E65922A52C641CF0858BBA93CDA6A187CE",
+      "bytes": 8172
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.3.exe",
+      "sha256": "01735399BD0508B49267407D3256D1DED53DFD53533ECED25848D9FAA59C1CCD",
+      "bytes": 192883862
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.3.zip",
+      "sha256": "86A3B65AD11A8DA027493B8CABEA56EAD5450A6E2A678E94230BF76BAC611404",
+      "bytes": 81771154
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "sha256": "370BF12DF96E0972859C9C6DE4E284EC464EF41F8B3C8378A03CE198C2A2975E",
+      "bytes": 274
+    }
+  ],
+  "overtureExecutableSha256": "38F2B1FD10FAFDF4FD291D47522BE0F158DD1202CE7317FDCCB4754DA5F91639",
+  "validation": {
+    "frameworkHostTests": {
+      "passed": 55,
+      "failed": 0
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0
+    },
+    "installerStandalone": "Exact Setup startup/extraction/checksums/bilingual GUI/dependencies passed without installed .NET runtime",
+    "installationTopology": "A-F passed with synthetic content/runtime fixtures; independent removals and exact restore verified",
+    "upgradeFromPublished102": "Both payload roots passed upgrade; all eight default hashes verified, damaged Index graph repaired, all three games installation-verified, original executables restored and user-owned marker preserved",
+    "blackPlagueTurningHeight": "Real placement function regression reproduces calibrated/native height switch across yaw epochs; corrected same-origin continuity, stale/origin/large-delta guards preserved",
+    "overtureMissingStick": "Independent inactive analog fallback host-tested; active zero custom action preserved, legacy click bits excluded",
+    "controllerProfiles": "Generated and both distributed roots checked for modern gameplay click conflicts, physical face-button hands, Index force thresholds and declared tip poses; all eight documented",
+    "bindingEditor": "Overture and Black Plague shortcuts compiled; dashboard presentation pending hardware",
+    "gamesLaunchedByAutomation": false,
+    "currentControllerHardware": "pending",
+    "lowRestingHeight": "cause unconfirmed",
+    "fingerMismatch": "unresolved, nonblocking and deferred",
+    "newInstallerHeadsetAcceptance": "pending",
+    "independentCleanMachine": "pending"
+  }
+}

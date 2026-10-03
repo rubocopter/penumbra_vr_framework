@@ -112,9 +112,9 @@ automatically validate a newer candidate.
   left-stick action values from unapplied body movement, and investigate Black
   Plague's low viewpoint that rises during turning and drops on stick release.
   The offline analog fallback, BP yaw/height continuity correction, profile
-  conflict guards and controls reference are host-tested. Keep these together
-  for the next update rather than requiring repeated diagnostic releases or
-  reporter test rounds. Hardware acceptance and the low baseline's cause remain
+  conflict guards and controls reference are host-tested and bundled together
+  in v1.0.3. Avoid repeated diagnostic releases or reporter test rounds.
+  Hardware acceptance and the low baseline's cause remain
   open; the scoped evidence is in `TRILOGY_PARITY_PLAN.md`. Finger comparison is
   non-blocking and deferred.
 

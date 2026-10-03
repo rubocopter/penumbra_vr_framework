@@ -18,7 +18,20 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.2
+## Current release — 1.0.3
+
+Framework v1.0.3 bundles the offline corrections following the external Index
+retest: Black Plague turning-height continuity, independent inactive Overture
+stick recovery, controller-default conflicts and access to active SteamVR
+bindings. [Patch notes](releases/1.0.3.md) describe the scope and update procedure.
+The [validation record](releases/1.0.3-validation.json) identifies the exact
+installer/source and 55 Framework tests, 298 Overture checks, standalone Setup,
+A-F synthetic topology and v1.0.2-to-v1.0.3 upgrade/repair/restore across both
+payload roots. Current hardware acceptance and the reporter's low resting
+height remain open; nonblocking finger feedback is deferred. No automated game
+launch or new headset acceptance is claimed.
+
+## Previous release — 1.0.2
 
 Framework v1.0.2 is published on 2026-10-03 to let Index users retest the corrected
 thumbstick defaults in all three games. [Patch notes](releases/1.0.2.md) describe
