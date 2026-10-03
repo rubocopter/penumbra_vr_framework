@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.2",
+  "validatedOn": "2026-10-03",
+  "releaseTag": "v1.0.2",
+  "buildSourceCommit": "37f9f97196d3d85cf3d89deb5b70e00b7ede1db5",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.2",
+  "publishedWithoutRebuildAfterHostValidation": true,
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "External Index retesting of the host-tested controller binding correction",
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "sha256": "26818D791604BA4313C7E6752723057CC8B2DDA71322D0E0E50D5F45AB3FC546",
+      "bytes": 8172
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.2.exe",
+      "sha256": "E4F3956C75E3438D8E9A8B0D720C900711D1925848D5C0472740DA0DAE0D20F0",
+      "bytes": 192879766
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.2.zip",
+      "sha256": "B0748DF0BFC2FC859FE34267237E3AAC2EA7E88091060C52606474DC76D5CF24",
+      "bytes": 81752180
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "sha256": "8FC66EE5185C71277A894440846B0A3C3AB649479669CE2E39A4DD6DADA93C1B",
+      "bytes": 274
+    }
+  ],
+  "overtureExecutableSha256": "06A8BC40C8697EDB7DFC5AD85C5AA2C3F1529BFAD0EAA109E0DE3C8E292C4EF9",
+  "validation": {
+    "frameworkHostTests": {
+      "failed": 0,
+      "passed": 52
+    },
+    "overtureHostChecks": {
+      "failed": 0,
+      "passed": 289
+    },
+    "installerStandalone": "Exact Setup EXE startup/extraction/checksums/bilingual GUI/dependencies passed without installed .NET runtime",
+    "installationTopology": "A-F passed with synthetic content/runtime fixtures; independent removals and exact restore verified",
+    "upgradeFromPublished101": "Overture and shared Black Plague/Requiem upgrade passed; all eight defaults checked by source hash, old joystick paths replaced by thumbstick, damaged Index graph repaired, installation verified, original executable restored and user-owned marker preserved",
+    "gamesLaunchedByAutomation": false,
+    "indexHardware": "pending",
+    "indexFingerMismatch": "unresolved; no channel reversal applied",
+    "overtureCustomRemappingDifficulty": "hardware reproduction pending",
+    "newInstallerHeadsetAcceptance": "pending",
+    "independentCleanMachine": "pending"
+  }
+}

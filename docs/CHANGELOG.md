@@ -5,6 +5,15 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.2 — 2026-10-03
+
+- Corrected Valve Index thumbstick components in all three games' bundled
+  defaults, including both handedness layouts and gameplay/UI stick clicks.
+- Added the generated/distributed binding regression and published a new
+  installer, matching source, checksums and scoped host-validation record.
+- Added saved-binding update guidance and a hardware procedure for the
+  unresolved index/pinky finger mismatch. See [patch notes](releases/1.0.2.md).
+
 ## 1.0.1 — 2026-10-03
 
 - Corrected Overture acquisition of multi-body mechanisms: a sibling body from

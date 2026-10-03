@@ -24,6 +24,9 @@ Framework v1.0.2 is published on 2026-10-03 to let Index users retest the correc
 thumbstick defaults in all three games. [Patch notes](releases/1.0.2.md) describe
 the update/reset procedure, host evidence and unresolved finger mismatch.
 The matching source, checksums and build report identify this new artifact.
+The [validation record](releases/1.0.2-validation.json) records 52 Framework
+tests, 289 Overture checks, standalone Setup, A-F topology and exact
+v1.0.1-to-v1.0.2 upgrade/repair/restore fixtures across both payload roots.
 Index hardware and new-installer headset acceptance remain pending; publication
 does not transfer the exact v1.0.1 headset acceptance to the new build.
 
