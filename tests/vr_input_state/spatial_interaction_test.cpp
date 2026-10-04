@@ -1,6 +1,7 @@
 // Exercise the actual exact-build adapter against a synthetic image. Native
 // calls jump to typed fakes; this does not load or modify a game process.
 #include "../../src/backends/black_plague/spatial_interaction.cpp"
+#include "Newton.h"
 #include <iostream>
 #include <vector>
 namespace penumbra_vr::backends::black_plague {
@@ -168,6 +169,36 @@ bool QueryGameplayPalmOverlaps(std::size_t,
 }
 int RunSpatialTest() {
     {
+        // BP's 0x19C3D0 wrapper forwards the vector unchanged to
+        // NewtonAddBodyImpulse(pointDeltaVeloc, pointPosit). Exercise the real
+        // shipped DLL, whose hash matches BP's installed Newton.dll.
+        const NewtonWorld* world=NewtonCreate(nullptr,nullptr);
+        NewtonCollision* shape=NewtonCreateBox(world,1,1,1,nullptr);
+        const Matrix identity=runtime::IdentityMatrix();
+        const Vec hand_center{-0.1F,0,0},contact{},stationary{};
+        NudgePlan bounded{{1,0,0},0.22F,0.38F,0.10F};
+        for (float mass : {1.0F,3.0F,20.0F,100.0F}) {
+            NewtonBody* body=NewtonCreateBody(world,shape);
+            NewtonBodySetMassMatrix(body,mass,mass,mass,mass);
+            Vec request{};
+            if (!ComputeNudgeImpulse(hand_center,{1,0,0},bounded.velocity,
+                    contact,identity,stationary,stationary,mass,bounded,request)) return 174;
+            NewtonAddBodyImpulse(body,request.data(),contact.data());
+            Vec actual{};
+            NewtonBodyGetVelocity(body,actual.data());
+            NewtonDestroyBody(world,body);
+            if (std::abs(actual[0]-0.10F)>0.00001F) {
+                std::cerr << "BP bounded nudge exceeded delta-v: mass=" << mass
+                    << " speed=" << actual[0] << '\n';
+                NewtonReleaseCollision(world,shape);
+                NewtonDestroy(world);
+                return 175;
+            }
+        }
+        NewtonReleaseCollision(world,shape);
+        NewtonDestroy(world);
+    }
+    {
         // Newton can report a negative distance when a widened VR ray starts
         // inside/behind geometry. Such a hit is not a forward acquisition and
         // must never outrank a valid candidate or underflow telemetry.
@@ -210,16 +241,16 @@ int RunSpatialTest() {
         if (!ComputeNudgeImpulse(hand_center,{1,0,0},gentle.velocity,contact,
                 body_matrix,stationary,stationary,2.0F,gentle,impulse,
                 &applied_delta) ||
-            !VecNearlyEqual(impulse,{0.44F,0,0}) ||
+            !VecNearlyEqual(impulse,{0.22F,0,0}) ||
             std::abs(applied_delta-0.22F)>=0.00001F) return 40;
         NudgePlan large{{1,0,0},0.22F,0.38F,0.10F};
         if (!ComputeNudgeImpulse(hand_center,{1,0,0},large.velocity,contact,
                 body_matrix,stationary,stationary,20.0F,large,impulse) ||
-            !VecNearlyEqual(impulse,{2.0F,0,0})) return 41;
+            !VecNearlyEqual(impulse,{0.10F,0,0})) return 41;
         NudgePlan door{{1,0,0},0.30F,0.30F,0.10F};
         if (!ComputeNudgeImpulse(hand_center,{1,0,0},door.velocity,contact,
                 body_matrix,stationary,stationary,2.0F,door,impulse) ||
-            !VecNearlyEqual(impulse,{0.20F,0,0})) return 42;
+            !VecNearlyEqual(impulse,{0.10F,0,0})) return 42;
         if (ComputeNudgeImpulse(hand_center,{-1,0,0},{-1,0,0},contact,
                 body_matrix,stationary,stationary,2.0F,gentle,impulse)) return 43;
         if (ComputeNudgeImpulse(hand_center,{1,0,0},gentle.velocity,contact,

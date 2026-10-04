@@ -454,6 +454,13 @@ if(BUILD_TESTING)
     add_executable(pvr_spatial_interaction_test tests/vr_input_state/spatial_interaction_test.cpp)
     target_include_directories(pvr_spatial_interaction_test PRIVATE src/hooks src/backends/black_plague src/adapters/hpl1 src/graphics)
     target_link_libraries(pvr_spatial_interaction_test PRIVATE pvr_vr_math pvr_iat_hook pvr_rel32_call_hook)
+    target_include_directories(pvr_spatial_interaction_test PRIVATE products/overture/dependencies/include)
+    target_link_libraries(pvr_spatial_interaction_test PRIVATE
+        "${CMAKE_SOURCE_DIR}/products/overture/dependencies/lib/win32/newton.lib")
+    add_custom_command(TARGET pvr_spatial_interaction_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/products/overture/dependencies/lib/win32/Newton.dll"
+            "$<TARGET_FILE_DIR:pvr_spatial_interaction_test>")
     pvr_enable_warnings(pvr_spatial_interaction_test)
     add_test(NAME spatial_interaction COMMAND pvr_spatial_interaction_test)
 

@@ -876,8 +876,12 @@ void DestroyNudgeShape() noexcept {
     const float delta=std::clamp(desired_speed-current_speed,0.0F,
         plan.maximum_delta_velocity);
     if (delta<=0.005F) return false;
-    impulse={push_direction[0]*delta*mass,push_direction[1]*delta*mass,
-        push_direction[2]*delta*mass};
+    // Exact BP AddImpulseAtPosition(0x19C3D0) forwards this vector unchanged
+    // to NewtonAddBodyImpulse(pointDeltaVeloc, pointPosit). Newton already
+    // accounts for mass/inertia: delta*mass exceeds the bounded contact speed
+    // and can launch a heavy prop into the player while acquiring nearby items.
+    impulse={push_direction[0]*delta,push_direction[1]*delta,
+        push_direction[2]*delta};
     if (applied_delta) *applied_delta=delta;
     return FiniteVec(impulse);
 }

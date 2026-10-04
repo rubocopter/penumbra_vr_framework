@@ -142,6 +142,19 @@ and sliders, retaining the native joint lifecycle and existing contact-speed
 policy. Loose-prop tuning remains the reference behavior. The real-DLL test
 covers masses 1, 3, 25 and 100 kg; door feel still requires headset acceptance.
 
+The later BP tutorial shelf report exposes the same incompatible boundary for
+loose props. BP's verified `0x19C3D0` wrapper forwards its vector unchanged to
+its own Newton import at IAT `0x2724E4`; the installed Newton DLL SHA-256 is
+`69E6F1BA9D02E7FEBEFCB6DF9BFC6A5A8D8ED78FA659E86B06CA301BFAC894EE`,
+identical to the real-DLL test dependency. A 0.10 m/s bounded request became
+0.30 m/s at 3 kg. BP now sends point delta velocity directly for all hand
+nudges, keeping its existing mass/size policy, contact direction, speed caps,
+selection protection and native joints. Actual BP consumer math feeding the
+real DLL passes at 1, 3, 20 and 100 kg. This evidence justifies adapting the
+inherited `delta-v * mass` formula rather than preserving that incompatible
+unit conversion. Character collision response is a separate unresolved gate;
+the fixed native body boundary and solver remain unchanged.
+
 Rework's source camera consumes native `GetViewMatrix`, which resolves dirty
 position/rotation caches. Requiem previously copied the matrix cache before
 native visibility resolved it, then fixed a per-body height calibration from

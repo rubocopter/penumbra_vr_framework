@@ -7,6 +7,12 @@ Product-specific Overture release history is retained under
 
 ## Unreleased
 
+- Correct Black Plague hand contact nudges at its verified Newton boundary:
+  send bounded point delta velocity without multiplying it by body mass.
+  A real-DLL regression covers 1, 3, 20 and 100 kg bodies, preventing heavy
+  shelves/props from receiving a mass-amplified velocity kick. Native character
+  collision response remains unchanged and still needs investigation.
+
 - Reduce Black Plague production telemetry to periodic samples instead of
   dumping matrices/body state on every successful presentation. Remove
   synchronous per-line disk durability flushes from probe logging; flush at
