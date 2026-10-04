@@ -66,25 +66,26 @@ The exact interaction set varies between the three games. See the [controls guid
 
 ## See it in motion
 
-<table>
-<tr>
-<td width="50%" align="center"><b>Penumbra: Overture</b></td>
-<td width="50%" align="center"><b>Penumbra: Black Plague</b></td>
-</tr>
-<tr>
-<td width="50%"><video src="https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265" controls muted loop></video></td>
-<td width="50%"><video src="https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd" controls muted loop></video></td>
-</tr>
-</table>
+<p align="center"><b>Penumbra: Overture</b></p>
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265" width="720" controls muted loop></video>
+</p>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=dc90jlH-tp0">Watch the first 18 minutes of Overture in VR →</a>
 </p>
 
+<p align="center"><b>Penumbra: Black Plague</b></p>
+
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd" width="720" controls muted loop></video>
+</p>
+
 <p align="center"><b>Penumbra: Requiem</b></p>
 
 <p align="center">
-  <video src="https://github.com/user-attachments/assets/325b79e0-aca3-4111-93d2-8a73f9530a07" width="720" controls muted loop></video>
+  <video src="https://github.com/user-attachments/assets/3e87feb8-b50b-484d-b283-57c84128a2b3" width="720" controls muted loop></video>
 </p>
 
 ## Install
