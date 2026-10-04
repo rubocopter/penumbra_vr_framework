@@ -908,6 +908,21 @@ bool TrackedGripPosition(runtime::VrHand hand, Vec& position) noexcept {
     return FiniteVec(position);
 }
 
+bool HeldGrabAwaitingWorldReference(
+    const runtime::VrControllerFrame& frame, runtime::VrHand hand) noexcept {
+    // World-space presentation expires after 250 ms. That is a coordinate
+    // freshness gate, not proof that an otherwise tracked grip was released.
+    // Defer transform writes until the render owner publishes a fresh basis.
+    if (!frame.focused || !frame.input.state.interact.pressed) return false;
+    const auto& grip=frame.hands[hand==runtime::VrHand::left ? 0U : 1U].grip;
+    if (!grip.device_connected || !grip.pose_valid ||
+        !std::all_of(grip.device_to_absolute.values.begin(),
+            grip.device_to_absolute.values.end(),
+            [](float value) { return std::isfinite(value); })) return false;
+    Matrix head{};
+    return !TrackedHeadWorldPose(head);
+}
+
 struct MagneticRayHit {
     float t = 0.0F;
     float distance = INFINITY;
@@ -2135,9 +2150,20 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) {
     Matrix palm,destination; Vec velocity{},angular{};
     std::string error;
     if (dt == 0) return; // Paused/zero-time ticks must not eject a held object.
-    bool valid=g_enabled.load(std::memory_order_acquire) && BodyMatches(g_hold.body) && std::isfinite(dt) && dt>0 && dt<=0.25F &&
-        RefreshHeldHandPose(g_hold.player,g_hold.hand,palm,velocity,angular) &&
-        g_hold.pose.Update(palm,destination,error);
+    // Like Rework, Grab writes a tracked rigid transform rather than
+    // integrating dt. A long tick alone is not evidence of a lost controller.
+    bool valid=g_enabled.load(std::memory_order_acquire) && BodyMatches(g_hold.body) && std::isfinite(dt) && dt>0;
+    if (valid) {
+        valid=RefreshHeldHandPose(g_hold.player,g_hold.hand,palm,velocity,angular);
+        if (!valid && HeldGrabAwaitingWorldReference(
+                ReadNativeControllerFrame(),g_hold.hand)) {
+            SetVelocity(g_hold.body,0x19C2A0,{});
+            SetVelocity(g_hold.body,0x19C2C0,{});
+            g_hold.release_velocity.Reset();
+            return;
+        }
+        if (valid) valid=g_hold.pose.Update(palm,destination,error);
+    }
     if (valid) {
         const float displacement=std::hypot(palm.values[3]-g_hold.previous_palm[0],
             palm.values[7]-g_hold.previous_palm[1],palm.values[11]-g_hold.previous_palm[2]);
@@ -2790,6 +2816,8 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
     if (!valid_pose && yaw_epoch!=0 && g_hold.palm_yaw_epoch!=0 &&
         yaw_epoch!=g_hold.palm_yaw_epoch)
         valid_pose=RefreshHeldHandPose(g_hold.player,g_hold.hand,palm,velocity,angular);
+    if (!valid_pose && g_enabled.load(std::memory_order_acquire) && !ui &&
+        HeldGrabAwaitingWorldReference(frame,g_hold.hand)) return;
     if (!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused ||
         !frame.input.state.interact.pressed || !valid_pose) {
         g_hold.discard_momentum=!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused || !valid_pose;

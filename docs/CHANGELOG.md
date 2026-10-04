@@ -7,6 +7,16 @@ Product-specific Overture release history is retained under
 
 ## Unreleased
 
+- Reduce Black Plague production telemetry to periodic samples instead of
+  dumping matrices/body state on every successful presentation. Remove
+  synchronous per-line disk durability flushes from probe logging; flush at
+  close instead.
+- Preserve Black Plague kinematic Grab across a long tick and defer its pose
+  writes when the presentation reference expires while the controller remains
+  tracked. Keep held-body character-collision exclusion during that deferral;
+  actual release, focus loss and tracking/disconnection still release normally.
+  Regression tests pass; tutorial pacing and crate handling need a headset retest.
+
 - Align Black Plague's native Push stick forces with HMD-relative body movement
   using the projection already consumed by Requiem. Preserve native Push and
   locomotion permission gates; validate Black Plague's own captured-axis ABI.

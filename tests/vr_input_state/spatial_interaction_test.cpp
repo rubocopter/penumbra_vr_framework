@@ -124,7 +124,7 @@ runtime::VrControllerFrame ReadNativeControllerFrame() noexcept { return test_fr
 void NativeControllerHaptic(runtime::VrHand,runtime::VrHapticEvent,float) noexcept {}
 bool NativeInputUiActive() noexcept { return test_ui; }
 bool ControllerWorldPose(const runtime::VrHmdPose& hand, Matrix& pose, Vec& velocity, Vec& angular) noexcept {
-    if (!hand.device_connected || !hand.pose_valid) return false;
+    if (!test_head_pose_valid || !hand.device_connected || !hand.pose_valid) return false;
     pose=runtime::ExpandMatrix(hand.device_to_absolute); velocity=hand.velocity; angular=hand.angular_velocity; return true;
 }
 bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept {
@@ -528,6 +528,46 @@ int RunSpatialTest() {
         test_palm_held[1]!=body.data()) return 2;
     HookedGrabUpdate(state.data(),nullptr,0);
     if (!g_held.load() || test_leaves) return 3;
+    // Kinematic Grab does not integrate dt. A slow frame with a fresh, steady
+    // hand must not restore collision or eject the body into the player.
+    HookedGrabUpdate(state.data(),nullptr,0.5F);
+    if (!g_held.load() || test_leaves || Read<bool>(body.data(),0x3C8)) {
+        std::cerr << "long tick ejected a valid held body\n";
+        return 170;
+    }
+    test_active_calls=test_auto_freeze_calls=0;
+    // A presentation stall can age the game/world reference before the next
+    // render refresh, while the controller is still connected and tracked.
+    // Keep ownership/collision exclusion; do not drive from an old world pose.
+    const auto stalled_body_pose=Read<Matrix>(body.data(),0x34);
+    test_head_pose_valid=false;
+    HookedGrabUpdate(state.data(),nullptr,0.016F);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_held.load() || test_leaves || Read<bool>(body.data(),0x3C8) ||
+        !MatrixNearlyEqual(stalled_body_pose,Read<Matrix>(body.data(),0x34))) {
+        std::cerr << "expired presentation reference ejected a tracked held body\n";
+        return 171;
+    }
+    test_head_pose_valid=true;
+    for (unsigned loss=0;loss<4;++loss) {
+        test_head_pose_valid=false;
+        if (loss==0) test_frame.focused=false;
+        if (loss==1) hand.pose_valid=false;
+        if (loss==2) hand.device_connected=false;
+        if (loss==3) test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        if (g_held.load() || !Read<bool>(body.data(),0x3C8)) {
+            std::cerr << "world-reference deferral masked a real release\n";
+            return 172;
+        }
+        test_frame.focused=true;
+        hand.pose_valid=hand.device_connected=true;
+        test_head_pose_valid=true;
+        test_leaves=0;
+        begin();
+        if (!g_held.load()) return 173;
+    }
+    test_active_calls=test_auto_freeze_calls=0;
     test_palm_resolver_services=0;
     test_palm_resolver_character_body=nullptr;
     test_palm_resolver_saw_held_body=false;

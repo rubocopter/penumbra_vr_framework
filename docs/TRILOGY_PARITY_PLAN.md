@@ -114,6 +114,21 @@ consumer is now host-tested for immediate focus release, held-button recovery
 and fresh grip fallback after auxiliary aim loss. These changes do not identify
 or validate a fix for the reported pre-menu crash.
 
+The maintainer subsequently accepted startup/basic use of the locally installed
+`1c3f834` Overture build, with no apparent issues; this is scoped acceptance,
+not an attribution of the earlier external startup crash. The same local test
+reported recurring BP tutorial stalls, small-crate body blocking and drops
+during freezes/turns. Its matching log contains 280–470 ms presentation gaps,
+stale palm samples and guarded Grab releases. Production presentation success
+counts triggered per-frame matrix/body logs, with synchronous disk durability
+flushes on the presentation thread. The follow-up reduces healthy telemetry
+to periodic samples and moves durability flushes to close. Actual-adapter host
+regressions also preserve Grab on a long tick and defer world-pose writes while
+only the presentation reference is expired, retaining held-body collision
+exclusion. Release/focus/tracking/disconnection guards remain covered. The
+complete cause of the observed stalls and the updated tutorial behavior still
+require a headset retest; unheld crate collision has not been retuned.
+
 The finger mismatch is unresolved and the reporter considers it non-blocking.
 Current consumers preserve OpenVR's Thumb/Index/Middle/Ring/Pinky channel order and map
 it to the named rig chains; host conditioning/articulation/render tests pass

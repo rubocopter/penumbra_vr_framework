@@ -770,6 +770,12 @@ if(BUILD_TESTING)
             "$<TARGET_FILE_DIR:pvr_overture_input_consumer_test>/vr/actions.json")
     add_test(NAME overture_input_consumer COMMAND pvr_overture_input_consumer_test)
 
+    add_executable(pvr_probe_log_test tests/probe_log/probe_log_test.cpp src/probe/log.cpp)
+    target_include_directories(pvr_probe_log_test PRIVATE src/probe)
+    target_link_libraries(pvr_probe_log_test PRIVATE pvr_iat_hook)
+    pvr_enable_warnings(pvr_probe_log_test)
+    add_test(NAME probe_log_pacing COMMAND pvr_probe_log_test)
+
     add_executable(pvr_vr_action_input_test tests/vr_input_state/vr_action_input_test.cpp)
     target_link_libraries(pvr_vr_action_input_test PRIVATE pvr_vr_action_input)
     pvr_enable_warnings(pvr_vr_action_input_test)

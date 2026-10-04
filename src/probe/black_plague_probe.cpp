@@ -663,8 +663,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         render_world.stereo_failed ||
         !render_world.stereo_camera_restored ||
         render_world.hmd_visibility_failures != 0 ||
-        render_world.presentation_pose_acquisitions != 0 ||
-        render_world.presentation_pose_reuses != 0 ||
+        // Acquiring/reusing a presentation pose is normal on every VR frame.
+        // Keep the periodic sample above; do not dump matrices/body telemetry
+        // on every successful presentation just because these counts are >0.
         render_world.presentation_pose_stale_rejects != 0 ||
         render_world.dropped_updates != 0 ||
         render_world.gameplay_overlay_failures != 0 ||

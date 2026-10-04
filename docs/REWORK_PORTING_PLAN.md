@@ -272,6 +272,20 @@ changing controller profiles. Tests compile the actual Overture input sources
 against substituted external OpenVR interfaces; no physical-device or startup
 crash acceptance follows from those tests.
 
+The BP tutorial follow-up found a second difference from Rework's kinematic
+Grab: BP ejected a valid hold solely for `dt > 0.25`, although that path writes
+a rigid tracked transform and does not integrate the timestep. This cutoff is
+removed while finite/positive-time and physical-discontinuity guards remain.
+BP's `ControllerWorldPose` also requires a render-published world reference
+younger than 250 ms. An expired reference now defers Grab transform writes
+while the controller is still tracked and the interaction remains held; the
+backend retains collision exclusion and clears residual velocity during that
+deferral. It never drives from stale world coordinates or suppresses actual
+release, focus loss, tracking loss or disconnection. This adaptation is needed
+because BP's independently published binary presentation boundary differs from
+Rework's synchronous source hand-pose consumption. Actual-adapter tests cover
+the boundary; renewed headset acceptance remains separate.
+
 ## Validation rule
 
 Extraction, target implementation and target validation are different facts.

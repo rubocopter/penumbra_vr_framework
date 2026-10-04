@@ -87,7 +87,6 @@ void WriteLog(const char* format, ...) noexcept {
     if (g_log != INVALID_HANDLE_VALUE) {
         DWORD written = 0;
         WriteFile(g_log, line, static_cast<DWORD>(std::strlen(line)), &written, nullptr);
-        FlushFileBuffers(g_log);
     }
     ReleaseSRWLockExclusive(&g_log_lock);
 }
@@ -95,6 +94,9 @@ void WriteLog(const char* format, ...) noexcept {
 void CloseLog() noexcept {
     AcquireSRWLockExclusive(&g_log_lock);
     if (g_log != INVALID_HANDLE_VALUE) {
+        // Log records are diagnostics, not transactions. Per-line durability
+        // on the render/game thread turns storage latency into missed frames.
+        FlushFileBuffers(g_log);
         CloseHandle(g_log);
         g_log = INVALID_HANDLE_VALUE;
     }
