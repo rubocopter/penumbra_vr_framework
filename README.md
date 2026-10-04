@@ -8,7 +8,7 @@
   <a href="https://ko-fi.com/onitaku"><img alt="Support development on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
 </p>
 
-**Step into the complete Penumbra trilogy in PC VR.** Explore, solve puzzles and interact with the world using your headset and motion controllers.
+**Step into the complete Penumbra trilogy in PC VR.** Revisit three atmospheric adventures from inside the world: look around naturally, explore with your motion controllers and reach out to handle the objects around you.
 
 [**Get the VR installer**](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.5/PenumbraVR-Setup-1.0.5.exe) · [What you need](#before-you-start) · [Help](#need-help)
 
@@ -16,27 +16,36 @@ You’ll need the original PC games and SteamVR. Install only the games you own;
 
 ## Watch the trilogy in VR
 
+Take a look at each game in motion. These short clips show the Framework in real gameplay; choose a player to watch right here on GitHub.
+
 ### Penumbra: Overture
 
-Explore the mine with head-tracked viewing, room-scale movement and hands-on interactions.
+Descend into the mine and explore its dark spaces from inside the game. Turn to look around, move through the environment and reach for the objects and puzzles in front of you.
 
 https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265
 
-[Watch the first 18 minutes, uncut, on YouTube](https://www.youtube.com/watch?v=dc90jlH-tp0)
+**Want the full opening?** [Watch the first 18 minutes, uncut, on YouTube →](https://www.youtube.com/watch?v=dc90jlH-tp0)
 
 ### Penumbra: Black Plague
 
-Investigate and solve puzzles with VR movement, tracked hands and physical object interaction.
+Search the shelter for a way forward. Inspect your surroundings up close and use tracked hands to pick up, move and use objects as you work through its puzzles.
 
 https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd
 
 ### Penumbra: Requiem
 
-Play the expansion in VR on top of your Black Plague installation.
+Return to the Penumbra world for the puzzle-focused expansion. Requiem brings its rooms and challenges into VR as an add-on to Black Plague.
 
 https://github.com/user-attachments/assets/325b79e0-aca3-4111-93d2-8a73f9530a07
 
-The framework adds stereoscopic VR, controller-based movement and turning, object and puzzle interaction, and VR-friendly menus, inventory and notebook views. What’s available and tested varies by game and controller.
+## Make the world your own in VR
+
+- **Look around naturally.** Head tracking and stereoscopic 3D put the game world around you.
+- **Move through each space.** Use room-scale movement and controller locomotion, with turning and comfort options to suit your setup.
+- **Reach into the puzzles.** Tracked hands bring physical object handling and game-specific interactions into play.
+- **Keep the essentials close.** Inventory, notebook and menus are presented for VR.
+
+The details vary between games and controller profiles. The guides below explain current compatibility and controls.
 
 ## Get started
 
