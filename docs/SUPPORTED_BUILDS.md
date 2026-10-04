@@ -11,10 +11,10 @@ release.
 | Overture retail baseline | x86 | `95ACB863441A17E701AF2CD1B1EF301C55C1AC620269A167275580EB6954A448` | Recognized retail baseline only |
 | Overture VR Rework v0.1.0 | x86, LAA | `A88F605CE01D5E1F053B2F8450E7EFA77F8C6E50622303AC2D6736C2694DBC71` | Proven historical/public Rework reference |
 | Framework-owned Overture Release checkpoint | x86, LAA | `D4FAC244E73729966C8B9BF42F4A9BBFF9BD42F02710DCB1EACA3B668F1A9EE1` | Included in public Framework v1.0.0; earlier headset regression plus v1.0 maintainer install/game-entry acceptance |
-| Framework-owned Overture v1.0.1 | x86, LAA | `5DCCCD1EBCEACFBA10D12C964F7B529A711331915930B2D85ADD3FA29E429097` | Public Framework v1.0.1; exact installed hash verified and maintainer drawer/crank gameplay accepted in headset |
-| Framework-owned Overture v1.0.2 | x86, LAA | `06A8BC40C8697EDB7DFC5AD85C5AA2C3F1529BFAD0EAA109E0DE3C8E292C4EF9` | Public Framework v1.0.2; build/package/install/upgrade host-tested, Index hardware and new-build headset acceptance pending |
-| Framework-owned Overture v1.0.3 | x86, LAA | `38F2B1FD10FAFDF4FD291D47522BE0F158DD1202CE7317FDCCB4754DA5F91639` | Public Framework v1.0.3; independent missing-stick recovery and controller defaults host-tested, current-build hardware/headset acceptance pending |
-| Framework-owned Overture v1.0.4 | x86, LAA | `07048F55AF9AB97C06514D4457B21F2AB13336C2FD283AF4986AB339E9B9950E` | Public Framework v1.0.4 packaged build; suspect in-game binding shortcut removed, controller fallback retained, host-tested; focused headset retest pending |
+| Framework-owned Overture v1.0.1 | x86, LAA | `5DCCCD1EBCEACFBA10D12C964F7B529A711331915930B2D85ADD3FA29E429097` | Historical Framework v1.0.1 (download superseded by v1.0.5); exact installed hash verified and maintainer drawer/crank gameplay accepted in headset |
+| Framework-owned Overture v1.0.2 | x86, LAA | `06A8BC40C8697EDB7DFC5AD85C5AA2C3F1529BFAD0EAA109E0DE3C8E292C4EF9` | Historical Framework v1.0.2 (download superseded by v1.0.5); build/package/install/upgrade host-tested, Index hardware and new-build headset acceptance pending |
+| Framework-owned Overture v1.0.3 | x86, LAA | `38F2B1FD10FAFDF4FD291D47522BE0F158DD1202CE7317FDCCB4754DA5F91639` | Historical Framework v1.0.3 (download superseded by v1.0.5); independent missing-stick recovery and controller defaults host-tested, current-build hardware/headset acceptance pending |
+| Framework-owned Overture v1.0.4 | x86, LAA | `07048F55AF9AB97C06514D4457B21F2AB13336C2FD283AF4986AB339E9B9950E` | Historical Framework v1.0.4 packaged build (download superseded by v1.0.5); suspect in-game binding shortcut removed, controller fallback retained, host-tested; focused headset retest pending |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
 | Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative interaction, first transition, portal refraction and final flashlight alignment headset-validated; broader regression open |
@@ -68,13 +68,12 @@ Current product-level evidence:
   interaction milestone is concluded; this does not imply full-game support.
 
 Framework v1.0.0 is the first public trilogy release for the allowlisted builds;
-v1.0.4 is the current public patch. It retains the v1.0.3 controller defaults,
-inactive Overture stick recovery and Black Plague turning-height continuity,
-removes Overture's suspect in-game binding shortcut, and adds a host-tested
-Black Plague native Push adapter. Focused v1.0.4 headset confirmation remains
-pending. Publication does
-not promote every capability, controller family or
-game path to `supported`; the evidence levels above remain authoritative.
+v1.0.5 consolidates the post-v1.0.0 controller, Overture interaction/input,
+Black Plague Push/height/pacing/contact and installer improvements. Local
+Overture gameplay and BP tutorial pacing have scoped maintainer feedback;
+new-installer, broader per-game and controller acceptance remain separate.
+Publication does not promote every capability, controller family or game path
+to `supported`; the evidence levels above remain authoritative.
 
 ## Support rules
 

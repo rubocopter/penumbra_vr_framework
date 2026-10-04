@@ -5,95 +5,31 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
-## Unreleased
+## 1.0.5 — 2026-10-04
 
-- Correct Black Plague hand contact nudges at its verified Newton boundary:
-  send bounded point delta velocity without multiplying it by body mass.
-  A real-DLL regression covers 1, 3, 20 and 100 kg bodies, preventing heavy
-  shelves/props from receiving a mass-amplified velocity kick. Native character
-  collision response remains unchanged and still needs investigation.
+Consolidated update replacing the v1.0.1–v1.0.4 release downloads.
 
-- Reduce Black Plague production telemetry to periodic samples instead of
-  dumping matrices/body state on every successful presentation. Remove
-  synchronous per-line disk durability flushes from probe logging; flush at
-  close instead.
-- Preserve Black Plague kinematic Grab across a long tick and defer its pose
-  writes when the presentation reference expires while the controller remains
-  tracked. Keep held-body character-collision exclusion during that deferral;
-  actual release, focus loss and tracking/disconnection still release normally.
-  Regression tests pass; tutorial pacing and crate handling need a headset retest.
-
-- Align Black Plague's native Push stick forces with HMD-relative body movement
-  using the projection already consumed by Requiem. Preserve native Push and
-  locomotion permission gates; validate Black Plague's own captured-axis ABI.
-- Release Overture action and legacy controls immediately when SteamVR takes
-  input focus. Latch held buttons until release after focus returns, including
-  UI drag, while retaining focused binding-refresh and inactive-stick fallback.
-- Clear Overture's auxiliary aim pose each tracking frame and on inactive or
-  failed aim reads; fall back to the fresh grip pose. Initialize aim diagnostics
-  and handles explicitly.
-- Add an offline regression executable using Overture's actual input consumer
-  and extend Black Plague's native input contract harness. These changes require
-  local headset testing; they do not establish the reported pre-menu crash cause.
-
-## 1.0.4 — 2026-10-04
-
-- Remove Overture's v1.0.3 in-game SteamVR binding shortcut after an external
-  Valve Index report of a crash immediately before the main menu. The inactive
-  stick fallback and corrected controller defaults remain intact.
-- Add a Black Plague adapter for native `Push=1` interactions. VR-origin Push
-  now follows the tracked palm and applies the proven Rework 300 N horizontal
-  force while preserving Black Plague's native state lifecycle.
-- Keep Black Plague/Requiem general behavior unchanged. Both v1.0.4 fixes are
-  host-tested and require the focused external headset retest before promotion.
-
-## 1.0.3 — 2026-10-03
-
-- Preserve Black Plague's calibrated eye height across turning before the next
-  native body sample; suppress only prediction from the previous yaw basis.
-- Recover each missing Overture stick action independently through its existing
-  legacy analog path, preserving active custom actions and excluding raw clicks.
-- Correct Index light/interaction overlap, grip/trackpad force-click semantics
-  and pause placement; remove invalid/duplicate Touch/Pico recenter defaults and
-  WMR's mirrored pause/recenter overlap. Use declared SteamVR tip pointing poses.
-- Add shortcuts to the active SteamVR bindings in Overture controls and Black
-  Plague VR settings, plus a checked reference for all eight controller defaults.
-  These changes are host-tested; hardware acceptance remains separate.
-
-## 1.0.2 — 2026-10-03
-
-- Corrected Valve Index thumbstick components in all three games' bundled
-  defaults, including both handedness layouts and gameplay/UI stick clicks.
-- Added the generated/distributed binding regression and published a new
-  installer, matching source, checksums and scoped host-validation record.
-- Added saved-binding update guidance and a hardware procedure for the
-  unresolved index/pinky finger mismatch. See [patch notes](releases/1.0.2.md).
-
-## 1.0.1 — 2026-10-03
-
-- Corrected Overture acquisition of multi-body mechanisms: a sibling body from
-  the same entity no longer hides the selected wheel/handle. The maintainer
-  installed the exact 1.0.1 installer and accepted an Overture headset session
-  including the initial drawer and repeated crank/mechanism interaction.
-- Corrected nearest-overlap ranking: an occluded target can no longer suppress
-  another accessible drawer/prop or inventory item. Physical reach, collision
-  dimensions and sight barriers retain their established limits.
-- Oculus Touch pointing uses SteamVR's tip pose in both binding trees; Quest 3
-  alignment remains a focused hardware retest.
-- Setup shows a bilingual preparation window during payload extraction and
-  checksum validation, retained until the installer window appears. Disabled
-  redundant single-file compression so the already zipped payload does not
-  delay entry into the bootstrap UI.
-- Installer discovery, preflight, installation, maintenance and verification
-  run in background PowerShell runspaces with an animated waiting dialog.
-  Controls and outcomes stay on the UI thread; checksums, all-root preflight,
-  transactions, rollback and partial-failure reporting remain enforced.
-- Black Plague render-thread telemetry drops and counts samples when its
-  diagnostic lock is busy, avoiding a VR-frame stall.
-- Updated executable/installer/package identity to 1.0.1 and added
-  [patch notes](releases/1.0.1.md). Published the accepted candidate unchanged,
-  with matching source, hashes, build report and a separate acceptance record.
-  Broader headset and independent clean-machine acceptance remain separate.
+- Correct Valve Index thumbstick paths and button/force-click conflicts in both
+  handedness layouts; align pointing poses and generate an eight-profile controls
+  reference. BP VR settings can open the active SteamVR binding editor.
+- Improve Overture drawer/prop/mechanism visibility ranking, independently recover
+  inactive stick actions, release input on focus loss, and discard stale aim poses.
+  Remove the new Controls-menu binding shortcut after the pre-menu crash report.
+- Preserve BP calibrated eye height while turning and add tracked-palm native Push
+  with HMD-relative stick projection, retaining native lifecycle/permission gates.
+- Remove per-line disk flushes and excessive presentation logs, and avoid waiting
+  on busy render telemetry. Preserve held BP objects through long ticks/stale
+  presentation references while retaining real release/focus/tracking guards.
+- Pass bounded BP hand-contact delta velocity directly to Newton without the
+  extra mass multiplier; real-DLL regressions cover 1, 3, 20 and 100 kg bodies.
+- Show installer preparation/progress and run long operations in background
+  runspaces while retaining transactions, settings preservation and error reporting.
+- Maintainer feedback accepts preceding local Overture gameplay and BP tutorial
+  pacing. Native collision recoil remains unresolved; the shelf launch when using
+  the mixed tutorial chemical is the original map script's intended behavior.
+- Publish an updated installer, matching source, checksums and build provenance.
+  Prior v1.0.1–v1.0.4 acceptance/validation records retain their scoped hashes;
+  publication does not transfer them to the new artifact.
 
 ## 1.0.0 — 2026-09-29
 

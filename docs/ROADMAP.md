@@ -7,14 +7,14 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework [v1.0.4](releases/1.0.4.md) retains the v1.0.3 controller defaults,
-Overture stick recovery and Black Plague turning-height correction, removes the
-suspect Overture in-game binding shortcut and adds Black Plague's host-tested
-native Push adapter. The exact v1.0.1 installer retains its
-maintainer installation and Overture gameplay acceptance. Index input/finger
-feedback, Quest 3 pointer alignment and broader per-game
-regressions remain focused follow-up. Use `CLOSURE_STATUS.md` for the release evidence
-and remaining deployment-validation matrix,
+Framework [v1.0.5](releases/1.0.5.md) consolidates all post-v1.0.0 changes,
+including controller defaults, Overture interaction/input fixes, Black Plague
+Push, turning-height continuity, logging/pacing and held-object improvements.
+Intermediate release downloads are superseded; their validation records remain
+historical evidence. Black Plague collision recoil, Index finger feedback,
+Quest 3 pointer alignment and broader per-game regressions remain focused
+follow-up. Use `CLOSURE_STATUS.md` for release evidence and the remaining
+deployment-validation matrix,
 `RUNTIME_DEPENDENCIES.md` for deployment dependencies and
 `RELEASE_PREPARATION_AUDIT.md` for the inspected installer baseline. The unified
 installer contract is implemented in `INSTALLER_DESIGN.md`; independent clean-PC,
@@ -110,13 +110,11 @@ automatically validate a newer candidate.
   three games. Host guards reject dropped profiles/actions and type drift;
   package/install/repair fixtures verify all eight by hash. Device hardware
   validation and the documented Vive/WMR layout limitations remain separate.
-- [ ] Complete the focused external Valve Index v1.0.4 retest. The reporter now
-  says Black Plague and Requiem work as intended, while Overture crashes just
-  before the main menu and the BP tutorial heavy crate is unreliable to push.
-  v1.0.4 removes Overture's new binding shortcut while retaining its stick
-  fallback, and ports the proven tracked-hand Push behavior to BP. Ask only for
-  Overture menu/gameplay entry and one successful crate-to-red-cross push.
-  Finger comparison remains non-blocking and deferred.
+- [ ] Confirm the consolidated v1.0.5 update on the external Index setup when
+  feedback is available. The maintainer has accepted local Overture gameplay
+  and completed the BP tutorial without performance issues; those observations
+  do not establish Index acceptance of the new installer. Preserve the deferred,
+  non-blocking finger report and avoid requesting redundant gameplay tests.
 
 The deferred focused runtime issue is Black Plague's vertical mini-hops while
 touching ventilation walls. Investigate accepted motion, native stepping and
