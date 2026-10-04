@@ -38,6 +38,14 @@ Historical v1.0.1 installation and Overture drawer/crank acceptance remain tied
 to their original artifact hashes in [the acceptance record](releases/1.0.1-acceptance.json).
 Subsequent host evidence remains in the versioned validation records.
 
+The [v1.0.5 validation record](releases/1.0.5-validation.json) identifies the exact
+installer/source hashes, clean build source, 57 Framework tests, 298 Overture
+checks, standalone English/Spanish Setup and topology A-F. Updates from v1.0.0
+and v1.0.4 pass with exact payload/default hashes, repair and restoration. The
+release tag adds provenance documents to the build source; the tested artifacts
+are published unchanged. Build-time pending headset/clean-machine fields remain
+historical readiness data, separate from the maintainer's publication decision.
+
 ## Remaining validation and release limitations
 
 - Requiem's intermittent startup crash remains unresolved and unattributed. Do

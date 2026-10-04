@@ -1,0 +1,69 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.5",
+  "validatedOn": "2026-10-04",
+  "releaseTag": "v1.0.5",
+  "buildSourceCommit": "721971d8e6d35b620fb6162daab2e65cb25e1a64",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.5",
+  "publishedWithoutRebuildAfterHostValidation": true,
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "Consolidate all post-v1.0.0 changes and replace intermediate release downloads",
+  "supersededReleaseDownloads": [
+    "v1.0.1",
+    "v1.0.2",
+    "v1.0.3",
+    "v1.0.4"
+  ],
+  "historicalTagsAndValidationRecordsRetained": true,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "sha256": "3535E8A8187013B0C0744E438974CE0ACF77A47211CF741200A0DE1FF09C7551",
+      "bytes": 5319
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.5.exe",
+      "sha256": "D13E541791E7DFDC5EB2D5A859AC9531A208F7E56AAB684DCB542D8FBC9EA605",
+      "bytes": 193096854
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.5.zip",
+      "sha256": "3969EA3F34C1D6D50F047985E2BD6AD420F1600AC14F7B794B780CE875BBA0D8",
+      "bytes": 81943784
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "sha256": "896191DDCDE3965F25992198F72485A44B56DB187D77EDC30A0D597D297C3D7F",
+      "bytes": 274
+    }
+  ],
+  "overtureExecutableSha256": "051DFF43C849FF62D265F822B894EF3082FA348AD90578CEDEF3181CE2AFE609",
+  "validation": {
+    "frameworkHostTests": {
+      "passed": 57,
+      "failed": 0
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0,
+      "fullReleaseWin32Rebuild": true,
+      "largeAddressAwareVerified": true
+    },
+    "releasePackaging": "Passed exact PE version/hash identity, source/notices, outer checksums and absence of private/developer payload",
+    "standaloneSetup": "Exact EXE passed English/Spanish preparation, extraction and cleanup smoke with multilevel runtime lookup disabled",
+    "topology": "A-F install, verification, repair, component transitions, shared-root deduplication and exact restoration passed with synthetic content/runtime fixtures",
+    "upgrades": {
+      "1.0.0To1.0.5": "Overture and shared BP/RQ upgrade, eight defaults by hash, exact shipped EXE/probes, damaged-binding repair, verification and exact restore passed",
+      "1.0.4To1.0.5": "Same checks passed in two isolated fresh-fixture runs"
+    },
+    "gamesLaunchedByAutomation": false,
+    "precedingLocalGameplayFeedback": "Maintainer accepted Overture gameplay and completed BP tutorial without reported pacing problems or freeze-related box drops; scoped feedback on preceding local fixes, not exact new-installer acceptance",
+    "newInstallerHeadsetAcceptance": "pending",
+    "independentCleanMachine": "pending",
+    "remainingGameplayIssues": [
+      "Black Plague collision recoil",
+      "intermittent Requiem startup failure",
+      "reported Index finger mismatch (nonblocking)"
+    ]
+  }
+}
