@@ -13,10 +13,50 @@
 
 namespace hpl {
 
+  namespace {
+    // Enumerate logical buttons once so focus release/recovery also covers
+    // UI drag and secondary gameplay controls, on actions and raw polling.
+    cVRButtonState cVRInputState::* const kFocusButtons[] = {
+      &cVRInputState::sprint, &cVRInputState::interact, &cVRInputState::examine,
+      &cVRInputState::holster, &cVRInputState::inventory, &cVRInputState::notebook,
+      &cVRInputState::quickLight, &cVRInputState::jump, &cVRInputState::crouch,
+      &cVRInputState::pause, &cVRInputState::recenter, &cVRInputState::uiSelect,
+      &cVRInputState::uiDrag, &cVRInputState::uiBack, &cVRInputState::uiClose
+    };
+  }
+
+  void cSteamVRInput::ReleaseInputFocus(const cVRInputState& previousState) {
+    mState = cVRInputState();
+    for (unsigned int i = 0; i < sizeof(kFocusButtons) / sizeof(kFocusButtons[0]); ++i) {
+      mState.*kFocusButtons[i] = cVRButtonState();
+      (mState.*kFocusButtons[i]).justReleased = (previousState.*kFocusButtons[i]).pressed;
+    }
+    mbFocusLost = true;
+    mbUsingActions = false;
+    mbHasActiveContext = false;
+    mlActionsIdleSince = 0;
+    mlSticksInactiveSince = 0;
+  }
+
+  void cSteamVRInput::ApplyFocusRecovery(cVRInputState& state) {
+    for (unsigned int i = 0; i < sizeof(kFocusButtons) / sizeof(kFocusButtons[0]); ++i) {
+      cVRButtonState& sample = state.*kFocusButtons[i];
+      cVRButtonState& blocked = mFocusBlocked.*kFocusButtons[i];
+      if (mbFocusLost) blocked.pressed = sample.pressed;
+      if (blocked.pressed) {
+        blocked.pressed = sample.pressed;
+        sample.pressed = sample.justPressed = sample.justReleased = false;
+      }
+    }
+    mbFocusLost = false;
+  }
+
   cSteamVRInput::cSteamVRInput()
     : mbAvailable(false), mbUsingActions(false), mbFallbackReported(false), mbHasActiveContext(false),
       mbLeftPoseStateKnown(false), mbRightPoseStateKnown(false),
+      mbLeftAimStateKnown(false), mbRightAimStateKnown(false),
       mbLeftPoseWasValid(false), mbRightPoseWasValid(false),
+      mbLeftAimWasValid(false), mbRightAimWasValid(false), mbFocusLost(false),
       mActiveContext(eSteamVRInputContext_Gameplay),
       mActiveHandedness(eSteamVRHand_Right), mfMoveDeadZone(0.15f),
       mHandedness(eSteamVRHand_Right),
@@ -63,6 +103,8 @@ namespace hpl {
       mUICloseActionLeft(vr::k_ulInvalidActionHandle),
       mLeftPoseAction(vr::k_ulInvalidActionHandle),
       mRightPoseAction(vr::k_ulInvalidActionHandle),
+      mLeftAimAction(vr::k_ulInvalidActionHandle),
+      mRightAimAction(vr::k_ulInvalidActionHandle),
       mLeftHapticAction(vr::k_ulInvalidActionHandle),
       mRightHapticAction(vr::k_ulInvalidActionHandle),
       mLeftSkeletonAction(vr::k_ulInvalidActionHandle),
@@ -177,6 +219,14 @@ namespace hpl {
 
     const cVRInputState previousState = mState;
     mState = cVRInputState();
+    if (vr::VRSystem() == NULL || !vr::VRSystem()->IsInputAvailable()) {
+      ReleaseInputFocus(previousState);
+      leftHand.SetAimValid(false);
+      rightHand.SetAimValid(false);
+      // Consume the frame even without a manifest: ButtonHandler must not
+      // repopulate dashboard input through the raw controller fallback.
+      return true;
+    }
     if (!mbAvailable) {
       return false;
     }
@@ -427,6 +477,7 @@ namespace hpl {
       mbHasActiveContext = true;
       mActiveContext = context;
       mActiveHandedness = mHandedness;
+      ApplyFocusRecovery(nextState);
       mState = nextState;
       mlActionsIdleSince = 0;
       return true;
@@ -468,6 +519,11 @@ namespace hpl {
 
   void cSteamVRInput::UpdateLegacyState(eSteamVRInputContext context,
     TrackedController& leftHand, TrackedController& rightHand) {
+    if (vr::VRSystem() == NULL || !vr::VRSystem()->IsInputAvailable()) {
+      const cVRInputState previousState = mState;
+      ReleaseInputFocus(previousState);
+      return;
+    }
     const TrackedController::ButtonState& leftState = leftHand.GetButtonState();
     const TrackedController::ButtonState& rightState = rightHand.GetButtonState();
     const TrackedController::ButtonState& dominantState =
@@ -558,6 +614,7 @@ namespace hpl {
         (dominantState.gripJustReleased || offState.menuJustReleased);
     }
 
+    ApplyFocusRecovery(legacyState);
     mState = legacyState;
   }
 
@@ -782,6 +839,7 @@ bool cSteamVRInput::UpdatePoseAction(vr::VRActionHandle_t handle, TrackedControl
   // An inactive pose has no binding for the current controller. Leave the
   // compositor/device-role result in place so legacy bindings still work.
   if (error != vr::VRInputError_None || !data.bActive) {
+    if (isAim) hand.SetAimValid(false);
     if (stateKnown && wasValid) {
       Log(" [VR input +%lu ms] %s pose action lost (%s, error %d).\n", GetApplicationTime(),
         handName, data.bActive ? "read failure" : "inactive", (int)error);

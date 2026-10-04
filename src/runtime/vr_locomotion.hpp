@@ -7,6 +7,19 @@
 
 namespace penumbra_vr::runtime {
 
+struct NativePushAxes {
+    float forward{};
+    float sideways{};
+    bool valid{};
+};
+
+// Requiem's proven projection, shared with Black Plague. Backends supply
+// independently verified native axes; runtime owns only the horizontal math.
+[[nodiscard]] NativePushAxes ProjectNativePushAxes(
+    const std::array<float, 3>& desired_world_direction,
+    const std::array<float, 3>& native_forward,
+    const std::array<float, 3>& native_right) noexcept;
+
 namespace vr_locomotion_policy {
 
 // Values preserved from Rework Player.cpp at revision 23c890f.

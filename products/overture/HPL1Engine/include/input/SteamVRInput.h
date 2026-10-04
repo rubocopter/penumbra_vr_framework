@@ -101,6 +101,8 @@ namespace hpl {
     AnalogState ReadAnalog(vr::VRActionHandle_t handle) const;
     void SuppressDigitalEdges(cVRButtonState& state) const;
     void SuppressAllEdges(cVRInputState& state) const;
+    void ReleaseInputFocus(const cVRInputState& previousState);
+    void ApplyFocusRecovery(cVRInputState& state);
     void ApplyMoveDeadZone(float& x, float& y) const;
     tString FindManifestPath() const;
     // Mirrored action sets (/actions/gameplay_left, /actions/ui_left) carry the
@@ -121,6 +123,8 @@ namespace hpl {
     bool mbRightPoseWasValid;
     bool mbLeftAimWasValid;
     bool mbRightAimWasValid;
+    bool mbFocusLost;
+    cVRInputState mFocusBlocked;
     eSteamVRInputContext mActiveContext;
     eSteamVRHand mActiveHandedness;
     cVRInputState mState;

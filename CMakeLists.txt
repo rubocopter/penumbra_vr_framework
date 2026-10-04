@@ -746,6 +746,30 @@ if(BUILD_TESTING)
     add_test(NAME native_input_bridge_contract
         COMMAND pvr_native_input_bridge_contract_test)
 
+    # Exercise Overture's actual action/legacy consumer with only the external
+    # OpenVR interfaces replaced. No headset or game process is required.
+    add_executable(pvr_overture_input_consumer_test
+        tests/overture_input/input_consumer_test.cpp
+        products/overture/HPL1Engine/sources/input/TrackedController.cpp
+        products/overture/HPL1Engine/sources/input/SteamVRInput.cpp
+        products/overture/HPL1Engine/sources/math/Math.cpp
+        products/overture/HPL1Engine/sources/math/MathTypes.cpp
+        products/overture/HPL1Engine/sources/math/Quaternion.cpp
+        products/overture/HPL1Engine/sources/math/CRC.cpp
+        products/overture/HPL1Engine/sources/graphics/Color.cpp
+        products/overture/tests/VRTrackingTest/LowLevelStubs.cpp)
+    target_include_directories(pvr_overture_input_consumer_test PRIVATE
+        tests/overture_input/shim products/overture/HPL1Engine/include)
+    set_target_properties(pvr_overture_input_consumer_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/overture_input_consumer")
+    target_compile_definitions(pvr_overture_input_consumer_test PRIVATE WIN32 NOMINMAX)
+    add_custom_command(TARGET pvr_overture_input_consumer_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+            "$<TARGET_FILE_DIR:pvr_overture_input_consumer_test>/vr"
+        COMMAND ${CMAKE_COMMAND} -E touch
+            "$<TARGET_FILE_DIR:pvr_overture_input_consumer_test>/vr/actions.json")
+    add_test(NAME overture_input_consumer COMMAND pvr_overture_input_consumer_test)
+
     add_executable(pvr_vr_action_input_test tests/vr_input_state/vr_action_input_test.cpp)
     target_link_libraries(pvr_vr_action_input_test PRIVATE pvr_vr_action_input)
     pvr_enable_warnings(pvr_vr_action_input_test)

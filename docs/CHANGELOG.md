@@ -5,6 +5,21 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## Unreleased
+
+- Align Black Plague's native Push stick forces with HMD-relative body movement
+  using the projection already consumed by Requiem. Preserve native Push and
+  locomotion permission gates; validate Black Plague's own captured-axis ABI.
+- Release Overture action and legacy controls immediately when SteamVR takes
+  input focus. Latch held buttons until release after focus returns, including
+  UI drag, while retaining focused binding-refresh and inactive-stick fallback.
+- Clear Overture's auxiliary aim pose each tracking frame and on inactive or
+  failed aim reads; fall back to the fresh grip pose. Initialize aim diagnostics
+  and handles explicitly.
+- Add an offline regression executable using Overture's actual input consumer
+  and extend Black Plague's native input contract harness. These changes require
+  local headset testing; they do not establish the reported pre-menu crash cause.
+
 ## 1.0.4 — 2026-10-04
 
 - Remove Overture's v1.0.3 in-game SteamVR binding shortcut after an external

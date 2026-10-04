@@ -105,6 +105,15 @@ headset acceptance remains pending. Vive/WMR
 compatibility exceptions are retained and documented. These source changes
 follow the published v1.0.2 and do not retroactively change that artifact.
 
+The unreleased offline follow-up aligns BP's native Push axis-force dispatch
+with HMD-relative body intent using the projection already consumed by Requiem.
+BP-owned captured axes and callback slots are exact-image verified; actual
+dispatch, native rejection and non-Push behavior are host-tested. The tutorial
+crate still needs a local headset retest. Overture's actual action/legacy
+consumer is now host-tested for immediate focus release, held-button recovery
+and fresh grip fallback after auxiliary aim loss. These changes do not identify
+or validate a fix for the reported pre-menu crash.
+
 The finger mismatch is unresolved and the reporter considers it non-blocking.
 Current consumers preserve OpenVR's Thumb/Index/Middle/Ring/Pinky channel order and map
 it to the named rig chains; host conditioning/articulation/render tests pass

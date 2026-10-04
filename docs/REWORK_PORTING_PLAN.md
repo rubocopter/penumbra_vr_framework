@@ -243,6 +243,35 @@ The maintainer accepted the initial drawer and repeated crank/mechanism use in
 an Overture headset session installed with the exact 1.0.1 candidate. Broader
 progression remains a separate regression gate.
 
+## Native Push axis projection and Overture input validity
+
+Rework `23c890f` `PlayerState_Interact_VR.cpp` retains side-effecting native
+Push movement callbacks: forward/right forces use the camera axes captured by
+Push Enter. Framework's binary Black Plague adapter previously sent raw stick
+components to those callbacks while its body owner moved in HMD world axes.
+A rotated-head host reproduction proved perpendicular force/body intent.
+
+The correction promotes Requiem's existing neutral horizontal projection into
+`runtime::ProjectNativePushAxes`, now consumed by both backends. Black Plague
+independently supplies its Push vtable `0x27CFF8`, forward/sideways slots
+`0x4C/0x50` (`0xACCC0/0xAB290`) and Enter-captured axes at `+0x14/+0x20`.
+Runtime contains none of these binary values. Both primary Push callbacks and
+the secondary locomotion permission gate retain native ownership. Host tests
+exercise actual BP dispatch, native rejection and unchanged non-Push behavior;
+the exact-image verifier pins the captured stores and force consumers. The
+reported tutorial-crate symptom still requires a headset retest.
+
+Rework and Framework Overture's `TrackedController::BeginPoseFrame` inherited
+an auxiliary aim-validity omission. The maintained product now clears aim
+validity per frame, on lost grip and on inactive/failed aim reads, preserving
+compositor grip fallback. Its action and legacy consumers also check OpenVR
+input availability before sampling or using binding-refresh grace, emit held
+release edges once, and latch held digital controls through focus recovery.
+This follows the focus boundary already consumed by BP/Requiem rather than
+changing controller profiles. Tests compile the actual Overture input sources
+against substituted external OpenVR interfaces; no physical-device or startup
+crash acceptance follows from those tests.
+
 ## Validation rule
 
 Extraction, target implementation and target validation are different facts.

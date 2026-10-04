@@ -448,8 +448,32 @@ void ServiceNativeVrCrouch(void* player, bool desired,
     //   vector = player+0x2C4, index = player+0x2BC
     // before dispatching OnMoveForward/OnMoveSideways.
     auto* const primary = CurrentMoveState(player, 0x2C4, 0x2BC);
-    if (!CallMoveStateGate(primary, sideways ? 0x50 : 0x4C,
-                           amount, delta_seconds)) {
+    if (Read<std::int32_t>(player, 0x2BC) == 1) {
+        // FD316F... Push::Enter captures native camera forward/right at
+        // +0x14/+0x20. Its movement gates add force in that captured basis.
+        // Project the same HMD world intent used by the body owner into it.
+        if (Read<void*>(primary, 0) != g_image + 0x27CFF8) return false;
+        runtime::VrAnalogState axis{true, sideways ? amount : 0.0F,
+            sideways ? 0.0F : amount};
+        const auto axes = runtime::ProjectNativePushAxes(
+            runtime::HeadRelativeMoveDirection(g_direct_head_world_pose, axis),
+            Read<std::array<float, 3>>(primary, 0x14),
+            Read<std::array<float, 3>>(primary, 0x20));
+        if (!axes.valid) return false;
+        bool accepted = false;
+        if (std::abs(axes.forward) > 0.00001F) {
+            const bool allowed = CallMoveStateGate(primary, 0x4C,
+                axes.forward, delta_seconds);
+            accepted = accepted || allowed;
+        }
+        if (std::abs(axes.sideways) > 0.00001F) {
+            const bool allowed = CallMoveStateGate(primary, 0x50,
+                axes.sideways, delta_seconds);
+            accepted = accepted || allowed;
+        }
+        if (!accepted) return false;
+    } else if (!CallMoveStateGate(primary, sideways ? 0x50 : 0x4C,
+                                  amount, delta_seconds)) {
         return false;
     }
     // They then load the current locomotion state as
@@ -1137,6 +1161,17 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
             error = "Native movement call mismatch"; return false;
         }
     }
+    // Push axis callbacks are side-effecting, so validate their independently
+    // mapped BP vtable before consuming the captured native basis.
+    for (const auto& axis : {std::array<std::uintptr_t, 2>{0x27D044, 0xACCC0},
+                            {0x27D048, 0xAB290}}) {
+        std::uintptr_t target = 0;
+        if (!ReadBytes(g_image + axis[0], &target, sizeof(target)) ||
+            target != reinterpret_cast<std::uintptr_t>(g_image + axis[1])) {
+            error = "Native Push movement gate mismatch";
+            return false;
+        }
+    }
     // Validate the remaining exact native input entries before publishing hooks.
     for (const auto& light : {std::array<std::uintptr_t,2>{0x513D,0x9BCD0},{0x5165,0x9BD80}}) {
         std::array<std::uint8_t,5> actual{};
@@ -1425,6 +1460,23 @@ NativeHapticDiagnostics ConsumeNativeHapticDiagnostics() noexcept {
 namespace {
 bool g_contract_native_query_result = false;
 bool g_contract_block_stand = false;
+std::array<float, 3> g_contract_push_force{};
+bool g_contract_axis_accepted = true;
+bool g_contract_walk_accepted = true;
+
+bool __fastcall ContractPushForward(void* state, void*, float amount, float) noexcept {
+    const auto axis = Read<std::array<float, 3>>(state, 0x14);
+    for (std::size_t i = 0; i < axis.size(); ++i)
+        g_contract_push_force[i] += axis[i] * amount * 100.0F;
+    return g_contract_axis_accepted;
+}
+bool __fastcall ContractPushSideways(void* state, void*, float amount, float) noexcept {
+    const auto axis = Read<std::array<float, 3>>(state, 0x20);
+    for (std::size_t i = 0; i < axis.size(); ++i)
+        g_contract_push_force[i] += axis[i] * amount * 100.0F;
+    return g_contract_axis_accepted;
+}
+bool __fastcall ContractWalkGate(void*, void*, float, float) noexcept { return g_contract_walk_accepted; }
 
 template<class T>
 void ContractWrite(void* object, std::uintptr_t offset, const T& value) noexcept {
@@ -1471,7 +1523,7 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         return false;
     }
 
-    constexpr std::size_t kImageSize = 0x100000;
+    constexpr std::size_t kImageSize = 0x300000;
     auto* const image = static_cast<std::uint8_t*>(VirtualAlloc(
         nullptr, kImageSize, MEM_COMMIT | MEM_RESERVE,
         PAGE_EXECUTE_READWRITE));
@@ -1504,6 +1556,10 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         ReleaseSRWLockExclusive(&g_crouch_lock);
         g_contract_native_query_result = false;
         g_contract_block_stand = false;
+        g_contract_push_force = {};
+        g_contract_axis_accepted = true;
+        g_contract_walk_accepted = true;
+        g_direct_head_world_pose = runtime::IdentityMatrix();
         g_intents = nullptr;
         g_input_player = nullptr;
         g_input_handler = nullptr;
@@ -1519,6 +1575,80 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         cleanup();
         return false;
     };
+
+    // Native Push gates add force in the camera axes captured on entry.
+    // Looking left by 90 degrees must push left, just like direct body intent.
+    std::array<std::uint8_t, 0x300> push_player{};
+    std::array<std::uint8_t, 0x30> push_state{};
+    std::array<void*, 24> walk_vtable{};
+    void* walk_state = walk_vtable.data();
+    std::array<void*, 2> primary_states{nullptr, push_state.data()};
+    std::array<void*, 1> secondary_states{&walk_state};
+    ContractWrite(push_player.data(), 0x2C4, primary_states.data());
+    ContractWrite(push_player.data(), 0x2BC, std::int32_t{1});
+    ContractWrite(push_player.data(), 0x2D8, secondary_states.data());
+    ContractWrite(push_player.data(), 0x268, std::int32_t{1});
+    ContractWrite(push_state.data(), 0, static_cast<void*>(image + 0x27CFF8));
+    ContractWrite(push_state.data(), 0x14, std::array<float, 3>{0, 0, -1});
+    ContractWrite(push_state.data(), 0x20, std::array<float, 3>{1, 0, 0});
+    ContractWrite(image + 0x27CFF8, 0x4C, reinterpret_cast<void*>(&ContractPushForward));
+    ContractWrite(image + 0x27CFF8, 0x50, reinterpret_cast<void*>(&ContractPushSideways));
+    walk_vtable[0x0C / sizeof(void*)] = reinterpret_cast<void*>(&ContractWalkGate);
+    walk_vtable[0x10 / sizeof(void*)] = reinterpret_cast<void*>(&ContractWalkGate);
+    g_direct_head_world_pose = runtime::IdentityMatrix();
+    g_direct_head_world_pose.values[0] = g_direct_head_world_pose.values[10] = 0;
+    g_direct_head_world_pose.values[2] = 1;
+    g_direct_head_world_pose.values[8] = -1;
+    if (!NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, false) ||
+        std::abs(g_contract_push_force[0] + 100) > 0.001F ||
+        std::abs(g_contract_push_force[2]) > 0.001F)
+        return fail("native Push force does not follow HMD-relative forward motion");
+    g_contract_push_force = {};
+    if (!NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, true) ||
+        std::abs(g_contract_push_force[2] + 100) > 0.001F)
+        return fail("native Push force does not follow HMD-relative sideways motion");
+    g_contract_axis_accepted = false;
+    if (NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, false))
+        return fail("Push projection bypassed native axis rejection");
+    g_contract_axis_accepted = true;
+    g_contract_walk_accepted = false;
+    if (NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, false))
+        return fail("Push projection bypassed secondary locomotion rejection");
+    g_contract_walk_accepted = true;
+    ContractWrite(push_player.data(), 0x268, std::int32_t{0});
+    if (NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, false))
+        return fail("Push projection bypassed native movement-count predicate");
+    ContractWrite(push_player.data(), 0x268, std::int32_t{1});
+    // Non-Push states must still receive the original native logical axis.
+    ContractWrite(push_player.data(), 0x2BC, std::int32_t{0});
+    primary_states[0] = push_state.data();
+    g_contract_push_force = {};
+    if (!NativeMoveAxisAllowsDirectLocomotion(push_player.data(), -0.5F, 0.016F, false) ||
+        std::abs(g_contract_push_force[2] - 50) > 0.001F ||
+        std::abs(g_contract_push_force[0]) > 0.001F)
+        return fail("non-Push movement gate was projected into the HMD basis");
+    ContractWrite(push_player.data(), 0x2BC, std::int32_t{1});
+    // At 45 degrees both native callbacks participate, preserving analog size.
+    g_direct_head_world_pose.values[0] = g_direct_head_world_pose.values[2] = 0.70710678F;
+    g_direct_head_world_pose.values[8] = -0.70710678F;
+    g_direct_head_world_pose.values[10] = 0.70710678F;
+    g_contract_push_force = {};
+    if (!NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 0.5F, 0.016F, false) ||
+        std::abs(g_contract_push_force[0] + 35.355339F) > 0.001F ||
+        std::abs(g_contract_push_force[2] + 35.355339F) > 0.001F)
+        return fail("diagonal Push projection lost a force component or analog scale");
+    ContractWrite(push_state.data(), 0, static_cast<void*>(walk_vtable.data()));
+    g_contract_push_force = {};
+    if (NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, false) ||
+        g_contract_push_force != std::array<float, 3>{})
+        return fail("unrecognized Push state dispatched native force");
+    ContractWrite(push_state.data(), 0, static_cast<void*>(image + 0x27CFF8));
+    ContractWrite(push_state.data(), 0x20, std::array<float, 3>{0, 0, 0});
+    g_contract_push_force = {};
+    if (NativeMoveAxisAllowsDirectLocomotion(push_player.data(), 1, 0.016F, false) ||
+        g_contract_push_force != std::array<float, 3>{})
+        return fail("invalid captured Push axes dispatched native force");
+    g_direct_head_world_pose = runtime::IdentityMatrix();
 
     const auto has_pointer_entry = [](std::uintptr_t site,
                                       std::uintptr_t target,

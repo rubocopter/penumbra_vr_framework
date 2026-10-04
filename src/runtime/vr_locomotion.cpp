@@ -4,6 +4,31 @@
 #include <cmath>
 
 namespace penumbra_vr::runtime {
+
+NativePushAxes ProjectNativePushAxes(
+    const std::array<float,3>& desired_world_direction,
+    const std::array<float,3>& native_forward,
+    const std::array<float,3>& native_right) noexcept {
+    const auto finite = [](const std::array<float,3>& value) {
+        return std::all_of(value.begin(), value.end(),
+            [](float axis) { return std::isfinite(axis); });
+    };
+    if (!finite(desired_world_direction) || !finite(native_forward) ||
+        !finite(native_right)) return {};
+    const float forward_length = std::hypot(
+        native_forward[0], native_forward[2]);
+    const float right_length = std::hypot(
+        native_right[0], native_right[2]);
+    if (forward_length < 0.95F || forward_length > 1.05F ||
+        right_length < 0.95F || right_length > 1.05F) return {};
+    return {
+        (desired_world_direction[0] * native_forward[0] +
+         desired_world_direction[2] * native_forward[2]) / forward_length,
+        (desired_world_direction[0] * native_right[0] +
+         desired_world_direction[2] * native_right[2]) / right_length,
+        true};
+}
+
 namespace {
 
 [[nodiscard]] bool FiniteVector(const std::array<float, 3>& value) noexcept {

@@ -50,6 +50,7 @@ cVector3f TrackedController::GetAngularVelocity() {
 
 void TrackedController::BeginPoseFrame() {
   pose_valid_ = false;
+  aim_valid_ = false;
   device_index_ = vr::k_unTrackedDeviceIndexInvalid;
   velocity_ = cVector3f(0.0f);
   angular_velocity_ = cVector3f(0.0f);
@@ -71,6 +72,7 @@ void TrackedController::SetPose(const cMatrixf& matrix, const cVector3f& velocit
 void TrackedController::SetPoseValid(bool valid) {
   pose_valid_ = valid;
   if (!valid) {
+    aim_valid_ = false;
     device_index_ = vr::k_unTrackedDeviceIndexInvalid;
     velocity_ = cVector3f(0.0f);
     angular_velocity_ = cVector3f(0.0f);
