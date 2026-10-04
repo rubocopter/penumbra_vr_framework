@@ -1,5 +1,13 @@
 # Release history
 
+## v1.0.5 — Consolidated Framework update (2026-10-04)
+
+Replaces the v1.0.1–v1.0.4 downloads. Retains drawer/mechanism selection,
+corrected controller defaults and independent stick fallback; includes focus-loss
+release and fresh aim-pose handling. The Controls menu binding shortcut remains
+removed. See the [Framework notes](../../../docs/releases/1.0.5.md).
+Prior local gameplay feedback does not establish exact new-installer acceptance.
+
 ## v1.0.4 — Pre-menu crash mitigation (2026-10-04)
 
 Removed the v1.0.3 **Controller bindings (SteamVR)** entry from Overture's

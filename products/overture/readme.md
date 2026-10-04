@@ -2,7 +2,7 @@
 
 A community-made PCVR rework that brings **Penumbra: Overture** to full room-scale VR with motion-controlled hands, physical interactions, and a complete spatial-audio chain built for horror.
 
-> Framework product — current release: **v1.0.4** (v1.0.3 controller/stick fixes retained; pre-menu crash mitigation host-tested and current hardware acceptance pending). You must own **Penumbra: Overture** on Steam; the original game is not included.
+> Framework product — current release: **v1.0.5** (consolidated interaction, controller and input fixes; exact new-installer hardware acceptance remains separate). You must own **Penumbra: Overture** on Steam; the original game is not included.
 
 This directory contains the Framework-owned Overture product derived from the accepted Rework baseline. For the current trilogy/framework state, see the root [README](../../README.md), [ROADMAP](../../docs/ROADMAP.md), [trilogy parity plan](../../docs/TRILOGY_PARITY_PLAN.md), and [supported builds](../../docs/SUPPORTED_BUILDS.md).
 
