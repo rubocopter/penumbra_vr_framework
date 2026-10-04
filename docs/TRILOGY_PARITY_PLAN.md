@@ -133,14 +133,21 @@ The maintainer subsequently completed the BP tutorial on local `30a1e78`
 without performance problems. The matching log has no 250–1000 ms gameplay
 presentation gaps or guarded Grab releases. This closes the reported pacing/
 freeze-drop symptom for that tested route, not general collision comfort.
-The same test launched the bottle shelf while acquiring items and reported
-excessive player displacement on contact. BP's hand-nudge vector multiplied
+The maintainer clarified with a headset clip that the bottle shelf launches
+when using the combined tutorial chemical. The installed game's
+`maps/level00_tutorial.hps` registers `chemC` on `shelf01` to `UseItem`, which
+explicitly calls `AddBodyForce("shelf01","world",-20000,10000,0)`, flashes,
+and hides the shelf after 2.5 seconds before starting the sneak tutorial.
+The clip shows that sequence; this shelf launch is native scripted gameplay,
+not evidence of a VR hand-contact regression. Preserve the native callback.
+
+Separately, BP's hand-nudge vector multiplied
 bounded delta velocity by mass before a verified unchanged forward to
 `NewtonAddBodyImpulse`. The installed Newton DLL matches the tested product
 DLL exactly; real-DLL tests reproduce the excess speed and now pass at 1, 3,
 20 and 100 kg with the mass multiplier removed. That correction is host-tested.
 The log also records an approximately 8 mm requested horizontal step resolving
-to 21 cm through native collision; its cause and updated shelf/contact feel
+to 21 cm through native collision; its cause and updated hand-contact feel
 remain open headset gates. No solver clamp or body-size retuning was applied.
 
 The finger mismatch is unresolved and the reporter considers it non-blocking.

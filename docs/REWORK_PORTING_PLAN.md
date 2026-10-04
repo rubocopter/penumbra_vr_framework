@@ -142,8 +142,12 @@ and sliders, retaining the native joint lifecycle and existing contact-speed
 policy. Loose-prop tuning remains the reference behavior. The real-DLL test
 covers masses 1, 3, 25 and 100 kg; door feel still requires headset acceptance.
 
-The later BP tutorial shelf report exposes the same incompatible boundary for
-loose props. BP's verified `0x19C3D0` wrapper forwards its vector unchanged to
+Investigation prompted by the BP tutorial shelf report independently exposed
+the same incompatible boundary for loose-prop hand nudges. The clarified clip
+and tutorial script establish that the shelf launch on chemical use is an
+intentional native `AddBodyForce` callback, not a reproduction of the nudge
+defect; see `TRILOGY_PARITY_PLAN.md` for that scoped evidence.
+BP's verified `0x19C3D0` wrapper forwards its vector unchanged to
 its own Newton import at IAT `0x2724E4`; the installed Newton DLL SHA-256 is
 `69E6F1BA9D02E7FEBEFCB6DF9BFC6A5A8D8ED78FA659E86B06CA301BFAC894EE`,
 identical to the real-DLL test dependency. A 0.10 m/s bounded request became
