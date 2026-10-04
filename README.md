@@ -1,114 +1,153 @@
-# Penumbra VR Framework
-
-![Penumbra VR Framework — Overture, Black Plague and Requiem](assets/banner/penumbra-vr-framework.png)
+<p align="center">
+  <img src="assets/banner/penumbra-vr-framework.png" alt="Penumbra VR Framework — Overture, Black Plague and Requiem">
+</p>
 
 <p align="center">
-  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.5"><img alt="Get the latest release: v1.0.5" src="https://img.shields.io/badge/latest%20release-v1.0.5-brightgreen?style=flat-square"></a>
+  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/rubocopter/penumbra_vr_framework?style=flat-square&label=release"></a>
+  <img alt="Platform: Windows" src="https://img.shields.io/badge/platform-Windows-0078D6?style=flat-square">
+  <img alt="VR runtime: SteamVR" src="https://img.shields.io/badge/VR-SteamVR-1a9fff?style=flat-square">
   <a href="COPYING"><img alt="License: GPL v3+" src="https://img.shields.io/badge/license-GPL%20v3%2B-blue?style=flat-square"></a>
+</p>
+
+<p align="center">
   <a href="https://ko-fi.com/onitaku"><img alt="Support development on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
 </p>
 
-**Step into the complete Penumbra trilogy in PC VR.** Revisit three atmospheric adventures from inside the world: look around naturally, explore with your motion controllers and reach out to handle the objects around you.
+<p align="center">
+  <b>Bring the complete Penumbra trilogy into PC VR.</b><br>
+  Stereoscopic rendering, head tracking, tracked hands, motion-controller interaction,<br>
+  room-scale movement and VR-ready menus — delivered through one installer.
+</p>
 
-[**Get the VR installer**](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.5/PenumbraVR-Setup-1.0.5.exe) · [What you need](#before-you-start) · [Help](#need-help)
+<p align="center">
+  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/latest"><b>Download the VR installer →</b></a>
+  &nbsp;·&nbsp;
+  <a href="#install">Install</a>
+  &nbsp;·&nbsp;
+  <a href="docs/CONTROLS.md">Controls</a>
+  &nbsp;·&nbsp;
+  <a href="docs/TROUBLESHOOTING.md">Troubleshooting</a>
+</p>
 
-You’ll need the original PC games and SteamVR. Install only the games you own; **Requiem requires Penumbra: Black Plague**.
+> [!IMPORTANT]
+> You need the original PC games and SteamVR. Install only the games you own. **Penumbra: Requiem is an expansion and requires Penumbra: Black Plague.**
 
-## Watch the trilogy in VR
+## One framework, three games
 
-Take a look at each game in motion. These short clips show the Framework in real gameplay; choose a player to watch right here on GitHub.
+<table>
+<tr>
+<td width="33%" align="center">
+  <img src="assets/steam/overture-vr-600x900.png" width="210" alt="Penumbra: Overture VR"><br>
+  <b>Penumbra: Overture</b><br>
+  Descend into the mine with full head tracking and tracked-hand interaction.
+</td>
+<td width="33%" align="center">
+  <img src="assets/steam/black-plague-vr-600x900.png" width="210" alt="Penumbra: Black Plague VR"><br>
+  <b>Penumbra: Black Plague</b><br>
+  Explore the shelter, handle objects directly and work through its puzzles in VR.
+</td>
+<td width="33%" align="center">
+  <img src="assets/steam/requiem-vr-600x900.png" width="210" alt="Penumbra: Requiem VR"><br>
+  <b>Penumbra: Requiem</b><br>
+  Return for the puzzle-focused expansion, running through the Black Plague installation.
+</td>
+</tr>
+</table>
 
-### Penumbra: Overture
+## What changes in VR
 
-Descend into the mine and explore its dark spaces from inside the game. Turn to look around, move through the environment and reach for the objects and puzzles in front of you.
+- **Look around naturally.** Head tracking and stereoscopic 3D place the original environments around you instead of on a flat screen.
+- **Use tracked hands.** Reach for doors, drawers, switches, physics objects and other game interactions with motion controllers.
+- **Move the way you prefer.** Controller locomotion, room-scale movement, turning and comfort options are available through the VR configuration.
+- **Keep the game usable in-headset.** Inventory, notebook, menus and game-specific interfaces are adapted for VR.
+- **Manage everything from one installer.** Detect supported games, install only the modules you own, apply optional extras, update, repair, collect diagnostics or remove the VR components.
 
-https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265
+The exact interaction set varies between the three games. See the [controls guide](docs/CONTROLS.md) and [trilogy capability notes](docs/TRILOGY_PARITY_PLAN.md) for the detailed breakdown.
 
-**Want the full opening?** [Watch the first 18 minutes, uncut, on YouTube →](https://www.youtube.com/watch?v=dc90jlH-tp0)
+## See it in motion
 
-### Penumbra: Black Plague
+<p align="center"><b>Penumbra: Overture</b></p>
 
-Search the shelter for a way forward. Inspect your surroundings up close and use tracked hands to pick up, move and use objects as you work through its puzzles.
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265" width="720" controls muted loop></video>
+</p>
 
-https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=dc90jlH-tp0">Watch the first 18 minutes of Overture in VR →</a>
+</p>
 
-### Penumbra: Requiem
+<p align="center"><b>Penumbra: Black Plague</b></p>
 
-Return to the Penumbra world for the puzzle-focused expansion. Requiem brings its rooms and challenges into VR as an add-on to Black Plague.
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd" width="720" controls muted loop></video>
+</p>
 
-https://github.com/user-attachments/assets/325b79e0-aca3-4111-93d2-8a73f9530a07
+<p align="center"><b>Penumbra: Requiem</b></p>
 
-## Make the world your own in VR
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/3e87feb8-b50b-484d-b283-57c84128a2b3" width="720" controls muted loop></video>
+</p>
 
-- **Look around naturally.** Head tracking and stereoscopic 3D put the game world around you.
-- **Move through each space.** Use room-scale movement and controller locomotion, with turning and comfort options to suit your setup.
-- **Reach into the puzzles.** Tracked hands bring physical object handling and game-specific interactions into play.
-- **Keep the essentials close.** Inventory, notebook and menus are presented for VR.
+## Install
 
-The details vary between games and controller profiles. The guides below explain current compatibility and controls.
+1. Install **Penumbra: Overture**, **Penumbra: Black Plague** and/or **Penumbra: Requiem**, plus SteamVR.
+2. Download and run the [latest Penumbra VR installer](https://github.com/rubocopter/penumbra_vr_framework/releases/latest). It detects supported installations and lets you choose the games and optional components you want.
+3. Start SteamVR, put on the headset and launch the game normally.
 
-## Get started
+The installer can also update, verify, repair or remove the Framework. Optional components include Spanish translations, Overture texture improvements and recommended graphics settings.
 
-1. Install the original game or games and SteamVR.
-2. Download and run the [latest installer](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.5). Choose the games and optional extras you want.
-3. Start SteamVR, put on your headset, then launch the game from Steam as usual.
+## Requirements and compatibility
 
-The installer detects supported games and can install, update, repair or remove VR components. You don’t need to own the whole trilogy. Optional extras include Spanish translations, Overture texture improvements and recommended graphics settings.
+**Required:** Windows PC · SteamVR · PCVR headset · two tracked controllers · original supported Penumbra game files.
 
-## Before you start
+The Framework has been tested end-to-end primarily with **PS VR2 and Sense controllers**. Bundled profiles are also provided for Valve Index, Meta/Oculus Touch, Pico, Vive and Windows Mixed Reality controllers, but not every device/action combination has been validated on physical hardware.
 
-- A Windows PC, a PCVR headset, two tracked controllers and SteamVR.
-- Original game files matching a [recognized game build](docs/SUPPORTED_BUILDS.md). Other editions or modified executables may not work.
-- Requiem installed as an expansion alongside Black Plague.
+Unknown or modified game builds may be rejected by the installer. Check [supported builds](docs/SUPPORTED_BUILDS.md), [controller mappings](docs/CONTROLS.md) and the [VR configuration guide](docs/VR_CONFIGURATION.md) before troubleshooting a setup.
 
-The project’s end-to-end headset testing has primarily used PS VR2 and Sense controllers. Other controller profiles are included, but their bindings and gameplay still need device-specific testing. Check the [controller guide](docs/CONTROLS.md) for details.
+## Current release status
 
-## Current notes
+The current public release is **[v1.0.5](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.5)**.
 
-The latest release, **v1.0.5**, brings together the improvements made since v1.0.0. Overture gameplay and the Black Plague tutorial have been exercised by the maintainer; Requiem has had representative gameplay testing, but its full progression and startup reliability need more testing. Requiem may occasionally fail during startup, and contact with some Black Plague objects can push the player back more than intended. See [known issues and validation status](docs/CLOSURE_STATUS.md) before installing.
+Overture and the Black Plague tutorial have received maintainer gameplay passes on the fixes leading into this release. Requiem has representative gameplay testing, but full progression and startup reliability still need broader validation.
 
-## Need help?
+Known issues currently include intermittent Requiem startup failure, excessive push-back from some Black Plague object collisions and a reported finger-pose mismatch. See [release status and validation](docs/CLOSURE_STATUS.md) for the current ledger.
 
-For installation steps, controller mappings, graphics settings and fixes, see [Troubleshooting](docs/TROUBLESHOOTING.md), [Controls](docs/CONTROLS.md) and [VR configuration](docs/VR_CONFIGURATION.md). To report a problem, [open or check a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, headset/controllers and what happened.
+## Help and documentation
 
-[Release notes](docs/releases/1.0.5.md) · [All releases](https://github.com/rubocopter/penumbra_vr_framework/releases) · [Support development on Ko-fi](https://ko-fi.com/onitaku)
+| Playing and setup | Project and technical |
+| --- | --- |
+| [Controls](docs/CONTROLS.md) | [Architecture](docs/ARCHITECTURE.md) |
+| [VR configuration](docs/VR_CONFIGURATION.md) | [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | [Supported builds](docs/SUPPORTED_BUILDS.md) |
+| [Release notes](docs/releases/1.0.5.md) | [Roadmap](docs/ROADMAP.md) |
+| [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
+
+If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a new bug, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs.
 
 <details>
-<summary>Controller compatibility and default controls</summary>
+<summary><b>Controller notes</b></summary>
 
-Bindings are included for PS VR2 Sense, Valve Index, Meta/Oculus Touch, Pico and Windows Mixed Reality controllers. A profile being included does not mean that every controller or action has been validated on physical hardware. Vive wand and WMR layouts have known missing actions; see the [controller capability ledger](docs/TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
+Bindings are included for PS VR2 Sense, Valve Index, Meta/Oculus Touch, Pico, Vive and Windows Mixed Reality controllers. A bundled profile does not mean every action has been validated on physical hardware.
 
-With the default right-handed Sense layout, the left stick moves and the right stick turns. R2 interacts or uses an item, R1 opens inventory, Square opens the notebook, Cross jumps and R3 toggles crouch in Button/Hybrid mode. Mappings can be changed in SteamVR.
+With the default right-handed Sense layout, the left stick moves and the right stick turns. R2 interacts or uses an item, R1 opens inventory, Square opens the notebook, Cross jumps and R3 toggles crouch in Button/Hybrid mode. Bindings can be changed in SteamVR.
+
+See [Controls](docs/CONTROLS.md) and the [controller capability ledger](docs/TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
 
 </details>
 
 <details>
-<summary>Installer options, repair and removal</summary>
+<summary><b>Installer, repair and removal</b></summary>
 
-The installer lets you choose individual games and optional components, locate games that were not detected, apply recommended settings, verify or repair an installation, create a diagnostics ZIP and uninstall VR components. Overture is managed separately; Black Plague and Requiem share an installation folder, and Requiem depends on Black Plague. The same installer can be reopened to change or repair your selection.
+The installer lets you choose individual games and optional components, locate games that were not detected automatically, apply recommended settings, verify or repair an installation, create a diagnostics ZIP and uninstall VR components.
 
-See the [installer guide](docs/INSTALLER_DESIGN.md) and [recovery instructions](docs/TROUBLESHOOTING.md#repair-recovery-and-removal) for details.
+Overture is managed separately. Black Plague and Requiem share an installation folder, and Requiem depends on Black Plague. Reopen the same installer whenever you want to change or repair the selection.
 
-</details>
-
-<details>
-<summary>Compatibility, settings and troubleshooting</summary>
-
-Use recognized, clean game files and start SteamVR before launching a game. A GPU with working OpenGL drivers is required. The project has no published minimum CPU or GPU specification; performance depends on the PC, headset and selected render scale.
-
-For a starting point, use VR render scale 1.0 where available and lower it if performance is insufficient. Disable desktop VSync/FPS limiting, legacy FSAA, motion blur, depth of field and noise filtering; keep physics at 60 updates per second. Keep PostEffects and Refractions enabled for Black Plague/Requiem. Settings vary between games; the [full configuration guide](docs/VR_CONFIGURATION.md) has the current recommendations.
-
-Requiem can occasionally fail during startup. Black Plague may push the player back on contact with some objects. Other translations, texture packs, executable replacements and graphics injectors are not established as compatible. Unknown game builds are rejected by the installer.
-
-If installation or launch fails, use the installer’s verify/repair tools and follow [Troubleshooting](docs/TROUBLESHOOTING.md). Include the game version, Framework release, headset/controllers, steps to reproduce and relevant logs in a [bug report](https://github.com/rubocopter/penumbra_vr_framework/issues).
+See the [installer design and behaviour notes](docs/INSTALLER_DESIGN.md) and [recovery instructions](docs/TROUBLESHOOTING.md#repair-recovery-and-removal).
 
 </details>
 
-<details>
-<summary>More project information</summary>
+---
 
-For contributors and technical readers: [Architecture](docs/ARCHITECTURE.md) · [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) · [Recognized builds](docs/SUPPORTED_BUILDS.md) · [Release status](docs/CLOSURE_STATUS.md) · [Roadmap](docs/ROADMAP.md) · [Build instructions](docs/SOURCE-AND-NOTICES.md#building-the-versioned-release).
+Penumbra VR Framework is an unofficial fan project and is not affiliated with or endorsed by Frictional Games, Valve or Sony Interactive Entertainment. The original games are required and are not included.
 
-Penumbra VR Framework is an unofficial fan project and is not affiliated with or endorsed by Frictional Games, Valve or Sony Interactive Entertainment. It is licensed under **GNU GPL v3 or later**; see [COPYING](COPYING). Dependencies and optional assets retain their own terms; see [third-party notices](docs/THIRD_PARTY.md). The original games are required and are not included.
-
-</details>
+Licensed under **GNU GPL v3 or later**. See [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY.md).
