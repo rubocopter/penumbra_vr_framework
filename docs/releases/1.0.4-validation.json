@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.4",
+  "validatedOn": "2026-10-04",
+  "releaseTag": "v1.0.4",
+  "buildSourceCommit": "0a18a7557dbcc68f8ef8124d69e2903233564cab",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.4",
+  "publishedWithoutRebuildAfterHostValidation": true,
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "Focused Valve Index retest for Overture startup and Black Plague tutorial Push",
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "sha256": "605C7EBE8AD53E47A2325375EFE5A7ECF03D257EA827754FE6889887CFD05F16",
+      "bytes": 5319
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.4.exe",
+      "sha256": "A2901D3D1804254790F107FCC69A64947450CBD9F024509AF6C6B31DE78DD416",
+      "bytes": 193092758
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.4.zip",
+      "sha256": "D6EECB1591B23BFE1E5503A1EFF52DBEA78C07D3B1D1B799F2B6F4890169A557",
+      "bytes": 81927699
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "sha256": "70905199B563EB3BC75B7E4EF0D559811A8B84994CCFF9803984D5AE67CB74F6",
+      "bytes": 274
+    }
+  ],
+  "overtureExecutableSha256": "07048F55AF9AB97C06514D4457B21F2AB13336C2FD283AF4986AB339E9B9950E",
+  "validation": {
+    "frameworkHostTests": {
+      "passed": 55,
+      "failed": 0
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0
+    },
+    "releasePackaging": "Exact identity, setup/source/notices, outer checksums and absence of developer/private payload passed",
+    "blackPlaguePush": "Tracked-hand native Push adapter regression passes on host using the proven Overture/Rework horizontal-force behavior",
+    "overtureStartupMitigation": "The v1.0.3 in-game SteamVR binding shortcut was removed while the independent inactive-stick fallback remains guarded by project checks",
+    "gamesLaunchedByAutomation": false,
+    "currentControllerHardware": "pending focused external retest",
+    "overtureMenuGameplayEntry": "pending",
+    "blackPlagueTutorialCrate": "pending one crate-to-red-cross confirmation",
+    "fingerMismatch": "unresolved, nonblocking and deferred",
+    "newInstallerHeadsetAcceptance": "pending",
+    "independentCleanMachine": "pending"
+  }
+}

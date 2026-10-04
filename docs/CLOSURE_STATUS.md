@@ -28,6 +28,8 @@ describe the scope and focused retest. Both new changes are host-tested; no
 automated game launch or v1.0.4 headset acceptance is claimed. The same external
 tester reports Black Plague and Requiem otherwise working as intended, while the
 finger mismatch is non-blocking and deferred.
+The [validation record](releases/1.0.4-validation.json) identifies the exact
+installer/source artifacts, packaged Overture executable and host validation.
 
 ## Previous release — 1.0.3
 
