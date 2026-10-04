@@ -14,17 +14,27 @@
 
 You’ll need the original PC games and SteamVR. Install only the games you own; **Requiem requires Penumbra: Black Plague**.
 
-## Watch Overture in VR
+## Watch the trilogy in VR
 
-[![Watch the first 18 minutes of Penumbra: Overture in VR, uncut](https://img.youtube.com/vi/dc90jlH-tp0/hqdefault.jpg)](https://www.youtube.com/watch?v=dc90jlH-tp0)
+### Penumbra: Overture
 
-* [Watch on YouTube](https://www.youtube.com/watch?v=dc90jlH-tp0) · The first 18 minutes, without cuts. Black Plague and Requiem gameplay videos will be added later.*
+Explore the mine with head-tracked viewing, room-scale movement and hands-on interactions.
 
-## The trilogy, in VR
+https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265
 
-- **Penumbra: Overture** — explore the mine with head-tracked viewing, room-scale movement and hands-on interactions.
-- **Penumbra: Black Plague** — investigate and solve puzzles with VR movement, tracked hands and physical object interaction.
-- **Penumbra: Requiem** — play the expansion in VR on top of your Black Plague installation.
+[Watch the first 18 minutes, uncut, on YouTube](https://www.youtube.com/watch?v=dc90jlH-tp0)
+
+### Penumbra: Black Plague
+
+Investigate and solve puzzles with VR movement, tracked hands and physical object interaction.
+
+https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd
+
+### Penumbra: Requiem
+
+Play the expansion in VR on top of your Black Plague installation.
+
+https://github.com/user-attachments/assets/325b79e0-aca3-4111-93d2-8a73f9530a07
 
 The framework adds stereoscopic VR, controller-based movement and turning, object and puzzle interaction, and VR-friendly menus, inventory and notebook views. What’s available and tested varies by game and controller.
 
