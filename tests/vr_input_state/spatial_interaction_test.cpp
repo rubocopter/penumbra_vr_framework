@@ -8,11 +8,13 @@ namespace {
 runtime::VrControllerFrame test_frame;
 int test_joints=0, test_leaves=0, test_native_updates=0;
 int test_move_leaves=0, test_native_move_updates=0;
+int test_push_leaves=0, test_native_push_updates=0;
 void* test_joint=nullptr;
 void* test_joint_secondary=nullptr;
 int test_active_calls=0, test_auto_freeze_calls=0;
 bool test_active_value=false, test_auto_freeze_value=true;
 Vec test_move_force{},test_move_force_position{};
+Vec test_push_force{};
 bool test_ui=false;
 std::array<void*,2> test_palm_held{};
 bool test_resolved_palm_valid=false;
@@ -75,6 +77,13 @@ void __fastcall NativeMoveStop(void* state,void*) {
     HookedMoveLeave(state,nullptr,nullptr);
     Put(Read<void*>(state,0x10),0x2BC,0);
 }
+void __fastcall NativePushEnter(void*,void*,void*) {}
+void __fastcall NativePushLeave(void*,void*,void*) { ++test_push_leaves; }
+void __fastcall NativePushUpdate(void*,void*,float) { ++test_native_push_updates; }
+void __fastcall NativePushStop(void* state,void*) {
+    HookedPushLeave(state,nullptr,nullptr);
+    Put(Read<void*>(state,0x10),0x2BC,0);
+}
 void __fastcall MaxLinear(void* body,void*,float value) { Put(body,0x42C,value); }
 void __fastcall MaxAngular(void* body,void*,float value) { Put(body,0x430,value); }
 void __fastcall Linear(void* body,void*,const Vec* value) { Put(body,0x450,*value); }
@@ -93,6 +102,7 @@ void __fastcall BodyForceAtPosition(void*,void*,const Vec* force,const Vec* posi
     test_move_force=*force;
     test_move_force_position=*position;
 }
+void __fastcall BodyForce(void*,void*,const Vec* force) { test_push_force=*force; }
 struct TestPickCallback {
     struct VTable {
         bool (__thiscall *before)(void*,void*);
@@ -248,6 +258,8 @@ int RunSpatialTest() {
     Jump(0xABA90,reinterpret_cast<void*>(&NativeUpdate)); Jump(0xA9FD0,reinterpret_cast<void*>(&NativeStop));
     Jump(0xAAC80,reinterpret_cast<void*>(&NativeMoveEnter)); Jump(0xAAED0,reinterpret_cast<void*>(&NativeMoveLeave));
     Jump(0xAA690,reinterpret_cast<void*>(&NativeMoveUpdate)); Jump(0xAA030,reinterpret_cast<void*>(&NativeMoveStop));
+    Jump(0xAB370,reinterpret_cast<void*>(&NativePushEnter)); Jump(0xAB6A0,reinterpret_cast<void*>(&NativePushLeave));
+    Jump(0xAB010,reinterpret_cast<void*>(&NativePushUpdate)); Jump(0xAB1F0,reinterpret_cast<void*>(&NativePushStop));
     Jump(0xCCF00,reinterpret_cast<void*>(&JointCount)); Jump(0xCA120,reinterpret_cast<void*>(&BodyMatrix));
     Jump(kGetBodyJoint,reinterpret_cast<void*>(&BodyJoint));
     Jump(kHingeGetType,reinterpret_cast<void*>(&HingeType));
@@ -257,6 +269,7 @@ int RunSpatialTest() {
     Jump(0x19C590,reinterpret_cast<void*>(&Gravity));
     Jump(0x19C3F0,reinterpret_cast<void*>(&Active));
     Jump(0x19C450,reinterpret_cast<void*>(&AutoFreeze));
+    Jump(0x19C9A0,reinterpret_cast<void*>(&BodyForce));
     Jump(0x19C9E0,reinterpret_cast<void*>(&BodyForceAtPosition));
     {
         std::array<std::uint8_t,0x500> nudge_body{};
@@ -794,6 +807,49 @@ int RunSpatialTest() {
         Read<float>(body.data(),0x42C)!=3 || Read<float>(body.data(),0x430)!=4 ||
         test_palm_held[1]!=nullptr || test_auto_freeze_calls!=2 ||
         !test_auto_freeze_value) return 34;
+
+    // Push is a distinct native state used by the tutorial's large crate.
+    // VR-origin Push keeps the native state lifecycle but replaces its
+    // camera/mouse force with the tracked palm, matching Rework's 300 N
+    // horizontal hand delta and rebasing contact on snap yaw.
+    std::array<std::uint8_t,0x200> push_state{};
+    states[1]=push_state.data();
+    Put(push_state.data(),0x10,player.data()); Put(push_state.data(),0x50,body.data());
+    Put(body.data(),0x34,runtime::IdentityMatrix());
+    hand.device_to_absolute={{1,0,0,0,0,1,0,0,0,0,1,0}};
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    test_push_force={}; test_native_push_updates=0; test_push_leaves=0;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedPushEnter(push_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,1);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_push_held.load() || test_palm_held[1]!=body.data()) return 167;
+    hand.device_to_absolute.values[3]=0.10F;
+    HookedPushUpdate(push_state.data(),nullptr,0.016F);
+    if (std::abs(test_push_force[0]-300.0F)>0.001F || test_push_force[1]!=0 ||
+        test_push_force[2]!=0 || test_native_push_updates!=0) return 168;
+    test_push_force={};
+    test_resolved_palm=runtime::IdentityMatrix();
+    test_resolved_palm.values[3]=0.52F;
+    test_resolved_palm_valid=true;
+    ++test_palm_yaw_epoch;
+    HookedPushUpdate(push_state.data(),nullptr,0.016F);
+    if (!g_push_held.load() || test_push_force!=Vec{}) return 169;
+    test_resolved_palm_valid=false;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_push_held.load() || test_push_leaves!=1 || test_palm_held[1]!=nullptr)
+        return 170;
+
+    // Native-origin Push remains native.
+    Put(player.data(),0x2BC,1);
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=false;
+    test_native_push_updates=0;
+    HookedPushUpdate(push_state.data(),nullptr,0.016F);
+    if (test_native_push_updates!=1) return 171;
+    Put(player.data(),0x2BC,0);
 
     // Move acquisition uses the same Rework palm/finger interaction box as
     // Grab. A valid contact near a box corner must not be rejected by the old

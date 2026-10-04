@@ -408,9 +408,6 @@
     <Entry Name="VRSeated">Seated</Entry>
     <Entry Name="TipVRCalibrateHeight">Stand up straight and press Calibrate to set your standing height.</Entry>
     <Entry Name="VRControls">CONTROLS</Entry>
-    <Entry Name="VRControllerBindings">Controller bindings (SteamVR)</Entry>
-    <Entry Name="TipVRControllerBindings">View or change the active bindings for your controller in SteamVR. Includes saved custom layouts.</Entry>
-    <Entry Name="VRControllerBindingsUnavailable">Open SteamVR's controller bindings from its dashboard.</Entry>
     <Entry Name="VRMovement">MOVEMENT</Entry>
     <Entry Name="VRCalibration">CALIBRATION</Entry>
     <Entry Name="VRDisplay">DISPLAY</Entry>

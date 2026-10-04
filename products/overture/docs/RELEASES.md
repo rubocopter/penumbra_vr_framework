@@ -1,5 +1,13 @@
 # Release history
 
+## v1.0.4 — Pre-menu crash mitigation (2026-10-04)
+
+Removed the v1.0.3 **Controller bindings (SteamVR)** entry from Overture's
+legacy Controls menu after an external Valve Index tester reported a crash just
+before the main menu. The independent inactive-stick fallback and controller
+profile corrections remain in place. Use SteamVR's dashboard binding editor for
+Overture. This mitigation is host-tested and awaits the focused headset retest.
+
 ## v1.0.3 — Controller defaults and missing-stick recovery (2026-10-03)
 
 Overture recovers an inactive stick action independently without overriding an

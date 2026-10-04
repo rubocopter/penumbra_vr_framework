@@ -37,7 +37,7 @@ boundary and also awaits headset confirmation. See
 | Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Tool/hand motion and final native-size flashlight beam/model alignment headset-validated | BP finger/material pass; slight finger/contact imperfections remain |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
 | Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Surface-contact Grab port has headset evidence from acquiring a chair at different points; stale/native picks retain origin fallback | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP held turn/throw/mechanism regression; Requiem throwable prop and distinct Move path when encountered |
-| Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Requiem mechanism comfort investigation; BP mechanism regression |
+| Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership; native `Push=1` tracked-palm adapter host-tested for the tutorial heavy crate | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Focused BP tutorial-crate headset retest; Requiem mechanism comfort investigation |
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
 | VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
@@ -75,14 +75,12 @@ fallback. SteamVR permits custom remapping.
 
 The inherited Index component-path correction is host-tested in the generator
 and both payload roots, including movement, turn, sprint/crouch clicks and UI
-drag for both handedness layouts. An external Index retest after the v1.0.2
-update reports working Overture turning but no left-stick movement despite an
-apparently correct binding; Requiem worked for the reporter; Black Plague
-movement and turning work, but the viewpoint stays low, rises while turning
-and drops again when the stick is released. These are scoped user reports,
-without an exact installed-build hash, matching logs or posture settings;
-they do not establish full controller or game acceptance. Overture movement
-and Black Plague posture/turn continuity remain open regressions.
+drag for both handedness layouts. The external Index tester later reports Black
+Plague and Requiem working as intended after the v1.0.3 fixes. Overture now
+crashes immediately before the main menu, and the Black Plague tutorial heavy
+crate's native Push interaction is unreliable in VR. These are scoped reports
+without exact installed-build hashes and do not establish full controller or
+game acceptance.
 
 The offline follow-up host-tests independent Overture analog fallback when
 only move or turn is inactive, preserving an active neutral custom binding and
@@ -91,16 +89,19 @@ the calibrated height when a yaw epoch changes before the next body tick; it now
 keeps the fresh same-origin feet/world anchor and height, while suppressing old
 horizontal prediction. Origin discontinuities, invalid/stale body samples and
 excessive physical deltas still reject placement. This is a host-tested camera
-continuity correction, not proof of the reporter's native crouch state or a
-headset fix for their low baseline viewpoint.
+continuity correction. The subsequent external retest reports Black Plague
+working as intended, closing that reported turning-height symptom for the tested
+path without promoting broader hardware support.
 
 Index defaults now separate offhand interaction from quick light, use explicit
 force clicks for grip/trackpad and put pause on the spare right trackpad. The
 pointing sources use SteamVR's declared tip poses. Touch/Pico no longer bind
 recenter to a duplicate/nonexistent face-button click; WMR's mirrored pause no
 longer also recenters. The generated [binding reference](CONTROLLER_BINDINGS.md)
-and Overture/BP shortcuts to SteamVR's active binding editor are host-tested;
-new mapping/pointer/dashboard headset acceptance remains pending. Vive/WMR
+and Black Plague's shortcut to SteamVR's active binding editor are host-tested.
+Overture's v1.0.3 shortcut is removed in v1.0.4 after the pre-menu crash report;
+it uses the SteamVR dashboard editor again. New mapping/pointer/dashboard
+headset acceptance remains pending. Vive/WMR
 compatibility exceptions are retained and documented. These source changes
 follow the published v1.0.2 and do not retroactively change that artifact.
 

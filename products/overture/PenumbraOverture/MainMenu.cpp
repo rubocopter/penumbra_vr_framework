@@ -1500,23 +1500,6 @@ public:
 
 //-----------------------------------------------------------------------
 
-class cMainMenuWidget_VRControllerBindings : public cMainMenuWidget_Button
-{
-public:
-  cMainMenuWidget_VRControllerBindings(cInit *init, const cVector3f &pos)
-    : cMainMenuWidget_Button(init, pos, kTranslate("MainMenu", "VRControllerBindings"),
-        eMainMenuState_LastEnum, 20, eFontAlign_Center)
-  {
-    msTip = kTranslate("MainMenu", "TipVRControllerBindings");
-  }
-
-  void OnMouseDown(eMButton button)
-  {
-    if (button == eMButton_Left && !mpInit->mpGame->vr_input.OpenControllerBindings())
-      msTip = kTranslate("MainMenu", "VRControllerBindingsUnavailable");
-  }
-};
-
 class cMainMenuWidget_UseTrackpadMovement : public cMainMenuWidget_Button
 {
 public:
@@ -3879,9 +3862,6 @@ AddWidgetToState(eMainMenuState_OptionsVRSettings, gpRenderToMonitorText);
 		
 		vPos.y+= 5;
 	}
-    AddWidgetToState(eMainMenuState_OptionsControls,
-      hplNew(cMainMenuWidget_VRControllerBindings, (mpInit, vPos)));
-    vPos.y += 35;
 	cMainMenuWidget *pWidgetChangeKeyConf = hplNew( cMainMenuWidget_Button,(mpInit,vPos,kTranslate("MainMenu","Change Key Mapping"),eMainMenuState_OptionsKeySetupMove,20,eFontAlign_Center) );
 	AddWidgetToState(eMainMenuState_OptionsControls,pWidgetChangeKeyConf); 
 	vPos.y += 35;

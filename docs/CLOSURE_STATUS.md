@@ -18,18 +18,24 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.3
+## Current release — 1.0.4
 
-Framework v1.0.3 bundles the offline corrections following the external Index
-retest: Black Plague turning-height continuity, independent inactive Overture
-stick recovery, controller-default conflicts and access to active SteamVR
-bindings. [Patch notes](releases/1.0.3.md) describe the scope and update procedure.
-The [validation record](releases/1.0.3-validation.json) identifies the exact
-installer/source and 55 Framework tests, 298 Overture checks, standalone Setup,
-A-F synthetic topology and v1.0.2-to-v1.0.3 upgrade/repair/restore across both
-payload roots. Current hardware acceptance and the reporter's low resting
-height remain open; nonblocking finger feedback is deferred. No automated game
-launch or new headset acceptance is claimed.
+Framework v1.0.4 keeps the v1.0.3 controller/default and inactive-stick fixes,
+removes Overture's in-game SteamVR binding shortcut after an external pre-menu
+crash report, and adds a tracked-hand adapter for Black Plague native `Push=1`
+objects such as the tutorial heavy crate. [Patch notes](releases/1.0.4.md)
+describe the scope and focused retest. Both new changes are host-tested; no
+automated game launch or v1.0.4 headset acceptance is claimed. The same external
+tester reports Black Plague and Requiem otherwise working as intended, while the
+finger mismatch is non-blocking and deferred.
+
+## Previous release — 1.0.3
+
+Framework v1.0.3 bundled Black Plague turning-height continuity, independent
+inactive Overture stick recovery and controller-default corrections. Its
+[validation record](releases/1.0.3-validation.json) identifies the exact
+installer/source and host validation. The Overture in-game binding shortcut
+introduced there is removed by v1.0.4.
 
 ## Previous release — 1.0.2
 

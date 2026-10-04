@@ -14,6 +14,7 @@ release.
 | Framework-owned Overture v1.0.1 | x86, LAA | `5DCCCD1EBCEACFBA10D12C964F7B529A711331915930B2D85ADD3FA29E429097` | Public Framework v1.0.1; exact installed hash verified and maintainer drawer/crank gameplay accepted in headset |
 | Framework-owned Overture v1.0.2 | x86, LAA | `06A8BC40C8697EDB7DFC5AD85C5AA2C3F1529BFAD0EAA109E0DE3C8E292C4EF9` | Public Framework v1.0.2; build/package/install/upgrade host-tested, Index hardware and new-build headset acceptance pending |
 | Framework-owned Overture v1.0.3 | x86, LAA | `38F2B1FD10FAFDF4FD291D47522BE0F158DD1202CE7317FDCCB4754DA5F91639` | Public Framework v1.0.3; independent missing-stick recovery and controller defaults host-tested, current-build hardware/headset acceptance pending |
+| Framework-owned Overture v1.0.4 | x86, LAA | `787806B5426AE6278F9E2306A38C26FF2E816D98472C438865FFA88355403EC5` | Framework v1.0.4 release build; suspect in-game binding shortcut removed, controller fallback retained, host-tested; focused headset retest pending |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
 | Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative interaction, first transition, portal refraction and final flashlight alignment headset-validated; broader regression open |
@@ -67,9 +68,11 @@ Current product-level evidence:
   interaction milestone is concluded; this does not imply full-game support.
 
 Framework v1.0.0 is the first public trilogy release for the allowlisted builds;
-v1.0.3 is the current public patch. Its controller defaults, inactive Overture
-stick recovery and Black Plague turning-height continuity are host-tested;
-current-build hardware and headset acceptance remain pending. Publication does
+v1.0.4 is the current public patch. It retains the v1.0.3 controller defaults,
+inactive Overture stick recovery and Black Plague turning-height continuity,
+removes Overture's suspect in-game binding shortcut, and adds a host-tested
+Black Plague native Push adapter. Focused v1.0.4 headset confirmation remains
+pending. Publication does
 not promote every capability, controller family or
 game path to `supported`; the evidence levels above remain authoritative.
 

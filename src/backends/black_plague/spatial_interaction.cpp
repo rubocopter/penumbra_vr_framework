@@ -121,7 +121,7 @@ constexpr std::array<float,9> kToolModelToHandRotation{
 constexpr runtime::VrAttachmentSocketProfile kFlashlightSocket{
     kToolModelToHandRotation,{0,-0.016669F,0}};
 std::uint8_t* g_image = nullptr;
-std::array<hooks::IatHook,9> g_hooks;
+std::array<hooks::IatHook,12> g_hooks;
 hooks::Rel32CallHook g_tool_hook;
 thread_local void* g_updating_hands = nullptr;
 std::atomic<std::uint64_t> g_tools_attached{0},g_tools_native{0},g_invalid_tool_pose{0},g_blocked_grabs{0};
@@ -171,6 +171,7 @@ struct CallbackScope {
 };
 std::atomic<bool> g_held{false};
 std::atomic<bool> g_move_held{false};
+std::atomic<bool> g_push_held{false};
 std::atomic<void*> g_player_identity{nullptr};
 std::atomic<std::uint64_t> g_player_generation{0};
 thread_local bool g_vr_selection_ready = false;
@@ -182,8 +183,10 @@ thread_local bool g_vr_selection_refresh_active = false;
 std::atomic<bool> g_player_collision_filter_ready{false};
 void* g_pending_state = nullptr; // Input thread only; never dereferenced without current-state identity.
 void* g_pending_move_state = nullptr;
+void* g_pending_push_state = nullptr;
 runtime::VrHand g_pending_hand = runtime::VrHand::right;
 runtime::VrHand g_pending_move_hand = runtime::VrHand::right;
+runtime::VrHand g_pending_push_hand = runtime::VrHand::right;
 struct Hold {
     void* state = nullptr;
     void* player = nullptr;
@@ -225,6 +228,15 @@ struct MoveHold {
     Vec joint_pivot{};
     float hinge_lightness = 1.0F;
 } g_move_hold;
+struct PushHold {
+    void* state = nullptr;
+    void* player = nullptr;
+    void* body = nullptr;
+    std::uint64_t player_generation = 0;
+    runtime::VrHand hand = runtime::VrHand::right;
+    Vec body_relative_contact{};
+    std::uint64_t palm_yaw_epoch = 0;
+} g_push_hold;
 
 struct NudgePlan {
     Vec velocity{};
@@ -1075,7 +1087,8 @@ struct MagneticSightCallback final {
         void* const candidate_body=Read<void*>(current,kBodyListPayloadOffset);
         if (!candidate_body ||
             (g_held.load(std::memory_order_acquire) && candidate_body==g_hold.body) ||
-            (g_move_held.load(std::memory_order_acquire) && candidate_body==g_move_hold.body))
+            (g_move_held.load(std::memory_order_acquire) && candidate_body==g_move_hold.body) ||
+            (g_push_held.load(std::memory_order_acquire) && candidate_body==g_push_hold.body))
             continue;
         runtime::vr_magnetic_pickup_policy::VrMagneticPickupProfile profile{};
         if (!MagneticItemProfile(candidate_body,profile)) continue;
@@ -1784,6 +1797,121 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) {
     const int move_count=20;
     static_cast<void>(Store(static_cast<std::uint8_t*>(state)+0x58,&move_count,sizeof(move_count)));
 }
+
+void __fastcall HookedPushEnter(void* state, void*, void* previous) {
+    CallbackScope scope;
+    const auto frame=ReadNativeControllerFrame();
+    auto* const player=Read<void*>(state,0x10);
+    g_pending_push_state=g_enabled.load(std::memory_order_acquire) && frame.focused &&
+        frame.input.state.interact.just_pressed && g_vr_selection_ready &&
+        g_vr_selection_player==player ? state : nullptr;
+    if (g_pending_push_state) g_pending_push_hand=frame.interact_source;
+    g_vr_selection_ready=false;
+    g_vr_selection_player=nullptr;
+    reinterpret_cast<Transition>(g_image+0xAB370)(state,previous);
+    // ChangeState publishes player+2BC after Enter returns. Service the
+    // pending VR Push only after state 1 is committed by the native player.
+}
+
+void AcquirePendingPush(void* state, std::uint64_t player_generation,
+    runtime::VrHand pending_hand) {
+    const auto frame=ReadNativeControllerFrame();
+    auto* const player=Read<void*>(state,0x10);
+    auto* const body=Read<void*>(state,0x50);
+    if (!g_enabled.load(std::memory_order_acquire) || g_held.load() ||
+        g_move_held.load() || g_push_held.load() || !player || !BodyMatches(body) ||
+        !frame.focused || !frame.input.state.interact.pressed ||
+        frame.interact_source!=pending_hand || Read<int>(player,0x2BC)!=1) return;
+    const std::size_t hand_index=pending_hand==runtime::VrHand::left ? 0U : 1U;
+    PublishGameplayPalmHeldBody(hand_index,body);
+    Matrix palm{},body_pose{}; Vec velocity{},angular{};
+    if (!RefreshHeldHandPose(player,pending_hand,palm,velocity,angular) ||
+        !Copy(static_cast<std::uint8_t*>(body)+0x34,&body_pose,sizeof(body_pose))) {
+        PublishGameplayPalmHeldBody(hand_index,nullptr);
+        return;
+    }
+    const Vec palm_position{palm.values[3],palm.values[7],palm.values[11]};
+    const Vec body_position{body_pose.values[3],body_pose.values[7],body_pose.values[11]};
+    if (!FiniteVec(palm_position) || !FiniteVec(body_position)) {
+        PublishGameplayPalmHeldBody(hand_index,nullptr);
+        return;
+    }
+    PushHold hold;
+    hold.state=state;
+    hold.player=player;
+    hold.body=body;
+    hold.player_generation=player_generation;
+    hold.hand=pending_hand;
+    for (std::size_t axis=0;axis<3;++axis)
+        hold.body_relative_contact[axis]=palm_position[axis]-body_position[axis];
+    hold.palm_yaw_epoch=GameplayPalmYawEpoch();
+    g_push_hold=hold;
+    g_push_held.store(true,std::memory_order_release);
+}
+
+void __fastcall HookedPushLeave(void* state, void*, void* next) {
+    CallbackScope scope;
+    if (g_pending_push_state==state) g_pending_push_state=nullptr;
+    const bool owned=g_push_held.load(std::memory_order_acquire) &&
+        g_push_hold.state==state;
+    if (owned) {
+        const auto hand=g_push_hold.hand;
+        g_push_hold={};
+        g_push_held.store(false,std::memory_order_release);
+        PublishGameplayPalmHeldBody(hand==runtime::VrHand::left ? 0U : 1U,nullptr);
+    }
+    reinterpret_cast<Transition>(g_image+0xAB6A0)(state,next);
+}
+
+void __fastcall HookedPushUpdate(void* state, void*, float dt) {
+    CallbackScope scope;
+    if (!g_push_held.load(std::memory_order_acquire) || g_push_hold.state!=state) {
+        reinterpret_cast<Update>(g_image+0xAB010)(state,dt);
+        return;
+    }
+    const auto frame=ReadNativeControllerFrame();
+    const auto current_generation=g_player_generation.load(std::memory_order_acquire);
+    bool valid=g_enabled.load(std::memory_order_acquire) && frame.focused &&
+        frame.input.state.interact.pressed && frame.interact_source==g_push_hold.hand &&
+        g_player_identity.load(std::memory_order_acquire)==g_push_hold.player &&
+        current_generation==g_push_hold.player_generation && BodyMatches(g_push_hold.body) &&
+        Read<void*>(state,0x10)==g_push_hold.player &&
+        Read<void*>(state,0x50)==g_push_hold.body &&
+        Read<int>(g_push_hold.player,0x2BC)==1;
+    auto* states=valid ? Read<void*>(g_push_hold.player,0x2C4) : nullptr;
+    valid=valid && states && Read<void*>(states,sizeof(void*))==state;
+    Matrix palm{},body_pose{}; Vec velocity{},angular{};
+    if (valid) valid=RefreshHeldHandPose(g_push_hold.player,g_push_hold.hand,
+        palm,velocity,angular) &&
+        Copy(static_cast<std::uint8_t*>(g_push_hold.body)+0x34,&body_pose,sizeof(body_pose));
+    if (!valid) {
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xAB1F0)(state);
+        return;
+    }
+    const Vec palm_position{palm.values[3],palm.values[7],palm.values[11]};
+    const Vec body_position{body_pose.values[3],body_pose.values[7],body_pose.values[11]};
+    if (!FiniteVec(palm_position) || !FiniteVec(body_position)) {
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xAB1F0)(state);
+        return;
+    }
+    const auto yaw_epoch=GameplayPalmYawEpoch();
+    if (yaw_epoch!=g_push_hold.palm_yaw_epoch) {
+        for (std::size_t axis=0;axis<3;++axis)
+            g_push_hold.body_relative_contact[axis]=palm_position[axis]-body_position[axis];
+        g_push_hold.palm_yaw_epoch=yaw_epoch;
+        return;
+    }
+    Vec delta{};
+    for (std::size_t axis=0;axis<3;++axis)
+        delta[axis]=palm_position[axis]-body_position[axis]-g_push_hold.body_relative_contact[axis];
+    const float length=std::hypot(std::hypot(delta[0],delta[1]),delta[2]);
+    if (!std::isfinite(length) || length<=1.0e-5F) return;
+    // Rework Push normalizes the full 3D hand delta before removing vertical
+    // force, preserving its original horizontal 300 N response.
+    const Vec force{delta[0]/length*300.0F,0.0F,delta[2]/length*300.0F};
+    reinterpret_cast<void(__thiscall*)(void*,const Vec*)>(
+        g_image+0x19C9A0)(g_push_hold.body,&force);
+}
 void AcquirePendingGrab(void* state, std::uint64_t player_generation,
     runtime::VrHand pending_hand) {
     if (!g_player_collision_filter_ready.load(std::memory_order_acquire)) { ++g_blocked_grabs; return; }
@@ -2185,12 +2313,14 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         error="The Black Plague image base changed after spatial hook publication";
         return false;
     }
-    constexpr std::array<std::uintptr_t,9> slots{
+    constexpr std::array<std::uintptr_t,12> slots{
         0x291BE8,0x27D0D4,0x27D12C,0x27D130,0x27CB70,
-        0x27CF74,0x27CFCC,0x27CFD0,0x27D1A4};
-    constexpr std::array<std::uintptr_t,9> targets{
+        0x27CF74,0x27CFCC,0x27CFD0,0x27CFFC,0x27D054,
+        0x27D058,0x27D1A4};
+    constexpr std::array<std::uintptr_t,12> targets{
         0x189E30,0xABA90,0xAC900,0xAA4C0,0xA3DE0,
-        0xAA690,0xAAC80,0xAAED0,0xADE90};
+        0xAA690,0xAAC80,0xAAED0,0xAB010,0xAB370,
+        0xAB6A0,0xADE90};
     const auto crt=GetModuleHandleW(L"MSVCP71.dll");
     const auto compare=crt ? GetProcAddress(crt,"??$?8DU?$char_traits@D@std@@V?$allocator@D@1@@std@@YA_NABV?$basic_string@DU?$char_traits@D@std@@V?$allocator@D@2@@0@PBD@Z") : nullptr;
     if (!compare || Read<void*>(g_image,0x272138)!=reinterpret_cast<void*>(compare)) {
@@ -2204,7 +2334,7 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
     // Also validate each body-method slot used by direct native calls.
     for (const auto& pair : {std::array<std::uintptr_t,2>{0x34,0x19C2A0}, {0x38,kGetLinearVelocity},
         {0x3C,0x19C2C0},{0x40,kGetAngularVelocity},{0x54,0x19C360},{0x5C,0x19C380},
-        {0x7C,0x19C9E0},{0x88,kAddImpulseAtPosition},{0x8C,kSetBodyEnabled},
+        {0x78,0x19C9A0},{0x7C,0x19C9E0},{0x88,kAddImpulseAtPosition},{0x8C,kSetBodyEnabled},
         {0x94,kSetBodyAutoDisable},{0xBC,0x19C590}})
         if (Read<void*>(g_image+kPhysicsBodyVtable,pair[0])!=g_image+pair[1]) { error="Physics body method mismatch"; return false; }
     if (Read<void*>(g_image+kPhysicsJointHingeNewtonVtable,kJointTypeVtableSlot)!=
@@ -2212,6 +2342,26 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         Read<void*>(g_image+kPhysicsJointSliderNewtonVtable,kJointTypeVtableSlot)!=
             g_image+kSliderGetType) {
         error="Physics joint type boundary mismatch";
+        return false;
+    }
+    constexpr std::array<std::array<std::uint8_t,8>,3> push_entries{{
+        {0x83,0xEC,0x68,0x53,0x55,0x56,0x57,0x8B},
+        {0x81,0xEC,0x94,0x00,0x00,0x00,0x53,0x56},
+        {0x56,0x8B,0xF1,0x8B,0x46,0x50,0x8A,0x4E}}};
+    constexpr std::array<std::uintptr_t,3> push_targets{0xAB010,0xAB370,0xAB6A0};
+    std::array<std::uint8_t,8> actual_push{};
+    for (std::size_t index=0;index<push_targets.size();++index) {
+        if (!Copy(g_image+push_targets[index],actual_push.data(),actual_push.size()) ||
+            actual_push!=push_entries[index]) {
+            error="Push state entry mismatch";
+            return false;
+        }
+    }
+    constexpr std::array<std::uint8_t,8> push_exit_entry{
+        0x83,0xEC,0x18,0x56,0x8B,0xF1,0x8B,0x46};
+    if (!Copy(g_image+0xAB1F0,actual_push.data(),actual_push.size()) ||
+        actual_push!=push_exit_entry) {
+        error="Push state exit mismatch";
         return false;
     }
     constexpr std::array<std::uint8_t,15> get_joint_entry{
@@ -2288,11 +2438,13 @@ bool InstallSpatialInteraction(std::string& error) noexcept {
         std::memcmp(actual_collision.data(),collision_contact_b.data(),collision_contact_b.size())!=0) {
         error="CollideCharacter field mismatch"; return false;
     }
-    const std::array<void*,9> replacements{
+    const std::array<void*,12> replacements{
         reinterpret_cast<void*>(&HookedRay),reinterpret_cast<void*>(&HookedGrabUpdate),
         reinterpret_cast<void*>(&HookedEnter),reinterpret_cast<void*>(&HookedLeave),
         reinterpret_cast<void*>(&HookedHandsUpdate),reinterpret_cast<void*>(&HookedMoveUpdate),
         reinterpret_cast<void*>(&HookedMoveEnter),reinterpret_cast<void*>(&HookedMoveLeave),
+        reinterpret_cast<void*>(&HookedPushUpdate),reinterpret_cast<void*>(&HookedPushEnter),
+        reinterpret_cast<void*>(&HookedPushLeave),
         reinterpret_cast<void*>(&HookedUseItemUpdate)};
     for (std::size_t i=0;i<slots.size();++i) {
         if (!hooks::InstallPointerHook(reinterpret_cast<void**>(g_image+slots[i]),g_image+targets[i],replacements[i],g_hooks[i],error)) {
@@ -2321,7 +2473,8 @@ bool RemoveSpatialInteraction(std::string& error) noexcept {
     g_player_collision_filter_ready.store(false,std::memory_order_release);
     SetGameplayInteractionTargetProvider(nullptr);
     if (g_prepared_grab.active || g_held.load(std::memory_order_acquire) ||
-        g_move_held.load(std::memory_order_acquire)) {
+        g_move_held.load(std::memory_order_acquire) ||
+        g_push_held.load(std::memory_order_acquire)) {
         error="Release the tracked body before removing spatial hooks";
         return false;
     }
@@ -2370,8 +2523,10 @@ void ServiceSpatialHandNudge(void* character_body) noexcept {
         const auto hand=hand_index==0 ? runtime::VrHand::left : runtime::VrHand::right;
         if ((g_held.load(std::memory_order_acquire) && g_hold.hand==hand) ||
             (g_move_held.load(std::memory_order_acquire) && g_move_hold.hand==hand) ||
+            (g_push_held.load(std::memory_order_acquire) && g_push_hold.hand==hand) ||
             (g_pending_state && g_pending_hand==hand) ||
             (g_pending_move_state && g_pending_move_hand==hand) ||
+            (g_pending_push_state && g_pending_push_hand==hand) ||
             (frame.input.state.interact.pressed && frame.interact_source==hand)) continue;
 
         // Rework keeps acquisition and physical pushing as separate routes.
@@ -2402,7 +2557,8 @@ void ServiceSpatialHandNudge(void* character_body) noexcept {
             if (!hit.body || !hit.contact_count || !BodyMatches(hit.body) ||
                 hit.body == protected_body ||
                 (g_held.load(std::memory_order_acquire) && g_hold.body==hit.body) ||
-                (g_move_held.load(std::memory_order_acquire) && g_move_hold.body==hit.body)) continue;
+                (g_move_held.load(std::memory_order_acquire) && g_move_hold.body==hit.body) ||
+                (g_push_held.load(std::memory_order_acquire) && g_push_hold.body==hit.body)) continue;
             g_nudge_contacts.fetch_add(hit.contact_count,std::memory_order_relaxed);
             const float mass=Read<float>(hit.body,0x434);
             if (!std::isfinite(mass) || mass<=0) continue;
@@ -2538,6 +2694,55 @@ void ServiceSpatialInteraction(void* player, bool ui) noexcept {
             if (!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused || !valid_pose)
                 ++g_guarded_releases;
             reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xAA030)(g_move_hold.state);
+        }
+        return;
+    }
+    if (g_pending_push_state) {
+        auto* pending=g_pending_push_state;
+        const auto pending_hand=g_pending_push_hand;
+        g_pending_push_state=nullptr;
+        if (!ui && player && Read<int>(player,0x2BC)==1 &&
+            Read<void*>(Read<void*>(player,0x2C4),sizeof(void*))==pending &&
+            Read<void*>(pending,0x10)==player)
+            AcquirePendingPush(pending,player_generation,pending_hand);
+        if (!g_push_held.load(std::memory_order_acquire) && player &&
+            Read<int>(player,0x2BC)==1 &&
+            Read<void*>(Read<void*>(player,0x2C4),sizeof(void*))==pending &&
+            Read<void*>(pending,0x10)==player) {
+            ++g_guarded_releases;
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xAB1F0)(pending);
+        }
+    }
+    if (g_push_held.load(std::memory_order_acquire)) {
+        if (!player || g_push_hold.player!=player ||
+            g_push_hold.player_generation!=player_generation) {
+            const auto hand=g_push_hold.hand;
+            g_push_hold={};
+            g_push_held.store(false,std::memory_order_release);
+            PublishGameplayPalmHeldBody(hand==runtime::VrHand::left ? 0U : 1U,nullptr);
+            ++g_guarded_releases;
+            return;
+        }
+        auto* const states=Read<void*>(player,0x2C4);
+        const bool state_owned=states && Read<void*>(states,sizeof(void*))==g_push_hold.state &&
+            Read<void*>(g_push_hold.state,0x10)==player;
+        if (Read<int>(player,0x2BC)!=1 || !state_owned) {
+            const auto hand=g_push_hold.hand;
+            g_push_hold={};
+            g_push_held.store(false,std::memory_order_release);
+            PublishGameplayPalmHeldBody(hand==runtime::VrHand::left ? 0U : 1U,nullptr);
+            ++g_guarded_releases;
+            return;
+        }
+        const auto frame=ReadNativeControllerFrame();
+        Matrix palm; Vec velocity{},angular{};
+        const bool valid_pose=HandPose(g_push_hold.hand,false,palm,velocity,angular);
+        if (!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused ||
+            !frame.input.state.interact.pressed || frame.interact_source!=g_push_hold.hand ||
+            !valid_pose) {
+            if (!g_enabled.load(std::memory_order_acquire) || ui || !frame.focused || !valid_pose)
+                ++g_guarded_releases;
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+0xAB1F0)(g_push_hold.state);
         }
         return;
     }

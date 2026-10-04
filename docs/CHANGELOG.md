@@ -5,6 +5,17 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.4 — 2026-10-04
+
+- Remove Overture's v1.0.3 in-game SteamVR binding shortcut after an external
+  Valve Index report of a crash immediately before the main menu. The inactive
+  stick fallback and corrected controller defaults remain intact.
+- Add a Black Plague adapter for native `Push=1` interactions. VR-origin Push
+  now follows the tracked palm and applies the proven Rework 300 N horizontal
+  force while preserving Black Plague's native state lifecycle.
+- Keep Black Plague/Requiem general behavior unchanged. Both v1.0.4 fixes are
+  host-tested and require the focused external headset retest before promotion.
+
 ## 1.0.3 — 2026-10-03
 
 - Preserve Black Plague's calibrated eye height across turning before the next

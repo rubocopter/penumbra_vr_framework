@@ -79,7 +79,6 @@ namespace hpl {
     void SetInteractSourceHand(eSteamVRHand hand) { mInteractSourceHand = hand; }
 
     bool TriggerHaptic(eSteamVRHand hand, float durationSeconds, float frequency, float amplitude);
-    bool OpenControllerBindings();
 
   private:
     struct AnalogState {

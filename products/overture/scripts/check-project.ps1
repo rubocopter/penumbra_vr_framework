@@ -245,6 +245,12 @@ foreach ($requiredSemanticInputSnippet in @(
 if ($steamVRInputSource -match '\.SetButtonState\s*\(') {
     throw 'SteamVR actions must not be transported through TrackedController::ButtonState.'
 }
+if (($steamVRInputHeader + $steamVRInputSource) -match 'OpenControllerBindings') {
+    throw 'Overture must not open SteamVR controller bindings from its startup/menu process.'
+}
+if ($steamVRInputSource -notmatch [regex]::Escape('ApplyInactiveStickFallback(')) {
+    throw 'Overture must preserve the inactive-stick fallback used by controller profiles with missing Vector2 activity.'
+}
 
 foreach ($legacyButtonField in @(
     'touchContact', 'touchX', 'touchY',
@@ -307,6 +313,9 @@ foreach ($requiredVRSetter in @(
 }
 
 $mainMenuSource = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\MainMenu.cpp')
+if ($mainMenuSource -match 'cMainMenuWidget_VRControllerBindings') {
+    throw 'Overture must keep SteamVR controller binding UI out of the legacy Controls menu.'
+}
 if ($mainMenuSource -notmatch [regex]::Escape('ApplyVRSettings(true)')) {
     throw 'The in-game VR settings editor must apply and save changes immediately.'
 }

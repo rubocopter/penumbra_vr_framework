@@ -858,15 +858,6 @@ bool cSteamVRInput::UpdatePoseAction(vr::VRActionHandle_t handle, TrackedControl
     return state;
   }
 
-  bool cSteamVRInput::OpenControllerBindings() {
-    if (!mbAvailable) return false;
-    const vr::EVRInputError error = vr::VRInput()->OpenBindingUI(nullptr,
-      vr::k_ulInvalidActionSetHandle, vr::k_ulInvalidInputValueHandle, false);
-    if (error != vr::VRInputError_None)
-      Log(" SteamVR controller binding UI failed with error %d.\n", (int)error);
-    return error == vr::VRInputError_None;
-  }
-
   cSteamVRInput::AnalogState cSteamVRInput::ReadAnalog(vr::VRActionHandle_t handle) const {
     AnalogState state;
     vr::InputAnalogActionData_t data;

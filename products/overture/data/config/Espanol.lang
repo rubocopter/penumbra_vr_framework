@@ -404,9 +404,6 @@
     <Entry Name="VRSeated">Sentado</Entry>
     <Entry Name="TipVRCalibrateHeight">Ponte de pie y pulsa Calibrar para fijar tu altura de pie.</Entry>
     <Entry Name="VRControls">CONTROLES</Entry>
-    <Entry Name="VRControllerBindings">Bindings del mando (SteamVR)</Entry>
-    <Entry Name="TipVRControllerBindings">Consulta o cambia los bindings activos de tu mando en SteamVR. Incluye tus mapeados personalizados.</Entry>
-    <Entry Name="VRControllerBindingsUnavailable">Abre los bindings del mando desde el panel de SteamVR.</Entry>
     <Entry Name="VRMovement">MOVIMIENTO</Entry>
     <Entry Name="VRCalibration">CALIBRACIÓN</Entry>
     <Entry Name="VRDisplay">PANTALLA</Entry>
