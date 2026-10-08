@@ -92,6 +92,9 @@ constexpr int kObjectEntityType = 1;
 constexpr int kItemEntityType = 5;
 constexpr int kSwingDoorEntityType = 8;
 constexpr int kLeverEntityType = 0x12;
+// Exact BP 2.2.0.0 cGameWheel constructor at RVA 0x5A340 writes +0xC0 = 0x13.
+// The tutorial vice's handle is a native Wheel entity with script callbacks.
+constexpr int kWheelEntityType = 0x13;
 constexpr int kHingeJointType = 1;
 constexpr int kSliderJointType = 2;
 constexpr std::uintptr_t kBoundingVolumeGetMax = 0xD8A10;
@@ -333,6 +336,8 @@ struct InteractionRaySegment {
     Vec to{};
 };
 
+[[nodiscard]] bool IsStaticMechanismFrame(void* body) noexcept;
+
 // HPL returns ray hits incrementally through the callback. The old VR ray
 // path improved the ray geometry but still allowed HPL's first-hit ordering to
 // decide the winner. Keep the native callback contract and collect the
@@ -376,6 +381,9 @@ struct RankedRayCallback final {
         // and underflows the unsigned distance diagnostic seen in live logs.
         if (!Copy(params, &hit, sizeof(hit)) || !std::isfinite(hit.dist) ||
             hit.dist < 0.0F) return true;
+        // The assembly's fixed frame cannot authorize native Move; keep the
+        // moving door/handle selectable even when its frame is hit first.
+        if (IsStaticMechanismFrame(body)) return true;
         ++g_selection_candidates;
         if (proxy->Better(hit.dist, proxy->ray_index)) {
             if (proxy->best_body) ++g_selection_discards;
@@ -518,6 +526,30 @@ void PublishUseItemLaserFromNativeState(
     ReleaseSRWLockExclusive(&g_use_item_laser_lock);
 }
 bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + kPhysicsBodyVtable; }
+
+[[nodiscard]] bool IsStaticMechanismFrame(void* body) noexcept {
+    if (!BodyMatches(body) || Read<float>(body,0x434)!=0.0F) return false;
+    void* const entity=Read<void*>(body,kBodyUserDataOffset);
+    if (!entity) return false;
+    const int type=Read<int>(entity,kEntityTypeOffset);
+    if (type!=kObjectEntityType && type!=kWheelEntityType) return false;
+    auto** const begin=Read<void**>(entity,kEntityBodiesBeginOffset);
+    auto** const end=Read<void**>(entity,kEntityBodiesEndOffset);
+    const auto first=reinterpret_cast<std::uintptr_t>(begin);
+    const auto last=reinterpret_cast<std::uintptr_t>(end);
+    if (!first || last<=first || (last-first)%sizeof(void*)!=0 ||
+        (last-first)/sizeof(void*)>256) return false;
+    for (std::size_t index=0;index<(last-first)/sizeof(void*);++index) {
+        void* sibling=nullptr;
+        if (!Copy(begin+index,&sibling,sizeof(sibling)) || sibling==body ||
+            !BodyMatches(sibling) ||
+            Read<void*>(sibling,kBodyUserDataOffset)!=entity ||
+            !Read<bool>(sibling,kBodyActiveOffset)) continue;
+        const float mass=Read<float>(sibling,0x434);
+        if (std::isfinite(mass) && mass>0.0F) return true;
+    }
+    return false;
+}
 [[nodiscard]] float ReworkHingeLightness(float mass) noexcept {
     if (!std::isfinite(mass) || mass<=0.0F) return 0.0F;
     if (mass>10.0F) return 2.25F;
@@ -626,11 +658,17 @@ bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + k
     const bool is_swing_door=entity_type==kSwingDoorEntityType;
     const bool is_committed_object=
         native_move_committed_object && entity_type==kObjectEntityType;
+    // Exact Wheel vtable 0x2793E8+0x28 shares OnPlayerInteract (0x3B8E0)
+    // with the lever: native acceptance commits Move=2 at 0x3B9D4. Wheel's
+    // own Update still owns accumulated angle, limits and script callbacks.
+    const bool is_committed_wheel=
+        native_move_committed_object && entity_type==kWheelEntityType;
     // Rework's Move state drives recognized joints on GameObject too. Keep
     // that consumption behind an already-committed native Move transition so
     // Object locks/scripts remain game-owned; direct nudge continues to call
     // this helper without the opt-in and therefore stays fail-closed.
-    if (!is_lever && !is_swing_door && !is_committed_object) return false;
+    if (!is_lever && !is_swing_door && !is_committed_object &&
+        !is_committed_wheel) return false;
     void* const joint=ReworkMoveJoint(body);
     if (!joint) return false;
     void* const vtable=Read<void*>(joint,0);
@@ -643,7 +681,7 @@ bool BodyMatches(void* body) { return body && Read<void*>(body,0) == g_image + k
     } else if (vtable==g_image+kPhysicsJointSliderNewtonVtable) {
         // Rework's SwingDoor family is authored and handled as hinges. Keep
         // Black Plague doors fail-closed if target evidence ever disagrees.
-        if (is_swing_door) return false;
+        if (is_swing_door || is_committed_wheel) return false;
         expected_type=kSliderJointType;
         expected_get_type=kSliderGetType;
         hold.mode=MoveHold::Mode::slider;
@@ -1264,12 +1302,13 @@ struct PalmSelectionCandidate {
 [[nodiscard]] bool PalmAcquisitionEntity(void* body) noexcept {
     if (!BodyMatches(body) || !Read<bool>(body,kBodyActiveOffset) ||
         !Read<bool>(body,kBodyCollideOffset) || Read<bool>(body,kBodyCharacterOffset) ||
-        Read<bool>(body,kBodyPlayerOffset)) return false;
+        Read<bool>(body,kBodyPlayerOffset) || IsStaticMechanismFrame(body)) return false;
     void* const entity=Read<void*>(body,kBodyUserDataOffset);
     if (!entity || !Read<bool>(entity,kEntityActiveOffset)) return false;
     const int type=Read<int>(entity,kEntityTypeOffset);
     return type==kObjectEntityType || type==kItemEntityType ||
-        type==kSwingDoorEntityType || type==kLeverEntityType;
+        type==kSwingDoorEntityType || type==kLeverEntityType ||
+        type==kWheelEntityType;
 }
 
 [[nodiscard]] bool FindPalmOverlapTarget(void* world,void* native_callback,

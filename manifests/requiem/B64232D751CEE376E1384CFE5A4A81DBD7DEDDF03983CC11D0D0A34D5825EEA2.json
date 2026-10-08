@@ -191,167 +191,280 @@
         "has one direct caller in the equivalent cScene::Render flow"
       ]
     },
-      "hpl.cScene.UpdateRenderList": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x000EDDD0",
-        "preferredVirtualAddress": "0x004EDDD0",
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "56 8B F1 8A 46 40 84 C0 74 2F 8B 46 64 85 C0 74 28",
-          "matches": 1
-        },
-        "directCallSites": [
-          {
-            "target": "hpl.cRenderer3D.UpdateRenderList",
-            "rva": "0x000EDE04",
-            "bytes": "E8 C7 D0 03 00",
-            "matchesInText": 1
-          }
-        ],
-        "evidence": "Exact initialized-image flow in cScene::UpdateRenderList; no runtime validation."
+    "hpl.cScene.UpdateRenderList": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000EDDD0",
+      "preferredVirtualAddress": "0x004EDDD0",
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "56 8B F1 8A 46 40 84 C0 74 2F 8B 46 64 85 C0 74 28",
+        "matches": 1
       },
-      "hpl.cRenderer3D.UpdateRenderList": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x0012AED0",
-        "preferredVirtualAddress": "0x0052AED0",
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "83 EC 0C 56 8B F1 8B 8E 48 03 00 00",
-          "matches": 1
+      "directCallSites": [
+        {
+          "target": "hpl.cRenderer3D.UpdateRenderList",
+          "rva": "0x000EDE04",
+          "bytes": "E8 C7 D0 03 00",
+          "matchesInText": 1
         }
-      },
-      "hpl.iCharacterBody.GetSize": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x000D59D0",
-        "preferredVirtualAddress": "0x004D59D0",
-        "objectOffsets": {
-          "activeCapsuleHeightY": "0xC8"
-        },
-        "signature": {
-          "region": "initialized-memory:.text",
-          "rva": "0x000D59DC",
-          "bytes": "8B 91 C8 00 00 00 89 50 04 8B 89 CC 00 00 00 89 48 08",
-          "matches": 1
-        },
-        "evidence": "GetSize copies iCharacterBody+0xC8 into the Y component of its result in the observed Requiem image."
-      },
-      "hpl.iCharacterBody.SetActiveSize.heightWrite": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x000D6044",
-        "preferredVirtualAddress": "0x004D6044",
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "8B 8E 3C 02 00 00 89 86 C8 00 00 00",
-          "matches": 1
-        },
-        "evidence": "Within SetActiveSize, a shape-height result is written into iCharacterBody+0xC8 after selecting the active body; this RVA names the evidence window, not the function entry."
-      },
-      "hpl.iCharacterBody.Move": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x000D58E0",
-        "preferredVirtualAddress": "0x004D58E0",
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "D9 44 24 08 56 8B F1 57 8B 7C 24 0C D8 4C BE 78 D8 4C 24 14 D8 44 BE 70 D9 5C BE 70 C6 84 37 88",
-          "matches": 1
-        },
-        "evidence": "Exact native movement function; player callsites below are Requiem-specific."
-      },
-      "hpl.iCharacterBody.Update": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x000D77A0",
-        "preferredVirtualAddress": "0x004D77A0",
-        "objectOffsets": {
-          "positionVector": "0x48"
-        },
-        "signature": {
-          "region": "initialized-memory:.text",
-          "rva": "0x000D77B5",
-          "bytes": "81 EC D4 05 00 00 53 55 56 8B F1 8A 46 30 33 DB 84 C0 57 0F 84 95 12 00",
-          "matches": 1
-        },
-        "evidence": "Native physics-loop body update; +0x48 is copied to +0x54 at RVA 0xD77EF before movement, and the adapter must not call Update itself."
-      },
-      "hpl.iPhysicsWorld.Update": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x000D4F10",
-        "preferredVirtualAddress": "0x004D4F10",
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "53 56 8B F1 8B 46 58 57 33 FF 3B C7",
-          "matches": 1
-        },
-        "directCallSites": [
-          {
-            "target": "hpl.iCharacterBody.Update",
-            "rva": "0x000D4F6A",
-            "bytes": "E8 31 28 00 00"
-          }
-        ]
-      },
-      "requiem.cButtonHandler.vrActionQueries": {
-        "status": "confirmed-static-mapping",
-        "ownerRva": "0x00003C30",
-        "inputQueryTargets": {
-          "pressed": "0x000DAFB0",
-          "held": "0x000DAE70",
-          "released": "0x000DAF10"
-        },
-        "mappedCallSites": {
-          "Inventory.pressed": "0x507F",
-          "NoteBook.pressed": "0x50A7",
-          "Jump.pressed": "0x526F",
-          "Jump.held": "0x5297",
-          "Run.pressed": "0x52C1",
-          "Run.released": "0x52E9",
-          "Interact.pressed": "0x5400",
-          "Interact.released": "0x5444",
-          "Examine.pressed": "0x546C",
-          "Examine.released": "0x5494",
-          "Holster.pressed": "0x54BC"
-        },
-        "evidence": "Each decoded initialized-image callsite follows construction of its literal legacy action string and calls the matching native pressed/held/released query. The bridge calls the native query first and adds focused Sense intent only at these owned callsites; runtime game behavior remains unverified."
-      },
-      "requiem.cPlayer.MoveForward": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x0009D020",
-        "preferredVirtualAddress": "0x0049D020",
-        "objectOffsets": {
-          "characterBody": "0x278"
-        },
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "53 8B 5C 24 08 56 8B F1 8B 8E C8 02 00 00 8B 86 C0 02 00 00 57 8B 7C 24 14 8D 04 81 8B 08 8B 11 57 53 FF 52 4C 84 C0 74",
-          "matches": 1
-        },
-        "directCallSites": [
-          {
-            "target": "hpl.iCharacterBody.Move",
-            "rva": "0x0009D096",
-            "bytes": "E8 45 88 03 00"
-          }
-        ],
-        "evidence": "Exact initialized-image player function; body offset differs from Black Plague +0x274."
-      },
-      "requiem.cPlayer.MoveSideways": {
-        "status": "confirmed-static-mapping",
-        "rva": "0x0009D0C0",
-        "preferredVirtualAddress": "0x0049D0C0",
-        "objectOffsets": {
-          "characterBody": "0x278"
-        },
-        "signature": {
-          "region": "initialized-memory:.text",
-          "bytes": "53 8B 5C 24 08 56 8B F1 8B 8E C8 02 00 00 8B 86 C0 02 00 00 57 8B 7C 24 14 8D 04 81 8B 08 8B 11 57 53 FF 52 50 84 C0 74",
-          "matches": 1
-        },
-        "directCallSites": [
-          {
-            "target": "hpl.iCharacterBody.Move",
-            "rva": "0x0009D136",
-            "bytes": "E8 A5 87 03 00"
-          }
-        ]
+      ],
+      "evidence": "Exact initialized-image flow in cScene::UpdateRenderList; no runtime validation."
+    },
+    "hpl.cRenderer3D.UpdateRenderList": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0012AED0",
+      "preferredVirtualAddress": "0x0052AED0",
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "83 EC 0C 56 8B F1 8B 8E 48 03 00 00",
+        "matches": 1
       }
+    },
+    "hpl.iCharacterBody.GetSize": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D59D0",
+      "preferredVirtualAddress": "0x004D59D0",
+      "objectOffsets": {
+        "activeCapsuleHeightY": "0xC8"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "rva": "0x000D59DC",
+        "bytes": "8B 91 C8 00 00 00 89 50 04 8B 89 CC 00 00 00 89 48 08",
+        "matches": 1
+      },
+      "evidence": "GetSize copies iCharacterBody+0xC8 into the Y component of its result in the observed Requiem image."
+    },
+    "hpl.iCharacterBody.SetActiveSize.heightWrite": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D6044",
+      "preferredVirtualAddress": "0x004D6044",
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "8B 8E 3C 02 00 00 89 86 C8 00 00 00",
+        "matches": 1
+      },
+      "evidence": "Within SetActiveSize, a shape-height result is written into iCharacterBody+0xC8 after selecting the active body; this RVA names the evidence window, not the function entry."
+    },
+    "hpl.iCharacterBody.Move": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D58E0",
+      "preferredVirtualAddress": "0x004D58E0",
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "D9 44 24 08 56 8B F1 57 8B 7C 24 0C D8 4C BE 78 D8 4C 24 14 D8 44 BE 70 D9 5C BE 70 C6 84 37 88",
+        "matches": 1
+      },
+      "evidence": "Exact native movement function; player callsites below are Requiem-specific."
+    },
+    "hpl.iCharacterBody.Update": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D77A0",
+      "preferredVirtualAddress": "0x004D77A0",
+      "objectOffsets": {
+        "positionVector": "0x48"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "rva": "0x000D77B5",
+        "bytes": "81 EC D4 05 00 00 53 55 56 8B F1 8A 46 30 33 DB 84 C0 57 0F 84 95 12 00",
+        "matches": 1
+      },
+      "evidence": "Native physics-loop body update; +0x48 is copied to +0x54 at RVA 0xD77EF before movement, and the adapter must not call Update itself."
+    },
+    "hpl.iPhysicsWorld.Update": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x000D4F10",
+      "preferredVirtualAddress": "0x004D4F10",
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "53 56 8B F1 8B 46 58 57 33 FF 3B C7",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "target": "hpl.iCharacterBody.Update",
+          "rva": "0x000D4F6A",
+          "bytes": "E8 31 28 00 00"
+        }
+      ]
+    },
+    "requiem.cButtonHandler.vrActionQueries": {
+      "status": "confirmed-static-mapping",
+      "ownerRva": "0x00003C30",
+      "inputQueryTargets": {
+        "pressed": "0x000DAFB0",
+        "held": "0x000DAE70",
+        "released": "0x000DAF10"
+      },
+      "mappedCallSites": {
+        "Inventory.pressed": "0x507F",
+        "NoteBook.pressed": "0x50A7",
+        "Jump.pressed": "0x526F",
+        "Jump.held": "0x5297",
+        "Run.pressed": "0x52C1",
+        "Run.released": "0x52E9",
+        "Interact.pressed": "0x5400",
+        "Interact.released": "0x5444",
+        "Examine.pressed": "0x546C",
+        "Examine.released": "0x5494",
+        "Holster.pressed": "0x54BC"
+      },
+      "evidence": "Each decoded initialized-image callsite follows construction of its literal legacy action string and calls the matching native pressed/held/released query. The bridge calls the native query first and adds focused Sense intent only at these owned callsites; runtime game behavior remains unverified."
+    },
+    "requiem.cPlayer.MoveForward": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0009D020",
+      "preferredVirtualAddress": "0x0049D020",
+      "objectOffsets": {
+        "characterBody": "0x278"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "53 8B 5C 24 08 56 8B F1 8B 8E C8 02 00 00 8B 86 C0 02 00 00 57 8B 7C 24 14 8D 04 81 8B 08 8B 11 57 53 FF 52 4C 84 C0 74",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "target": "hpl.iCharacterBody.Move",
+          "rva": "0x0009D096",
+          "bytes": "E8 45 88 03 00"
+        }
+      ],
+      "evidence": "Exact initialized-image player function; body offset differs from Black Plague +0x274."
+    },
+    "requiem.cPlayer.MoveSideways": {
+      "status": "confirmed-static-mapping",
+      "rva": "0x0009D0C0",
+      "preferredVirtualAddress": "0x0049D0C0",
+      "objectOffsets": {
+        "characterBody": "0x278"
+      },
+      "signature": {
+        "region": "initialized-memory:.text",
+        "bytes": "53 8B 5C 24 08 56 8B F1 8B 8E C8 02 00 00 8B 86 C0 02 00 00 57 8B 7C 24 14 8D 04 81 8B 08 8B 11 57 53 FF 52 50 84 C0 74",
+        "matches": 1
+      },
+      "directCallSites": [
+        {
+          "target": "hpl.iCharacterBody.Move",
+          "rva": "0x0009D136",
+          "bytes": "E8 A5 87 03 00"
+        }
+      ]
+    }
+  },
+  "nativeVrSettingsMenu": {
+    "status": "independently-mapped-offline-and-host-tested; new hooks not live/headset tested",
+    "evidence": {
+      "canonicalExecutableSha256": "B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2",
+      "method": "Offline unpacking of a copy of the canonical executable with Steamless 3.1.0.5; original installation untouched; disassembly, imports, vtable and all direct calls independently verified",
+      "derivedOfflineImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B"
+    },
+    "entryPoints": {
+      "kButtonVtableRva": "0x27bf1c",
+      "kButtonMouseDownRva": "0x7b1a0",
+      "kButtonActiveChangedRva": "0x74430",
+      "kButtonConstructorRva": "0x74980",
+      "kButtonDeletingDestructorRva": "0x74b20",
+      "kAddWidgetToStateRva": "0x7b5b0",
+      "kMenuSetStateRva": "0x7abf0",
+      "kGameAllocateRva": "0x1ef408",
+      "kWideStringConstructorIatRva": "0x2731f8",
+      "kWideStringDestructorIatRva": "0x2731ec",
+      "kWideStringAssignIatRva": "0x273128"
+    },
+    "setStateCallsites": [
+      "0x7b118",
+      "0x7b1c8",
+      "0x7b2e8",
+      "0x7b311",
+      "0x7b40f",
+      "0x8a544",
+      "0x8a9fd",
+      "0x8aa61",
+      "0x8adf9",
+      "0x8ae88"
+    ],
+    "buttonVtableSlots": {
+      "0x0": "0x74b20",
+      "0xc": "0x7b1a0",
+      "0x20": "0x74430"
+    },
+    "wideStringImports": {
+      "kWideStringConstructorIatRva": {
+        "iatRva": "0x2731f8",
+        "import": "??0?$basic_string@GU?$char_traits@G@std@@V?$allocator@G@2@@std@@QAE@PBG@Z"
+      },
+      "kWideStringDestructorIatRva": {
+        "iatRva": "0x2731ec",
+        "import": "??1?$basic_string@GU?$char_traits@G@std@@V?$allocator@G@2@@std@@QAE@XZ"
+      },
+      "kWideStringAssignIatRva": {
+        "iatRva": "0x273128",
+        "import": "??4?$basic_string@GU?$char_traits@G@std@@V?$allocator@G@2@@std@@QAEAAV01@PBG@Z"
+      }
+    },
+    "layout": {
+      "widgetInit": 8,
+      "widgetActive": 48,
+      "widgetText": 52,
+      "buttonTargetState": 92,
+      "buttonObjectBytes": 132,
+      "wideStringBytes": 28,
+      "menuInit": 32,
+      "initMainMenu": 440,
+      "menuPreviousState": 152,
+      "menuCurrentState": 180,
+      "menuStateLists": 188,
+      "stateListStride": 12,
+      "listSentinel": 4,
+      "nodeNext": 0,
+      "nodeWidget": 8
+    },
+    "rootState": 0,
+    "stableInitializedImageSignatures": [
+      {
+        "owner": "kMenuSetStateRva",
+        "rva": "0x7abf0",
+        "bytes": "8B542404535556578BF9"
+      },
+      {
+        "owner": "kButtonConstructorRva",
+        "rva": "0x74987",
+        "bytes": "64A100000000506489250000000083EC288B542438"
+      },
+      {
+        "owner": "kButtonDeletingDestructorRva",
+        "rva": "0x74b20",
+        "bytes": "568BF1E848F5FFFF"
+      },
+      {
+        "owner": "kAddWidgetToStateRva",
+        "rva": "0x7b5b0",
+        "bytes": "5355568BE957"
+      },
+      {
+        "owner": "kButtonMouseDownRva",
+        "rva": "0x7b1a7",
+        "bytes": "64A100000000506489250000000083EC28568BF18B465C8B4E088B89B801000050"
+      },
+      {
+        "owner": "kButtonActiveChangedRva",
+        "rva": "0x74430",
+        "bytes": "33C089412C898180000000884104C3"
+      },
+      {
+        "owner": "kGameAllocateRva",
+        "rva": "0x1ef408",
+        "bytes": "568B742408EB1156"
+      }
+    ],
+    "ownership": "Native menu adapter owns two button vtable slots and ten SetState calls; already-owned gameplay Update fans out existing Start-page observation on the native thread",
+    "languages": {
+      "english": "English_exp.lang",
+      "spanish": "Espanol_exp.lang"
+    },
+    "supportedSettingRows": 9
   }
 }

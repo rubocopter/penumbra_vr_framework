@@ -3,14 +3,14 @@
 ![Penumbra VR Framework — Overture, Black Plague and Requiem](assets/banner/penumbra-vr-framework.png)
 
 <p align="center">
-  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.5"><img alt="Get the latest release: v1.0.5" src="https://img.shields.io/badge/latest%20release-v1.0.5-brightgreen?style=flat-square"></a>
+  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.6"><img alt="Get the latest release: v1.0.6" src="https://img.shields.io/badge/latest%20release-v1.0.6-brightgreen?style=flat-square"></a>
   <a href="COPYING"><img alt="License: GPL v3+" src="https://img.shields.io/badge/license-GPL%20v3%2B-blue?style=flat-square"></a>
   <a href="https://ko-fi.com/onitaku"><img alt="Support development on Ko-fi" src="https://ko-fi.com/img/githubbutton_sm.svg"></a>
 </p>
 
 **Step into the complete Penumbra trilogy in PC VR.** Revisit three atmospheric adventures from inside the world: look around naturally, explore with your motion controllers and reach out to handle the objects around you.
 
-[**Get the VR installer**](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.5/PenumbraVR-Setup-1.0.5.exe) · [What you need](#before-you-start) · [Help](#need-help)
+[**Get the VR installer**](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.6/PenumbraVR-Setup-1.0.6.exe) · [What you need](#before-you-start) · [Help](#need-help)
 
 You’ll need the original PC games and SteamVR. Install only the games you own; **Requiem requires Penumbra: Black Plague**.
 
@@ -50,7 +50,7 @@ The details vary between games and controller profiles. The guides below explain
 ## Get started
 
 1. Install the original game or games and SteamVR.
-2. Download and run the [latest installer](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.5). Choose the games and optional extras you want.
+2. Download and run the [latest installer](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.6). Choose the games and optional extras you want.
 3. Start SteamVR, put on your headset, then launch the game from Steam as usual.
 
 The installer detects supported games and can install, update, repair or remove VR components. You don’t need to own the whole trilogy. Optional extras include Spanish translations, Overture texture improvements and recommended graphics settings.
@@ -65,13 +65,13 @@ The project’s end-to-end headset testing has primarily used PS VR2 and Sense c
 
 ## Current notes
 
-The latest release, **v1.0.5**, brings together the improvements made since v1.0.0. Overture gameplay and the Black Plague tutorial have been exercised by the maintainer; Requiem has had representative gameplay testing, but its full progression and startup reliability need more testing. Requiem may occasionally fail during startup, and contact with some Black Plague objects can push the player back more than intended. See [known issues and validation status](docs/CLOSURE_STATUS.md) before installing.
+The latest release, **v1.0.6**, adds first-level VR Settings in the same place in all three games, in English and Spanish. It includes the maintainer-accepted Black Plague vice/locker and Requiem intro-height fixes, plus a correction for excessive Black Plague blocking near movable obstacles. The new menu routes and blocking correction have host tests; their headset confirmation remains separate. Requiem may occasionally fail during startup, and full progression and other controller families still need more testing. See [known issues and validation status](docs/CLOSURE_STATUS.md) before installing.
 
 ## Need help?
 
 For installation steps, controller mappings, graphics settings and fixes, see [Troubleshooting](docs/TROUBLESHOOTING.md), [Controls](docs/CONTROLS.md) and [VR configuration](docs/VR_CONFIGURATION.md). To report a problem, [open or check a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, headset/controllers and what happened.
 
-[Release notes](docs/releases/1.0.5.md) · [All releases](https://github.com/rubocopter/penumbra_vr_framework/releases) · [Support development on Ko-fi](https://ko-fi.com/onitaku)
+[Release notes](docs/releases/1.0.6.md) · [All releases](https://github.com/rubocopter/penumbra_vr_framework/releases) · [Support development on Ko-fi](https://ko-fi.com/onitaku)
 
 <details>
 <summary>Controller compatibility and default controls</summary>

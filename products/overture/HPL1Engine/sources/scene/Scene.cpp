@@ -51,6 +51,8 @@
 
 #include "game/Game.h"
 
+#include "../../../../../src/runtime/stereo_render_policy.hpp"
+
 namespace hpl {
 
   extern cGame* gGame;
@@ -291,7 +293,27 @@ namespace hpl {
 				cCamera3D* pCamera3D = static_cast<cCamera3D*>(mpActiveCamera);
 
 				if(mpCurrentWorld3D)
+				{
+					if(gGame != NULL && gGame->vr_hmd != NULL)
+					{
+						float leftTop, leftLeft, leftRight, leftBottom;
+						float rightTop, rightLeft, rightRight, rightBottom;
+						gGame->vr_hmd->GetProjectionRaw(vr::Eye_Left,
+							&leftLeft, &leftRight, &leftTop, &leftBottom);
+						gGame->vr_hmd->GetProjectionRaw(vr::Eye_Right,
+							&rightLeft, &rightRight, &rightTop, &rightBottom);
+						const penumbra_vr::runtime::StereoProjectionTangents leftEye = {
+							leftTop, leftLeft, leftRight, leftBottom};
+						const penumbra_vr::runtime::StereoProjectionTangents rightEye = {
+							rightTop, rightLeft, rightRight, rightBottom};
+						const penumbra_vr::runtime::StereoProjectionTangents stereo =
+							penumbra_vr::runtime::UnionStereoProjectionTangents(leftEye, rightEye);
+						pCamera3D->SetVRViewMatrix(GetVRWorldSpaceHeadMatrix());
+						pCamera3D->SetVRProjectionMatrix(
+							stereo.top, stereo.left, stereo.right, stereo.bottom);
+					}
 					mpGraphics->GetRenderer3D()->UpdateRenderList(mpCurrentWorld3D, pCamera3D,afFrameTime);
+				}
 			}
 		}
 	}

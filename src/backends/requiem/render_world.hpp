@@ -2,6 +2,7 @@
 
 #include "openvr_session.hpp"
 #include "vr_math.hpp"
+#include "vr_settings.hpp"
 
 #include <cstdint>
 #include <string>
@@ -58,10 +59,12 @@ struct RequiemInteractionCounters final {
 [[nodiscard]] bool StopPresentation(std::string& error) noexcept;
 [[nodiscard]] bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept;
 [[nodiscard]] bool TrackedHeadTrackingHeight(float& height) noexcept;
+[[nodiscard]] bool TrackedHeadTrackingHeightForMenu(float& height) noexcept;
 void OnSdlSwap(std::uint64_t frame_number) noexcept;
 void RequestTrackedRecenter() noexcept;
 void AddTrackedWorldYaw(float radians) noexcept;
 void RefreshVrSelectionBeforeInteract(void* player) noexcept;
+void ConfigurePresentationSettings(runtime::VrSettings settings) noexcept;
 [[nodiscard]] bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose,
     std::array<float, 2>& uv) noexcept;
 

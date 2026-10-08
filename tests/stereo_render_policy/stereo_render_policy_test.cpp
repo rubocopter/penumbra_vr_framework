@@ -1,6 +1,7 @@
 #include "stereo_render_policy.hpp"
 
 #include <iostream>
+#include <limits>
 
 namespace {
 
@@ -14,7 +15,33 @@ namespace {
 int main() {
     using penumbra_vr::runtime::IsFreshPresentationSequence;
     using penumbra_vr::runtime::PlanStereoWorldRendering;
+    using penumbra_vr::runtime::SelectVrLogicUpdateRate;
     using penumbra_vr::runtime::ShouldRefreshPresentationSequence;
+    using penumbra_vr::runtime::StereoProjectionTangents;
+    using penumbra_vr::runtime::UnionStereoProjectionTangents;
+
+    if (SelectVrLogicUpdateRate(72.0F) != 72 ||
+        SelectVrLogicUpdateRate(79.98F) != 80 ||
+        SelectVrLogicUpdateRate(90.0F) != 90 ||
+        SelectVrLogicUpdateRate(120.0F) != 120 ||
+        SelectVrLogicUpdateRate(144.0F) != 144 ||
+        SelectVrLogicUpdateRate(0.0F) != 90 ||
+        SelectVrLogicUpdateRate(1000.0F) != 90 ||
+        SelectVrLogicUpdateRate(std::numeric_limits<float>::quiet_NaN()) != 90) {
+        std::cerr << "VR logic update-rate selection policy failed\n";
+        return 7;
+    }
+
+    const StereoProjectionTangents left_eye{-1.00F, -1.20F, 0.85F, 1.10F};
+    const StereoProjectionTangents right_eye{-0.90F, -0.80F, 1.30F, 1.00F};
+    const auto stereo_union = UnionStereoProjectionTangents(left_eye, right_eye);
+    if (!NearlyEqual(stereo_union.top, -1.00F) ||
+        !NearlyEqual(stereo_union.left, -1.20F) ||
+        !NearlyEqual(stereo_union.right, 1.30F) ||
+        !NearlyEqual(stereo_union.bottom, 1.10F)) {
+        std::cerr << "Stereo projection union does not cover both eyes\n";
+        return 8;
+    }
 
     if (IsFreshPresentationSequence(0, 0) ||
         !IsFreshPresentationSequence(1, 0) ||

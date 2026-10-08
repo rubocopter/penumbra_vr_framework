@@ -310,9 +310,9 @@ std::array<runtime::VrEyeConfiguration, 2> g_eyes{};
 std::array<runtime::VrMatrix44, 2> g_projections{};
 runtime::VrMatrix34 g_tracking_anchor{};
 bool g_tracking_anchor_valid = false; // Render thread only.
-std::uint64_t g_height_calibration_generation = 0;
-float g_height_calibration = 0.0F;
-bool g_height_calibration_valid = false; // Render thread only.
+runtime::VrSettings g_height_settings;
+SRWLOCK g_height_settings_lock = SRWLOCK_INIT;
+runtime::VrPlayModePolicy g_height_play_mode; // Render thread only.
 SRWLOCK g_head_world_pose_lock = SRWLOCK_INIT;
 runtime::VrMatrix44 g_head_world_pose{};
 std::uint64_t g_head_world_pose_sampled_at_ms = 0;
@@ -323,6 +323,8 @@ std::uint64_t g_world_from_tracking_time = 0;
 std::uint64_t g_world_from_tracking_yaw_epoch = 0;
 runtime::VrTrackingSampleIdentity g_world_from_tracking_identity{};
 float g_head_tracking_height = 0.0F;
+float g_menu_tracking_height = 0.0F;
+std::uint64_t g_menu_tracking_height_at = 0;
 runtime::VrMatrix34 g_menu_anchor{};
 bool g_menu_anchor_valid = false; // Render thread only.
 runtime::VrMatrix44 g_world_panel_pose{}; // Render thread only.
@@ -487,10 +489,6 @@ void LogFailureOnce(const char* phase, const std::string& error) noexcept {
         TrackingWorldYaw(native_view, effective_anchor));
 
     const auto body = ReadGameplayTrackingSample();
-    if (g_height_calibration_generation != body.body_generation) {
-        g_height_calibration_generation = body.body_generation;
-        g_height_calibration_valid = false;
-    }
     if (body.character_body == nullptr || !body.body_height_valid ||
         body.sampled_at_ms == 0) return true;
 
@@ -506,24 +504,32 @@ void LogFailureOnce(const char* phase, const std::string& error) noexcept {
             native_view_rigid, native_head_pose, error)) return false;
     const float native_y = native_head_pose.values[7];
     const float tracking_y = pose.device_to_absolute.values[7];
-    if (!g_height_calibration_valid) {
-        // Align the Rework tracking transform to the observed standing camera
-        // once per native body. No guessed Requiem camera-height offset.
-        if (body.native_crouched) return true;
-        float uncalibrated_y = 0.0F;
-        if (!ComposeRequiemTrackedHeadHeight(
-                body.body_center_y, body.active_size_y, tracking_y,
-                0.0F, false, false, uncalibrated_y, error)) return false;
-        g_height_calibration = native_y - uncalibrated_y;
-        g_height_calibration_valid = true;
-    }
+    // The intro's scripted camera/crouch must never become a permanent VR
+    // height offset. As in Rework/BP, feet + tracked HMD + user profile own Y.
     float tracked_y = 0.0F;
-    if (!ComposeRequiemTrackedHeadHeight(
+    AcquireSRWLockShared(&g_height_settings_lock);
+    const auto height_settings = g_height_settings;
+    ReleaseSRWLockShared(&g_height_settings_lock);
+    if (!ComposeRequiemConfiguredHeadHeight(
             body.body_center_y, body.active_size_y, tracking_y,
-            g_height_calibration, body.native_crouched,
+            height_settings, g_height_play_mode, body.native_crouched,
             body.physical_crouch, tracked_y, error)) return false;
-    std::array<float, 3> translation{0.0F, tracked_y - native_y, 0.0F};
     const auto now = GetTickCount64();
+    thread_local std::uint64_t logged_height_generation = 0;
+    thread_local std::uint64_t logged_height_at = 0;
+    if (logged_height_generation != body.body_generation ||
+        now - logged_height_at >= 5000) {
+        logged_height_generation = body.body_generation;
+        logged_height_at = now;
+        probe::WriteLog(
+            "Requiem tracked height generation=%llu feet_y=%.3f native_camera_y=%.3f tracking_y=%.3f world_y=%.3f height_offset=%.3f seated_offset=%.3f native_crouched=%u physical_crouch=%u",
+            static_cast<unsigned long long>(body.body_generation),
+            body.body_center_y - body.active_size_y * 0.5F, native_y,
+            tracking_y, tracked_y, height_settings.height_offset,
+            g_height_play_mode.status().seated_offset,
+            body.native_crouched ? 1U : 0U, body.physical_crouch ? 1U : 0U);
+    }
+    std::array<float, 3> translation{0.0F, tracked_y - native_y, 0.0F};
     if (body.room_scale_valid && body.sampled_at_ms != 0 &&
         now >= body.sampled_at_ms && now - body.sampled_at_ms <= 250 &&
         (body.tracking_identity.pose_epoch == 0 ||
@@ -600,6 +606,10 @@ void PublishTrackedHeadWorldPose(
     g_head_world_pose_valid = valid;
     g_head_tracking_height = valid && std::isfinite(tracking_height)
         ? tracking_height : 0.0F;
+    if (std::isfinite(tracking_height)) {
+        g_menu_tracking_height = tracking_height;
+        g_menu_tracking_height_at = sampled_at_ms;
+    }
     ReleaseSRWLockExclusive(&g_head_world_pose_lock);
 }
 
@@ -2851,6 +2861,13 @@ bool RemoveRenderWorld(std::string& error) noexcept {
     return false;
 }
 
+void ConfigurePresentationSettings(runtime::VrSettings settings) noexcept {
+    runtime::NormalizeVrSettings(settings);
+    AcquireSRWLockExclusive(&g_height_settings_lock);
+    g_height_settings = settings;
+    ReleaseSRWLockExclusive(&g_height_settings_lock);
+}
+
 bool StartPresentation(runtime::OpenVrSession& session,
     std::string& error) noexcept {
     error.clear();
@@ -2892,9 +2909,12 @@ bool StartPresentation(runtime::OpenVrSession& session,
     for (auto& ticks : g_eye_ticks) ticks.store(0, std::memory_order_relaxed);
     g_overlay_ticks.store(0, std::memory_order_relaxed);
     g_submit_ticks.store(0, std::memory_order_relaxed);
-    g_height_calibration_generation = 0;
-    g_height_calibration_valid = false;
+    g_height_play_mode.Reset();
     ResetTrackedHeadWorldPose();
+    AcquireSRWLockExclusive(&g_head_world_pose_lock);
+    g_menu_tracking_height = 0.0F;
+    g_menu_tracking_height_at = 0;
+    ReleaseSRWLockExclusive(&g_head_world_pose_lock);
     AcquireSRWLockExclusive(&g_tracking_world_lock);
     g_world_from_tracking_time = 0;
     g_world_from_tracking_yaw_epoch = 0;
@@ -2966,6 +2986,17 @@ bool TrackedHeadTrackingHeight(float& height) noexcept {
         valid, sampled_at_ms, GetTickCount64()) && std::isfinite(height);
 }
 
+bool TrackedHeadTrackingHeightForMenu(float& height) noexcept {
+    if (!g_presenting.load(std::memory_order_acquire)) return false;
+    AcquireSRWLockShared(&g_head_world_pose_lock);
+    height = g_menu_tracking_height;
+    const auto sampled_at = g_menu_tracking_height_at;
+    ReleaseSRWLockShared(&g_head_world_pose_lock);
+    const auto now = GetTickCount64();
+    return sampled_at != 0 && now >= sampled_at && now - sampled_at <= 500 &&
+        std::isfinite(height);
+}
+
 RequiemPresentationTiming ConsumePresentationTiming() noexcept {
     LARGE_INTEGER frequency{};
     QueryPerformanceFrequency(&frequency);
@@ -3021,8 +3052,7 @@ void OnSdlSwap(std::uint64_t) noexcept {
         std::string error;
         if (g_targets.Destroy(error) && g_overlay_targets.Destroy(error)) {
             g_tracking_anchor_valid = false;
-            g_height_calibration_generation = 0;
-            g_height_calibration_valid = false;
+            g_height_play_mode.Reset();
             ResetTrackedHeadWorldPose();
             g_menu_anchor_valid = false;
             g_world_panel_valid = false;
@@ -3075,6 +3105,11 @@ void OnSdlSwap(std::uint64_t) noexcept {
         LogFailureOnce("menu HMD pose", "The HMD pose is not tracked");
         return;
     }
+
+    AcquireSRWLockExclusive(&g_head_world_pose_lock);
+    g_menu_tracking_height = pose.device_to_absolute.values[7];
+    g_menu_tracking_height_at = GetTickCount64();
+    ReleaseSRWLockExclusive(&g_head_world_pose_lock);
 
     const bool recenter = g_recenter_requested.exchange(
         false, std::memory_order_acq_rel);

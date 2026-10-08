@@ -1,4 +1,5 @@
 #include "gameplay_bridge.hpp"
+#include "native_vr_settings_menu.hpp"
 
 #include "gameplay_contract.hpp"
 #include "hand_contact_probe.hpp"
@@ -176,6 +177,7 @@ std::atomic<unsigned> g_active_callbacks{0};
 std::atomic<bool> g_crouch_reset_requested{false};
 std::atomic<bool> g_native_ui_active{false};
 std::atomic<NativeUiSurface> g_native_ui_surface{NativeUiSurface::none};
+std::atomic<bool> g_native_pointer_observed{false};
 std::atomic<bool> g_recenter_body_requested{false};
 std::atomic<std::uint64_t> g_vr_interact_presses{0};
 std::atomic<std::uint64_t> g_vr_inventory_presses{0};
@@ -185,6 +187,8 @@ std::atomic<std::uint64_t> g_ui_updates{0};
 std::atomic<std::uint64_t> g_native_move_enters{0};
 runtime::VrPhysicalCrouchPolicy g_crouch_policy; // ButtonHandler update thread.
 runtime::VrSnapTurn g_turn; // ButtonHandler update thread.
+runtime::VrSettings g_settings;
+SRWLOCK g_settings_lock = SRWLOCK_INIT;
 void* g_crouch_player = nullptr;
 void* g_crouch_body = nullptr;
 void* g_crouch_owner_player = nullptr;
@@ -732,6 +736,14 @@ void __fastcall HookedCharacterUpdate(
         g_tracking_state.room_scale_valid = true;
         g_tracking_state.head_anchor = anchor;
         g_tracking_state.body_position = body_after;
+        // Rework anchors head height from GetFeetPosition() after the native
+        // character update. ApplyQueuedLocomotion samples the body while that
+        // update is still in flight, so publish the final native Y here too.
+        // This keeps render-time height on the same post-physics sample as the
+        // native camera when stepping up slopes/stairs.
+        g_tracking_state.body_center_y = body_after[1];
+        g_tracking_state.active_size_y = active_size_y;
+        g_tracking_state.body_height_valid = true;
         g_tracking_state.observed_tracking_pose =
             tracking.pose.device_to_absolute;
         g_tracking_state.tracking_identity = tracking.pose.identity;
@@ -845,6 +857,7 @@ void __fastcall HookedPointer(
         _ReturnAddress()) - reinterpret_cast<std::uintptr_t>(g_image);
     for (const auto& entry : kPointers) {
         if (entry.site + 5 != return_rva) continue;
+        g_native_pointer_observed.store(true, std::memory_order_release);
         if (physical_delta == nullptr) return;
         auto delta = Read<std::array<float, 2>>(physical_delta, 0);
         const auto now = GetTickCount64();
@@ -910,6 +923,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     const auto& contract = GameplayContract();
     void* const player = Read<void*>(handler, contract.handler_player_offset);
     void* const init = Read<void*>(handler, 0x2C);
+    ObserveNativeVrSettingsMenu(Read<void*>(init, 0x1B8));
     runtime::VrControllerFrame frame;
     bool input_ready = false;
     const bool in_game = Read<std::int32_t>(handler, 0x3C) == 1;
@@ -919,11 +933,17 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         Read<bool>(Read<void*>(init, 0x164), 0x5C);
     const bool notebook_active =
         Read<bool>(Read<void*>(init, 0x178), 0x44);
-    const bool ui = !in_game || inventory_active || notebook_active;
-    const auto surface = !in_game ? NativeUiSurface::fullscreen
-        : inventory_active ? NativeUiSurface::inventory
-        : notebook_active ? NativeUiSurface::notebook
-        : NativeUiSurface::none;
+    const auto ui_classification = ClassifyRequiemUi(
+        in_game, inventory_active, notebook_active,
+        g_native_pointer_observed.exchange(false, std::memory_order_acq_rel));
+    const bool ui = ui_classification.active;
+    const auto surface = ui_classification.surface == RequiemUiSurface::fullscreen
+        ? NativeUiSurface::fullscreen
+        : ui_classification.surface == RequiemUiSurface::inventory
+            ? NativeUiSurface::inventory
+            : ui_classification.surface == RequiemUiSurface::notebook
+                ? NativeUiSurface::notebook
+                : NativeUiSurface::none;
     if (ui) g_ui_updates.fetch_add(1, std::memory_order_relaxed);
     g_native_ui_active.store(ui, std::memory_order_release);
     g_native_ui_surface.store(surface, std::memory_order_release);
@@ -958,11 +978,14 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     const bool body_present = current_body != nullptr;
     const bool gameplay_active = input_ready && frame.focused &&
         !ui && body_present;
+    AcquireSRWLockShared(&g_settings_lock);
+    const auto settings = g_settings;
+    ReleaseSRWLockShared(&g_settings_lock);
     const float turn = g_turn.Update(frame.input.state.turn,
-        gameplay_active, runtime::VrTurnMode::snap, dt,
-        runtime::vr_setting_limits::kSnapTurnAngle.default_value,
-        runtime::vr_setting_limits::kSmoothTurnSpeed.default_value,
-        runtime::vr_setting_limits::kTurnDeadZone.default_value);
+        gameplay_active, settings.turn_mode, dt,
+        settings.snap_turn_angle,
+        settings.smooth_turn_speed,
+        settings.turn_dead_zone);
     if (turn != 0.0F) AddTrackedWorldYaw(-turn);
     const auto pointer = runtime::SelectUiPointerPose(
         frame, frame.interact_source);
@@ -988,8 +1011,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         frame.input.state.crouch;
     static_cast<void>(g_crouch_policy.Update(
         crouch_button,
-        runtime::VrCrouchMode::hybrid,
-        runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value,
+        settings.crouch_mode,
+        settings.physical_crouch_depth,
         stance_tracking_active,
         tracking_valid,
         head_height,
@@ -1367,6 +1390,20 @@ bool InstallGameplayBridge(std::string& error) noexcept {
 
     g_installed.store(true, std::memory_order_release);
     return true;
+}
+
+void ConfigureGameplaySettings(runtime::VrSettings settings) noexcept {
+    runtime::NormalizeVrSettings(settings);
+    AcquireSRWLockExclusive(&g_settings_lock);
+    g_settings = settings;
+    ReleaseSRWLockExclusive(&g_settings_lock);
+}
+
+bool OpenNativeControllerBindings(std::string& error) noexcept {
+    AcquireSRWLockShared(&g_session_lock);
+    const bool opened = g_session != nullptr && g_session->OpenControllerBindings(error);
+    ReleaseSRWLockShared(&g_session_lock);
+    return opened;
 }
 
 bool GameplayBridgeInstalled() noexcept {

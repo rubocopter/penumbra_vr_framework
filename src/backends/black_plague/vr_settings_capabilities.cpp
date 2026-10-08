@@ -1,5 +1,7 @@
 #include "vr_settings_capabilities.hpp"
+#include "../../adapters/hpl1/native_vr_menu_policy.hpp"
 
+#include <cmath>
 #include <cstddef>
 
 namespace penumbra_vr::backends::black_plague {
@@ -40,6 +42,49 @@ runtime::VrSettingCapabilities BlackPlagueVrSettingCapabilities() noexcept {
     }
 
     return capabilities;
+}
+
+bool TryCalibratePlayerHeight(
+    runtime::VrSettings& settings,
+    float tracked_height) noexcept {
+    if (!std::isfinite(tracked_height) ||
+        tracked_height <= 0.90F || tracked_height >= 2.20F) {
+        return false;
+    }
+
+    settings.player_height = tracked_height;
+    runtime::NormalizeVrSettings(settings);
+    return true;
+}
+
+bool BlackPlagueVrMenuNeedsRebind(
+    bool has_bound_root,
+    bool same_menu) noexcept {
+    return !has_bound_root || !same_menu;
+}
+
+bool BlackPlagueVrMenuRootBindingMatches(
+    const void* bound_root, const void* live_widget,
+    const void* widget_vtable, const void* native_button_vtable,
+    int target_state) noexcept {
+    return adapters::hpl1::NativeVrMenuRootBindingMatches(
+        bound_root, live_widget, widget_vtable, native_button_vtable, target_state);
+}
+
+bool BlackPlagueVrMenuNeedsRebindOnStateTransition(
+    int next_state,
+    bool has_bound_root,
+    bool same_menu) noexcept {
+    return adapters::hpl1::NativeVrMenuNeedsRebindOnStateTransition(
+        next_state, has_bound_root, same_menu);
+}
+
+bool BlackPlagueCalibrationPoseUsable(
+    bool has_sample,
+    float tracked_height,
+    std::uint64_t age_ms) noexcept {
+    return has_sample && std::isfinite(tracked_height) &&
+        age_ms <= kBlackPlagueCalibrationMaxPoseAgeMs;
 }
 
 } // namespace penumbra_vr::backends::black_plague

@@ -452,6 +452,36 @@ int RunSpatialTest() {
         if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
             selected.body!=touched_body.data() || selected.assisted ||
             std::abs(selected.distance-0.04F)>=0.00001F) return 54;
+        // A locker/vice owns a static frame and a movable child. The closer
+        // frame cannot steal the palm pick from its nearby door/handle.
+        std::array<std::uint8_t,0x500> static_frame{};
+        std::array<void*,2> assembly{static_frame.data(),touched_body.data()};
+        Put(static_frame.data(),0,g_image+kPhysicsBodyVtable);
+        Put(static_frame.data(),kBodyActiveOffset,true);
+        Put(static_frame.data(),kBodyCollideOffset,true);
+        Put(static_frame.data(),kBodyUserDataOffset,
+            static_cast<void*>(touched_entity.data()));
+        Put(touched_body.data(),0x434,5.0F);
+        Put(touched_entity.data(),0x14C,assembly.data());
+        Put(touched_entity.data(),0x150,assembly.data()+assembly.size());
+        test_palm_overlap.hit_count=2;
+        test_palm_overlap.hits[1]={};
+        test_palm_overlap.hits[1].body=static_frame.data();
+        test_palm_overlap.hits[1].contact_sum={0.01F,0,0};
+        test_palm_overlap.hits[1].contact_count=1;
+        for (const auto type : {kObjectEntityType,kWheelEntityType}) {
+            Put(touched_entity.data(),kEntityTypeOffset,type);
+            if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+                selected.body!=touched_body.data()) return 176;
+        }
+        // A native directional ray must apply the same assembly policy.
+        RankedRayCallback ranked{};
+        struct Params { float t; float dist; Vec normal; Vec point; };
+        Params frame_hit{0,0.01F,{}, {0.01F,0,0}};
+        Params door_hit{0,0.04F,{}, {0.04F,0,0}};
+        RankedRayCallback::Intersect(&ranked,nullptr,static_frame.data(),&frame_hit);
+        RankedRayCallback::Intersect(&ranked,nullptr,touched_body.data(),&door_hit);
+        if (ranked.best_body!=touched_body.data()) return 177;
         test_palm_overlap_available=false;
         test_palm_overlap={};
     }
@@ -1080,6 +1110,31 @@ int RunSpatialTest() {
     ServiceSpatialInteraction(player.data(),false);
     if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3 ||
         Read<float>(body.data(),0x430)!=4) return 49;
+
+    // BP's Wheel uses the same native Move=2 transition as its lever. The
+    // vice must consume the hand hinge servo after native authorization,
+    // while bare contact must never activate or bypass the wheel lifecycle.
+    Put(mechanism_entity.data(),kEntityTypeOffset,kWheelEntityType);
+    MoveHold untouched_wheel{};
+    if (BindRecognizedMechanism(body.data(),untouched_wheel)) return 170;
+    hand.device_to_absolute.values[11]=0;
+    test_frame.input.state.interact.pressed=true;
+    test_frame.input.state.interact.just_pressed=true;
+    g_vr_selection_ready=true; g_vr_selection_player=player.data();
+    HookedMoveEnter(move_state.data(),nullptr,nullptr);
+    Put(player.data(),0x2BC,2);
+    ServiceSpatialInteraction(player.data(),false);
+    if (!g_move_held.load() || g_move_hold.mode!=MoveHold::Mode::hinge) return 171;
+    hand.device_to_absolute.values[11]=0.05F;
+    HookedMoveUpdate(move_state.data(),nullptr,0.016F);
+    const auto wheel_angular=Read<Vec>(body.data(),0x460);
+    if (std::abs(wheel_angular[1])<0.01F ||
+        std::abs(wheel_angular[0])>0.001F || std::abs(wheel_angular[2])>0.001F)
+        return 172;
+    test_frame.input.state.interact.pressed=false;
+    ServiceSpatialInteraction(player.data(),false);
+    if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3 ||
+        Read<float>(body.data(),0x430)!=4) return 173;
 
     // Once the native game has already committed an Object to Move=2, Rework
     // drives its recognized hinge/slider exactly like other Move mechanisms.

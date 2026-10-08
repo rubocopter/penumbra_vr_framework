@@ -19,6 +19,7 @@ std::array<void*, 16> g_move_states{};
 void* g_test_player = g_player_storage.data();
 unsigned int g_native_update_calls = 0;
 bool g_stationary_native_update = false;
+bool g_simulate_native_step_climb = false;
 bool g_replace_player_body_during_native_update = false;
 bool g_activate_death_during_native_update = false;
 void* g_replacement_player_body = nullptr;
@@ -71,6 +72,14 @@ void __fastcall FakeUpdate(void* body, void*, float) {
     auto* const current_position = reinterpret_cast<Vec3*>(
         static_cast<std::uint8_t*>(body) + kCharacterPositionOffset);
     ApplyQueuedPhysicalDisplacement(body, current_position);
+    Put(body, kCharacterSteppedThisTickOffset, static_cast<std::uint8_t>(0));
+    if (g_simulate_native_step_climb) {
+        Vec3 stepped = Read<Vec3>(body, kCharacterPositionOffset);
+        stepped.y += 0.01F;
+        Put(body, kCharacterPositionOffset, stepped);
+        Put(body, kCharacterSteppedThisTickOffset,
+            static_cast<std::uint8_t>(1));
+    }
     if (g_replace_player_body_during_native_update) {
         Put(g_player_storage.data(), kPlayerCharacterBodyOffset,
             g_replacement_player_body);
@@ -136,8 +145,9 @@ int RunBodyCollisionProbeTest() {
     std::memcpy(image + kCharacterRayIntersect,
         kCharacterRayIntersectSignature.data(),
         kCharacterRayIntersectSignature.size());
-    std::memcpy(image + kPhysicalStepDecision,
-        kPhysicalStepWindow.data(), kPhysicalStepWindow.size());
+    std::memcpy(image + kPhysicalStepRayResultFilter,
+        kPhysicalStepRayResultWindow.data(),
+        kPhysicalStepRayResultWindow.size());
     void* const ray_intersect = image + kCharacterRayIntersect;
     std::memcpy(image + kCharacterRayIntersectSlot,
         &ray_intersect, sizeof(ray_intersect));
@@ -218,7 +228,9 @@ int RunBodyCollisionProbeTest() {
     g_physical_step_nearest_static = true;
     g_physical_step_nearest_normal_y = 1.0F;
     if (!PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
-        g_tick.physical_step_climb_suppressed) return 87;
+        g_tick.physical_step_climb_suppressed ||
+        !g_tick.physical_step_candidate_height_valid ||
+        !Near(g_tick.physical_step_candidate_height, 0.05F)) return 87;
     g_physical_step_nearest_normal_y = 0.0F;
     if (!ShouldRejectPhysicalStepHit() ||
         !g_tick.physical_step_climb_suppressed) return 92;
@@ -234,8 +246,18 @@ int RunBodyCollisionProbeTest() {
     if (!PhysicalRoomScaleStepTick() || ShouldRejectPhysicalStepHit() ||
         g_tick.physical_step_climb_suppressed) return 88;
     g_physical_step_nearest_static = false;
-    if (!ShouldRejectPhysicalStepHit() ||
-        !g_tick.physical_step_climb_suppressed) return 93;
+    // Rework's physical phase is static-only, then its distinct stick phase
+    // restores dynamic step eligibility. Combining phases must not let tiny
+    // tracked motion disable a valid stick step onto a movable low prop.
+    if (ShouldRejectPhysicalStepHit() ||
+        g_tick.physical_step_climb_suppressed) return 93;
+    g_physical_step_nearest_normal_y = 0.0F;
+    if (!ShouldRejectPhysicalStepHit()) return 140;
+    g_tick.physical_step_climb_suppressed = false;
+    g_physical_step_nearest_normal_y = 1.0F;
+    Put(step_ray_callback.data(), 4, size.y + 0.05F);
+    if (!ShouldRejectPhysicalStepHit()) return 141;
+    Put(step_ray_callback.data(), 4, size.y - 0.05F);
     g_tick.physical_step_climb_suppressed = false;
     g_tick.locomotion_request_injected = false;
     g_tick.position_before = {};
@@ -470,13 +492,18 @@ int RunBodyCollisionProbeTest() {
 
     g_stationary_native_update = true;
     g_collision_x_adjustment = 0.0F;
+    g_simulate_native_step_climb = true;
     if (!QueuePhysicalBodyDisplacement({0.03F, 99.0F, 0.04F})) return 49;
     HookedCharacterUpdate(g_body_storage.data(), nullptr, 0.016F);
+    g_simulate_native_step_climb = false;
     const auto physical_sample = ConsumeBodyCollisionTelemetry();
     physical = ConsumePhysicalBodyDisplacementTelemetry();
     if (!physical_sample.valid || !physical_sample.collision_sample_valid ||
         !physical_sample.physical_request_consumed ||
         !physical_sample.physical_request_injected ||
+        !physical_sample.native_step_climb_flag ||
+        !physical_sample.physical_step_climb_accepted ||
+        physical_sample.physical_step_climb_accepts != 1 ||
         !Near(physical_sample.physical_requested_displacement[0], 0.03F) ||
         !Near(physical_sample.physical_requested_displacement[1], 0.0F) ||
         !Near(physical_sample.physical_requested_displacement[2], 0.04F) ||
@@ -898,9 +925,9 @@ int RunBodyCollisionProbeTest() {
     if (!std::equal(kPhysicalRequestWindow.begin(),
             kPhysicalRequestWindow.end(),
             image + kPhysicalRequestInjection)) return 48;
-    if (!std::equal(kPhysicalStepWindow.begin(),
-            kPhysicalStepWindow.end(),
-            image + kPhysicalStepDecision)) return 89;
+    if (!std::equal(kPhysicalStepRayResultWindow.begin(),
+            kPhysicalStepRayResultWindow.end(),
+            image + kPhysicalStepRayResultFilter)) return 89;
 
     image[kPhysicsWorldCharacterUpdateCall] = 0x90;
     if (InstallForImage(image, error) || error.empty()) {

@@ -3,6 +3,7 @@
 #include "openvr_session.hpp"
 #include "vr_action_input.hpp"
 #include "vr_locomotion.hpp"
+#include "vr_settings.hpp"
 
 #include <array>
 #include <cstdint>
@@ -32,6 +33,8 @@ struct RequiemBodyTrackingSample final {
 [[nodiscard]] bool InstallGameplayBridge(std::string& error) noexcept;
 [[nodiscard]] bool GameplayBridgeInstalled() noexcept;
 [[nodiscard]] bool RemoveGameplayBridge(std::string& error) noexcept;
+void ConfigureGameplaySettings(runtime::VrSettings settings) noexcept;
+[[nodiscard]] bool OpenNativeControllerBindings(std::string& error) noexcept;
 void ConnectGameplayInput(runtime::OpenVrSession* session) noexcept;
 void PublishGameplayHeadTracking(const runtime::VrHmdPose& pose,
     float world_yaw) noexcept;

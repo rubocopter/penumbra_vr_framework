@@ -3,10 +3,12 @@
 #include "penumbra_vr/requiem_probe_capabilities.hpp"
 #include "penumbra_vr/requiem_probe_lifecycle.hpp"
 #include "gameplay_bridge.hpp"
+#include "native_vr_settings_menu.hpp"
 #include "render_world.hpp"
 #include "openvr_session.hpp"
 #include "opengl_eye_scissor.hpp"
 #include "sdl_frame_hook.hpp"
+#include "vr_settings_store.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -23,6 +25,24 @@ bool g_render_hook_installed = false;
 bool g_gameplay_bridge_owned = false;
 bool g_scissor_hook_installed = false;
 bool g_swap_hook_installed = false;
+bool g_native_menu_owned = false;
+penumbra_vr::runtime::VrSettings g_vr_settings;
+
+bool CommitNativeVrSettings(const penumbra_vr::runtime::VrSettings& settings,
+    std::string& error) noexcept {
+    std::wstring settings_error;
+    const auto path = penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
+    if (path.empty() || !penumbra_vr::launcher::SaveVrSettings(
+            path, settings, settings_error)) {
+        error = "Requiem VR settings could not be saved";
+        penumbra_vr::probe::WriteLog("%s", error.c_str());
+        return false;
+    }
+    penumbra_vr::backends::requiem::ConfigureGameplaySettings(settings);
+    penumbra_vr::backends::requiem::ConfigurePresentationSettings(settings);
+    error.clear();
+    return true;
+}
 
 [[nodiscard]] std::wstring ModulePath(HMODULE module) {
     std::wstring path(32768, L'\0');
@@ -36,6 +56,13 @@ bool g_swap_hook_installed = false;
 [[nodiscard]] bool Cleanup(std::string& error) noexcept {
     error.clear();
     std::string next;
+    if (g_native_menu_owned) {
+        if (!penumbra_vr::backends::requiem::RemoveNativeVrSettingsMenu(next)) {
+            error = "Native VR menu: " + next;
+            return false;
+        }
+        g_native_menu_owned = false;
+    }
     penumbra_vr::backends::requiem::ConnectGameplayInput(nullptr);
     if (g_gameplay_bridge_owned) {
         if (!penumbra_vr::backends::requiem::RemoveGameplayBridge(next)) {
@@ -107,6 +134,30 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
         InterlockedExchange(&g_state, 0);
         return 0;
     }
+
+    std::wstring settings_error;
+    auto& vr_settings = g_vr_settings;
+    const auto settings_path =
+        penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
+    if (settings_path.empty() || !penumbra_vr::launcher::LoadVrSettings(
+            settings_path, vr_settings, settings_error)) {
+        vr_settings = {};
+        penumbra_vr::probe::WriteLog(
+            "Requiem VR settings unavailable; using shared defaults");
+    }
+    penumbra_vr::backends::requiem::ConfigureGameplaySettings(vr_settings);
+    penumbra_vr::backends::requiem::ConfigurePresentationSettings(vr_settings);
+    penumbra_vr::backends::requiem::ConfigureNativeVrSettingsMenu(
+        &g_vr_settings, &CommitNativeVrSettings);
+    penumbra_vr::probe::WriteLog(
+        "Requiem VR gameplay settings turn_mode=%.*s snap_angle=%.1f smooth_speed=%.1f turn_dead_zone=%.3f crouch_mode=%.*s crouch_depth=%.3f",
+        static_cast<int>(penumbra_vr::runtime::ToConfigValue(vr_settings.turn_mode).size()),
+        penumbra_vr::runtime::ToConfigValue(vr_settings.turn_mode).data(),
+        vr_settings.snap_turn_angle, vr_settings.smooth_turn_speed,
+        vr_settings.turn_dead_zone,
+        static_cast<int>(penumbra_vr::runtime::ToConfigValue(vr_settings.crouch_mode).size()),
+        penumbra_vr::runtime::ToConfigValue(vr_settings.crouch_mode).data(),
+        vr_settings.physical_crouch_depth);
 
     const auto probe_path = ModulePath(g_instance);
     std::string error;
@@ -180,6 +231,14 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
         return 0;
     }
     g_render_hook_installed = true;
+    g_native_menu_owned = true;
+    if (!penumbra_vr::backends::requiem::InstallNativeVrSettingsMenu(error)) {
+        penumbra_vr::probe::WriteLog("Requiem native VR menu install failed: %s", error.c_str());
+        std::string cleanup_error;
+        const bool clean = Cleanup(cleanup_error);
+        InterlockedExchange(&g_state, clean ? 0 : 4);
+        return 0;
+    }
     if (!penumbra_vr::hooks::InstallOpenGlEyeScissor(error)) {
         penumbra_vr::probe::WriteLog("Requiem GL scissor install failed: %s", error.c_str());
         std::string cleanup_error;

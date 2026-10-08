@@ -8,6 +8,29 @@ evidence contradicts it.
 
 ## Before the headset session
 
+### Consolidated feedback retest across the trilogy
+
+The maintainer accepted the preceding requested BP/Requiem feedback cases on
+2026-10-08; their binary identities are recorded in
+`releases/1.0.6-feedback-acceptance.json`. Do not repeat those cases as an
+unresolved release gate. New changes require their own scoped confirmation:
+
+1. **All three menus:** open VR Settings directly at the same position in the
+   main and paused-game menus. Back must return to the first level. Reopen after
+   a map/menu recreation. Check English/Spanish labels, live setting refresh,
+   persistence and fresh-HMD height calibration, especially in Requiem.
+2. **BP mixed movement:** approach a small movable obstacle using joystick
+   movement while the HMD moves naturally. Confirm the player can negotiate a
+   native step without jumping or moving the object by hand. Recheck physical
+   wall/floor contact for mini-hops. Preserve the matching body diagnostics.
+3. **Overture pending coverage:** Quest Link 72 Hz cadence, left-eye edge
+   visibility, crouched hatch reach and constrained-door nudge remain separate
+   from the accepted BP/Requiem feedback session.
+
+The BP distance/occlusion low-pass consumer and intermittent Requiem startup
+crash remain unresolved implementation/investigation items. A successful session
+does not close either without evidence specific to that issue.
+
 1. Build and run host tests:
 
    ```powershell

@@ -30,6 +30,13 @@ struct BodyCollisionTelemetry {
     bool physical_request_consumed = false;
     bool physical_request_injected = false;
     bool physical_step_climb_suppressed = false;
+    bool native_step_climb_flag = false;
+    bool physical_step_climb_accepted = false;
+    std::uint64_t physical_step_climb_accepts = 0;
+    bool physical_step_candidate_height_valid = false;
+    float physical_step_candidate_height = 0.0F;
+    bool physical_step_nearest_static = false;
+    float physical_step_nearest_normal_y = 0.0F;
     bool locomotion_request_consumed = false;
     bool locomotion_request_injected = false;
     std::array<float, 3> physical_requested_displacement{};

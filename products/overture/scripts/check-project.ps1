@@ -319,8 +319,8 @@ if ($mainMenuSource -match 'cMainMenuWidget_VRControllerBindings') {
 if ($mainMenuSource -notmatch [regex]::Escape('ApplyVRSettings(true)')) {
     throw 'The in-game VR settings editor must apply and save changes immediately.'
 }
-if ($mainMenuSource -notmatch [regex]::Escape('eMainMenuState_Options,//eMainMenuState_OptionsVRSettings')) {
-    throw 'The VR settings state is missing from the positional menu back-state table.'
+if ($mainMenuSource -notmatch [regex]::Escape('eMainMenuState_Start,//eMainMenuState_OptionsVRSettings')) {
+    throw 'The VR settings back-state must return directly to the first-level Start menu.'
 }
 foreach ($requiredVRMenuTranslation in @(
     'VRHandedness', 'VRPlayMode', 'VRPlayerHeight', 'VRCalibrateHeight',

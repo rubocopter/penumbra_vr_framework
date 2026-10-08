@@ -1,4 +1,5 @@
 #include "render_world_probe.hpp"
+#include "vr_settings_capabilities.hpp"
 #include "room_scale_camera.hpp"
 #include "black_plague_body_adapter.hpp"
 #include "hand_contact_probe.hpp"
@@ -341,6 +342,17 @@ float g_world_movement_yaw = 0;
 bool g_world_movement_yaw_valid = false;
 bool g_world_head_pose_valid = false;
 std::uint64_t g_world_tracking_time = 0;
+// Full-screen native menus invalidate world tracking every frame. Keep the
+// actual HMD tracking-space Y separately for the explicit calibration action.
+float g_calibration_head_height = 0.0F;
+std::uint64_t g_calibration_tracking_time = 0;
+
+void ResetCalibrationTracking() noexcept {
+    AcquireSRWLockExclusive(&g_world_tracking_lock);
+    g_calibration_head_height = 0.0F;
+    g_calibration_tracking_time = 0;
+    ReleaseSRWLockExclusive(&g_world_tracking_lock);
+}
 
 void ResetTrackedWorldYawForRecenter() noexcept {
     AcquireSRWLockExclusive(&g_tracking_yaw_lock);
@@ -1528,6 +1540,8 @@ void __fastcall HookedUpdateRenderList(
         for (const auto index : {3U,7U,11U})
             g_world_anchor.values[index] = pose.device_to_absolute.values[index];
         g_world_tracking_time = GetTickCount64();
+        g_calibration_head_height = pose.device_to_absolute.values[7];
+        g_calibration_tracking_time = g_world_tracking_time;
         ReleaseSRWLockExclusive(&g_world_tracking_lock);
         // Same yaw basis as ComposeYawRecenteredTrackedHeadView. Use the
         // original rotational anchor, not g_world_anchor whose translation
@@ -2041,6 +2055,7 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     g_stereo_tracking_anchor = {};
     g_stereo_latest_pose_valid = false;
     g_stereo_latest_pose = {};
+    ResetCalibrationTracking();
     g_stereo_room_scale_sample = {};
     g_pending_gameplay_overlay_submission = {};
     g_last_submitted_presentation_sequence.store(0, std::memory_order_release);
@@ -2578,6 +2593,7 @@ bool StartTrackedStereoPresentation(
 bool StopTrackedStereoPresentation(std::string& error) noexcept {
     error.clear();
     InvalidateWorldTracking();
+    ResetCalibrationTracking();
     if (!g_stereo_persistent.load(std::memory_order_acquire)) {
         return true;
     }
@@ -2675,6 +2691,12 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     runtime::VrHmdPose pose;
     std::string error;
     if (!session->WaitForHmdPose(pose, error) || !pose.device_connected || !pose.pose_valid) return;
+    if (std::isfinite(pose.device_to_absolute.values[7])) {
+        AcquireSRWLockExclusive(&g_world_tracking_lock);
+        g_calibration_head_height = pose.device_to_absolute.values[7];
+        g_calibration_tracking_time = GetTickCount64();
+        ReleaseSRWLockExclusive(&g_world_tracking_lock);
+    }
     const bool recenter_requested =
         g_recenter_requested.exchange(false, std::memory_order_acq_rel);
     const auto anchor_plan = runtime::PlanStablePanelAnchor(
@@ -2798,6 +2820,14 @@ bool TrackedHeadTrackingHeight(float& height) noexcept {
     const auto time = g_world_tracking_time;
     ReleaseSRWLockShared(&g_world_tracking_lock);
     return time != 0 && GetTickCount64() - time <= 250 && std::isfinite(height);
+}
+bool TrackedHeadTrackingHeightForCalibration(float& height) noexcept {
+    AcquireSRWLockShared(&g_world_tracking_lock);
+    height = g_calibration_head_height;
+    const auto time = g_calibration_tracking_time;
+    ReleaseSRWLockShared(&g_world_tracking_lock);
+    const std::uint64_t age_ms = time == 0 ? 0 : GetTickCount64() - time;
+    return BlackPlagueCalibrationPoseUsable(time != 0, height, age_ms);
 }
 bool ControllerWorldPose(const runtime::VrHmdPose& controller, runtime::VrMatrix44& pose,
     std::array<float,3>& velocity, std::array<float,3>& angular) noexcept {

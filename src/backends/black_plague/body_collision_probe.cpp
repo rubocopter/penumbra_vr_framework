@@ -52,6 +52,7 @@ constexpr std::uintptr_t kCharacterSizeOffset = 0xC4;
 constexpr std::uintptr_t kCharacterPhysicsBodyOffset = 0x23C;
 constexpr std::uintptr_t kCharacterPhysicsWorldOffset = 0x240;
 constexpr std::uintptr_t kCharacterRayCallbackOffset = 0x21C;
+constexpr std::uintptr_t kCharacterSteppedThisTickOffset = 0x238;
 constexpr std::uintptr_t kPhysicsRayNormalYOffset = 0x0C;
 constexpr std::uintptr_t kCharacterMoveSpeedForwardOffset = 0x70;
 constexpr std::uintptr_t kCharacterMoveSpeedRightOffset = 0x74;
@@ -65,7 +66,7 @@ constexpr std::uintptr_t kPhysicalRequestInjection = 0xD7281;
 constexpr std::uintptr_t kCharacterRayIntersect = 0xD4E00;
 constexpr std::uintptr_t kCharacterRayVtable = 0x27F7B0;
 constexpr std::uintptr_t kCharacterRayIntersectSlot = kCharacterRayVtable + 4;
-constexpr std::uintptr_t kPhysicalStepDecision = 0xD7772;
+constexpr std::uintptr_t kPhysicalStepRayResultFilter = 0xD7772;
 
 constexpr std::array<std::uint8_t, 5> kUpdateCall{
     0xE8, 0xF1, 0x27, 0x00, 0x00};
@@ -73,7 +74,7 @@ constexpr std::array<std::uint8_t, 5> kCollisionCall{
     0xE8, 0x19, 0xD5, 0xFF, 0xFF};
 constexpr std::array<std::uint8_t, 5> kPhysicalRequestWindow{
     0xD9, 0x07, 0xD9, 0x46, 0x54}; // fld [edi]; fld [esi+54h]
-constexpr std::array<std::uint8_t, 5> kPhysicalStepWindow{
+constexpr std::array<std::uint8_t, 5> kPhysicalStepRayResultWindow{
     0x83, 0xC5, 0x0C, 0x3B, 0xD9}; // add ebp,0Ch; cmp ebx,ecx
 constexpr std::array<std::uint8_t, 8> kCharacterRayIntersectSignature{
     0x8B, 0x44, 0x24, 0x04, 0x8A, 0x90, 0xC7, 0x03};
@@ -91,16 +92,16 @@ std::atomic<std::uint8_t*> g_published_image{nullptr};
 hooks::Rel32CallHook g_update_hook;
 hooks::Rel32CallHook g_collision_hook;
 hooks::Rel32JumpHook g_physical_request_hook;
-hooks::Rel32JumpHook g_physical_step_hook;
+hooks::Rel32JumpHook g_physical_step_ray_filter_hook;
 std::atomic<bool> g_update_owner_installed{false};
 std::atomic<bool> g_physical_request_owner_installed{false};
-std::atomic<bool> g_physical_step_owner_installed{false};
+std::atomic<bool> g_physical_step_ray_filter_owner_installed{false};
 CharacterUpdate g_original_update = nullptr;
 CheckShapeWorldCollision g_original_collision = nullptr;
 CharacterRayIntersect g_original_character_ray_intersect = nullptr;
 void** g_character_ray_intersect_slot = nullptr;
 void* g_physical_request_resume = nullptr;
-void* g_physical_step_resume = nullptr;
+void* g_physical_step_ray_filter_resume = nullptr;
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 BodyCollisionTelemetry g_telemetry;
 BodyJumpBurstTelemetry g_jump_burst;
@@ -122,6 +123,8 @@ struct TickContext {
     bool physical_request_consumed = false;
     bool physical_request_injected = false;
     bool physical_step_climb_suppressed = false;
+    bool physical_step_candidate_height_valid = false;
+    float physical_step_candidate_height = 0.0F;
     bool locomotion_request_consumed = false;
     bool locomotion_request_injected = false;
     Vec3 physical_requested{};
@@ -137,7 +140,7 @@ thread_local bool g_physical_step_nearest_static = false;
 thread_local float g_physical_step_nearest_normal_y = 0.0F;
 
 void PhysicalRequestGateway() noexcept;
-void PhysicalStepGateway() noexcept;
+void PhysicalStepRayFilterGateway() noexcept;
 
 bool ReadBytes(const void* source, void* destination, std::size_t size) noexcept {
     if (source == nullptr || destination == nullptr) {
@@ -274,7 +277,8 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
     if (!g_physical_request_owner_installed.load(std::memory_order_acquire)) {
         return false;
     }
-    if (!g_physical_step_owner_installed.load(std::memory_order_acquire)) {
+    if (!g_physical_step_ray_filter_owner_installed.load(
+            std::memory_order_acquire)) {
         return false;
     }
     auto* const image = g_published_image.load(std::memory_order_acquire);
@@ -291,14 +295,16 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
     if (target != reinterpret_cast<std::uintptr_t>(&PhysicalRequestGateway)) {
         return false;
     }
-    if (!ReadBytes(image + kPhysicalStepDecision, live.data(), live.size()) ||
+    if (!ReadBytes(image + kPhysicalStepRayResultFilter,
+            live.data(), live.size()) ||
         live[0] != 0xE9) {
         return false;
     }
     std::memcpy(&displacement, live.data() + 1, sizeof(displacement));
     const auto step_target = reinterpret_cast<std::uintptr_t>(
-        image + kPhysicalStepDecision + live.size()) + displacement;
-    return step_target == reinterpret_cast<std::uintptr_t>(&PhysicalStepGateway);
+        image + kPhysicalStepRayResultFilter + live.size()) + displacement;
+    return step_target ==
+        reinterpret_cast<std::uintptr_t>(&PhysicalStepRayFilterGateway);
 }
 
 void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcept {
@@ -482,7 +488,14 @@ bool __cdecl ShouldRejectPhysicalStepHit() noexcept {
     const Vec3 size = Read<Vec3>(g_tick.character_body, kCharacterSizeOffset);
     const float min_distance = Read<float>(callback, 4);
     const float step_height = size.y - min_distance;
-    if (g_physical_step_nearest_static &&
+    g_tick.physical_step_candidate_height_valid = std::isfinite(step_height);
+    g_tick.physical_step_candidate_height =
+        g_tick.physical_step_candidate_height_valid ? step_height : 0.0F;
+    // Rework performs static-only physical motion before a separate stick
+    // update with dynamic step eligibility restored. BP combines both at its
+    // single native update: active stick intent owns eligibility for this tick.
+    // Keep positive/upward checks for both, so floor/wall hits cannot hop.
+    if ((g_physical_step_nearest_static || g_tick.locomotion_request_injected) &&
         std::isfinite(g_physical_step_nearest_normal_y) &&
         g_physical_step_nearest_normal_y >= 0.5F &&
         std::isfinite(step_height) && step_height > 0.0F) return false;
@@ -495,12 +508,12 @@ bool __cdecl ShouldRejectPhysicalStepHit() noexcept {
 // Black Plague's older cCharacterBodyRay stores neither property, so the vtable
 // observer above records both from the accepted nearest hit. This gateway runs
 // immediately after the native ray result is stored and clears an ineligible
-// hit whenever the tick contains physical room-scale translation, including a
-// tick that also carries direct VR locomotion. D7281 separately keeps native
+// hit for physical-only ticks. A mixed stick tick can step onto dynamic bodies,
+// retaining the positive/upward gate. D7281 separately keeps native
 // vPosAdd synchronized with the injected VR displacement so this step search is
 // aimed along the motion that actually reached the collision. Pure stick/native
 // locomotion without a physical component keeps the original step eligibility.
-__declspec(naked) void PhysicalStepGateway() noexcept {
+__declspec(naked) void PhysicalStepRayFilterGateway() noexcept {
     __asm {
         pushfd
         pushad
@@ -514,13 +527,13 @@ __declspec(naked) void PhysicalStepGateway() noexcept {
         mov byte ptr [esp + ebx + 37h], 0
         add ebp, 0Ch
         cmp ebx, ecx
-        jmp dword ptr [g_physical_step_resume]
+        jmp dword ptr [g_physical_step_ray_filter_resume]
     keep_step:
         popad
         popfd
         add ebp, 0Ch
         cmp ebx, ecx
-        jmp dword ptr [g_physical_step_resume]
+        jmp dword ptr [g_physical_step_ray_filter_resume]
     }
 }
 
@@ -692,6 +705,21 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
             sample.physical_request_injected = g_tick.physical_request_injected;
             sample.physical_step_climb_suppressed =
                 g_tick.physical_step_climb_suppressed;
+            sample.native_step_climb_flag =
+                Read<std::uint8_t>(character_body,
+                    kCharacterSteppedThisTickOffset) != 0;
+            sample.physical_step_climb_accepted =
+                g_tick.physical_request_injected && sample.native_step_climb_flag;
+            sample.physical_step_climb_accepts =
+                sample.physical_step_climb_accepted ? 1 : 0;
+            sample.physical_step_candidate_height_valid =
+                g_tick.physical_step_candidate_height_valid;
+            sample.physical_step_candidate_height =
+                g_tick.physical_step_candidate_height;
+            sample.physical_step_nearest_static =
+                g_physical_step_nearest_static;
+            sample.physical_step_nearest_normal_y =
+                g_physical_step_nearest_normal_y;
             sample.locomotion_request_consumed =
                 g_tick.locomotion_request_consumed;
             sample.locomotion_request_injected =
@@ -749,6 +777,8 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
             sample.character_updates += g_telemetry.character_updates;
             sample.horizontal_collision_requests +=
                 g_telemetry.horizontal_collision_requests;
+            sample.physical_step_climb_accepts +=
+                g_telemetry.physical_step_climb_accepts;
             g_telemetry = sample;
             auto remaining = g_jump_burst_remaining.load(
                 std::memory_order_relaxed);
@@ -809,14 +839,15 @@ template<std::size_t Size>
     const bool update_installed = g_update_hook.installed();
     const bool collision_installed = g_collision_hook.installed();
     const bool physical_request_installed = g_physical_request_hook.installed();
-    const bool physical_step_installed = g_physical_step_hook.installed();
+    const bool physical_step_ray_filter_installed =
+        g_physical_step_ray_filter_hook.installed();
     const bool character_ray_installed = g_character_ray_intersect_slot != nullptr;
     if (update_installed && collision_installed && physical_request_installed &&
-        physical_step_installed && character_ray_installed) {
+        physical_step_ray_filter_installed && character_ray_installed) {
         return true;
     }
     if (update_installed || collision_installed || physical_request_installed ||
-        physical_step_installed || character_ray_installed) {
+        physical_step_ray_filter_installed || character_ray_installed) {
         error = "Body/collision probe is only partially installed";
         return false;
     }
@@ -837,7 +868,8 @@ template<std::size_t Size>
         !Matches(kCharacterCollisionCall, kCollisionCall) ||
         !Matches(kPhysicalRequestInjection, kPhysicalRequestWindow) ||
         !Matches(kCharacterRayIntersect, kCharacterRayIntersectSignature) ||
-        !Matches(kPhysicalStepDecision, kPhysicalStepWindow)) {
+        !Matches(kPhysicalStepRayResultFilter,
+            kPhysicalStepRayResultWindow)) {
         error = "Body/collision boundary does not match the exact initialized build";
         g_image = nullptr;
         return false;
@@ -849,18 +881,19 @@ template<std::size_t Size>
     // its callsite is restored.
     void* const physical_request_resume = g_image + kPhysicalRequestInjection +
         kPhysicalRequestWindow.size();
-    void* const physical_step_resume = g_image + kPhysicalStepDecision +
-        kPhysicalStepWindow.size();
+    void* const physical_step_ray_filter_resume =
+        g_image + kPhysicalStepRayResultFilter +
+        kPhysicalStepRayResultWindow.size();
     if ((g_physical_request_resume != nullptr &&
          g_physical_request_resume != physical_request_resume) ||
-        (g_physical_step_resume != nullptr &&
-         g_physical_step_resume != physical_step_resume)) {
+        (g_physical_step_ray_filter_resume != nullptr &&
+         g_physical_step_ray_filter_resume != physical_step_ray_filter_resume)) {
         error = "Body/collision gateway resume target belongs to another image";
         g_image = nullptr;
         return false;
     }
     g_physical_request_resume = physical_request_resume;
-    g_physical_step_resume = physical_step_resume;
+    g_physical_step_ray_filter_resume = physical_step_ray_filter_resume;
 
     // Publish the verified native targets before either live callsite can
     // dispatch to its wrapper on another game thread. Once published, keep
@@ -964,10 +997,10 @@ template<std::size_t Size>
     }
     g_character_ray_intersect_slot = ray_slot;
     if (!hooks::InstallRel32JumpHook(
-            g_image + kPhysicalStepDecision,
-            kPhysicalStepWindow,
-            reinterpret_cast<void*>(&PhysicalStepGateway),
-            g_physical_step_hook,
+            g_image + kPhysicalStepRayResultFilter,
+            kPhysicalStepRayResultWindow,
+            reinterpret_cast<void*>(&PhysicalStepRayFilterGateway),
+            g_physical_step_ray_filter_hook,
             error)) {
         static_cast<void>(ReplacePointer(
             g_character_ray_intersect_slot,
@@ -990,7 +1023,8 @@ template<std::size_t Size>
         if (!update_rollback.empty()) error += "; " + update_rollback;
         return false;
     }
-    g_physical_step_owner_installed.store(true, std::memory_order_release);
+    g_physical_step_ray_filter_owner_installed.store(
+        true, std::memory_order_release);
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     g_jump_burst = {};
@@ -1019,9 +1053,11 @@ bool RemoveBodyCollisionProbe(std::string& error) noexcept {
     if (!ShutdownGameplayPalmResolver(error)) {
         return false;
     }
-    bool success = hooks::RemoveRel32JumpHook(g_physical_step_hook, error);
+    bool success = hooks::RemoveRel32JumpHook(
+        g_physical_step_ray_filter_hook, error);
     if (success) {
-        g_physical_step_owner_installed.store(false, std::memory_order_release);
+        g_physical_step_ray_filter_owner_installed.store(
+            false, std::memory_order_release);
     }
     if (g_character_ray_intersect_slot != nullptr) {
         if (!ReplacePointer(
@@ -1258,7 +1294,8 @@ ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
     result.expected = kPhysicalRequestWindow;
     result.owner_installed =
         g_physical_request_owner_installed.load(std::memory_order_acquire) &&
-        g_physical_step_owner_installed.load(std::memory_order_acquire);
+        g_physical_step_ray_filter_owner_installed.load(
+            std::memory_order_acquire);
     auto* const image = g_published_image.load(std::memory_order_acquire);
     if (image != nullptr) {
         static_cast<void>(ReadBytes(image + kPhysicalRequestInjection,
@@ -1277,16 +1314,17 @@ ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
     std::array<std::uint8_t, 5> step_live{};
     bool step_matches_live = false;
     if (image != nullptr &&
-        ReadBytes(image + kPhysicalStepDecision, step_live.data(), step_live.size()) &&
+        ReadBytes(image + kPhysicalStepRayResultFilter,
+            step_live.data(), step_live.size()) &&
         step_live[0] == 0xE9) {
         std::int32_t step_displacement = 0;
         std::memcpy(&step_displacement, step_live.data() + 1,
             sizeof(step_displacement));
         const auto step_target = reinterpret_cast<std::uintptr_t>(
-            image + kPhysicalStepDecision + step_live.size()) +
+            image + kPhysicalStepRayResultFilter + step_live.size()) +
             step_displacement;
         step_matches_live = step_target ==
-            reinterpret_cast<std::uintptr_t>(&PhysicalStepGateway);
+            reinterpret_cast<std::uintptr_t>(&PhysicalStepRayFilterGateway);
     }
     result.owner_matches_live = result.owner_matches_live && step_matches_live;
     result.initialized = result.owner_matches_live;

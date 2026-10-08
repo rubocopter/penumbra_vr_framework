@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "acceptedOn": "2026-10-08",
+  "evidence": "Maintainer explicitly accepted all requested BP/Requiem feedback retest cases in chat",
+  "candidate": "feedback-2026-10-08-b",
+  "installedProbeSha256": {
+    "black_plague": "2A32D758D00803B1E96BCAC0AC075C6EA9921C04CB1D31421DA224CF92DF50B1",
+    "requiem": "C24DF455A50AB244E428498D9DA958CB4B72B23346FB35F2DD6FEE23CB53DAC8"
+  },
+  "acceptedCases": {
+    "black_plague": [
+      "first-level main/pause VR Settings",
+      "height calibration and persistence",
+      "physical vice progression",
+      "locker acquisition",
+      "physical-contact mini-hop correction"
+    ],
+    "requiem": [
+      "intro height without inventory workaround",
+      "physical/button crouch",
+      "fullscreen UI/death/continue pointer",
+      "uphill slope stability",
+      "persisted turn/crouch settings"
+    ]
+  },
+  "overtureIncluded": false,
+  "newChangesExcluded": [
+    "shared binary native-menu extraction",
+    "Overture first-level VR Settings relocation",
+    "Requiem native VR Settings page",
+    "BP mixed stick/HMD dynamic-step eligibility"
+  ],
+  "newInstallerHeadsetAcceptance": "pending",
+  "fullGameSupportImplied": false
+}

@@ -18,7 +18,17 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.5
+## Current release — 1.0.6
+
+Framework v1.0.6 includes the maintainer-accepted BP/Requiem feedback fixes,
+first-level English/Spanish VR Settings across the trilogy, and the host-tested
+BP mixed stick/HMD obstacle correction. See the [release notes](releases/1.0.6.md)
+and [preceding feedback acceptance](releases/1.0.6-feedback-acceptance.json).
+The accepted preceding binaries do not validate the new shared menu extraction,
+Overture/Requiem menu routes, mixed-obstacle correction or exact new installer.
+Requiem's intermittent startup failure remains unresolved.
+
+## Historical consolidated release — 1.0.5
 
 Framework v1.0.5 consolidates the controller, Overture interaction/input,
 Black Plague Push/height/contact/pacing and installer improvements introduced

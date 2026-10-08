@@ -197,7 +197,7 @@ The `pico4_controller` (Pico 4 and Pico 4 Ultra) and `pico_neo3_controller` (Pic
 
 ## Left-handed controls
 
-Set **Options → VR Settings → Handedness** to **Left** to mirror the controls between hands. Movement, turning, gameplay actions, inventory, and UI controls all change sides. The dominant hand remains the default for tools and pointing, while either bare hand can target, grab, throw, and receive interaction haptics; the notebook remains on the off hand.
+Set **Main / pause menu → VR Settings → Handedness** to **Left** to mirror the controls between hands. Movement, turning, gameplay actions, inventory, and UI controls all change sides. The dominant hand remains the default for tools and pointing, while either bare hand can target, grab, throw, and receive interaction haptics; the notebook remains on the off hand.
 
 Pause and recenter stay on the same physical controls in both modes. Changing handedness safely holsters an equipped tool and turns off a hand-held light before the controls switch.
 
@@ -236,7 +236,7 @@ The original game exposes one active player-interaction state. Consequently, bot
 
 ## VR settings
 
-Open **Options → VR Settings** to change controls, movement, calibration, and display options. Controls and Movement occupy the left column; Calibration, Display, the graphics preset, and the desktop-mirror toggle occupy the right. The two-column layout keeps every row and the Back button inside the VR cursor's selectable area. Aim at a row and use R2 to increase or select the next value, R3 to decrease or select the previous value, and Circle to return.
+Open **Main / pause menu → VR Settings** to change controls, movement, calibration, and display options. Controls and Movement occupy the left column; Calibration, Display, the graphics preset, and the desktop-mirror toggle occupy the right. The two-column layout keeps every row and the Back button inside the VR cursor's selectable area. Aim at a row and use R2 to increase or select the next value, R3 to decrease or select the previous value, and Circle to return.
 
 Changes are saved immediately. Render scale and HRTF require a restart. Settings that do not apply to the selected turn or crouch mode are shown greyed out.
 

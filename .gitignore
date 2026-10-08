@@ -49,6 +49,7 @@ CMakeUserPresets.json
 /logs/
 /captures/
 /work/
+/local-test/
 *.dmp
 
 # Editor and OS metadata

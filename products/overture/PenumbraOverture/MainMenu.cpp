@@ -62,7 +62,7 @@ static eMainMenuState gvMenuBackStates[] = {
 		eMainMenuState_OptionsControls,//eMainMenuState_OptionsKeySetupAction,
 		eMainMenuState_OptionsControls,//eMainMenuState_OptionsKeySetupMisc,
 
-		eMainMenuState_Options,//eMainMenuState_OptionsVRSettings,
+		eMainMenuState_Start,//eMainMenuState_OptionsVRSettings,
 		eMainMenuState_Options,//eMainMenuState_GraphicsRestart,
 
 		eMainMenuState_Start,	//eMainMenuState_FirstStart,
@@ -3504,6 +3504,9 @@ void cMainMenu::CreateWidgets()
   AddWidgetToState(eMainMenuState_Start,hplNew( cMainMenuWidget_VRTutorial,(mpInit,vPos,kTranslate("MainMenu","VRTutorial"))) );
   vPos.y += 51;
 	AddWidgetToState(eMainMenuState_Start,hplNew( cMainMenuWidget_MainButton,(mpInit,vPos,kTranslate("MainMenu","Exit"),eMainMenuState_Exit)) );
+	AddWidgetToState(eMainMenuState_Start, hplNew(cMainMenuWidget_Button,
+      (mpInit, cVector3f(600, 500, 40), kTranslate("MainMenu", "VRSettings"),
+       eMainMenuState_OptionsVRSettings, 25, eFontAlign_Center)));
 	
 	
 	///////////////////////////////////
@@ -3665,8 +3668,6 @@ void cMainMenu::CreateWidgets()
 	// Options
 	///////////////////////////////////
 	vPos = vTextStart;//cVector3f(400, 260, 40);
-  AddWidgetToState(eMainMenuState_Options, hplNew(cMainMenuWidget_Button, (mpInit, vPos, kTranslate("MainMenu", "VRSettings"), eMainMenuState_OptionsVRSettings, 25, eFontAlign_Center)));
-  vPos.y += 37;
 	AddWidgetToState(eMainMenuState_Options,hplNew( cMainMenuWidget_Button,(mpInit,vPos,kTranslate("MainMenu","Controls"), eMainMenuState_OptionsControls,25,eFontAlign_Center)) );
 	vPos.y += 37;
 	AddWidgetToState(eMainMenuState_Options,hplNew( cMainMenuWidget_Button,(mpInit,vPos,kTranslate("MainMenu","Game"),eMainMenuState_OptionsGame,25,eFontAlign_Center)) );
@@ -3806,7 +3807,7 @@ AddWidgetToState(eMainMenuState_OptionsVRSettings, gpRenderToMonitorText);
   const float fVRSettingsBottom = vVRColumnPos[0].y > vPos.y ? vVRColumnPos[0].y : vPos.y;
   AddWidgetToState(eMainMenuState_OptionsVRSettings, hplNew(cMainMenuWidget_Button,
     (mpInit, cVector3f(400, fVRSettingsBottom + 18, vPos.z),
-      kTranslate("MainMenu", "Back"), eMainMenuState_Options, 18, eFontAlign_Center)));
+      kTranslate("MainMenu", "Back"), eMainMenuState_Start, 18, eFontAlign_Center)));
 
 	///////////////////////////////////
 	// Options Controls

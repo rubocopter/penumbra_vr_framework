@@ -199,7 +199,13 @@ and rig-specific axes stay in per-game/profile data.
 
 Black Plague consumes the shared settings schema through
 `%LOCALAPPDATA%\PenumbraVR\settings.ini` and a native `VR Settings` page inserted
-through the verified Options UI boundary. Input/presentation settings that are
+through the verified first-level Start menu boundary. The native widget
+lifecycle and English/Spanish labels live in
+`src/adapters/hpl1/native_vr_settings_menu.inl`, consumed by BP and Requiem.
+Each backend supplies independently mapped RVAs, native layouts and supported
+setting rows; shared runtime retains the setting semantics. Requiem observes
+its already-owned native input update to populate an existing Start page on the
+game thread even when its initial activation predates hook installation. Input/presentation settings that are
 safe to refresh apply live; render-scale/audio startup settings keep their
 restart semantics.
 

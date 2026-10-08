@@ -125,8 +125,14 @@ stage and menu row are disabled until Black Plague's pre-tone lighting response
 is calibrated. `SubtitleScale` enlarges the captured native HUD/message surface
 and is awaiting headset validation at the Rework-centered UI distance.
 
-The native Black Plague `VR Settings` page and offline editor use this shared
-schema. Edit the profile offline with:
+All three games place `VR Settings` / `Ajustes de VR` directly on the first
+level of both the main and paused-game menus, at native 800×600 coordinates
+(600, 500). Back returns to that first level. Labels follow the native game
+language; BP uses `Espanol.lang` and Requiem uses `Espanol_exp.lang`.
+The native Black Plague entry and calibration have maintainer headset acceptance
+on the preceding feedback build; the shared extraction and new Overture/Requiem
+routes remain host-tested. Its page and offline editor use this shared schema.
+Edit the profile offline with:
 
 ```powershell
 .\build\bin\Release\PenumbraVR.ProbeLauncher.exe --configure-vr black-plague
@@ -139,11 +145,19 @@ preflight and out-of-range numeric values are clamped.
 
 Requiem's recommended game-level profile is versioned in
 `assets/settings/recommended.json`. The active Requiem backend consumes common
-VR input, tracking and locomotion policy, using backend defaults for the current
-development probe. It does not yet consume a persisted Requiem VR settings block
-or expose a native VR settings page. The profile's `vr` value remains `null`:
-there is no validated user-facing Requiem VR preset to install. The exact
-current capability and headset gate are recorded in `ROADMAP.md` and
+VR input, tracking and locomotion policy. The current development probe also
+loads the shared `%LOCALAPPDATA%\PenumbraVR\settings.ini` profile and consumes
+`TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`, `TurnDeadZone`,
+`CrouchMode`, `PhysicalCrouchDepth`, `PlayMode`, `PlayerHeight` and
+`HeightOffset`. Height uses native feet and tracked HMD with these profile
+values; the scripted intro camera does not calibrate the VR height. This path
+has maintainer headset acceptance for the preceding feedback candidate.
+Requiem now exposes these nine consumed settings and fresh-HMD height calibration
+through the same native VR Settings page as Black Plague. Changes persist to the
+shared profile and refresh the gameplay/presentation snapshots live. Save
+failures roll back the edit. The new page itself is host-tested. The profile's installer `vr` value remains `null`:
+there is still no headset-validated Requiem-specific preset to install. The
+exact current capability and headset gate are recorded in `ROADMAP.md` and
 `TRILOGY_PARITY_PLAN.md`.
 
 ## Installer policy

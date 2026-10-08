@@ -872,6 +872,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 "collision_sample_valid=%u requested_delta=[%.5f,%.5f,%.5f] "
                 "solver_delta=[%.5f,%.5f,%.5f] accepted_delta=[%.5f,%.5f,%.5f] "
                 "physical_consumed=%u physical_injected=%u physical_step_suppressed=%u "
+                "native_step_flag=%u physical_step_accepted=%u "
+                "physical_step_accepts=%llu "
+                "step_candidate=[valid=%u height=%.5f static=%u normal_y=%.5f] "
                 "physical_requested=[%.5f,%.5f,%.5f] "
                 "physical_injected_delta=[%.5f,%.5f,%.5f] "
                 "locomotion_consumed=%u locomotion_injected=%u "
@@ -917,6 +920,14 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                 body.physical_request_consumed ? 1U : 0U,
                 body.physical_request_injected ? 1U : 0U,
                 body.physical_step_climb_suppressed ? 1U : 0U,
+                body.native_step_climb_flag ? 1U : 0U,
+                body.physical_step_climb_accepted ? 1U : 0U,
+                static_cast<unsigned long long>(
+                    body.physical_step_climb_accepts),
+                body.physical_step_candidate_height_valid ? 1U : 0U,
+                body.physical_step_candidate_height,
+                body.physical_step_nearest_static ? 1U : 0U,
+                body.physical_step_nearest_normal_y,
                 body.physical_requested_displacement[0],
                 body.physical_requested_displacement[1],
                 body.physical_requested_displacement[2],
@@ -973,7 +984,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                     "body_jump_tick sequence=%llu dt=%.6f player=%p body=%p "
                     "body=[%.5f,%.5f,%.5f] feet=[%.5f,%.5f,%.5f] "
                     "requested=[%.5f,%.5f,%.5f] solver=[%.5f,%.5f,%.5f] accepted=[%.5f,%.5f,%.5f] "
-                    "vertical_speed_from_accepted_delta=%.5f player_268=%ld player_26c=%u "
+                    "vertical_speed_from_accepted_delta=%.5f "
+                    "step=[native=%u physical=%u candidate_valid=%u height=%.5f static=%u normal_y=%.5f] "
+                    "player_268=%ld player_26c=%u "
                     "jump=[down_1fc=%u count_200=%.6f max_204=%.6f] move_state=[index_2d0=%ld object=%p]",
                     static_cast<unsigned long long>(sample.body_update_sequence),
                     body_sample.delta_seconds,
@@ -985,6 +998,12 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                     body_sample.collision_resolved_displacement[0], body_sample.collision_resolved_displacement[1], body_sample.collision_resolved_displacement[2],
                     body_sample.accepted_displacement[0], body_sample.accepted_displacement[1], body_sample.accepted_displacement[2],
                     vertical_speed_from_accepted_delta,
+                    body_sample.native_step_climb_flag ? 1U : 0U,
+                    body_sample.physical_step_climb_accepted ? 1U : 0U,
+                    body_sample.physical_step_candidate_height_valid ? 1U : 0U,
+                    body_sample.physical_step_candidate_height,
+                    body_sample.physical_step_nearest_static ? 1U : 0U,
+                    body_sample.physical_step_nearest_normal_y,
                     static_cast<long>(sample.player_268),
                     static_cast<unsigned int>(sample.player_26c),
                     static_cast<unsigned int>(sample.jump_button_down_1fc),

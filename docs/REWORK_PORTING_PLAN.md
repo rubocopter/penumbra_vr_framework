@@ -167,8 +167,29 @@ and permits a new calibration, matching the reported recovery. Requiem now calls
 its own manifest-confirmed lazy view/projection getters before both visibility
 and stereo snapshots. Entry signatures are validated before hooks are installed.
 A host dirty-camera regression demonstrates the stale floor-height capture and
-its correction. No camera offset, automatic recenter, or new height algorithm
-was introduced; initial height remains a focused headset regression gate.
+its correction. The later intro-height report exposes a second difference:
+Rework `Player.cpp` anchors Y to `GetFeetPosition()` and `Init.cpp` takes height
+calibration from the user profile, whereas Requiem derived a permanent offset
+from the native scripted camera once per body. Its intro script forces crouch
+and LookAt before restoring control, so that camera is not a standing reference.
+Requiem now composes feet, tracked HMD, configured height offset, seated policy
+and configured button-crouch depth through the existing runtime transform.
+Host cases cover standing, physical/button crouch, seated mode and unchanged
+height after an inventory/body reset. No automatic native-camera calibration
+or guessed offset remains; the maintainer accepted intro height and physical/
+button crouch on the feedback candidate.
+
+BP's vice exposes native `cGameWheel::OnPlayerInteract` through vtable
+`0x2793E8+0x28`, targeting `0x3B8E0`, which commits native `Move=2` at
+`0x3B9D4`. Palm targeting alone was insufficient: the committed hinge adapter
+rejected Wheel. It now accepts Wheel only after that native transition and
+retains the joint limits, native angle update and script callbacks. Rework's
+interaction rejects non-interactive bodies before ranking; BP now excludes a
+fixed Object/Wheel frame when the same entity has an active dynamic body, for
+both palm and ranked-ray acquisition. Real adapter regressions reproduce the
+wheel rejection and fixed-frame selection before the fixes. Physical vice
+progression and locker acquisition were subsequently accepted by the maintainer
+on the feedback candidate.
 
 Rework `23c890f` copies refraction from a framebuffer whose dimensions match
 its native screen texture. Requiem's binary renderer retains that copy path,
@@ -276,7 +297,7 @@ Runtime contains none of these binary values. Both primary Push callbacks and
 the secondary locomotion permission gate retain native ownership. Host tests
 exercise actual BP dispatch, native rejection and unchanged non-Push behavior;
 the exact-image verifier pins the captured stores and force consumers. The
-reported tutorial-crate symptom still requires a headset retest.
+maintainer accepted the representative tutorial-crate feedback retest.
 
 Rework and Framework Overture's `TrackedController::BeginPoseFrame` inherited
 an auxiliary aim-validity omission. The maintained product now clears aim
@@ -302,6 +323,30 @@ release, focus loss, tracking loss or disconnection. This adaptation is needed
 because BP's independently published binary presentation boundary differs from
 Rework's synchronous source hand-pose consumption. Actual-adapter tests cover
 the boundary; renewed headset acceptance remains separate.
+
+## Native menu and mixed-step adaptation
+
+Rework `23c890f` owns its VR options in source-native menu widgets. Framework
+Overture retains that page and moves its entry/Back route to Start. BP's accepted
+native-widget injector provides the binary equivalent. Requiem independently
+maps the same constructor/list/state interfaces in its canonical initialized
+image; the shared HPL adapter now contains the widget lifecycle/localization,
+while each backend keeps exact addresses/layouts and its consumed setting set.
+This is an evidenced second consumer, not a universal binary HPL contract.
+Requiem observes its existing input-update owner for initial menu injection;
+it does not add a second hook to a claimed callsite.
+
+Rework Player.cpp performs physical motion with `vr_stepstaticonly=true`, then
+clears that flag for its separate joystick body update. BP must retain one
+native body update and therefore injects both requests through `0xD7281`.
+Applying physical static-only eligibility to this mixed update rejected a
+movable step candidate even when joystick movement was injected. The actual
+adapter host regression reproduces that difference. BP now admits dynamic
+candidates in the mixed case while retaining finite, upward-normal and positive
+height guards for physical contact. Pure physical motion remains static-only;
+pure native stick movement is unchanged. No additional physics update, guessed
+collider, scale, Y clamp or movement multiplier is introduced. The mixed-case
+correction is host-tested; headset confirmation of reduced blocking remains open.
 
 ## Validation rule
 

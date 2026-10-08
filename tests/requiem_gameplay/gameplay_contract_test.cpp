@@ -120,6 +120,37 @@ int main() {
                   << error << '\n';
         return 1;
     }
+    // Entry before/after the scripted intro and reopening inventory must
+    // produce the same height from the same body/tracking/profile. Physical
+    // and button crouch must each contribute only once.
+    {
+        using namespace penumbra_vr;
+        runtime::VrSettings settings;
+        settings.height_offset = 0.1F;
+        settings.physical_crouch_depth = 0.4F;
+        runtime::VrPlayModePolicy policy;
+        float standing = 0.0F, physical = 0.0F, button = 0.0F;
+        using backends::requiem::ComposeRequiemConfiguredHeadHeight;
+        if (!ComposeRequiemConfiguredHeadHeight(0.825F,1.65F,1.7F,
+                settings,policy,false,false,standing,error) ||
+            !near(standing,1.6975F) ||
+            !ComposeRequiemConfiguredHeadHeight(0.475F,0.95F,1.3F,
+                settings,policy,true,true,physical,error) ||
+            !near(physical,1.2715F) ||
+            !ComposeRequiemConfiguredHeadHeight(0.475F,0.95F,1.7F,
+                settings,policy,true,false,button,error) ||
+            !near(button,standing-0.4F)) return 2;
+        policy.Reset(); // A menu/body publication restart cannot change Y.
+        float after_menu = 0.0F;
+        if (!ComposeRequiemConfiguredHeadHeight(0.825F,1.65F,1.7F,
+                settings,policy,false,false,after_menu,error) ||
+            !near(after_menu,standing)) return 3;
+        settings.play_mode = runtime::VrPlayMode::seated;
+        settings.player_height = 1.75F;
+        if (!ComposeRequiemConfiguredHeadHeight(0.825F,1.65F,1.1F,
+                settings,policy,false,false,after_menu,error) ||
+            !near(after_menu,1.85F)) return 4;
+    }
     if (!penumbra_vr::backends::requiem::
             RunRequiemGameplayContractHarness(error)) {
         std::cerr << "Requiem gameplay contract failed: " << error << '\n';
@@ -211,6 +242,22 @@ int main() {
     if (!accepted.publish || ShouldMarkDirectLocomotionAccepted(accepted, false) ||
         !ShouldMarkDirectLocomotionAccepted(accepted, true)) {
         std::cerr << "accepted-motion marking is not coupled to publication\n";
+        return 1;
+    }
+
+    using penumbra_vr::backends::requiem::ClassifyRequiemUi;
+    using penumbra_vr::backends::requiem::RequiemUiSurface;
+    const auto gameplay_ui = ClassifyRequiemUi(true, false, false, false);
+    const auto death_ui = ClassifyRequiemUi(true, false, false, true);
+    const auto inventory_ui = ClassifyRequiemUi(true, true, false, true);
+    const auto notebook_ui = ClassifyRequiemUi(true, false, true, true);
+    const auto main_menu_ui = ClassifyRequiemUi(false, false, false, false);
+    if (gameplay_ui.active || gameplay_ui.surface != RequiemUiSurface::none ||
+        !death_ui.active || death_ui.surface != RequiemUiSurface::fullscreen ||
+        !inventory_ui.active || inventory_ui.surface != RequiemUiSurface::inventory ||
+        !notebook_ui.active || notebook_ui.surface != RequiemUiSurface::notebook ||
+        !main_menu_ui.active || main_menu_ui.surface != RequiemUiSurface::fullscreen) {
+        std::cerr << "Requiem native-pointer UI fallback classification drifted\n";
         return 1;
     }
 

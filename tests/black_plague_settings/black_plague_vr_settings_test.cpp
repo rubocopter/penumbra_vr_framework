@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <cmath>
 #include <iostream>
 
@@ -10,6 +11,10 @@ namespace {
 
 using penumbra_vr::backends::black_plague::BlackPlagueVrSettingCapabilities;
 using penumbra_vr::backends::black_plague::BlackPlagueVrMenuSettings;
+using penumbra_vr::backends::black_plague::BlackPlagueCalibrationPoseUsable;
+using penumbra_vr::backends::black_plague::BlackPlagueVrMenuNeedsRebind;
+using penumbra_vr::backends::black_plague::BlackPlagueVrMenuNeedsRebindOnStateTransition;
+using penumbra_vr::backends::black_plague::TryCalibratePlayerHeight;
 using penumbra_vr::runtime::IsVrSettingAvailable;
 using penumbra_vr::runtime::VrSettingId;
 using penumbra_vr::runtime::VrSettings;
@@ -105,6 +110,80 @@ using penumbra_vr::runtime::VrTurnMode;
         !BlackPlaguePreserveWorldPanelOnExit(false,false,false);
 }
 
+[[nodiscard]] bool TestPlayerHeightCalibrationPolicy() {
+    VrSettings settings;
+    settings.player_height = 1.72F;
+    if (!TryCalibratePlayerHeight(settings, 1.83F) ||
+        std::abs(settings.player_height - 1.83F) > 0.0001F) {
+        return false;
+    }
+    if (!TryCalibratePlayerHeight(settings, 2.15F) ||
+        std::abs(settings.player_height - 2.10F) > 0.0001F) {
+        return false;
+    }
+
+    settings.player_height = 1.77F;
+    if (TryCalibratePlayerHeight(settings, 0.90F) ||
+        TryCalibratePlayerHeight(settings, 2.20F) ||
+        TryCalibratePlayerHeight(settings,
+            std::numeric_limits<float>::quiet_NaN()) ||
+        std::abs(settings.player_height - 1.77F) > 0.0001F) {
+        return false;
+    }
+    return true;
+}
+
+[[nodiscard]] bool TestNativeMenuRebindPolicy() {
+    return BlackPlagueVrMenuNeedsRebind(false, false) &&
+        !BlackPlagueVrMenuNeedsRebind(true, true) &&
+        BlackPlagueVrMenuNeedsRebind(true, false);
+}
+
+[[nodiscard]] bool TestNativeMenuRebindUsesSetStateDestination() {
+    constexpr int kStartState = 0;
+    return BlackPlagueVrMenuNeedsRebindOnStateTransition(
+               kStartState, false, false) &&
+        BlackPlagueVrMenuNeedsRebindOnStateTransition(
+            kStartState, true, false) &&
+        !BlackPlagueVrMenuNeedsRebindOnStateTransition(
+            kStartState, true, true) &&
+        !BlackPlagueVrMenuNeedsRebindOnStateTransition(8, false, false) &&
+        !BlackPlagueVrMenuNeedsRebindOnStateTransition(7, false, false);
+}
+
+[[nodiscard]] bool TestCalibrationCanUseLastValidTrackedPose() {
+    constexpr std::uint64_t kFreshMenuAgeMs = 100;
+    return BlackPlagueCalibrationPoseUsable(true, 1.78F, kFreshMenuAgeMs) &&
+        BlackPlagueCalibrationPoseUsable(true, 1.78F,
+            penumbra_vr::backends::black_plague::kBlackPlagueCalibrationMaxPoseAgeMs) &&
+        !BlackPlagueCalibrationPoseUsable(true, 1.78F,
+            penumbra_vr::backends::black_plague::kBlackPlagueCalibrationMaxPoseAgeMs + 1) &&
+        !BlackPlagueCalibrationPoseUsable(false, 1.78F, 0) &&
+        !BlackPlagueCalibrationPoseUsable(
+            true, std::numeric_limits<float>::quiet_NaN(), kFreshMenuAgeMs);
+}
+
+[[nodiscard]] bool TestNativeMenuRecreationReusesRootAddress() {
+    using namespace penumbra_vr::backends::black_plague;
+    int root_storage = 0;
+    int button_vtable = 0;
+    int other_vtable = 0;
+    const auto retain = [&](const void* live, const void* vtable, int target) {
+        return BlackPlagueVrMenuRootBindingMatches(
+            &root_storage, live, vtable, &button_vtable, target);
+    };
+    if (!retain(&root_storage, &button_vtable, kBlackPlagueVrMenuRootSentinel))
+        return false;
+    // CreateWidgets frees the root and constructs a normal Start button in
+    // the same allocation. Membership alone must not preserve stale rows.
+    if (retain(&root_storage, &button_vtable, 0) ||
+        retain(&root_storage, &other_vtable, kBlackPlagueVrMenuRootSentinel) ||
+        retain(nullptr, &button_vtable, kBlackPlagueVrMenuRootSentinel))
+        return false;
+    return BlackPlagueVrMenuNeedsRebindOnStateTransition(
+        0, retain(&root_storage, &button_vtable, 0), true);
+}
+
 } // namespace
 
 int main() {
@@ -113,6 +192,11 @@ int main() {
     if (!TestNativeMenuUsesExactCapabilitySurface()) return 3;
     if (!TestReworkInventoryAndSubtitleGeometry()) return 4;
     if (!TestWorldPanelClosingFrame()) return 5;
+    if (!TestPlayerHeightCalibrationPolicy()) return 6;
+    if (!TestNativeMenuRebindPolicy()) return 7;
+    if (!TestNativeMenuRebindUsesSetStateDestination()) return 8;
+    if (!TestCalibrationCanUseLastValidTrackedPose()) return 9;
+    if (!TestNativeMenuRecreationReusesRootAddress()) return 10;
     std::cout << "Black Plague VR settings expose only backend-wired capabilities\n";
     return 0;
 }

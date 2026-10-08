@@ -21,12 +21,14 @@ Extraction alone is not parity. Validation uses the common ladder:
 
 ## Capability ledger
 
-Current release regression: the user's Requiem run started near floor height
-until inventory was opened. Refreshing the exact native lazy camera caches
-before capture is host-tested; initial-height headset confirmation remains
-pending. Overture's excessive door nudge is addressed at its Newton delta-velocity
-boundary and also awaits headset confirmation. See
-`REWORK_PORTING_PLAN.md` for the reference comparison and correction contracts.
+The maintainer accepted the requested BP/Requiem feedback retest on 2026-10-08.
+The [scoped acceptance record](releases/1.0.6-feedback-acceptance.json) pins the
+preceding installed binaries: BP vice/locker acquisition, first-level settings
+and height calibration, contact mini-hop correction, and Requiem intro height,
+crouch, fullscreen UI, slope stability and persisted controls. Overture was not
+included in that retest. The new shared native-menu extraction, Overture/Requiem
+first-level routes and BP mixed stick/HMD obstacle correction are host-tested;
+they do not inherit headset acceptance from those preceding binaries.
 
 | Capability family | Shared/framework state | Black Plague | Requiem | Remaining evidence/work |
 | --- | --- | --- | --- | --- |
@@ -37,9 +39,9 @@ boundary and also awaits headset confirmation. See
 | Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Tool/hand motion and final native-size flashlight beam/model alignment headset-validated | BP finger/material pass; slight finger/contact imperfections remain |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
 | Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Surface-contact Grab port has headset evidence from acquiring a chair at different points; stale/native picks retain origin fallback | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP held turn/throw/mechanism regression; Requiem throwable prop and distinct Move path when encountered |
-| Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership; native `Push=1` tracked-palm adapter host-tested for the tutorial heavy crate | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Focused BP tutorial-crate headset retest; Requiem mechanism comfort investigation |
+| Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership; native `Push=1` tracked-palm adapter host-tested for the tutorial heavy crate; native Move Wheel hinge and dynamic-over-frame acquisition headset-accepted on the feedback build | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Broader BP mechanism regression; Requiem mechanism comfort investigation |
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
-| VR settings/config | Shared schema/editor policy plus per-game data | Native settings consumer implemented | No validated persisted Requiem VR block yet | Headset settings regression; Requiem user-facing profile later |
+| VR settings/config | Shared schema/editor policy plus per-game data | First-level native settings and height calibration headset-accepted; shared extraction host-tested | Persisted turn/crouch and play-mode/height consumed; nine-row native first-level VR page, live refresh and calibration host-tested | New Overture/Requiem menu routes and shared extraction headset confirmation; broader profile coverage |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
 | Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; observed special effects now render correctly in headset with native full-eye copy/resize telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Coverage of all smoke/material variants and subtle ghosting remains unestablished |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | v1.0.0 package/selector/GUI host-tested with maintainer real-install, uninstall and game-entry acceptance; independent clean-PC breadth remains open |
@@ -108,17 +110,66 @@ follow the published v1.0.2 and do not retroactively change that artifact.
 The unreleased offline follow-up aligns BP's native Push axis-force dispatch
 with HMD-relative body intent using the projection already consumed by Requiem.
 BP-owned captured axes and callback slots are exact-image verified; actual
-dispatch, native rejection and non-Push behavior are host-tested. The tutorial
-crate still needs a local headset retest. Overture's actual action/legacy
+dispatch, native rejection and non-Push behavior are host-tested. The representative tutorial crate received local headset acceptance; broader
+Push coverage remains separate. Overture's actual action/legacy
 consumer is now host-tested for immediate focus release, held-button recovery
 and fresh grip fallback after auxiliary aim loss. These changes do not identify
 or validate a fix for the reported pre-menu crash.
 
+The BP vice model is `Type="Wheel"`, and `level01_cells.hps` reads its native
+angle and owns its `SetWheelCallback` progression. The exact BP 2.2.0.0
+`cGameWheel` constructor (RVA `0x5A340`) sets entity type `0x13`. The palm
+target filter admits that type. The latest physical hinge consumer also accepts
+Wheel after its proven native `Move=2` transition; the earlier consumer rejected
+it even after targeting succeeded. Fixed frames with active dynamic siblings
+no longer win palm/ray selection for the vice or locker. Native acceptance,
+wheel physics, joint limits and level callbacks remain authoritative. The probe
+build and focused host regression tests pass. Wheel acquisition and actual
+rotation received maintainer headset acceptance on the feedback candidate;
+broader mechanism coverage remains separate.
+
+The next unreleased feedback pass keeps Overture's logic cadence aligned to the
+active HMD display frequency reported by OpenVR, with the proven 90 Hz behavior
+as fallback when that property is unavailable. Its shared visibility pass now
+uses the union of both asymmetric eye projections before exact per-eye rendering,
+targeting the reported left-eye edge disappearance without widening either
+rendered eye. Both policies are host-tested and the Overture Release build passes
+its existing VR regression suite; Quest 3/Link 72 Hz headset confirmation is
+still pending. Black Plague also exposes the Overture-style height calibration
+action through its native VR Settings page. The subsequent PSVR2 report
+confirmed calibration still failed: full-screen menu presentation invalidates
+world tracking every frame. The follow-up caches raw HMD tracking height from
+both world and menu poses independently of the world anchor, accepts only a
+finite sample no older than 500 ms and clears it on session restart. Values are
+still normalized through the shared settings schema and persistence errors roll
+back. Build and settings-policy tests pass; the maintainer accepted the subsequent
+feedback calibration retest.
+The native settings injector now binds from the exact BP 2.2.0.0
+`cMainMenu::SetState` boundary (RVA `0x7A680`). Its ten verified direct
+callsites cover both front-end and in-game menu routes. VR Settings now lives
+in the first-level Start state `0`, without entering Options. Injection runs
+after native state activation and rebinds when the owner changes or its widget
+list is rebuilt. A recycled widget address is rejected unless its live button
+vtable and injected-root sentinel still match; the address-reuse case fails
+before the identity check and passes after it in host tests.
+The maintainer accepted the requested first-level main-menu/in-game settings
+and persisted-height feedback retest. This is scoped to the preceding BP build.
+
+The accepted feedback build also filters physical step candidates by Rework's
+positive/upward/static eligibility at the native ray-result boundary. The new
+mixed-input correction lets the native stick update consider dynamic obstacles
+when bounded joystick intent was actually injected, while retaining the
+physical positive/upward guards. A host regression reproduced the former
+dynamic-obstacle rejection; the new excessive-blocking report remains a device
+confirmation gate for this changed combination.
+
 The maintainer subsequently accepted startup/basic use of the locally installed
 `1c3f834` Overture build, with no apparent issues; this is scoped acceptance,
-not an attribution of the earlier external startup crash. The same local test
-reported recurring BP tutorial stalls, small-crate body blocking and drops
-during freezes/turns. Its matching log contains 280–470 ms presentation gaps,
+not an attribution of the earlier external startup crash. An earlier local BP
+tutorial run reported stalls, body blocking and drops during freezes/turns; a
+later PSVR2 retest grabbed the small tutorial crate repeatedly without issue, so
+the external small-crate reach report remains unreproduced locally. The earlier
+matching log contains 280–470 ms presentation gaps,
 stale palm samples and guarded Grab releases. Production presentation success
 counts triggered per-frame matrix/body logs, with synchronous disk durability
 flushes on the presentation thread. The follow-up reduces healthy telemetry
@@ -185,12 +236,12 @@ audio, visual effects, transitions and shutdown. Exact work order belongs in
 `ROADMAP.md`; the hardware procedure belongs in
 `VR_HEADSET_TEST_CHECKLIST.md`.
 
-The current headset run confirms special effects in the observed scene and
-surface-contact acquisition of a chair from different points. Its matching
-exact-build log records full-eye refraction copy/resize activity. The same run
-exposes vertical mini-hops when touching ventilation walls. Their cause remains
-unknown; accepted motion, native stepping and crouch/body contact need a focused
-investigation before closing the wall/tunnel comfort gate.
+The observed special-effects scene and chair surface-contact acquisition have
+headset evidence. The physical-contact mini-hop follow-up was accepted by the
+maintainer on the feedback candidate. The exact native step-climb flag at
+`cCharacterBody+0x238`, candidate height and hit normal/static telemetry remain
+available for scoped regression of the new mixed-input obstacle eligibility.
+Broader wall/tunnel comfort and native movement states remain separate gates.
 
 The SDL mutex crash remains historical and unattributed. Existing dumps do not
 justify assigning a cause. Collect a new discriminating dump/log only if it
@@ -271,6 +322,20 @@ direction and fixed grip under wrist rotation. The user accepted the combined
 result and supplied a headset image showing the beam at the housing edge.
 Earlier slight finger intersection remains a known limitation unless new
 headset evidence establishes otherwise.
+
+The unreleased feedback candidate also addresses three Requiem reports without
+changing its exact-build ownership boundaries. Native pointer activity now
+classifies otherwise-unidentified fullscreen UI so death/continue screens can
+use the shared tracked pointer path. Post-character-update publication refreshes
+the final native body Y before render-time height composition, matching Rework's
+post-physics vertical anchoring and targeting the reported uphill slope shake.
+The probe now loads the shared persisted VR settings profile and applies its
+turn mode/angles/speed/dead zone and crouch mode/depth instead of hard-coded
+backend defaults. The maintainer accepted these requested cases on the preceding feedback build.
+Requiem now also consumes the shared native VR page through independently mapped
+constructor, widget-list, SetState and vtable boundaries; both binary menus have
+host fixtures for startup injection, state return, widget recreation, languages,
+calibration, settings persistence failure and partial-allocation cleanup.
 
 The representative Requiem interaction milestone is concluded at the user's
 request after the final flashlight validation. Broader

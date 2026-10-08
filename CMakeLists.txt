@@ -299,6 +299,7 @@ add_library(pvr_requiem_backend STATIC
     src/backends/requiem/gameplay_bridge.cpp
     src/backends/requiem/gameplay_contract.cpp
     src/backends/requiem/hand_contact_probe.cpp
+    src/backends/requiem/native_vr_settings_menu.cpp
     src/backends/requiem/render_world.cpp
 )
 target_include_directories(pvr_requiem_backend PUBLIC
@@ -315,6 +316,8 @@ target_link_libraries(pvr_requiem_backend PUBLIC
     pvr_openvr_session
     pvr_vr_native_intents
     pvr_stereo_render_policy
+    pvr_vr_settings
+    shell32
     opengl32)
 pvr_enable_warnings(pvr_requiem_backend)
 
@@ -326,7 +329,8 @@ add_library(pvr_requiem_probe SHARED
 target_include_directories(pvr_requiem_probe PRIVATE
     include src/probe src/backends/requiem src/runtime src/hooks)
 target_link_libraries(pvr_requiem_probe PRIVATE
-    pvr_requiem_backend pvr_build_catalog pvr_sdl_frame_hook)
+    pvr_requiem_backend pvr_build_catalog pvr_sdl_frame_hook
+    pvr_vr_settings_store)
 set_target_properties(pvr_requiem_probe PROPERTIES
     OUTPUT_NAME "PenumbraVR.Requiem.Probe"
 )
@@ -816,6 +820,21 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_black_plague_vr_settings_test)
 
     add_test(NAME black_plague_vr_settings COMMAND pvr_black_plague_vr_settings_test)
+
+    foreach(game IN ITEMS black_plague requiem)
+        add_executable(pvr_${game}_native_vr_menu_test
+            tests/native_vr_menu/native_vr_settings_menu_test.cpp)
+        target_include_directories(pvr_${game}_native_vr_menu_test PRIVATE
+            src/adapters/hpl1 src/hooks src/backends/${game} src/graphics)
+        target_link_libraries(pvr_${game}_native_vr_menu_test PRIVATE
+            pvr_vr_settings pvr_iat_hook pvr_rel32_call_hook shell32)
+        if(game STREQUAL "black_plague")
+            target_compile_definitions(pvr_${game}_native_vr_menu_test PRIVATE PVR_TEST_BLACK_PLAGUE_MENU)
+            target_link_libraries(pvr_${game}_native_vr_menu_test PRIVATE pvr_black_plague_settings)
+        endif()
+        pvr_enable_warnings(pvr_${game}_native_vr_menu_test)
+        add_test(NAME ${game}_native_vr_menu COMMAND pvr_${game}_native_vr_menu_test)
+    endforeach()
 
     add_executable(pvr_vr_settings_store_test
         tests/vr_settings_store/vr_settings_store_test.cpp

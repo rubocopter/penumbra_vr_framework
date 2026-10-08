@@ -35,6 +35,8 @@
 #include "system/LowLevelSystem.h"
 #include "game/LowLevelGameSetup.h"
 
+#include "../../../../../src/runtime/stereo_render_policy.hpp"
+
 namespace hpl {
 
 	//////////////////////////////////////////////////////////////////////////
@@ -385,7 +387,30 @@ mpGameSetup = apGameSetup;
 		
 		//cMemoryManager::SetLogCreation(true);
 
-    SetUpdatesPerSec(90);
+    float vrDisplayFrequency = 0.0F;
+    vr::ETrackedPropertyError vrDisplayFrequencyError = vr::TrackedProp_Success;
+    if(vr_hmd != NULL)
+    {
+      vrDisplayFrequency = vr_hmd->GetFloatTrackedDeviceProperty(
+        vr::k_unTrackedDeviceIndex_Hmd,
+        vr::Prop_DisplayFrequency_Float,
+        &vrDisplayFrequencyError);
+    }
+    const int vrLogicUpdateRate =
+      penumbra_vr::runtime::SelectVrLogicUpdateRate(
+        vrDisplayFrequencyError == vr::TrackedProp_Success ? vrDisplayFrequency : 0.0F);
+    if(vrDisplayFrequencyError == vr::TrackedProp_Success &&
+       vrDisplayFrequency >= 50.0F && vrDisplayFrequency <= 240.0F)
+    {
+      Log(" [VR runtime +%lu ms] HMD display frequency %.2f Hz; logic update rate %d Hz.\n",
+        GetApplicationTime(), vrDisplayFrequency, vrLogicUpdateRate);
+    }
+    else
+    {
+      Log(" [VR runtime +%lu ms] WARNING: HMD display frequency unavailable or invalid; "
+        "using 90 Hz logic update fallback.\n", GetApplicationTime());
+    }
+    SetUpdatesPerSec(vrLogicUpdateRate);
 
 		while(!mbGameIsDone)
 		{

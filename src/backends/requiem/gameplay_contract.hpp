@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <string>
+#include "vr_play_mode_policy.hpp"
 
 namespace penumbra_vr::backends::requiem {
 
@@ -52,6 +53,18 @@ enum class NativeCrouchTransition {
     stand,
 };
 
+enum class RequiemUiSurface {
+    none,
+    fullscreen,
+    inventory,
+    notebook,
+};
+
+struct RequiemUiClassification final {
+    bool active{};
+    RequiemUiSurface surface{RequiemUiSurface::none};
+};
+
 struct DirectLocomotionPublication final {
     float move_x{};
     float move_y{};
@@ -93,6 +106,11 @@ struct RequiemPushAxes final {
 [[nodiscard]] bool ShouldMarkDirectLocomotionAccepted(
     const DirectLocomotionPublication& plan,
     bool publication_succeeded) noexcept;
+[[nodiscard]] RequiemUiClassification ClassifyRequiemUi(
+    bool in_game,
+    bool inventory_active,
+    bool notebook_active,
+    bool native_pointer_observed) noexcept;
 [[nodiscard]] NativeCrouchTransition PlanNativeCrouchTransition(
     bool body_present,
     int move_state,
@@ -106,7 +124,17 @@ struct RequiemPushAxes final {
     bool native_crouched,
     bool physical_crouch,
     float& world_y,
-    std::string& error) noexcept;
+    std::string& error,
+    float seated_offset = 0.0F,
+    float button_crouch_depth = runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value) noexcept;
+
+// Rework/BP feet-anchored height. Native cinematic camera height is not a
+// calibration input; user profile and physical tracking own VR eye height.
+[[nodiscard]] bool ComposeRequiemConfiguredHeadHeight(
+    float body_center_y, float active_size_y, float tracking_y,
+    const runtime::VrSettings& settings, runtime::VrPlayModePolicy& play_mode,
+    bool native_crouched, bool physical_crouch,
+    float& world_y, std::string& error) noexcept;
 [[nodiscard]] std::array<float, 3> AttributeRequiemPhysicalAcceptance(
     const std::array<float, 3>& physical_request,
     const std::array<float, 3>& direct_request,

@@ -7,18 +7,14 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework [v1.0.5](releases/1.0.5.md) consolidates all post-v1.0.0 changes,
-including controller defaults, Overture interaction/input fixes, Black Plague
-Push, turning-height continuity, logging/pacing and held-object improvements.
-Intermediate release downloads are superseded; their validation records remain
-historical evidence. Black Plague collision recoil, Index finger feedback,
-Quest 3 pointer alignment and broader per-game regressions remain focused
-follow-up. Use `CLOSURE_STATUS.md` for release evidence and the remaining
-deployment-validation matrix,
-`RUNTIME_DEPENDENCIES.md` for deployment dependencies and
-`RELEASE_PREPARATION_AUDIT.md` for the inspected installer baseline. The unified
-installer contract is implemented in `INSTALLER_DESIGN.md`; independent clean-PC,
-broader headset and non-Sense controller coverage remain post-release work.
+Framework [v1.0.6](releases/1.0.6.md) packages the maintainer-accepted BP/Requiem
+feedback fixes, unified first-level English/Spanish VR Settings and BP's mixed
+stick/HMD obstacle correction. Publish the installer, matching committed source,
+checksums and build report after host/package verification. Exact new-installer
+headset and independent clean-PC acceptance remain separate from publication.
+Use `CLOSURE_STATUS.md` for release provenance and the remaining deployment matrix.
+Index finger feedback, Quest 3 pointer/cadence coverage, broader per-game
+regression and Requiem startup reliability remain focused follow-up.
 
 The runtime milestones below retain their evidence but non-blocking polish,
 broader parity and optional improvements do not displace this release task.
@@ -110,15 +106,16 @@ automatically validate a newer candidate.
   three games. Host guards reject dropped profiles/actions and type drift;
   package/install/repair fixtures verify all eight by hash. Device hardware
   validation and the documented Vive/WMR layout limitations remain separate.
-- [ ] Confirm the consolidated v1.0.5 update on the external Index setup when
+- [ ] Confirm the current update on the external Index setup when
   feedback is available. The maintainer has accepted local Overture gameplay
   and completed the BP tutorial without performance issues; those observations
   do not establish Index acceptance of the new installer. Preserve the deferred,
   non-blocking finger report and avoid requesting redundant gameplay tests.
 
-The deferred focused runtime issue is Black Plague's vertical mini-hops while
-touching ventilation walls. Investigate accepted motion, native stepping and
-crouch/body contact together; the cause is not yet established.
+The requested BP/Requiem feedback retest is closed by maintainer acceptance.
+Do not request it again as a release prerequisite. The new BP excessive-blocking
+report is a separate mixed stick/HMD eligibility gate; host regression passes,
+but its changed behavior still needs focused headset confirmation.
 
 ### Overture
 
@@ -127,6 +124,9 @@ crouch/body contact together; the cause is not yet established.
   suite pass with the Overture interaction-sight and Touch aim-binding guards.
 - [ ] Repeat the core headset/controller regression on Quest 3, including Touch
   pointer posture/alignment and crouched reach to the outside hatch wheel.
+- [ ] On Quest 3 with Quest Link at 72 Hz, verify smooth-turn and locomotion
+  cadence against the OpenVR-selected logic rate, and confirm objects no longer
+  disappear only at the left-eye outer edge during head movement.
 - [ ] Confirm boot/gameplay, stereo/tracking, locomotion/crouch, hands,
   interaction, UI, transition and shutdown.
 
@@ -135,18 +135,28 @@ crouch/body contact together; the cause is not yet established.
 - [ ] Revalidate continuous presentation, focus/Alt+Tab, mirror and map
   transitions on the current release.
 - [ ] Revalidate wall/tunnel pressure, mixed stick + room-scale contact, Hybrid
-  crouch recovery and accepted-motion footsteps. A new headset run reproduces
-  vertical mini-hops in a ventilation duct while in contact with its walls.
+  crouch recovery and accepted-motion footsteps. The
+  accepted physical-contact mini-hop correction is distinct from the new mixed-input obstacle
+  eligibility change, which still needs a focused device confirmation.
 - [ ] Revalidate free-body acquisition/hold/throw, snap-turn continuity and
   representative slider/hinge/door mechanisms. A fresh, bounded surface
   contact now anchors VR-origin Grab as it does in the headset-tested Requiem
   path; BP's stale/native-only origin fallback remains. A chair was grabbed
   successfully from different points in headset. Held snap turns, throw and
-  mechanisms remain separate regression cases.
+  mechanisms remain separate regression cases. The latest candidate enables
+  the vice's physical hinge through native Move and prevents fixed vice/locker
+  frames from winning over their dynamic bodies; both have failing-before-fix
+  host regressions and have maintainer acceptance of the focused device retest.
 - [ ] Validate imported-hand fingers/material presentation, tool sockets and
   mapped haptics.
 - [ ] Validate inventory/notebook/context actions, `UseItem`, subtitles and the
-  native VR Settings page.
+  shared native-menu extraction in English and Spanish. First-level settings
+  and height calibration on the preceding BP feedback build were accepted;
+  confirm the extraction with the new trilogy menu routes without reopening
+  the closed feedback gate.
+- [ ] Keep the tutorial small-box reach report as a device-specific diagnostic:
+  repeated PSVR2 grabs did not reproduce it. Do not retune reach, collision,
+  body offsets or movement constants without a deterministic failing headset case.
 - [ ] Validate HRTF/reverb on headset audio hardware. Keep the missing
   distance/occlusion low-pass consumer as implementation work until its exact
   target boundary is mapped.
@@ -164,6 +174,14 @@ crouch/body contact together; the cause is not yet established.
 
 The repeatable Black Plague hardware procedure is in
 `VR_HEADSET_TEST_CHECKLIST.md`.
+
+### Requiem
+
+- [x] Maintainer accepted intro height without the inventory workaround,
+  physical/button crouch, death/continue/main-menu pointer, uphill slope stability
+  and persisted turn/crouch settings on the feedback candidate.
+- [ ] Confirm the new first-level English/Spanish native VR menu, live setting
+  refresh and height calibration in headset. Host widget lifecycle tests pass.
 
 ## Hito 4 — unified installer
 

@@ -132,6 +132,20 @@ bool ShouldMarkDirectLocomotionAccepted(
     return plan.publish && publication_succeeded;
 }
 
+RequiemUiClassification ClassifyRequiemUi(
+    bool in_game,
+    bool inventory_active,
+    bool notebook_active,
+    bool native_pointer_observed) noexcept {
+    if (inventory_active)
+        return {true, RequiemUiSurface::inventory};
+    if (notebook_active)
+        return {true, RequiemUiSurface::notebook};
+    if (!in_game || native_pointer_observed)
+        return {true, RequiemUiSurface::fullscreen};
+    return {};
+}
+
 NativeCrouchTransition PlanNativeCrouchTransition(
     bool body_present,
     int move_state,
@@ -156,11 +170,14 @@ bool ComposeRequiemTrackedHeadHeight(
     bool native_crouched,
     bool physical_crouch,
     float& world_y,
-    std::string& error) noexcept {
+    std::string& error,
+    float seated_offset,
+    float button_crouch_depth) noexcept {
     world_y = 0.0F;
     if (!std::isfinite(body_center_y) || !std::isfinite(active_size_y) ||
         active_size_y <= 0.0F || !std::isfinite(tracking_y) ||
-        !std::isfinite(height_calibration)) {
+        !std::isfinite(height_calibration) || !std::isfinite(seated_offset) ||
+        !std::isfinite(button_crouch_depth) || button_crouch_depth<0.0F) {
         error = "Requiem body, capsule, tracking or calibration height is invalid";
         return false;
     }
@@ -176,9 +193,9 @@ bool ComposeRequiemTrackedHeadHeight(
     tracking_space.SetPlayerWorldPosition({
         0.0F, body_center_y - active_size_y * 0.5F, 0.0F});
     tracking_space.SetHeightCalibration(height_calibration);
+    tracking_space.SetSeatedOffset(seated_offset);
     if (native_crouched && !physical_crouch) {
-        tracking_space.SetPostureOffset(
-            -runtime::vr_setting_limits::kPhysicalCrouchDepth.default_value);
+        tracking_space.SetPostureOffset(-button_crouch_depth);
     }
     runtime::VrMatrix44 head_world{};
     if (!tracking_space.HeadWorldPose(head_world, error)) return false;
@@ -188,6 +205,19 @@ bool ComposeRequiemTrackedHeadHeight(
         return false;
     }
     return true;
+}
+
+bool ComposeRequiemConfiguredHeadHeight(
+    float body_center_y, float active_size_y, float tracking_y,
+    const runtime::VrSettings& settings, runtime::VrPlayModePolicy& play_mode,
+    bool native_crouched, bool physical_crouch,
+    float& world_y, std::string& error) noexcept {
+    const auto mode = play_mode.Update(
+        settings.play_mode, tracking_y, settings.player_height);
+    return ComposeRequiemTrackedHeadHeight(
+        body_center_y, active_size_y, tracking_y,
+        settings.height_offset, native_crouched, physical_crouch, world_y, error,
+        mode.seated_offset, settings.physical_crouch_depth);
 }
 
 std::array<float, 3> AttributeRequiemPhysicalAcceptance(

@@ -45,8 +45,13 @@ Current product-level evidence:
   headset evidence from chair acquisition at different contact points. Special
   effects rendered correctly in the observed scene; its matching exact-build
   log records full-eye refraction copy/resize activity. This does not validate
-  every smoke/material variant or held snap/throw/mechanism behavior. The same
-  headset run exposed mini-hops against ventilation walls; the cause is unknown.
+  every smoke/material variant or held snap/throw/mechanism behavior. Exact-build
+  host work also maps `cMainMenu::SetState` at RVA `0x7A680`, root state `0`
+  and all ten verified direct callsites used to inject/rebind the VR Settings
+  entry for front-end and in-game menus. The maintainer accepted the requested
+  vice/locker, settings/calibration and physical-contact mini-hop feedback cases
+  on the binaries pinned in the feedback acceptance record. The new shared menu
+  extraction and mixed stick/HMD dynamic-obstacle eligibility remain host-tested.
 - **Requiem:** boot/menu/gameplay stereo, Sense locomotion, room-scale/body
   movement, crouch, visible hands and inventory/notebook have headset evidence.
   A representative Push puzzle, free-body `Grab=6` carry/snap/release sequence,
@@ -61,6 +66,10 @@ Current product-level evidence:
   log records resolved-palm attachment and no raw-palm use. The final combined
   forward-facing, native-size flashlight attachment is headset-validated by
   the user's acceptance and image showing the beam at the housing edge.
+  The maintainer also accepted the feedback candidate's intro-height/crouch,
+  fullscreen UI, slope and persisted-settings cases. The new native VR menu
+  is host-tested against independently mapped Requiem addresses and widget ABI;
+  see its manifest's `nativeVrSettingsMenu` contract.
   Slight finger penetration remains a known limitation.
   Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments
   at Requiem return site `0x5A9DA3`. Delayed OpenVR did not prevent the fault;

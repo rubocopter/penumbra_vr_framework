@@ -1,0 +1,26 @@
+#pragma once
+
+#include "vr_settings.hpp"
+
+#include <string>
+
+namespace penumbra_vr::backends::requiem {
+
+using CommitNativeVrSettings = bool (*)(
+    const runtime::VrSettings& settings,
+    std::string& error) noexcept;
+
+// Settings storage is owned by the probe. The native page edits that same
+// profile and asks the probe to persist/apply each accepted step.
+void ConfigureNativeVrSettingsMenu(
+    runtime::VrSettings* settings,
+    CommitNativeVrSettings commit) noexcept;
+
+[[nodiscard]] bool InstallNativeVrSettingsMenu(std::string& error) noexcept;
+[[nodiscard]] bool RemoveNativeVrSettingsMenu(std::string& error) noexcept;
+
+// Native update-thread fan-out also covers a Start page created before hooks
+// were installed, without mutating widgets from the bootstrap worker.
+void ObserveNativeVrSettingsMenu(void* menu) noexcept;
+
+} // namespace penumbra_vr::backends::requiem

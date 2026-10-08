@@ -1,5 +1,13 @@
 # Release history
 
+## v1.0.6 — Trilogy feedback update (2026-10-08)
+
+VR Settings is directly available from the main/pause menu and Back returns to
+that first level, matching BP and Requiem. Logic cadence follows the OpenVR
+headset refresh rate; visibility uses the union of both asymmetric eyes before
+per-eye rendering. These changes are host-tested; their device confirmation
+remains separate. See the [Framework notes](../../../docs/releases/1.0.6.md).
+
 ## v1.0.5 — Consolidated Framework update (2026-10-04)
 
 Replaces the v1.0.1–v1.0.4 downloads. Retains drawer/mechanism selection,
