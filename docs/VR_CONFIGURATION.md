@@ -162,6 +162,6 @@ exact current capability and headset gate are recorded in `ROADMAP.md` and
 
 ## Installer policy
 
-The future unified installer should treat recommended settings as an optional,
-reversible preset. It must back up existing files, preserve unrelated preferences
-and avoid silently replacing user-specific calibration.
+The unified installer treats recommended settings as an optional, reversible
+preset. It backs up existing files, preserves unrelated preferences and keeps
+existing personal calibration unless the user requests replacement.

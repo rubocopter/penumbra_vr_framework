@@ -128,7 +128,7 @@ build and focused host regression tests pass. Wheel acquisition and actual
 rotation received maintainer headset acceptance on the feedback candidate;
 broader mechanism coverage remains separate.
 
-The next unreleased feedback pass keeps Overture's logic cadence aligned to the
+Framework v1.0.6 keeps Overture's logic cadence aligned to the
 active HMD display frequency reported by OpenVR, with the proven 90 Hz behavior
 as fallback when that property is unavailable. Its shared visibility pass now
 uses the union of both asymmetric eye projections before exact per-eye rendering,

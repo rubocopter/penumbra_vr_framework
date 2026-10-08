@@ -1,0 +1,164 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.6",
+  "validatedOn": "2026-10-08",
+  "releaseTag": "v1.0.6",
+  "buildSourceCommit": "b6c8af9b2199ba674ff6db5c71f4b69a578bd135",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.6",
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "Package accepted trilogy feedback, consistent bilingual first-level VR Settings, and BP mixed-input obstacle correction",
+  "publishedWithoutRebuildAfterHostValidation": true,
+  "releaseTagAddsOnlyProvenanceDocumentationToBuildSource": true,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "bytes": 5336,
+      "sha256": "5DFD73E43A4419BB3EC0E48EA776F995700A60482ACA23FDAC44070357F89C9F"
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.6.exe",
+      "bytes": 193150102,
+      "sha256": "B96E57900C9089E561EB062327D018E91263A49C3CE7D8C29AAEA7E63E847B59"
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.6.zip",
+      "bytes": 81968797,
+      "sha256": "A8268FA106D30B55421160C5830464B46EC2819020EB8C2AF062E31783E61AB0"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 274,
+      "sha256": "35A5B2A20EECB4C71CDD4A416F29D177C1E3A235AE061D1EED1B7CF450D5FDE5"
+    }
+  ],
+  "pe": [
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.6",
+      "sha256": "AD64C2E9C34AC41DA8FB6993CF8084AB38C83EB99CE3C9C8576654037037E1FF",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll",
+        "USER32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.6",
+      "sha256": "3721DCC9ED467EF90F20610712540E32BBABD08AD58829C13A412AA95E9CB2BE",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.6",
+      "sha256": "AE764828D8122E163FE73028C2C629565C2540BFE61C71089D23493A6080B9CD",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.Requiem.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.6",
+      "sha256": "B65FA4984CF831FAEA5311B952950E30B68AE11349E519E0F1378DF8D5E47925",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.LaaTransform.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.6",
+      "sha256": "EA9AF9837B7B4E2B98115CDD11328E8D4FD66656D755F5A9D7355E7F7BD96D60",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "products/overture/build/bin/Release/Penumbra_vr.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.6",
+      "sha256": "47C434EDDFEFF71E3722FFD0F1B1628DF2B9FE3BC1F5687A2323D24AC86CBBA1",
+      "imports": [
+        "alut.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "cg.dll",
+        "cgGL.dll",
+        "GLU32.dll",
+        "KERNEL32.dll",
+        "libvorbisfile.dll",
+        "MSVCP140.dll",
+        "Newton.dll",
+        "OpenAL32.dll",
+        "OPENGL32.dll",
+        "openvr_api.dll",
+        "SDL_image.dll",
+        "SDL_ttf.dll",
+        "SDL.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "VCRUNTIME140.dll"
+      ],
+      "delayImports": []
+    }
+  ],
+  "validation": {
+    "frameworkHostTests": {
+      "passed": 59,
+      "failed": 0
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0,
+      "fullReleaseWin32Rebuild": true,
+      "largeAddressAwareVerified": true
+    },
+    "nativeVrMenuHostFixtures": "Actual shared production implementation compiled for BP and Requiem: startup insertion, Back/state transitions, recycled/recreated widgets, English/Spanish labels, edit rollback, fresh-height calibration and partial-allocation cleanup passed",
+    "requiemNativeMenuMapping": "7 stable initialized signatures, 10 direct SetState calls, 3 button vtable slots and 3 wide-string imports independently verified offline; contract recorded in canonical Requiem manifest",
+    "bpMixedStepRegression": "Actual adapter reproduced former rejection; allows injected stick intent to step onto an eligible dynamic hit while physical-only, wall/floor guards and single native update remain intact",
+    "releasePackaging": "Passed exact PE version/hash identity, source/notices, outer checksums and absence of private/developer payload",
+    "standaloneSetup": "Exact published EXE passed English/Spanish preparation, extraction and cleanup with multilevel runtime lookup disabled",
+    "topology": "A-F install/verify/repair/component transitions/shared-root deduplication/exact restoration passed with synthetic content/runtime fixtures",
+    "upgradeFrom1.0.5": "Overture and shared BP/RQ passed exact payload/default hashes, damaged-binding repair, verification and exact restore",
+    "precedingFeedbackHeadsetAcceptance": "See 1.0.6-feedback-acceptance.json; scoped to preceding installed BP/RQ probes",
+    "newInstallerHeadsetAcceptance": "pending",
+    "newMenuRoutesAndMixedStepHeadsetAcceptance": "pending",
+    "overtureCadenceVisibilityHeadsetAcceptance": "pending",
+    "independentCleanMachine": "pending",
+    "review": "Owner reviewed diffs, exact-image contracts, native ABI ownership and host regressions",
+    "gamesLaunchedByAutomation": false,
+    "remainingKnownIssues": [
+      "intermittent Requiem startup failure",
+      "nonblocking Index finger mismatch",
+      "broader per-game and non-Sense hardware coverage"
+    ]
+  }
+}

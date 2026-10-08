@@ -28,6 +28,14 @@ The accepted preceding binaries do not validate the new shared menu extraction,
 Overture/Requiem menu routes, mixed-obstacle correction or exact new installer.
 Requiem's intermittent startup failure remains unresolved.
 
+The [v1.0.6 validation record](releases/1.0.6-validation.json) pins the clean
+build source, exact artifact/PE hashes, 59 Framework tests, 298 Overture checks,
+English/Spanish final-EXE smoke, A-F topology and update from v1.0.5. The release
+tag adds this provenance documentation to the build source; the tested installer
+and source archive are published without rebuilding. Build-report pending
+headset/clean-PC fields remain historical build-time readiness data, separate
+from the maintainer's publication authorization and preceding feedback acceptance.
+
 ## Historical consolidated release — 1.0.5
 
 Framework v1.0.5 consolidates the controller, Overture interaction/input,

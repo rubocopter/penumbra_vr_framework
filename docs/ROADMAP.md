@@ -9,8 +9,8 @@ This file owns the current work order. Capability state lives in
 
 Framework [v1.0.6](releases/1.0.6.md) packages the maintainer-accepted BP/Requiem
 feedback fixes, unified first-level English/Spanish VR Settings and BP's mixed
-stick/HMD obstacle correction. Publish the installer, matching committed source,
-checksums and build report after host/package verification. Exact new-installer
+stick/HMD obstacle correction. The installer, matching committed source, checksums and build report are
+identified by the versioned release validation record. Exact new-installer
 headset and independent clean-PC acceptance remain separate from publication.
 Use `CLOSURE_STATUS.md` for release provenance and the remaining deployment matrix.
 Index finger feedback, Quest 3 pointer/cadence coverage, broader per-game
@@ -208,6 +208,10 @@ remain separate evidence tracks.
   Requiem root. The published EXE has maintainer real-install acceptance.
 
 ## Hito 5 — release
+
+- [x] Prepare v1.0.6 from clean committed source; verify 59 Framework tests,
+  298 Overture checks, final-EXE English/Spanish smoke, topology A-F and update
+  from v1.0.5. Publish the same tested artifacts with hashes and provenance.
 
 - [x] Run final automated release verification for the published artifact/tree.
 - [x] Produce the versioned v1.0.0 installer/source/checksum/report artifact set
