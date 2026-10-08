@@ -8,7 +8,6 @@
   "publicationAuthorizedByMaintainer": true,
   "publicationPurpose": "Package accepted trilogy feedback, consistent bilingual first-level VR Settings, and BP mixed-input obstacle correction",
   "publishedWithoutRebuildAfterHostValidation": true,
-  "releaseTagAddsOnlyProvenanceDocumentationToBuildSource": true,
   "artifacts": [
     {
       "name": "build-report.json",
@@ -160,5 +159,7 @@
       "nonblocking Index finger mismatch",
       "broader per-game and non-Sense hardware coverage"
     ]
-  }
+  },
+  "releaseTagAddsOnlyDocumentationToBuildSource": true,
+  "concurrentRemoteWorkPreserved": "Two remote README landing/video commits were merged after the artifact build; runtime and installer sources remain identical to buildSourceCommit."
 }
