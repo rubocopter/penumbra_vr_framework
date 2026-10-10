@@ -97,7 +97,9 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
     frame = {};
     const auto release = [&] {
         ReleaseButtons(router_.state(), frame.input.state);
+        const float configured_dead_zone = router_.move_dead_zone();
         router_.Reset();
+        router_.SetMoveDeadZone(configured_dead_zone);
         focused_ = false;
     };
     if (!initialized_ || !ValidHand(handedness) ||
@@ -159,7 +161,7 @@ bool VrActionInput::Update(VrActionBackend& backend, VrInputContext context,
     bool frozen_controller_sample = false;
     const bool moving = context == VrInputContext::gameplay && raw.move.active &&
         std::hypot(raw.move.x, raw.move.y) >= 0.3F &&
-        ValidPose(frame.hands[0].grip) && ValidPose(frame.hands[1].grip);
+        frame.hands[0].grip.pose_valid && frame.hands[1].grip.pose_valid;
     if (moving) {
         const bool unchanged = moving_sample_seen_ &&
             raw.move.x == previous_move_.x && raw.move.y == previous_move_.y &&

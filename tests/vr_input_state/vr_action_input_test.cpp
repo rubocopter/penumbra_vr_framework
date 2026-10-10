@@ -1,6 +1,7 @@
 #include "vr_action_input.hpp"
 #include "vr_haptics.hpp"
 
+#include <cmath>
 #include <iostream>
 #include <limits>
 #include <map>
@@ -52,7 +53,39 @@ public:
     }
 };
 }
+
+bool TestDeadZoneSurvivesTransientInputRelease() {
+    VrActionInput reader;
+    FakeBackend backend;
+    std::string error;
+    VrControllerFrame frame;
+    if (!reader.Initialize(backend, "C:/vr/actions.json", error)) return false;
+    reader.SetMoveDeadZone(0.5F);
+    backend.axes[backend.handles.at("/actions/gameplay/in/move")] = {true, 0.75F, 0.0F};
+
+    const auto update = [&](bool focused, std::uint64_t now_ms) {
+        return reader.Update(backend, VrInputContext::gameplay, VrHand::right,
+            focused, now_ms, frame, error);
+    };
+    if (!update(true, 100) || std::abs(frame.input.state.move.x - 0.5F) > 0.0001F)
+        return false;
+
+    if (!update(false, 101) || !update(true, 102) ||
+        std::abs(frame.input.state.move.x - 0.5F) > 0.0001F)
+        return false;
+
+    backend.inactive = true;
+    if (!update(true, 103)) return false;
+    backend.inactive = false;
+    return update(true, 104) &&
+        std::abs(frame.input.state.move.x - 0.5F) <= 0.0001F;
+}
+
 int main() {
+    if (!TestDeadZoneSurvivesTransientInputRelease()) {
+        std::cerr << "Configured move dead zone changed after input release\n";
+        return 29;
+    }
     const auto pickup = HapticProfile(VrHapticEvent::object_pickup);
     const auto damage = HapticProfile(VrHapticEvent::damage);
     if (pickup.duration_seconds != 0.045F || pickup.frequency_hz != 90.0F ||

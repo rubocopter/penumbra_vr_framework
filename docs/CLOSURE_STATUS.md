@@ -18,7 +18,21 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.6
+## Current release — 1.0.7
+
+Framework v1.0.7 publishes BP/Requiem release-edge recovery, transient movement
+dead-zone preservation and analog-data guards, with Windows installer/diagnostics
+CI. See [release notes](releases/1.0.7.md) and the detailed [changelog](CHANGELOG.md).
+
+The maintainer accepted the installed local trilogy checklist on 2026-10-10.
+The [acceptance record](releases/1.0.7-headset-acceptance.json) identifies the
+tested runtime hashes, accepted menus/input/obstacle/visibility cases and
+conditional cases that have no separately identified device evidence. This
+closes those focused runtime gates without claiming full-game support or
+headset acceptance of the newly versioned Setup artifact. Successful Requiem
+startup feedback does not identify or fix its intermittent crash cause.
+
+## Historical release — 1.0.6
 
 Framework v1.0.6 includes the maintainer-accepted BP/Requiem feedback fixes,
 first-level English/Spanish VR Settings across the trilogy, and the host-tested
@@ -72,9 +86,9 @@ historical readiness data, separate from the maintainer's publication decision.
   speculatively without new discriminating evidence.
 - The finite clean-machine matrix below remains useful post-release coverage;
   it was not completed on an independent PC before v1.0.0 publication.
-- Broader current-build headset regression, especially the documented Overture,
-  Black Plague and Requiem edge cases, remains follow-up validation rather than
-  evidence automatically inherited from older runs.
+- The installed trilogy checklist is accepted at its recorded hashes. Broader
+  progression, device-specific conditional cases and exact new-Setup headset
+  acceptance remain separate from that focused runtime result.
 - Non-Sense controller families remain bundled compatibility profiles without
   personal hardware acceptance; their action omissions stay documented.
 

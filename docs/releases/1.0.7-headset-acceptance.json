@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "acceptedOn": "2026-10-10",
+  "evidence": "Maintainer accepted the installed trilogy checklist in chat: funciona todo, and explicitly authorized documentation, commit, push and a new release.",
+  "candidate": "1.0.6-local-20261010",
+  "installedRuntimeSha256": {
+    "overture": "47C434EDDFEFF71E3722FFD0F1B1628DF2B9FE3BC1F5687A2323D24AC86CBBA1",
+    "black_plague": "58F98FDB7C2FF90642ABDF956C03DC2551DE4B64D01F3683A711D0586903C3AE",
+    "requiem": "F2F31EA5FD083D4ED175478864468400EB77CE94D172FF46FDF2DABF525244F6"
+  },
+  "acceptedCases": {
+    "overture": [
+      "first-level bilingual main/pause VR Settings and persistence",
+      "locomotion/turn cadence on the tested setup",
+      "left-eye edge visibility",
+      "crouched hatch reach and door contact",
+      "input/focus recovery"
+    ],
+    "black_plague": [
+      "mixed stick/HMD movement near movable obstacles",
+      "input/focus recovery and retained stick sensitivity",
+      "bilingual main/pause VR Settings, calibration and persistence",
+      "surface grabs, held turns, release/throw and gentle contact",
+      "inventory/notebook/context actions and UseItem",
+      "wall/step/crouch regression"
+    ],
+    "requiem": [
+      "new bilingual main/pause VR Settings and reopening",
+      "live turn/crouch edits, calibration and persistence",
+      "input/focus recovery and retained stick sensitivity",
+      "startup checklist without a reported failure",
+      "loaded height/crouch and slope regression"
+    ]
+  },
+  "conditionalCoverageNotIndependentlyConfirmed": [
+    "Quest 3/Link 72 Hz device-specific test",
+    "Requiem optional free-body Move/throw and additional mechanisms if encountered"
+  ],
+  "hardwareIdentifiedInThisConfirmation": false,
+  "installationVerification": {
+    "overtureChecks": 640,
+    "blackPlagueChecks": 140,
+    "requiemChecks": 140,
+    "failures": 0,
+    "gameConfigurationFilesUnchanged": 18
+  },
+  "release107ExactInstallerHeadsetAcceptance": "not implied; acceptance belongs to the listed installed binaries",
+  "intermittentRequiemStartupRootCause": "unresolved; successful reported starts do not establish a universal fix",
+  "fullGameOrOtherHardwareSupportImplied": false
+}

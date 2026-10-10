@@ -324,6 +324,31 @@ because BP's independently published binary presentation boundary differs from
 Rework's synchronous source hand-pose consumption. Actual-adapter tests cover
 the boundary; renewed headset acceptance remains separate.
 
+## Shared action release and dead-zone hardening
+
+Rework `23c890f` `SteamVRInput.cpp` reconstructs interaction release from the
+preceding held state, while its other digital actions require an active binding
+and `bChanged`. An individually inactive binding therefore cannot report its
+own release. The shared router extends the preceding-state rule to digital
+actions within an unchanged context and hand; context/hand entry keeps the
+reference edge suppression. BP/Requiem consume this shared router through
+`VrActionInput`. Native lifecycle and context selection remain backend-owned.
+
+Transient focus loss, read failure and complete binding inactivity previously
+called the router reset that also discarded the configured movement dead zone.
+`VrActionInput` now preserves that setting across these transient resets. An
+explicit reset still restores defaults. The public dead-zone helper also
+rejects non-finite axes, normalizes non-finite settings to the existing default,
+and bounds finite axes before radial rescaling, matching the action reader's
+physical axis range. Frozen-sample checks reuse already validated grip flags.
+
+These changes pass the Framework host regressions for individual binding
+release, context/hand suppression, transient setting preservation and invalid
+analog data. The maintainer accepted input/focus recovery on the installed
+BP/Requiem follow-up; the exact hashes and acceptance scope are recorded in
+`releases/1.0.7-headset-acceptance.json`. Version 1.0.7 publishes this hardening;
+synthetic invalid-data tests and other devices remain separate evidence.
+
 ## Native menu and mixed-step adaptation
 
 Rework `23c890f` owns its VR options in source-native menu widgets. Framework
@@ -346,7 +371,9 @@ candidates in the mixed case while retaining finite, upward-normal and positive
 height guards for physical contact. Pure physical motion remains static-only;
 pure native stick movement is unchanged. No additional physics update, guessed
 collider, scale, Y clamp or movement multiplier is introduced. The mixed-case
-correction is host-tested; headset confirmation of reduced blocking remains open.
+correction is host-tested and the maintainer accepted the mixed-obstacle
+headset checklist on the installed local build; see the scoped 1.0.7 acceptance
+record. Broader collision comfort remains a regression topic.
 
 ## Validation rule
 

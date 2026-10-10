@@ -30,18 +30,25 @@ included in that retest. The new shared native-menu extraction, Overture/Requiem
 first-level routes and BP mixed stick/HMD obstacle correction are host-tested;
 they do not inherit headset acceptance from those preceding binaries.
 
+On 2026-10-10 the maintainer accepted the newly installed trilogy checklist.
+`releases/1.0.7-headset-acceptance.json` pins the exact local runtime hashes and
+closes the new main/pause menu, BP mixed-obstacle and input/focus recovery gates.
+Overture cadence/edge visibility/reach and Requiem menu/calibration also have
+scoped acceptance. Quest 3/Link 72 Hz and optional Requiem Move/throw cases were
+conditional and have no separately identified evidence in that confirmation.
+
 | Capability family | Shared/framework state | Black Plague | Requiem | Remaining evidence/work |
 | --- | --- | --- | --- | --- |
 | Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-release presentation/focus/transition regression per game |
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
-| Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed | Consumed; held Grab body remained attached through one headset snap turn | Transition/tracking-loss and BP held-object continuity regression |
-| Controller actions/bindings | 42 actions, 6 sets, 8 graphs; all three consumers and package/install/repair distribution host-verified | Consumed; freshness guard host-tested | Sense gameplay/UI actions consumed | Device hardware regression; Vive compatibility and WMR holster omissions remain |
+| Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed; held-turn continuity accepted on local checklist | Consumed; held Grab body remained attached through one headset snap turn | Broader transitions/tracking-loss regression |
+| Controller actions/bindings | 42 actions, 6 sets, 8 graphs; all three consumers and package/install/repair distribution host-verified | Consumed; freshness/release guards host-tested; input/focus recovery accepted | Shared release/dead-zone hardening consumed; recovery accepted | Other-device hardware regression; Vive compatibility and WMR holster omissions remain |
 | Hands/fingers | Shared pose/conditioning; target profiles own mesh/socket data; attached-tool curl follows Rework's fixed radius pose | BP keeps richer skeletal channels; latest held-tool correction host-tested | Tool/hand motion and final native-size flashlight beam/model alignment headset-validated | BP finger/material pass; slight finger/contact imperfections remain |
 | Palm/contact | Shared resolver/contact policy | Collision-resolved palm and held-body ownership consumed | Requiem-owned exact-build palm adapter consumes the same proven lifecycle | Headset contact stability and turn continuity |
-| Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Surface-contact Grab port has headset evidence from acquiring a chair at different points; stale/native picks retain origin fallback | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack headset evidence | BP held turn/throw/mechanism regression; Requiem throwable prop and distinct Move path when encountered |
+| Free-body Grab/Move/throw | Shared pose, anchor and throw policy | Surface grabs, hold/turn, release and throw accepted on installed local checklist; stale/native picks retain origin fallback | Representative `Grab=6` acquisition, carry, snap turn, changed contact and release headset-validated; free-body `Move=2` and throw lack separately identified headset evidence | Broader BP shapes/mechanisms; Requiem throwable prop and distinct Move path when encountered |
 | Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership; native `Push=1` tracked-palm adapter host-tested for the tutorial heavy crate; native Move Wheel hinge and dynamic-over-frame acquisition headset-accepted on the feedback build | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Broader BP mechanism regression; Requiem mechanism comfort investigation |
-| Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem routes host-tested on latest candidate | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
-| VR settings/config | Shared schema/editor policy plus per-game data | First-level native settings and height calibration headset-accepted; shared extraction host-tested | Persisted turn/crouch and play-mode/height consumed; nine-row native first-level VR page, live refresh and calibration host-tested | New Overture/Requiem menu routes and shared extraction headset confirmation; broader profile coverage |
+| Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem accepted on installed local checklist | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
+| VR settings/config | Shared schema/editor policy plus per-game data | First-level settings, shared extraction and calibration accepted on installed local build | First-level native page, live edits, persistence and calibration accepted on installed local build | Broader device/profile coverage; exact new Setup acceptance separate |
 | Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
 | Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; observed special effects now render correctly in headset with native full-eye copy/resize telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Coverage of all smoke/material variants and subtle ghosting remains unestablished |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | v1.0.0 package/selector/GUI host-tested with maintainer real-install, uninstall and game-entry acceptance; independent clean-PC breadth remains open |
@@ -160,8 +167,8 @@ positive/upward/static eligibility at the native ray-result boundary. The new
 mixed-input correction lets the native stick update consider dynamic obstacles
 when bounded joystick intent was actually injected, while retaining the
 physical positive/upward guards. A host regression reproduced the former
-dynamic-obstacle rejection; the new excessive-blocking report remains a device
-confirmation gate for this changed combination.
+dynamic-obstacle rejection; the maintainer accepted the mixed-obstacle checklist for this changed
+combination on 2026-10-10. Broader collision comfort remains separate.
 
 The maintainer subsequently accepted startup/basic use of the locally installed
 `1c3f834` Overture build, with no apparent issues; this is scoped acceptance,

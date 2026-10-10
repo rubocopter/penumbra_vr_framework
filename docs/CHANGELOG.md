@@ -5,6 +5,41 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.7 — 2026-10-10
+
+- Recover missing digital release edges in the BP/Requiem shared input router
+  when an individual binding becomes inactive or omits its change flag. Preserve
+  context/hand entry suppression so menu changes cannot create unintended input.
+- Retain the configured movement dead zone across temporary focus/input loss;
+  explicit resets retain their default-setting behavior.
+- Reject non-finite analog axes, normalize non-finite dead-zone settings and
+  bound finite axes before radial rescaling. Reuse validated grip-pose flags in
+  controller freshness checks.
+- Add regressions for lost release edges, context/hand transitions, transient
+  dead-zone preservation and invalid/overflowing analog data.
+- Run isolated installer configuration, prerequisite, release-identity,
+  bilingual UI-state and diagnostics/privacy fixtures in Windows CI.
+- Record the maintainer's acceptance of the installed trilogy checklist with
+  exact local runtime hashes; update current capability/configuration/validation
+  documentation without transferring that evidence to unrelated devices.
+- Publish the unified installer, matching committed source, dependency sources,
+  SHA-256 checksums and build report. Requiem's intermittent startup cause remains
+  unresolved despite the successful reported startup checks.
+
+## 1.0.6 — 2026-10-08
+
+- Place English/Spanish VR Settings at the same first-level position in the
+  main and pause menus of all three games; add Requiem's native page with live
+  settings, persistence and height calibration.
+- Enable BP physical vice progression and easier locker acquisition; preserve
+  physical-contact step guards while admitting eligible dynamic obstacles when
+  bounded joystick intent is combined with HMD motion.
+- Correct Requiem intro height without the inventory workaround, refresh
+  post-physics slope height, track fullscreen UI and consume persisted controls.
+- Match Overture logic cadence to the HMD display frequency with a 90 Hz
+  fallback, and include both asymmetric eyes in shared visibility.
+- Publish matching installer/source/checksums and scoped validation records.
+
 ## 1.0.5 — 2026-10-04
 
 Consolidated update replacing the v1.0.1–v1.0.4 release downloads.

@@ -7,14 +7,18 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework [v1.0.6](releases/1.0.6.md) packages the maintainer-accepted BP/Requiem
-feedback fixes, unified first-level English/Spanish VR Settings and BP's mixed
-stick/HMD obstacle correction. The installer, matching committed source, checksums and build report are
+Framework [v1.0.7](releases/1.0.7.md) publishes shared BP/Requiem input-release,
+dead-zone and analog-data hardening, plus Windows installer/diagnostics CI.
+The maintainer accepted the installed trilogy checklist; exact local runtime
+hashes and scope are in `releases/1.0.7-headset-acceptance.json`. The installer, matching committed source, checksums and build report are
 identified by the versioned release validation record. Exact new-installer
 headset and independent clean-PC acceptance remain separate from publication.
 Use `CLOSURE_STATUS.md` for release provenance and the remaining deployment matrix.
 Index finger feedback, Quest 3 pointer/cadence coverage, broader per-game
 regression and Requiem startup reliability remain focused follow-up.
+The Windows CI also runs synthetic installer configuration, prerequisites,
+release identity, UI state and diagnostics/privacy checks without game binaries
+or VR hardware; these checks do not establish clean-PC or headset acceptance.
 
 The runtime milestones below retain their evidence but non-blocking polish,
 broader parity and optional improvements do not displace this release task.
@@ -115,7 +119,8 @@ automatically validate a newer candidate.
 The requested BP/Requiem feedback retest is closed by maintainer acceptance.
 Do not request it again as a release prerequisite. The new BP excessive-blocking
 report is a separate mixed stick/HMD eligibility gate; host regression passes,
-but its changed behavior still needs focused headset confirmation.
+and the maintainer accepted the changed behavior in the 2026-10-10 installed
+trilogy checklist. Do not request that focused gate again without new evidence.
 
 ### Overture
 
@@ -127,8 +132,9 @@ but its changed behavior still needs focused headset confirmation.
 - [ ] On Quest 3 with Quest Link at 72 Hz, verify smooth-turn and locomotion
   cadence against the OpenVR-selected logic rate, and confirm objects no longer
   disappear only at the left-eye outer edge during head movement.
-- [ ] Confirm boot/gameplay, stereo/tracking, locomotion/crouch, hands,
-  interaction, UI, transition and shutdown.
+- [x] Accept the installed Overture checklist for menus, locomotion/turning,
+  edge visibility, crouched hatch/door reach and input/focus recovery. Broader
+  progression, transitions and shutdown coverage remain follow-up.
 
 ### Black Plague
 
@@ -137,23 +143,23 @@ but its changed behavior still needs focused headset confirmation.
 - [ ] Revalidate wall/tunnel pressure, mixed stick + room-scale contact, Hybrid
   crouch recovery and accepted-motion footsteps. The
   accepted physical-contact mini-hop correction is distinct from the new mixed-input obstacle
-  eligibility change, which still needs a focused device confirmation.
-- [ ] Revalidate free-body acquisition/hold/throw, snap-turn continuity and
-  representative slider/hinge/door mechanisms. A fresh, bounded surface
+  eligibility change, now accepted on the installed local checklist.
+- [x] Accept free-body acquisition/hold/throw and snap-turn continuity on the
+  installed local checklist. Broader slider/hinge/door coverage remains open.
+  A fresh, bounded surface
   contact now anchors VR-origin Grab as it does in the headset-tested Requiem
   path; BP's stale/native-only origin fallback remains. A chair was grabbed
-  successfully from different points in headset. Held snap turns, throw and
-  mechanisms remain separate regression cases. The latest candidate enables
+  successfully from different points in headset. Broader mechanisms remain
+  separate regression cases. The latest candidate enables
   the vice's physical hinge through native Move and prevents fixed vice/locker
   frames from winning over their dynamic bodies; both have failing-before-fix
   host regressions and have maintainer acceptance of the focused device retest.
 - [ ] Validate imported-hand fingers/material presentation, tool sockets and
   mapped haptics.
-- [ ] Validate inventory/notebook/context actions, `UseItem`, subtitles and the
-  shared native-menu extraction in English and Spanish. First-level settings
-  and height calibration on the preceding BP feedback build were accepted;
-  confirm the extraction with the new trilogy menu routes without reopening
-  the closed feedback gate.
+- [x] Accept inventory/notebook/context actions, `UseItem` and the shared
+  native-menu extraction in English and Spanish on the installed local checklist.
+  First-level settings and height calibration are accepted too.
+- [ ] Validate subtitle scaling/legibility and broader UI hardware coverage.
 - [ ] Keep the tutorial small-box reach report as a device-specific diagnostic:
   repeated PSVR2 grabs did not reproduce it. Do not retune reach, collision,
   body offsets or movement constants without a deterministic failing headset case.
@@ -180,8 +186,12 @@ The repeatable Black Plague hardware procedure is in
 - [x] Maintainer accepted intro height without the inventory workaround,
   physical/button crouch, death/continue/main-menu pointer, uphill slope stability
   and persisted turn/crouch settings on the feedback candidate.
-- [ ] Confirm the new first-level English/Spanish native VR menu, live setting
-  refresh and height calibration in headset. Host widget lifecycle tests pass.
+- [x] Confirm the new first-level English/Spanish native VR menu, live setting
+  refresh, calibration and persistence on the installed local headset checklist.
+- [x] Accept installed BP/Requiem input/focus recovery and retained stick
+  response; host regressions separately cover binding loss and invalid data.
+- [x] Record successful Requiem startup checklist feedback. Its intermittent
+  crash remains unresolved until discriminating evidence identifies the cause.
 
 ## Hito 4 — unified installer
 
@@ -208,6 +218,11 @@ remain separate evidence tracks.
   Requiem root. The published EXE has maintainer real-install acceptance.
 
 ## Hito 5 — release
+
+- [x] Register the 2026-10-10 installed trilogy acceptance with exact hashes.
+- [ ] Build and publish v1.0.7 from committed source with current host, Setup,
+  topology and upgrade checks; record exact artifacts without retesting games
+  automatically.
 
 - [x] Prepare v1.0.6 from clean committed source; verify 59 Framework tests,
   298 Overture checks, final-EXE English/Spanish smoke, topology A-F and update

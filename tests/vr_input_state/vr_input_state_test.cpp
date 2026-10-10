@@ -3,6 +3,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <limits>
 
 namespace {
 
@@ -47,6 +48,25 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
     penumbra_vr::runtime::ApplyStickDeadZone(diagonal, 0.15F);
     const float magnitude = std::sqrt(
         diagonal.x * diagonal.x + diagonal.y * diagonal.y);
+    const auto invalid_dead_zone = std::numeric_limits<float>::quiet_NaN();
+    penumbra_vr::runtime::VrAnalogState invalid_setting{true, 0.575F, 0.0F};
+    penumbra_vr::runtime::ApplyStickDeadZone(invalid_setting, invalid_dead_zone);
+    if (!std::isfinite(invalid_setting.x) || !std::isfinite(invalid_setting.y) ||
+        !NearlyEqual(penumbra_vr::runtime::ClampStickDeadZone(invalid_dead_zone),
+            penumbra_vr::runtime::vr_setting_limits::kMoveDeadZone.default_value)) {
+        return false;
+    }
+    penumbra_vr::runtime::VrAnalogState invalid_axis{true, invalid_dead_zone, 0.75F};
+    penumbra_vr::runtime::ApplyStickDeadZone(invalid_axis, 0.15F);
+    if (invalid_axis.active || invalid_axis.x != 0.0F || invalid_axis.y != 0.0F)
+        return false;
+    penumbra_vr::runtime::VrAnalogState overflowing_axes{
+        true, std::numeric_limits<float>::max(), std::numeric_limits<float>::max()};
+    penumbra_vr::runtime::ApplyStickDeadZone(overflowing_axes, 0.15F);
+    if (!std::isfinite(overflowing_axes.x) || !std::isfinite(overflowing_axes.y) ||
+        !NearlyEqual(std::hypot(overflowing_axes.x, overflowing_axes.y), 1.0F)) {
+        return false;
+    }
     return NearlyEqual(magnitude, 1.0F) &&
         NearlyEqual(penumbra_vr::runtime::ClampStickDeadZone(-1.0F), 0.0F) &&
         NearlyEqual(penumbra_vr::runtime::ClampStickDeadZone(2.0F), 0.9F);
@@ -78,10 +98,87 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
     mirrored.recenter = PressedButton();
     result = router.Update(
         mirrored, VrInputContext::gameplay, VrHand::left, true, true, 120);
-    return result.status == VrInputUpdateStatus::actions_active &&
+    if (!(result.status == VrInputUpdateStatus::actions_active &&
         result.state.quick_light.pressed &&
         !result.state.quick_light.just_pressed &&
-        result.state.recenter.pressed && !result.state.recenter.just_pressed;
+        result.state.recenter.pressed && !result.state.recenter.just_pressed)) {
+        return false;
+    }
+
+    // A held menu binding must not generate a click on context entry. Leaving
+    // it must not leak a reconstructed UI release into gameplay either.
+    VrInputState menu;
+    menu.ui_select = PressedButton();
+    menu.ui_drag = PressedButton();
+    result = router.Update(
+        menu, VrInputContext::ui, VrHand::left, true, true, 130);
+    if (!result.state.ui_select.pressed || result.state.ui_select.just_pressed ||
+        !result.state.ui_drag.pressed || result.state.ui_drag.just_pressed) {
+        return false;
+    }
+    VrInputState gameplay;
+    gameplay.move.active = true;
+    result = router.Update(
+        gameplay, VrInputContext::gameplay, VrHand::left, true, true, 140);
+    if (result.state.ui_select.just_released || result.state.ui_drag.just_released)
+        return false;
+
+    result = router.Update(
+        menu, VrInputContext::ui, VrHand::left, true, true, 150);
+    VrInputState other_hand;
+    other_hand.ui_back.active = true;
+    result = router.Update(
+        other_hand, VrInputContext::ui, VrHand::right, true, true, 160);
+    return !result.state.ui_select.just_released &&
+        !result.state.ui_drag.just_released;
+}
+
+[[nodiscard]] bool TestInactiveIndividualActionsReleaseOnce() {
+    VrInputRouter gameplay_router;
+    VrInputState held;
+    held.move = {true, 0.0F, 0.0F};
+    held.interact = PressedButton();
+    held.inventory = PressedButton();
+    held.recenter = PressedButton();
+    auto result = gameplay_router.Update(
+        held, VrInputContext::gameplay, VrHand::right, true, true, 100);
+    if (!result.state.interact.pressed || !result.state.inventory.pressed ||
+        !result.state.recenter.pressed) return false;
+
+    VrInputState still_active;
+    still_active.move.active = true;
+    result = gameplay_router.Update(
+        still_active, VrInputContext::gameplay, VrHand::right, true, true, 110);
+    if (result.status != VrInputUpdateStatus::actions_active ||
+        result.state.interact.pressed || !result.state.interact.just_released ||
+        result.state.inventory.pressed || !result.state.inventory.just_released ||
+        result.state.recenter.pressed || !result.state.recenter.just_released)
+        return false;
+    result = gameplay_router.Update(
+        still_active, VrInputContext::gameplay, VrHand::right, true, true, 120);
+    if (result.state.interact.just_released || result.state.inventory.just_released ||
+        result.state.recenter.just_released) return false;
+
+    VrInputRouter ui_router;
+    VrInputState ui_held;
+    ui_held.ui_select = PressedButton();
+    ui_held.ui_drag = PressedButton();
+    ui_held.ui_back.active = true;
+    result = ui_router.Update(
+        ui_held, VrInputContext::ui, VrHand::right, true, true, 200);
+    if (!result.state.ui_select.pressed || !result.state.ui_drag.pressed)
+        return false;
+    VrInputState ui_active;
+    ui_active.ui_back.active = true;
+    result = ui_router.Update(
+        ui_active, VrInputContext::ui, VrHand::right, true, true, 210);
+    if (!result.state.ui_select.just_released || !result.state.ui_drag.just_released ||
+        result.state.ui_select.pressed || result.state.ui_drag.pressed)
+        return false;
+    result = ui_router.Update(
+        ui_active, VrInputContext::ui, VrHand::right, true, true, 220);
+    return !result.state.ui_select.just_released &&
+        !result.state.ui_drag.just_released;
 }
 
 [[nodiscard]] bool TestLostInteractionPoseReleasesCleanly() {
@@ -309,6 +406,10 @@ using penumbra_vr::runtime::VrInputUpdateStatus;
 } // namespace
 
 int main() {
+    if (!TestInactiveIndividualActionsReleaseOnce()) {
+        std::cerr << "Inactive individual actions missed a release edge\n";
+        return 34;
+    }
     if (!TestDeadZone()) {
         std::cerr << "VR stick dead-zone behavior failed\n";
         return 1;

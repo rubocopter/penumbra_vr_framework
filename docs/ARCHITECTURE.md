@@ -105,8 +105,10 @@ uses process-lifetime residency: shutdown restores owned hooks/resources but the
 DLL remains loaded until game exit because live evidence disproved safe unload.
 
 The ordinary Steam **Play** bootstrap path has reached gameplay VR on the
-allowlisted build. Subsequent presentation-pacing and packaged-hand-texture
-corrections are host-tested and remain focused headset regression items.
+allowlisted build. Subsequent presentation-pacing and packaged-hand-texture corrections have
+scoped maintainer gameplay acceptance. The current installed trilogy checklist
+is recorded in `releases/1.0.7-headset-acceptance.json`; broader hardware and
+progression remain separate.
 
 ### Presentation and tracking
 
@@ -226,8 +228,9 @@ not the native font alone. Inventory keeps the stereo world visible and places
 that queue on a world-anchored panel at Rework's 1.1 m / 1:750 geometry.
 Notebook follows the off hand at Rework's 1:1450 geometry. Full-screen menus
 retain their separate captured-panel route. Panel projection and pointer use
-the same world transform. These BP UI paths are host-tested, not yet validated
-in the headset.
+the same world transform. The maintainer accepted inventory/notebook, context
+actions and UseItem in the installed trilogy checklist. Subtitle scaling and
+broader layout/hardware coverage remain separate validation gates.
 
 ### Audio and visuals
 

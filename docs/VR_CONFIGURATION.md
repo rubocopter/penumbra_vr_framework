@@ -129,9 +129,9 @@ All three games place `VR Settings` / `Ajustes de VR` directly on the first
 level of both the main and paused-game menus, at native 800×600 coordinates
 (600, 500). Back returns to that first level. Labels follow the native game
 language; BP uses `Espanol.lang` and Requiem uses `Espanol_exp.lang`.
-The native Black Plague entry and calibration have maintainer headset acceptance
-on the preceding feedback build; the shared extraction and new Overture/Requiem
-routes remain host-tested. Its page and offline editor use this shared schema.
+The maintainer accepted the shared native page, trilogy menu routes and height
+calibration on the installed local build; exact hashes and scope are recorded in
+`releases/1.0.7-headset-acceptance.json`. Its page and offline editor use this shared schema.
 Edit the profile offline with:
 
 ```powershell
@@ -155,7 +155,8 @@ has maintainer headset acceptance for the preceding feedback candidate.
 Requiem now exposes these nine consumed settings and fresh-HMD height calibration
 through the same native VR Settings page as Black Plague. Changes persist to the
 shared profile and refresh the gameplay/presentation snapshots live. Save
-failures roll back the edit. The new page itself is host-tested. The profile's installer `vr` value remains `null`:
+failures roll back the edit. The maintainer accepted the new page, live edits,
+calibration and persistence on the installed local build. The profile's installer `vr` value remains `null`:
 there is still no headset-validated Requiem-specific preset to install. The
 exact current capability and headset gate are recorded in `ROADMAP.md` and
 `TRILOGY_PARITY_PLAN.md`.

@@ -16,7 +16,7 @@ release.
 | Framework-owned Overture v1.0.3 | x86, LAA | `38F2B1FD10FAFDF4FD291D47522BE0F158DD1202CE7317FDCCB4754DA5F91639` | Historical Framework v1.0.3 (download superseded by v1.0.5); independent missing-stick recovery and controller defaults host-tested, current-build hardware/headset acceptance pending |
 | Framework-owned Overture v1.0.4 | x86, LAA | `07048F55AF9AB97C06514D4457B21F2AB13336C2FD283AF4986AB339E9B9950E` | Historical Framework v1.0.4 packaged build (download superseded by v1.0.5); suspect in-game binding shortcut removed, controller fallback retained, host-tested; focused headset retest pending |
 | Framework-owned Overture v1.0.5 | x86, LAA | `051DFF43C849FF62D265F822B894EF3082FA348AD90578CEDEF3181CE2AFE609` | Consolidated Framework update; full Release build and 298 checks pass; preceding local gameplay accepted, exact new-installer headset acceptance pending |
-| Framework-owned Overture v1.0.6 | x86, LAA | `47C434EDDFEFF71E3722FFD0F1B1628DF2B9FE3BC1F5687A2323D24AC86CBBA1` | Full Release build and 298 host checks pass; first-level VR Settings, HMD-rate cadence and stereo visibility host-tested; exact new-installer headset acceptance pending |
+| Framework-owned Overture v1.0.6 | x86, LAA | `47C434EDDFEFF71E3722FFD0F1B1628DF2B9FE3BC1F5687A2323D24AC86CBBA1` | Full Release build and 298 host checks pass; installed 2026-10-10 menu/cadence/visibility/reach/input checklist accepted at this hash; Quest 3/Link-specific coverage and exact Setup acceptance separate |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
 | Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative interaction, first transition, portal refraction and final flashlight alignment headset-validated; broader regression open |
@@ -88,6 +88,12 @@ Overture gameplay and BP tutorial pacing have scoped maintainer feedback;
 new-installer, broader per-game and controller acceptance remain separate.
 Publication does not promote every capability, controller family or game path
 to `supported`; the evidence levels above remain authoritative.
+
+The 2026-10-10 installed trilogy checklist has scoped maintainer acceptance at
+the hashes in `releases/1.0.7-headset-acceptance.json`, including the new menu,
+BP mixed-obstacle and input recovery paths. Version 1.0.7 publishes the shared
+input hardening with fresh versioned PE/artifact identities; exact new Setup,
+other hardware and full-game support are not implied by this acceptance.
 
 ## Support rules
 

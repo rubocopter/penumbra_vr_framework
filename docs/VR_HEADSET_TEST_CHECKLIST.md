@@ -1,6 +1,7 @@
-# Black Plague headset validation checklist
+# Trilogy headset regression checklist
 
-This is the Black Plague release-regression checklist. The current work
+This is the trilogy release-regression checklist; the detailed gates below
+provide broader Black Plague coverage. The current work
 order is recorded in `ROADMAP.md`; the capability/evidence boundary is in
 `TRILOGY_PARITY_PLAN.md`. Historical session chronology is intentionally
 omitted. Do not repeat a closed reverse-engineering milestone unless new
@@ -10,22 +11,23 @@ evidence contradicts it.
 
 ### Consolidated feedback retest across the trilogy
 
-The maintainer accepted the preceding requested BP/Requiem feedback cases on
-2026-10-08; their binary identities are recorded in
-`releases/1.0.6-feedback-acceptance.json`. Do not repeat those cases as an
-unresolved release gate. New changes require their own scoped confirmation:
+The maintainer accepted the installed local trilogy checklist on 2026-10-10.
+The exact hashes and case scope are in `releases/1.0.7-headset-acceptance.json`.
+Do not repeat these cases as unresolved release gates:
 
-1. **All three menus:** open VR Settings directly at the same position in the
-   main and paused-game menus. Back must return to the first level. Reopen after
-   a map/menu recreation. Check English/Spanish labels, live setting refresh,
-   persistence and fresh-HMD height calibration, especially in Requiem.
-2. **BP mixed movement:** approach a small movable obstacle using joystick
-   movement while the HMD moves naturally. Confirm the player can negotiate a
-   native step without jumping or moving the object by hand. Recheck physical
-   wall/floor contact for mini-hops. Preserve the matching body diagnostics.
-3. **Overture pending coverage:** Quest Link 72 Hz cadence, left-eye edge
-   visibility, crouched hatch reach and constrained-door nudge remain separate
-   from the accepted BP/Requiem feedback session.
+- Overture: main/pause bilingual VR Settings and persistence, tested cadence,
+  left-eye edge visibility, crouched hatch/door reach and input/focus recovery.
+- Black Plague: mixed stick/HMD obstacles, input/focus recovery and stick
+  response, VR settings/calibration, held grabs/turns/release/throw, inventory/
+  notebook/context/UseItem and wall/step/crouch regression.
+- Requiem: native bilingual VR menu, live edits/calibration/persistence,
+  input/focus recovery, successful reported starts and height/crouch/slope.
+
+Keep Quest 3/Link 72 Hz, optional Requiem Move/throw/new mechanisms, other
+controller families and exact new-Setup acceptance separate. The confirmation
+did not identify new hardware or independently document conditional cases.
+Use the detailed gates for new regressions or broader coverage, not as a request
+to repeat accepted focused tests without new evidence.
 
 The BP distance/occlusion low-pass consumer and intermittent Requiem startup
 crash remain unresolved implementation/investigation items. A successful session
@@ -52,13 +54,13 @@ does not close either without evidence specific to that issue.
 Use focused validation helpers only when their extra telemetry is required.
 Normal gameplay validation should exercise the production path.
 
-## Gate 1 — presentation first
+## Gate 1 â€” presentation first
 
 Before interpreting body or interaction behavior:
 
 - enter gameplay from the menu;
 - remain still for roughly ten seconds, then rotate the head for another
-  20–30 seconds;
+  20â€“30 seconds;
 - confirm continuous stereo with no black frame, desktop-only fallback pattern or
   obvious alternating stale frame;
 - confirm both controllers remain tracked;
@@ -69,7 +71,7 @@ Before interpreting body or interaction behavior:
 Stop the session if this gate fails; body/interaction observations from a broken
 presentation run are not promotion evidence.
 
-## Gate 2 — body, room-scale and locomotion
+## Gate 2 â€” body, room-scale and locomotion
 
 Exercise the current production body path:
 
@@ -90,7 +92,7 @@ Expected behavior:
 - walk/sprint remains HMD-relative and uses the shared metric policy;
 - no body/lifecycle access after death/menu invalidates the active player body.
 
-## Gate 3 — crouch and calibration
+## Gate 3 â€” crouch and calibration
 
 - physical crouch down/up;
 - button crouch down/up;
@@ -100,7 +102,7 @@ Expected behavior:
 
 Confirm tracked Y, native stance and camera height remain coherent throughout.
 
-## Gate 4 — turning, tracking epochs and transitions
+## Gate 4 â€” turning, tracking epochs and transitions
 
 - snap and/or smooth turning as configured;
 - turn while both hands are visible and near geometry;
@@ -111,7 +113,7 @@ Confirm tracked Y, native stance and camera height remain coherent throughout.
 The user's world heading should survive authored map-start yaw. Hands must not
 jump because collision history was computed in an older yaw epoch.
 
-## Gate 5 — hands and direct interaction
+## Gate 5 â€” hands and direct interaction
 
 With production palm collision enabled:
 
@@ -140,7 +142,7 @@ skeletal-hand display and record the controller type and game/mod version.
 This distinguishes device/runtime curl data from the game's rig mapping;
 an attached tool intentionally overrides measured curl with its handle pose.
 
-## Gate 6 — constrained mechanisms and tools
+## Gate 6 â€” constrained mechanisms and tools
 
 Exercise representative mapped mechanisms:
 
@@ -153,7 +155,7 @@ Exercise representative mapped mechanisms:
 Native mechanism lifecycle remains authoritative. Unknown joint families should
 not be forced through free-body grab behavior.
 
-## Gate 7 — UI and settings
+## Gate 7 â€” UI and settings
 
 - open inventory and notebook in VR;
 - hover an inventory item, press the mapped context-action/Circle input and
@@ -170,7 +172,7 @@ not be forced through free-body grab behavior.
 Do not promote `SubtitleScale` for Black Plague until subtitles are actually
 observed and validated in-eye through the mapped HUD surface.
 
-## Gate 8 — audio, haptics and visuals
+## Gate 8 â€” audio, haptics and visuals
 
 When the scene provides suitable coverage:
 
@@ -193,7 +195,7 @@ classified as another render family before changing particle policy again.
 The missing distance/occlusion low-pass consumer remains implementation work and
 is not part of a passing audio gate yet.
 
-## Gate 9 — focus, mirror and shutdown
+## Gate 9 â€” focus, mirror and shutdown
 
 - Alt+Tab/focus loss and return;
 - monitor mirror on/off if both modes are relevant to the test;

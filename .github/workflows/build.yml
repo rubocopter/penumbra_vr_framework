@@ -7,6 +7,25 @@ on:
   workflow_dispatch:
 
 jobs:
+  installer-fixtures:
+    name: Installer and diagnostics fixtures (no game binaries)
+    runs-on: windows-2022
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Validate installer state, configuration and diagnostics
+        shell: pwsh
+        run: |
+          # Isolated synthetic fixtures: no installed games or VR hardware required.
+          ./tests/deployment/Test-ReleaseConfiguration.ps1
+          ./tests/deployment/Test-ReleasePrerequisites.ps1
+          ./tests/deployment/Test-ReleaseIdentity.ps1
+          ./tests/deployment/Test-InstallerUi.ps1
+          ./tests/deployment/Test-ReleaseDiagnostics.ps1
+
   windows-x86:
     name: Windows x86 (without OpenVR SDK)
     runs-on: windows-2022

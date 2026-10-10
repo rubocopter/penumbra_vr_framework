@@ -100,11 +100,11 @@ Unknown or modified game builds may be rejected by the installer. Check [support
 
 ## Current release status
 
-The current public release is **[v1.0.6](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.6)**.
+The current release is **[v1.0.7](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.7)**.
 
-VR Settings now appears in the same first-level position in the main and pause menus of all three games, in English and Spanish. This release includes maintainer-accepted Black Plague vice/locker and Requiem intro-height feedback fixes, plus a correction for excessive Black Plague blocking near movable obstacles. The new menu routes and mixed-obstacle correction have host tests; their headset confirmation remains separate.
+This update prevents stuck digital actions and preserves movement dead zones after temporary input/focus loss in Black Plague and Requiem. VR Settings occupies the same first-level position in all three games, in English and Spanish. The maintainer accepted the installed trilogy checklist, including the new menu routes, BP obstacle movement, Overture visibility/reach and input recovery; exact tested binaries are recorded separately from the new installer.
 
-Known issues include intermittent Requiem startup failure and a reported finger-pose mismatch. Full progression, the new menu/obstacle changes and other controller families still need broader device validation. See [release status and validation](docs/CLOSURE_STATUS.md) for the current ledger.
+Known issues include intermittent Requiem startup failure and a reported finger-pose mismatch. Full progression, conditional Quest 3/Link coverage and other controller families still need broader device validation. See [release status and validation](docs/CLOSURE_STATUS.md) for the current ledger.
 
 ## Help and documentation
 
@@ -113,7 +113,7 @@ Known issues include intermittent Requiem startup failure and a reported finger-
 | [Controls](docs/CONTROLS.md) | [Architecture](docs/ARCHITECTURE.md) |
 | [VR configuration](docs/VR_CONFIGURATION.md) | [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | [Supported builds](docs/SUPPORTED_BUILDS.md) |
-| [Release notes](docs/releases/1.0.6.md) | [Roadmap](docs/ROADMAP.md) |
+| [Release notes](docs/releases/1.0.7.md) | [Roadmap](docs/ROADMAP.md) |
 | [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
 
 If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a new bug, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs.

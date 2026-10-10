@@ -46,6 +46,26 @@ void ReleaseForLostPose(
     sample.just_released = previous.pressed;
 }
 
+void RecoverMissingReleaseEdges(
+    VrInputState& sample, const VrInputState& previous) noexcept {
+    // Rework reconstructs interact release from the preceding held state.
+    // Apply the same rule to the other actions: an individually inactive
+    // binding must still release its native/UI consumer while the action set
+    // remains active. Call only within an unchanged input context/hand.
+    for (auto member : {&VrInputState::sprint, &VrInputState::interact,
+        &VrInputState::examine, &VrInputState::holster,
+        &VrInputState::inventory, &VrInputState::notebook,
+        &VrInputState::quick_light, &VrInputState::jump,
+        &VrInputState::crouch, &VrInputState::pause,
+        &VrInputState::recenter, &VrInputState::ui_select,
+        &VrInputState::ui_drag, &VrInputState::ui_back,
+        &VrInputState::ui_close}) {
+        auto& button = sample.*member;
+        button.just_released = button.just_released ||
+            ((previous.*member).pressed && !button.pressed);
+    }
+}
+
 } // namespace
 
 VrButtonState MakeVrButtonState(
@@ -61,6 +81,9 @@ VrButtonState MakeVrButtonState(
 }
 
 float ClampStickDeadZone(float dead_zone) noexcept {
+    if (!std::isfinite(dead_zone)) {
+        return vr_setting_limits::kMoveDeadZone.default_value;
+    }
     return std::clamp(
         dead_zone,
         vr_setting_limits::kMoveDeadZone.minimum,
@@ -74,8 +97,17 @@ void ApplyStickDeadZone(VrAnalogState& state, float dead_zone) noexcept {
         return;
     }
 
+    if (!std::isfinite(state.x) || !std::isfinite(state.y)) {
+        state = {};
+        return;
+    }
+
     dead_zone = ClampStickDeadZone(dead_zone);
-    const float magnitude = std::sqrt(state.x * state.x + state.y * state.y);
+    // Keep the public router safe for backends that bypass the OpenVR reader,
+    // which already enforces the physical [-1, 1] axis range.
+    state.x = std::clamp(state.x, -1.0F, 1.0F);
+    state.y = std::clamp(state.y, -1.0F, 1.0F);
+    const float magnitude = std::hypot(state.x, state.y);
     if (magnitude <= dead_zone || magnitude <= 0.0001F) {
         state.x = 0.0F;
         state.y = 0.0F;
@@ -155,6 +187,8 @@ VrInputUpdateResult VrInputRouter::Update(
         } else {
             SuppressUiEdges(sample);
         }
+    } else {
+        RecoverMissingReleaseEdges(sample, state_);
     }
 
     if (AnyActionActive(sample)) {
