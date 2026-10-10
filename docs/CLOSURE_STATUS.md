@@ -32,6 +32,14 @@ closes those focused runtime gates without claiming full-game support or
 headset acceptance of the newly versioned Setup artifact. Successful Requiem
 startup feedback does not identify or fix its intermittent crash cause.
 
+The [1.0.7 validation record](releases/1.0.7-validation.json) pins the clean
+build source and exact Setup/source/report hashes, 59 Framework tests, 298
+Overture checks, final English/Spanish Setup smoke, A-F topology and upgrade
+from 1.0.6. The tag adds only provenance/status documentation to that build
+source. These verified artifacts are published unchanged with matching source.
+Build-report pending readiness fields remain build-time data; installed-local
+headset acceptance stays scoped to its separate record.
+
 ## Historical release — 1.0.6
 
 Framework v1.0.6 includes the maintainer-accepted BP/Requiem feedback fixes,

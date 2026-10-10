@@ -1,0 +1,184 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.7",
+  "validatedOn": "2026-10-10",
+  "releaseTag": "v1.0.7",
+  "buildSourceCommit": "190a2090942d3cdfa7274eb75a4962660f7578b9",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.7",
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "Publish accepted shared digital-release and dead-zone hardening, analog-data guards and Windows installer/diagnostics CI",
+  "publishedWithoutRebuildAfterHostValidation": true,
+  "releaseTagAddsOnlyDocumentationToBuildSource": true,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "bytes": 5336,
+      "sha256": "FA8B916896C907965DC453F001EC7D0A9168E4D68B43749131D3E3345342A829"
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.7.exe",
+      "bytes": 193150102,
+      "sha256": "7554C8D8C9508F49722138B0D33FEBEF217CB78E12E62C97697A0CE6BB48EA7C"
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.7.zip",
+      "bytes": 81979100,
+      "sha256": "D81DDD38133D551782281FC9934EFA971BB5877956D17804EB02AF9F6A269E00"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 274,
+      "sha256": "436CEDAE2DA721C82B52A5ECBFE24E847FB91152D80C2A069F7C57D7E098B70A"
+    }
+  ],
+  "pe": [
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.7",
+      "sha256": "6DF73D0335B56EFD126DDE8F4B6506BC9D846FDFCE3E426A9C58BEA0E3282298",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll",
+        "USER32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.7",
+      "sha256": "B073BD6674BC22ADF397D5E79E68E1A82879CC5E6D632864D3F2254CA7EA4584",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.7",
+      "sha256": "611F4FC8EAEEE2E3606DE0F85318388690691FCDD4B7469CF95C237E5B5A9A8A",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.Requiem.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.7",
+      "sha256": "23455D2D9B212A85B8F328883C2697DE4D717CE0E736EA500DA18115C526A319",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.LaaTransform.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.7",
+      "sha256": "1D9FD1E33D9102DB76288AC470D06B8A8FF13A94BBB4C47AE6934D81F4D6E51A",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "products/overture/build/bin/Release/Penumbra_vr.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.7",
+      "sha256": "D49D5AA374A387DB6DBED2D613BBC33B03484304E80E89F3210BF4AEAD14B645",
+      "imports": [
+        "alut.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "cg.dll",
+        "cgGL.dll",
+        "GLU32.dll",
+        "KERNEL32.dll",
+        "libvorbisfile.dll",
+        "MSVCP140.dll",
+        "Newton.dll",
+        "OpenAL32.dll",
+        "OPENGL32.dll",
+        "openvr_api.dll",
+        "SDL_image.dll",
+        "SDL_ttf.dll",
+        "SDL.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "VCRUNTIME140.dll"
+      ],
+      "delayImports": []
+    }
+  ],
+  "acceptedLocalCodeSectionComparison": [
+    {
+      "game": "overture",
+      "acceptedLocalTextSha256": "B06A4C36F59F682D6452E1539E8AAB8F0E4CE6E56ABE3FCF51C6C3727B536A86",
+      "release107TextSha256": "B06A4C36F59F682D6452E1539E8AAB8F0E4CE6E56ABE3FCF51C6C3727B536A86",
+      "textSectionIdentical": true,
+      "interpretation": "Code-section comparison only; not a transfer of exact-artifact headset acceptance."
+    },
+    {
+      "game": "black_plague",
+      "acceptedLocalTextSha256": "FE45BD88F7B7799572110B881ED21BDF06E625F3280C3778394E2F7E7F44AC2B",
+      "release107TextSha256": "FE45BD88F7B7799572110B881ED21BDF06E625F3280C3778394E2F7E7F44AC2B",
+      "textSectionIdentical": true,
+      "interpretation": "Code-section comparison only; not a transfer of exact-artifact headset acceptance."
+    },
+    {
+      "game": "requiem",
+      "acceptedLocalTextSha256": "CF485C96CCBB631C5FC85667B00DC2C74C0404B09EDB9E45F6BD2852EF4DC73A",
+      "release107TextSha256": "CF485C96CCBB631C5FC85667B00DC2C74C0404B09EDB9E45F6BD2852EF4DC73A",
+      "textSectionIdentical": true,
+      "interpretation": "Code-section comparison only; not a transfer of exact-artifact headset acceptance."
+    }
+  ],
+  "validation": {
+    "frameworkHostTests": {
+      "passed": 59,
+      "failed": 0
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0,
+      "releaseWin32Rebuild": true
+    },
+    "metadata": "passed: 42 actions, 6 sets, 8 controller binding graphs",
+    "installerCiFixtures": "configuration, prerequisites, release identity, bilingual UI state and diagnostics/privacy passed locally",
+    "languageSafety": "read-only preview, missing-language fallback, staged Spanish translations, removal, repair and later user edits passed",
+    "releasePackaging": "PE versions/imports/hash identity, source/notices, outer checksums and absence of private/developer payload passed",
+    "standaloneSetup": "Exact final 1.0.7 EXE passed English/Spanish embedded-resource extraction/cleanup with multilevel runtime lookup disabled",
+    "topology": "A-F install/verify/repair/component transitions/shared-root deduplication/exact restore passed on synthetic content/runtime fixtures",
+    "upgradeFrom1.0.6": "Overture and shared BP/Requiem payload/default hashes, eight bindings, repair, verify and exact restore passed in isolated roots",
+    "installedLocalHeadsetAcceptance": "See 1.0.7-headset-acceptance.json; maintainer accepted trilogy checklist at those exact local hashes",
+    "newInstallerHeadsetAcceptance": "not performed; versioned Setup artifact distinct from accepted installed local build",
+    "independentCleanMachine": "pending",
+    "review": "Independent static runtime/CI review approved; documentation review findings corrected and product preflight passed",
+    "gamesLaunchedByAutomation": false,
+    "remainingKnownIssues": [
+      "intermittent Requiem startup cause unresolved despite successful reported starts",
+      "nonblocking Index finger mismatch",
+      "broader progression, conditional Quest3/Link72 and other hardware coverage"
+    ]
+  }
+}

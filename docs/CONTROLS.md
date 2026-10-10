@@ -31,7 +31,7 @@ The [controller ledger](TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribut
 The [generated controller reference](CONTROLLER_BINDINGS.md) lists the actual
 default gameplay/UI bindings for all eight families and both handedness modes.
 It is checked against the distributed graphs. Black Plague provides a shortcut
-to the active layout under **Options → VR Settings → Controller bindings
+to the active layout under **Main menu or pause → VR Settings → Controller bindings
 (SteamVR)**. Overture and Requiem use the SteamVR dashboard binding editor.
 Overture's v1.0.3 in-game shortcut was removed in v1.0.4 after a pre-menu crash
 report. Saved custom bindings are shown by SteamVR and can differ from the

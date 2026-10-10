@@ -220,9 +220,10 @@ remain separate evidence tracks.
 ## Hito 5 — release
 
 - [x] Register the 2026-10-10 installed trilogy acceptance with exact hashes.
-- [ ] Build and publish v1.0.7 from committed source with current host, Setup,
-  topology and upgrade checks; record exact artifacts without retesting games
-  automatically.
+- [x] Build and publish v1.0.7 from committed source: 59 Framework tests,
+  298 Overture checks, final bilingual Setup smoke, A-F topology and upgrade
+  from 1.0.6. Exact artifact/build identities are recorded in the validation
+  record; games were not launched automatically.
 
 - [x] Prepare v1.0.6 from clean committed source; verify 59 Framework tests,
   298 Overture checks, final-EXE English/Spanish smoke, topology A-F and update

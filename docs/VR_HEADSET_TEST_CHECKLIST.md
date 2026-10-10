@@ -54,13 +54,13 @@ does not close either without evidence specific to that issue.
 Use focused validation helpers only when their extra telemetry is required.
 Normal gameplay validation should exercise the production path.
 
-## Gate 1 â€” presentation first
+## Gate 1 — presentation first
 
 Before interpreting body or interaction behavior:
 
 - enter gameplay from the menu;
 - remain still for roughly ten seconds, then rotate the head for another
-  20â€“30 seconds;
+  20–30 seconds;
 - confirm continuous stereo with no black frame, desktop-only fallback pattern or
   obvious alternating stale frame;
 - confirm both controllers remain tracked;
@@ -71,7 +71,7 @@ Before interpreting body or interaction behavior:
 Stop the session if this gate fails; body/interaction observations from a broken
 presentation run are not promotion evidence.
 
-## Gate 2 â€” body, room-scale and locomotion
+## Gate 2 — body, room-scale and locomotion
 
 Exercise the current production body path:
 
@@ -92,7 +92,7 @@ Expected behavior:
 - walk/sprint remains HMD-relative and uses the shared metric policy;
 - no body/lifecycle access after death/menu invalidates the active player body.
 
-## Gate 3 â€” crouch and calibration
+## Gate 3 — crouch and calibration
 
 - physical crouch down/up;
 - button crouch down/up;
@@ -102,7 +102,7 @@ Expected behavior:
 
 Confirm tracked Y, native stance and camera height remain coherent throughout.
 
-## Gate 4 â€” turning, tracking epochs and transitions
+## Gate 4 — turning, tracking epochs and transitions
 
 - snap and/or smooth turning as configured;
 - turn while both hands are visible and near geometry;
@@ -113,7 +113,7 @@ Confirm tracked Y, native stance and camera height remain coherent throughout.
 The user's world heading should survive authored map-start yaw. Hands must not
 jump because collision history was computed in an older yaw epoch.
 
-## Gate 5 â€” hands and direct interaction
+## Gate 5 — hands and direct interaction
 
 With production palm collision enabled:
 
@@ -142,7 +142,7 @@ skeletal-hand display and record the controller type and game/mod version.
 This distinguishes device/runtime curl data from the game's rig mapping;
 an attached tool intentionally overrides measured curl with its handle pose.
 
-## Gate 6 â€” constrained mechanisms and tools
+## Gate 6 — constrained mechanisms and tools
 
 Exercise representative mapped mechanisms:
 
@@ -155,7 +155,7 @@ Exercise representative mapped mechanisms:
 Native mechanism lifecycle remains authoritative. Unknown joint families should
 not be forced through free-body grab behavior.
 
-## Gate 7 â€” UI and settings
+## Gate 7 — UI and settings
 
 - open inventory and notebook in VR;
 - hover an inventory item, press the mapped context-action/Circle input and
@@ -172,7 +172,7 @@ not be forced through free-body grab behavior.
 Do not promote `SubtitleScale` for Black Plague until subtitles are actually
 observed and validated in-eye through the mapped HUD surface.
 
-## Gate 8 â€” audio, haptics and visuals
+## Gate 8 — audio, haptics and visuals
 
 When the scene provides suitable coverage:
 
@@ -195,7 +195,7 @@ classified as another render family before changing particle policy again.
 The missing distance/occlusion low-pass consumer remains implementation work and
 is not part of a passing audio gate yet.
 
-## Gate 9 â€” focus, mirror and shutdown
+## Gate 9 — focus, mirror and shutdown
 
 - Alt+Tab/focus loss and return;
 - monitor mirror on/off if both modes are relevant to the test;
