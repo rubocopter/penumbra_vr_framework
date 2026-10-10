@@ -41,18 +41,20 @@ Current product-level evidence:
   interaction. Broader current-build headset regression remains follow-up.
 - **Black Plague:** tracked stereo, head/camera tracking and several body/input
   paths have real headset evidence; the managed Steam bootstrap has reached
-  gameplay VR from Steam **Play**. Later host-tested changes still require the
-  focused regressions listed in `ROADMAP.md`. The surface-contact Grab port has
+  gameplay VR from Steam **Play**. The installed local checklist has scoped
+  acceptance; broader regressions remain listed in `ROADMAP.md`. The surface-contact Grab port has
   headset evidence from chair acquisition at different contact points. Special
   effects rendered correctly in the observed scene; its matching exact-build
   log records full-eye refraction copy/resize activity. This does not validate
-  every smoke/material variant or held snap/throw/mechanism behavior. Exact-build
+  every smoke/material variant or mechanism. Held turns and throws also have
+  acceptance on the installed local checklist. Exact-build
   host work also maps `cMainMenu::SetState` at RVA `0x7A680`, root state `0`
   and all ten verified direct callsites used to inject/rebind the VR Settings
   entry for front-end and in-game menus. The maintainer accepted the requested
   vice/locker, settings/calibration and physical-contact mini-hop feedback cases
-  on the binaries pinned in the feedback acceptance record. The new shared menu
-  extraction and mixed stick/HMD dynamic-obstacle eligibility remain host-tested.
+  on the binaries pinned in the feedback acceptance record. Shared menu
+  extraction and mixed stick/HMD dynamic-obstacle eligibility were subsequently
+  accepted at the hashes in `releases/1.0.7-headset-acceptance.json`.
 - **Requiem:** boot/menu/gameplay stereo, Sense locomotion, room-scale/body
   movement, crouch, visible hands and inventory/notebook have headset evidence.
   A representative Push puzzle, free-body `Grab=6` carry/snap/release sequence,
@@ -69,7 +71,8 @@ Current product-level evidence:
   the user's acceptance and image showing the beam at the housing edge.
   The maintainer also accepted the feedback candidate's intro-height/crouch,
   fullscreen UI, slope and persisted-settings cases. The new native VR menu
-  is host-tested against independently mapped Requiem addresses and widget ABI;
+  is host-tested against independently mapped Requiem addresses and widget ABI,
+  and its menu/calibration/live-edit checklist has installed-local acceptance;
   see its manifest's `nativeVrSettingsMenu` contract.
   Slight finger penetration remains a known limitation.
   Nine intermittent startup dumps identify invalid `SDL_mutexP` arguments

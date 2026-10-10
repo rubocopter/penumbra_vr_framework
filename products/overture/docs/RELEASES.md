@@ -1,5 +1,15 @@
 # Release history
 
+## v1.0.7 — Shared-input maintenance and trilogy acceptance (2026-10-10)
+
+Overture gameplay behavior is unchanged from v1.0.6. The maintainer accepted
+the installed menu, cadence, edge visibility, crouched hatch/door reach and
+input/focus checklist. The Framework update publishes BP/Requiem shared-input
+hardening and Windows installer/diagnostics CI. Conditional Quest 3/Link 72 Hz,
+other devices and the exact newly versioned Setup remain separate evidence.
+See the [Framework notes](../../../docs/releases/1.0.7.md) and
+[scoped installed-build acceptance](../../../docs/releases/1.0.7-headset-acceptance.json).
+
 ## v1.0.6 — Trilogy feedback update (2026-10-08)
 
 VR Settings is directly available from the main/pause menu and Back returns to

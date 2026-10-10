@@ -140,7 +140,9 @@ became 1.08 m/s for a 3 kg body. Direct adaptation is incorrect at this boundary
 Overture now passes bounded delta velocity for recognized constrained hinges
 and sliders, retaining the native joint lifecycle and existing contact-speed
 policy. Loose-prop tuning remains the reference behavior. The real-DLL test
-covers masses 1, 3, 25 and 100 kg; door feel still requires headset acceptance.
+covers masses 1, 3, 25 and 100 kg. Door contact and crouched hatch reach received
+scoped installed-local acceptance in `releases/1.0.7-headset-acceptance.json`;
+broader mechanisms remain separate.
 
 Investigation prompted by the BP tutorial shelf report independently exposed
 the same incompatible boundary for loose-prop hand nudges. The clarified clip
@@ -252,8 +254,9 @@ retain the tighter box guard. The Requiem headset sequence later demonstrated
 stable reacquisition of one prop from different surface points. BP now anchors
 a fresh, accepted VR surface contact within the shared reach bound and retains
 its origin fallback for stale/native-only picks. BP's own headset trial confirms
-chair acquisition from different contact points; held snap turns and throwing
-still require separate evidence. Native-origin grabs and jointed
+chair acquisition from different contact points. Held snap turns and throwing
+were subsequently accepted on the installed local checklist; exact hashes are
+in `releases/1.0.7-headset-acceptance.json`. Native-origin grabs and jointed
 `Move=2` mechanisms retain their native behavior. A published world-yaw epoch
 also distinguishes snap turning from physical palm jumps: free bodies follow
 that rebase without a one-frame force impulse, while mechanisms rebase their

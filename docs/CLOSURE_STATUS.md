@@ -117,8 +117,9 @@ archive determinism from unproven full binary reproducibility.
 
 - Slight finger/contact intersection, resistant Requiem monolith rings and
   accidental stacked-block displacement in observed sequences.
-- Black Plague mini-hops while touching ventilation walls: currently a comfort
-  issue of unknown cause; reclassify only with evidence meeting a blocker above.
+- The focused Black Plague physical-contact mini-hop correction and local
+  wall/step regression are accepted. Broader collision recoil/comfort coverage
+  remains open; investigate only a new reproducible case.
 - Non-Sense hardware lacks personal validation. Vive defaults omit several
   essential binary-backend actions; WMR defaults omit holster/skeleton outputs.
   Exact coverage/status remains in

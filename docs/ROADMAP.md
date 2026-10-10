@@ -138,12 +138,12 @@ trilogy checklist. Do not request that focused gate again without new evidence.
 
 ### Black Plague
 
-- [ ] Revalidate continuous presentation, focus/Alt+Tab, mirror and map
-  transitions on the current release.
-- [ ] Revalidate wall/tunnel pressure, mixed stick + room-scale contact, Hybrid
-  crouch recovery and accepted-motion footsteps. The
-  accepted physical-contact mini-hop correction is distinct from the new mixed-input obstacle
-  eligibility change, now accepted on the installed local checklist.
+- [x] Accept focus/Alt+Tab recovery, mixed stick/HMD obstacle contact and
+  wall/step/crouch regression on the installed local checklist.
+- [ ] Extend continuous presentation, mirror and map-transition coverage.
+- [ ] Extend tunnel/low-ceiling pressure, Hybrid blocked-stand recovery and
+  accepted-motion footsteps coverage. These distinct cases do not reopen the
+  accepted physical-contact mini-hop or mixed-obstacle gates.
 - [x] Accept free-body acquisition/hold/throw and snap-turn continuity on the
   installed local checklist. Broader slider/hinge/door coverage remains open.
   A fresh, bounded surface
