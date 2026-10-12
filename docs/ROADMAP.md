@@ -1,29 +1,14 @@
 # Roadmap
 
-This file owns the current work order. Capability state lives in
-`TRILOGY_PARITY_PLAN.md`, exact-build identity and validation levels in
-`SUPPORTED_BUILDS.md`, and stable ownership rules in `ARCHITECTURE.md` and
-`DESIGN_DECISIONS.md`.
+This document preserves shipped milestones, existing validation evidence and outstanding limitations. It is **not an active feature-development backlog**. Capability state lives in `TRILOGY_PARITY_PLAN.md`, exact-build identity and validation levels in `SUPPORTED_BUILDS.md`, and ownership rules in `ARCHITECTURE.md` and `DESIGN_DECISIONS.md`.
 
-## Current priority — post-v1.0 validation and maintenance
+## Project status — feature-complete; maintenance only
 
-Framework [v1.0.7](releases/1.0.7.md) publishes shared BP/Requiem input-release,
-dead-zone and analog-data hardening, plus Windows installer/diagnostics CI.
-The maintainer accepted the installed trilogy checklist; exact local runtime
-hashes and scope are in `releases/1.0.7-headset-acceptance.json`. The installer, matching committed source, checksums and build report are
-identified by the versioned release validation record. Exact new-installer
-headset and independent clean-PC acceptance remain separate from publication.
-Use `CLOSURE_STATUS.md` for release provenance and the remaining deployment matrix.
-Index finger feedback, Quest 3 pointer/cadence coverage, broader per-game
-regression and Requiem startup reliability remain focused follow-up.
-The Windows CI also runs synthetic installer configuration, prerequisites,
-release identity, UI state and diagnostics/privacy checks without game binaries
-or VR hardware; these checks do not establish clean-PC or headset acceptance.
+As of 2026-10-12, the maintainer considers the intended Penumbra trilogy VR feature set complete. There is **no planned further feature work, cosmetic polishing, controller-family expansion or broad compatibility-certification programme**. Remaining unchecked items below record possible validation or unresolved limitations, not commitments to resume development.
 
-The runtime milestones below retain their evidence but non-blocking polish,
-broader parity and optional improvements do not displace this release task.
-Reopen runtime work only for a concrete release blocker, including the documented
-intermittent Requiem startup crash. Do not automatically launch games.
+Only consider runtime or installer changes in response to a concrete, reproducible problem that prevents normal installation, launch, input, save/load or progression, or causes destructive repair/uninstall. Preserve the existing evidence gates and avoid speculative fixes, unnecessary refactoring and additional validation cycles without a reported failure. The intermittent Requiem startup crash is known but has no confirmed root-cause fix; investigate it only if new discriminating evidence becomes available. Do not automatically launch games.
+
+Framework [v1.0.7](releases/1.0.7.md) ships BP/Requiem input-release recovery, dead-zone/analog-data guards and Windows installer/diagnostics CI. The maintainer accepted scoped installed-trilogy headset checks, with exact tested runtime identities in [the acceptance record](releases/1.0.7-headset-acceptance.json). This does not certify complete playthroughs, other headset/controller families, independent clean-PC installations or the exact newly versioned Setup executable. Release provenance and deployment limitations remain in [CLOSURE_STATUS.md](CLOSURE_STATUS.md).
 
 ## Foundation already in place
 
