@@ -34,25 +34,15 @@
 
 ## One framework, three games
 
-<table>
-<tr>
-<td width="33%" align="center">
-  <img src="assets/steam/overture-vr-600x900.png" width="210" alt="Penumbra: Overture VR"><br>
-  <b>Penumbra: Overture</b><br>
-  Descend into the mine with full head tracking and tracked-hand interaction.
-</td>
-<td width="33%" align="center">
-  <img src="assets/steam/black-plague-vr-600x900.png" width="210" alt="Penumbra: Black Plague VR"><br>
-  <b>Penumbra: Black Plague</b><br>
-  Explore the shelter, handle objects directly and work through its puzzles in VR.
-</td>
-<td width="33%" align="center">
-  <img src="assets/steam/requiem-vr-600x900.png" width="210" alt="Penumbra: Requiem VR"><br>
-  <b>Penumbra: Requiem</b><br>
-  Return for the puzzle-focused expansion, running through the Black Plague installation.
-</td>
-</tr>
-</table>
+<p align="center">
+  <img src="assets/steam/overture-vr-600x900.png" width="180" alt="Penumbra: Overture VR">
+  <img src="assets/steam/black-plague-vr-600x900.png" width="180" alt="Penumbra: Black Plague VR">
+  <img src="assets/steam/requiem-vr-600x900.png" width="180" alt="Penumbra: Requiem VR">
+</p>
+
+- **Penumbra: Overture:** Descend into the mine with full head tracking and tracked-hand interaction.
+- **Penumbra: Black Plague:** Explore the shelter, handle objects directly and work through its puzzles in VR.
+- **Penumbra: Requiem:** Return for the puzzle-focused expansion, running through the Black Plague installation.
 
 ## What changes in VR
 
@@ -98,13 +88,13 @@ The Framework has been tested end-to-end primarily with **PS VR2 and Sense contr
 
 Unknown or modified game builds may be rejected by the installer. Check [supported builds](docs/SUPPORTED_BUILDS.md), [controller mappings](docs/CONTROLS.md) and the [VR configuration guide](docs/VR_CONFIGURATION.md) before troubleshooting a setup.
 
-## Current release status
+## Release and maintenance status
 
-The current release is **[v1.0.7](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.7)**.
+The latest stable release is **[v1.0.7](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.7)** (10 October 2026). **The intended VR feature set is complete; the project is now in maintenance-only mode.** No additional features, cosmetic polish or broad hardware certification are planned. Future fixes may be considered for reproducible problems that prevent normal installation, launch, input or progression.
 
-This update prevents stuck digital actions and preserves movement dead zones after temporary input/focus loss in Black Plague and Requiem. VR Settings occupies the same first-level position in all three games, in English and Spanish. The maintainer accepted the installed trilogy checklist, including the new menu routes, BP obstacle movement, Overture visibility/reach and input recovery; exact tested binaries are recorded separately from the new installer.
+The maintainer has accepted focused in-headset tests of the installed trilogy on the primary PS VR2 setup; this is not a claim of full playthroughs or universal headset compatibility. An intermittent Requiem startup crash remains without an identified fix, and a finger-pose mismatch has been reported on Index. Other controller families and independent clean-PC installations have not received equivalent validation.
 
-Known issues include intermittent Requiem startup failure and a reported finger-pose mismatch. Full progression, conditional Quest 3/Link coverage and other controller families still need broader device validation. See [release status and validation](docs/CLOSURE_STATUS.md) for the current ledger.
+See [v1.0.7 release notes](docs/releases/1.0.7.md) for changes and [release status and validation](docs/CLOSURE_STATUS.md) for precise evidence and known limitations.
 
 ## Help and documentation
 
@@ -116,7 +106,7 @@ Known issues include intermittent Requiem startup failure and a reported finger-
 | [Release notes](docs/releases/1.0.7.md) | [Roadmap](docs/ROADMAP.md) |
 | [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
 
-If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a new bug, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs.
+If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a reproducible regression, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs. The project is not accepting new feature requests as active work.
 
 <details>
 <summary><b>Controller notes</b></summary>
