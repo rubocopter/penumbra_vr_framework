@@ -5,7 +5,8 @@
 Overture receives the coordinated 1.0.8 executable/package identity with no
 new gameplay changes. Historical Overture acceptance remains scoped to its
 recorded binaries; the new Setup is independently host-tested. See the
-[Framework notes](../../../docs/releases/1.0.8.md).
+[Framework notes](../../../docs/releases/1.0.8.md) and
+[artifact validation record](../../../docs/releases/1.0.8-validation.json).
 
 ## v1.0.7 — Shared-input maintenance and trilogy acceptance (2026-10-10)
 

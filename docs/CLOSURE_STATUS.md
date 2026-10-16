@@ -29,8 +29,12 @@ cursor/Accept, and centered enlarged Examine text. Earlier dog/altar and arm
 puzzle completion evidence remains scoped in the capability ledger.
 
 The standalone installer and matching committed source are built and verified
-as a new versioned artifact set. Its build provenance and final host/installer
-checks are recorded separately from the accepted local runtime hashes. Exact
+as a new versioned artifact set. Its [artifact validation record](releases/1.0.8-validation.json) records
+60 Framework tests, 298 Overture checks, English/Spanish standalone extraction,
+topology A-F and upgrade/repair/exact-restore checks from 1.0.7. The artifacts
+come from clean source commit `aef43546c8a88b5d20da1beebf490f65fba6fa80`;
+the release tag adds documentation only, including independently updated
+maintenance policy. These checks remain separate from accepted local runtime hashes. Exact
 new-Setup headset and independent clean-PC acceptance are not implied.
 
 Equipped-light menu visibility, flashlight attachment, broader articulated

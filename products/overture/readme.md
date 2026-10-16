@@ -38,18 +38,20 @@ Penumbra is about what you hear coming. This rework rebuilds the entire acoustic
 
 ## Quick start
 
-This download is a mod overlay for an existing retail installation; it is not a
-standalone copy of Penumbra. Running `Penumbra_vr.exe` directly from the extracted
-package directory is unsupported and can fail because the retail `redist`
-resources and launch context are absent.
+The installer adds the mod to an existing retail installation. You must own
+Penumbra: Overture; the original game is not included.
 
-1. Download the release `.zip` and extract it completely.
-2. Run `Install-PenumbraVR.bat`; it finds the Steam installation and backs up replaced files.
+1. Download [PenumbraVR-Setup-1.0.8.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.8/PenumbraVR-Setup-1.0.8.exe).
+2. Close the games, run the installer and select **Overture**. It detects the Steam installation and backs up replaced files.
 3. Start SteamVR, then launch **Penumbra: Overture** with Steam's normal **Play** button.
 
-Requires Windows 10/11, SteamVR, and a PCVR headset — the Visual C++ runtime ships inside the package since alpha.6.1. To remove the mod, run `Install-PenumbraVR.bat -Restore`; only files owned by the mod are removed, and backed-up originals are restored.
+Requires Windows 10/11, SteamVR and a PCVR headset. The Visual C++ runtime is
+bundled. Use the same unified installer to repair or remove the mod; removal
+restores the recorded original files. Keep its original-file backups intact.
 
-If an installed mod file is damaged, run `Install-PenumbraVR.bat -Repair -InstallRoot "<game folder>"` from the extracted package. Repair requires the recorded deployment state and intact original backups. After an interrupted install, repair or restore, run `Install-PenumbraVR.bat -Recover -InstallRoot "<game folder>"` before another write.
+The standalone overlay ZIP and `Install-PenumbraVR.bat` commands are developer
+testing workflows. Running `Penumbra_vr.exe` from an extracted overlay is
+unsupported because the retail resources and launch context are absent.
 
 The release includes 231 reviewed model/scenery diffuse
 textures. They affect both visual modes and
