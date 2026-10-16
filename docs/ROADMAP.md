@@ -1,54 +1,32 @@
 # Roadmap
 
-This file owns the current work order. Capability state lives in
-`TRILOGY_PARITY_PLAN.md`, exact-build identity and validation levels in
-`SUPPORTED_BUILDS.md`, and stable ownership rules in `ARCHITECTURE.md` and
-`DESIGN_DECISIONS.md`.
+This document preserves shipped milestones, existing validation evidence and outstanding limitations. It is **not an active feature-development backlog**. Capability state lives in `TRILOGY_PARITY_PLAN.md`, exact-build identity and validation levels in `SUPPORTED_BUILDS.md`, and ownership rules in `ARCHITECTURE.md` and `DESIGN_DECISIONS.md`.
 
-## Current priority — post-v1.0 validation and maintenance
+## Project status — feature-complete; maintenance only
 
-Framework [v1.0.8](releases/1.0.8.md) packages focused BP prop/mechanism,
-computer and Examine-text corrections. The maintainer accepts the reported
-barrel/lever/bucket, PC reach/cursor/Accept and centered enlarged text cases;
-exact local hashes and scope are in `releases/1.0.8-headset-acceptance.json`.
-Prepare and verify the updated installer, matching committed source, checksums
-and build report before publication. Exact new-installer headset and independent
-clean-PC acceptance remain separate from publication. Historical trilogy
-acceptance stays scoped to `releases/1.0.7-headset-acceptance.json`.
-Use `CLOSURE_STATUS.md` for release provenance and the remaining deployment matrix.
-Index finger feedback, Quest 3 pointer/cadence coverage, broader per-game
-regression and Requiem startup reliability remain focused follow-up.
-The Windows CI also runs synthetic installer configuration, prerequisites,
-release identity, UI state and diagnostics/privacy checks without game binaries
-or VR hardware; these checks do not establish clean-PC or headset acceptance.
+As of 2026-10-12, the maintainer considers the intended Penumbra trilogy VR feature set complete. There is **no planned further feature work, cosmetic polishing, controller-family expansion or broad compatibility-certification programme**. Remaining unchecked items below record possible validation or unresolved limitations, not commitments to resume development.
 
-The runtime milestones below retain their evidence but non-blocking polish,
-broader parity and optional improvements do not displace this release task.
-Reopen runtime work only for a concrete release blocker, including the documented
-intermittent Requiem startup crash. Do not automatically launch games.
+Only consider runtime or installer changes in response to a concrete, reproducible problem that prevents normal installation, launch, input, save/load or progression, or causes destructive repair/uninstall. Preserve the existing evidence gates and avoid speculative fixes, unnecessary refactoring and additional validation cycles without a reported failure. The intermittent Requiem startup crash is known but has no confirmed root-cause fix; investigate it only if new discriminating evidence becomes available. Do not automatically launch games.
 
-The newly reported BP dream-ship progression blocker is current focused runtime
-work; see `TRILOGY_PARITY_PLAN.md` for scoped headset acceptance of arrival
-message, kitchen save and consistent local Examine cues. Reporter saves are
-available. Yellow-bucket acquisition by handle/container and lifting received
-local headset acceptance after the internal dynamic Grab assembly adaptation.
-Bucket throwing/reacquisition and correct-table egg/fire/dog appearance are
-accepted. The articulated Grab candidate and the 36-entry human-ragdoll guard
-correction are host-tested. The maintainer now confirms dog lift/altar placement;
-initial acquisition remains irregular. The world-rooted arm puzzle now has
-maintainer completion evidence. Focused host-tested corrections address barrel
-release impulses, wall-lever COM velocity and bucket-handle separation; the
-2026-10-16 maintainer report accepts those corrections. The new focused candidate
-has maintainer acceptance for Swanson's fixed-computer activation at distance.
-The ScreenGui cursor/Accept correction has subsequent maintainer acceptance.
-The requested centered 2x Examine-message text now has maintainer acceptance.
-Equipped-light menu visibility and flashlight socket confirmation remain
-headset retests. Retest these,
-other free/anchored Grab props and doors/chests/lockers
-per `TRILOGY_PARITY_PLAN.md`.
-Physical-only attribution correction did not close the
-reported reach/low-obstacle blocking; investigate step eligibility and continued
-world rejection against Rework. Quest 3 coverage remains an independent gate.
+Framework [v1.0.8](releases/1.0.8.md) ships focused Black Plague interaction,
+computer and Examine-text corrections. The reported barrel/lever/bucket,
+computer reach/cursor/Accept and centered enlarged text cases have scoped
+maintainer acceptance in [the local runtime record](releases/1.0.8-headset-acceptance.json).
+Earlier dog/altar placement and anchored-arm puzzle completion are recorded in
+`TRILOGY_PARITY_PLAN.md`; initial dog acquisition remains irregular.
+
+The updated installer, matching committed source, checksums and build report
+passed host validation, bilingual standalone extraction, topology A-F and
+upgrade/repair/exact restoration from 1.0.7. See [artifact validation](releases/1.0.8-validation.json).
+Exact new-Setup headset and independent clean-PC acceptance remain separate.
+Historical trilogy acceptance stays scoped to `releases/1.0.7-headset-acceptance.json`.
+
+Equipped-light menu visibility, flashlight attachment, broader articulated
+contact, physical-only/low-obstacle/leaning correction, Index finger feedback,
+Quest 3 coverage and Requiem startup reliability remain recorded limitations,
+not an active expansion programme. Host-tested motion-attribution and step-normal
+changes do not close the low-obstacle issue. Release provenance and deployment
+limitations remain in [CLOSURE_STATUS.md](CLOSURE_STATUS.md).
 
 ## Foundation already in place
 
