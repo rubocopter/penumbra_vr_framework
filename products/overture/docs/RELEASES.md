@@ -1,5 +1,12 @@
 # Release history
 
+## v1.0.8 — Black Plague fixes and coordinated packaging (2026-10-16)
+
+Overture receives the coordinated 1.0.8 executable/package identity with no
+new gameplay changes. Historical Overture acceptance remains scoped to its
+recorded binaries; the new Setup is independently host-tested. See the
+[Framework notes](../../../docs/releases/1.0.8.md).
+
 ## v1.0.7 — Shared-input maintenance and trilogy acceptance (2026-10-10)
 
 Overture gameplay behavior is unchanged from v1.0.6. The maintainer accepted

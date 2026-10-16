@@ -4,7 +4,7 @@ Framework v1.0.0 is the first public Framework release. Its acceptance record
 and remaining validation limits are documented in
 [CLOSURE_STATUS.md](CLOSURE_STATUS.md).
 
-The versioned release builder supplies `PenumbraVR-Source-1.0.7.zip` alongside
+The versioned release builder supplies `PenumbraVR-Source-1.0.8.zip` alongside
 the installer. It contains the exact committed Framework/Overture/HPL source,
 build scripts, dependency headers/link inputs and retained notices, plus the
 upstream source archives pinned by `assets/deployment/redistribution.json`.
