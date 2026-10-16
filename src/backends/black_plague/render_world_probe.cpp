@@ -16,6 +16,7 @@
 #include "spawn_yaw_rebase.hpp"
 #include "telemetry_try_lock.hpp"
 #include "ui_presentation.hpp"
+#include "message_presentation.hpp"
 #include "vr_grab_pose.hpp"
 #include "rel32_call_hook.hpp"
 #include "stereo_render_policy.hpp"
@@ -1018,6 +1019,8 @@ void __fastcall HookedUpdateRenderList(
     void* camera,
     float frame_time) noexcept {
     ActiveCall active_call;
+    ScopedEquippedLightMenuVisibility light_visibility(
+        NativePlayerPointer(),NativeInputUiActive());
     const auto original = reinterpret_cast<UpdateRenderList>(
         g_original_visibility_target.load(std::memory_order_acquire));
     if (original == nullptr) {
@@ -1848,6 +1851,8 @@ void __fastcall HookedRenderWorld(
     void* camera,
     float frame_time) noexcept {
     ActiveCall active_call;
+    ScopedEquippedLightMenuVisibility light_visibility(
+        NativePlayerPointer(),NativeInputUiActive());
     InitializeOpenGlCapabilities();
     ProcessEyeTargetRequestsOnRenderThread();
 
@@ -1923,7 +1928,8 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
     if (g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_spawn_yaw_hook.installed() ||
         g_particle_get_model_matrix_hook.installed() ||
-        g_particle_update_graphics_hook.installed() || g_refraction_copy_hook.installed()) {
+        g_particle_update_graphics_hook.installed() || g_refraction_copy_hook.installed() ||
+        MessagePresentationHooksPresent()) {
         error = "The Black Plague RenderWorld probe is already installed";
         return false;
     }
@@ -2208,6 +2214,11 @@ bool InstallRenderWorldProbe(std::string& error) noexcept {
             error += "; refraction hook rollback also failed: " + rollback_error;
         return false;
     }
+    if (!InstallMessagePresentation(error)) {
+        std::string rollback;
+        if (!RemoveRenderWorldProbe(rollback)) error+="; message/render rollback: "+rollback;
+        return false;
+    }
     return true;
 }
 
@@ -2221,6 +2232,8 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         error = "A controlled stereo-matrix request is still active";
         return false;
     }
+    std::string message_error;
+    const bool message_removed=RemoveMessagePresentation(message_error);
     std::string refraction_error;
     const bool refraction_removed = hooks::RemoveIatHook(
         g_refraction_copy_hook, refraction_error);
@@ -2241,10 +2254,12 @@ bool RemoveRenderWorldProbe(std::string& error) noexcept {
         hooks::RemoveRel32CallHook(g_visibility_hook, visibility_error);
     std::string render_error;
     const bool render_removed = hooks::RemoveRel32CallHook(g_hook, render_error);
-    if (!refraction_removed || !particle_get_model_matrix_removed || !particle_update_graphics_removed ||
+    if (!message_removed || !refraction_removed || !particle_get_model_matrix_removed || !particle_update_graphics_removed ||
         !spawn_yaw_removed || !draw_all_removed || !visibility_removed ||
         !render_removed) {
-        error = !refraction_removed
+        error = !message_removed
+            ? "Could not remove the GameMessage hooks: " + message_error
+            : !refraction_removed
             ? "Could not remove the refraction screen-copy hook: " + refraction_error
             : !particle_get_model_matrix_removed
             ? "Could not remove the ParticleEmitter3D GetModelMatrix hook: " +

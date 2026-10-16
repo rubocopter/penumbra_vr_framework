@@ -67,6 +67,7 @@ constexpr std::uintptr_t kCharacterRayIntersect = 0xD4E00;
 constexpr std::uintptr_t kCharacterRayVtable = 0x27F7B0;
 constexpr std::uintptr_t kCharacterRayIntersectSlot = kCharacterRayVtable + 4;
 constexpr std::uintptr_t kPhysicalStepRayResultFilter = 0xD7772;
+constexpr std::uintptr_t kPhysicalStepRayNormalRequest = 0xD7741;
 
 constexpr std::array<std::uint8_t, 5> kUpdateCall{
     0xE8, 0xF1, 0x27, 0x00, 0x00};
@@ -76,6 +77,15 @@ constexpr std::array<std::uint8_t, 5> kPhysicalRequestWindow{
     0xD9, 0x07, 0xD9, 0x46, 0x54}; // fld [edi]; fld [esi+54h]
 constexpr std::array<std::uint8_t, 5> kPhysicalStepRayResultWindow{
     0x83, 0xC5, 0x0C, 0x3B, 0xD9}; // add ebp,0Ch; cmp ebx,ecx
+constexpr std::array<std::uint8_t, 6> kPhysicalStepRayNormalSignature{
+    0x8B, 0x8E, 0x1C, 0x02, 0x00, 0x00}; // mov ecx,[esi+21Ch]
+constexpr std::array<std::uint8_t, 5> kPhysicalStepRayNormalWindow{
+    0x8B, 0x8E, 0x1C, 0x02, 0x00};
+constexpr std::array<std::uint8_t, 4> kPhysicalStepRayFlagsSignature{
+    0x6A, 0x00, 0x6A, 0x01}; // calcNormal=false; calcDist=true
+constexpr std::array<std::uint8_t, 18> kPhysicalStepRayCallSignature{
+    0x8B,0x86,0x40,0x02,0,0,0x8B,0,0x51,
+    0x8B,0x8E,0x40,0x02,0,0,0xFF,0x50,0x68};
 constexpr std::array<std::uint8_t, 8> kCharacterRayIntersectSignature{
     0x8B, 0x44, 0x24, 0x04, 0x8A, 0x90, 0xC7, 0x03};
 constexpr std::array<std::uint8_t, 24> kUpdateSignature{
@@ -93,15 +103,18 @@ hooks::Rel32CallHook g_update_hook;
 hooks::Rel32CallHook g_collision_hook;
 hooks::Rel32JumpHook g_physical_request_hook;
 hooks::Rel32JumpHook g_physical_step_ray_filter_hook;
+hooks::Rel32JumpHook g_physical_step_ray_normal_hook;
 std::atomic<bool> g_update_owner_installed{false};
 std::atomic<bool> g_physical_request_owner_installed{false};
 std::atomic<bool> g_physical_step_ray_filter_owner_installed{false};
+std::atomic<bool> g_physical_step_ray_normal_owner_installed{false};
 CharacterUpdate g_original_update = nullptr;
 CheckShapeWorldCollision g_original_collision = nullptr;
 CharacterRayIntersect g_original_character_ray_intersect = nullptr;
 void** g_character_ray_intersect_slot = nullptr;
 void* g_physical_request_resume = nullptr;
 void* g_physical_step_ray_filter_resume = nullptr;
+void* g_physical_step_ray_normal_resume = nullptr;
 SRWLOCK g_telemetry_lock = SRWLOCK_INIT;
 BodyCollisionTelemetry g_telemetry;
 BodyJumpBurstTelemetry g_jump_burst;
@@ -141,6 +154,7 @@ thread_local float g_physical_step_nearest_normal_y = 0.0F;
 
 void PhysicalRequestGateway() noexcept;
 void PhysicalStepRayFilterGateway() noexcept;
+void PhysicalStepRayNormalGateway() noexcept;
 
 bool ReadBytes(const void* source, void* destination, std::size_t size) noexcept {
     if (source == nullptr || destination == nullptr) {
@@ -281,6 +295,8 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
             std::memory_order_acquire)) {
         return false;
     }
+    if (!g_physical_step_ray_normal_owner_installed.load(
+            std::memory_order_acquire)) return false;
     auto* const image = g_published_image.load(std::memory_order_acquire);
     if (image == nullptr) return false;
     std::array<std::uint8_t, 5> live{};
@@ -303,8 +319,18 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
     std::memcpy(&displacement, live.data() + 1, sizeof(displacement));
     const auto step_target = reinterpret_cast<std::uintptr_t>(
         image + kPhysicalStepRayResultFilter + live.size()) + displacement;
-    return step_target ==
-        reinterpret_cast<std::uintptr_t>(&PhysicalStepRayFilterGateway);
+    if (step_target !=
+            reinterpret_cast<std::uintptr_t>(&PhysicalStepRayFilterGateway))
+        return false;
+    std::array<std::uint8_t, 6> normal_live{};
+    if (!ReadBytes(image + kPhysicalStepRayNormalRequest,
+            normal_live.data(), normal_live.size()) || normal_live[0] != 0xE9 ||
+        normal_live[5] != kPhysicalStepRayNormalSignature[5]) return false;
+    std::copy_n(normal_live.begin(), live.size(), live.begin());
+    std::memcpy(&displacement, live.data() + 1, sizeof(displacement));
+    return reinterpret_cast<std::uintptr_t>(
+        image + kPhysicalStepRayNormalRequest + live.size()) + displacement ==
+        reinterpret_cast<std::uintptr_t>(&PhysicalStepRayNormalGateway);
 }
 
 void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcept {
@@ -333,6 +359,15 @@ void __cdecl ApplyQueuedPhysicalDisplacement(
     void* player = NativePlayerPointer();
     void* current_body = player == nullptr ? nullptr :
         Read<void*>(player, kPlayerCharacterBodyOffset);
+
+    // Message dismissal/stereo may remain active while a map script disables
+    // the player. Recheck at the single injection boundary, including requests
+    // queued before that change, without taking over native Y or body Update.
+    if (!GameplayBodyServicesAllowed(player)) {
+        RejectPendingPhysicalRequest(
+            PhysicalBodyDisplacementResult::gameplay_inactive);
+        return;
+    }
 
     AcquireSRWLockExclusive(&g_physical_request_lock);
     if (!g_pending_body_request_active) {
@@ -446,6 +481,35 @@ bool PhysicalRoomScaleStepTick() noexcept {
     return g_tick.character_body != nullptr &&
         g_tick.physical_request_injected &&
         HorizontalLength(native_horizontal_before_injection) <= 1.0e-6F;
+}
+
+void __cdecl RequestPhysicalStepRayNormal(
+    void* character_body, std::uint32_t* calc_normal) noexcept {
+    if (character_body == g_tick.character_body &&
+        PhysicalRoomScaleStepTick() && calc_normal != nullptr) {
+        *calc_normal = 1;
+    }
+}
+
+// At D7741 the callback has not been pushed yet. The original stack holds
+// origin/end/calcDist/calcNormal/calcPoint/usePrefilter; calcNormal is +0Ch.
+// Saving flags/registers moves it to +30h. Replay the entire six-byte MOV
+// after the five-byte JMP window and resume at D7747, beyond its sixth byte.
+// Native CastRay at world+68 then fills params.normal for our existing filter.
+__declspec(naked) void PhysicalStepRayNormalGateway() noexcept {
+    __asm {
+        pushfd
+        pushad
+        lea eax, [esp + 30h]
+        push eax
+        push esi
+        call RequestPhysicalStepRayNormal
+        add esp, 8
+        popad
+        popfd
+        mov ecx, [esi + 21Ch]
+        jmp dword ptr [g_physical_step_ray_normal_resume]
+    }
 }
 
 bool __fastcall HookedCharacterRayIntersect(
@@ -742,11 +806,29 @@ void __fastcall HookedCharacterUpdate(void* character_body, void*, float delta_s
                 g_tick.locomotion_request_injected) {
                 const Vec3 accepted_combined = Subtract(
                     position_after, g_tick.physical_position_before);
+                // Only the initial horizontal solve can identify a pure HMD
+                // collision residual. Later native phases remain game-owned
+                // travel (forces/attachment/step); do not erase their result.
+                // A successful native step can replace this result too. Keep
+                // its existing attribution, as for mixed requests or native
+                // motion already present before injection: those phases cannot
+                // be split into pure HMD collision correction safely here.
+                const bool physical_only_solve =
+                    g_tick.physical_request_injected &&
+                    !g_tick.locomotion_request_injected &&
+                    !sample.native_step_climb_flag &&
+                    PhysicalRoomScaleStepTick() &&
+                    g_tick.collision_sample_valid;
+                const Vec3 physical_solve = physical_only_solve
+                    ? Subtract(g_tick.collision_position,
+                        g_tick.physical_position_before)
+                    : accepted_combined;
                 const Vec3 physical_accepted = PhysicalAcceptedFromCombined(
                     g_tick.physical_requested, g_tick.locomotion_requested,
-                    accepted_combined);
-                const Vec3 locomotion_accepted = Subtract(
-                    accepted_combined, physical_accepted);
+                    physical_solve);
+                const Vec3 locomotion_accepted = physical_only_solve
+                    ? Subtract(position_after, g_tick.collision_position)
+                    : Subtract(accepted_combined, physical_accepted);
                 sample.physical_accepted_displacement = ToArray(
                     physical_accepted);
                 sample.locomotion_accepted_displacement = ToArray(
@@ -842,12 +924,16 @@ template<std::size_t Size>
     const bool physical_step_ray_filter_installed =
         g_physical_step_ray_filter_hook.installed();
     const bool character_ray_installed = g_character_ray_intersect_slot != nullptr;
+    const bool physical_step_ray_normal_installed =
+        g_physical_step_ray_normal_hook.installed();
     if (update_installed && collision_installed && physical_request_installed &&
-        physical_step_ray_filter_installed && character_ray_installed) {
+        physical_step_ray_filter_installed && character_ray_installed &&
+        physical_step_ray_normal_installed) {
         return true;
     }
     if (update_installed || collision_installed || physical_request_installed ||
-        physical_step_ray_filter_installed || character_ray_installed) {
+        physical_step_ray_filter_installed || character_ray_installed ||
+        physical_step_ray_normal_installed) {
         error = "Body/collision probe is only partially installed";
         return false;
     }
@@ -869,7 +955,11 @@ template<std::size_t Size>
         !Matches(kPhysicalRequestInjection, kPhysicalRequestWindow) ||
         !Matches(kCharacterRayIntersect, kCharacterRayIntersectSignature) ||
         !Matches(kPhysicalStepRayResultFilter,
-            kPhysicalStepRayResultWindow)) {
+            kPhysicalStepRayResultWindow) ||
+        !Matches(kPhysicalStepRayNormalRequest,
+            kPhysicalStepRayNormalSignature) ||
+        !Matches(0xD76BF, kPhysicalStepRayFlagsSignature) ||
+        !Matches(0xD7747, kPhysicalStepRayCallSignature)) {
         error = "Body/collision boundary does not match the exact initialized build";
         g_image = nullptr;
         return false;
@@ -884,16 +974,22 @@ template<std::size_t Size>
     void* const physical_step_ray_filter_resume =
         g_image + kPhysicalStepRayResultFilter +
         kPhysicalStepRayResultWindow.size();
+    void* const physical_step_ray_normal_resume =
+        g_image + kPhysicalStepRayNormalRequest +
+        kPhysicalStepRayNormalSignature.size();
     if ((g_physical_request_resume != nullptr &&
          g_physical_request_resume != physical_request_resume) ||
         (g_physical_step_ray_filter_resume != nullptr &&
-         g_physical_step_ray_filter_resume != physical_step_ray_filter_resume)) {
+         g_physical_step_ray_filter_resume != physical_step_ray_filter_resume) ||
+        (g_physical_step_ray_normal_resume != nullptr &&
+         g_physical_step_ray_normal_resume != physical_step_ray_normal_resume)) {
         error = "Body/collision gateway resume target belongs to another image";
         g_image = nullptr;
         return false;
     }
     g_physical_request_resume = physical_request_resume;
     g_physical_step_ray_filter_resume = physical_step_ray_filter_resume;
+    g_physical_step_ray_normal_resume = physical_step_ray_normal_resume;
 
     // Publish the verified native targets before either live callsite can
     // dispatch to its wrapper on another game thread. Once published, keep
@@ -1025,6 +1121,18 @@ template<std::size_t Size>
     }
     g_physical_step_ray_filter_owner_installed.store(
         true, std::memory_order_release);
+    if (!hooks::InstallRel32JumpHook(
+            g_image + kPhysicalStepRayNormalRequest,
+            kPhysicalStepRayNormalWindow,
+            reinterpret_cast<void*>(&PhysicalStepRayNormalGateway),
+            g_physical_step_ray_normal_hook, error)) {
+        std::string rollback;
+        static_cast<void>(RemoveBodyCollisionProbe(rollback));
+        if (!rollback.empty()) error += "; " + rollback;
+        return false;
+    }
+    g_physical_step_ray_normal_owner_installed.store(
+        true, std::memory_order_release);
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     g_jump_burst = {};
@@ -1054,8 +1162,19 @@ bool RemoveBodyCollisionProbe(std::string& error) noexcept {
         return false;
     }
     bool success = hooks::RemoveRel32JumpHook(
-        g_physical_step_ray_filter_hook, error);
+        g_physical_step_ray_normal_hook, error);
     if (success) {
+        g_physical_step_ray_normal_owner_installed.store(
+            false, std::memory_order_release);
+    }
+    std::string step_error;
+    const bool step_removed = hooks::RemoveRel32JumpHook(
+        g_physical_step_ray_filter_hook, step_error);
+    if (!step_removed) {
+        success = false;
+        if (!error.empty()) error += "; ";
+        error += step_error;
+    } else {
         g_physical_step_ray_filter_owner_installed.store(
             false, std::memory_order_release);
     }
@@ -1295,6 +1414,8 @@ ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
     result.owner_installed =
         g_physical_request_owner_installed.load(std::memory_order_acquire) &&
         g_physical_step_ray_filter_owner_installed.load(
+            std::memory_order_acquire) &&
+        g_physical_step_ray_normal_owner_installed.load(
             std::memory_order_acquire);
     auto* const image = g_published_image.load(std::memory_order_acquire);
     if (image != nullptr) {
@@ -1326,7 +1447,8 @@ ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
         step_matches_live = step_target ==
             reinterpret_cast<std::uintptr_t>(&PhysicalStepRayFilterGateway);
     }
-    result.owner_matches_live = result.owner_matches_live && step_matches_live;
+    result.owner_matches_live = result.owner_matches_live && step_matches_live &&
+        PhysicalRequestOwnerMatchesLive();
     result.initialized = result.owner_matches_live;
     return result;
 }

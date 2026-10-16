@@ -760,6 +760,44 @@
         "matches the released pre-Rework HPL1 character-body algorithm and layout"
       ]
     },
+    "hpl.iCharacterBody.physicalStepRayNormalRequest": {
+      "status": "host-tested",
+      "owner": "body_collision_probe",
+      "gatewayRva": "0x000D7741",
+      "signature": {
+        "region": "initialized-memory:.text",
+        "rva": "0x000D7741",
+        "bytes": "8B 8E 1C 02 00 00",
+        "mask": "xx xx xx xx xx xx",
+        "matches": 1
+      },
+      "jumpWindowBytes": 5,
+      "replayedInstructionBytes": 6,
+      "resumeRva": "0x000D7747",
+      "castRay": {
+        "callRva": "0x000D7756",
+        "physicsWorldVtableRva": "0x00291B80",
+        "vtableSlot": "0x68",
+        "targetRva": "0x00189E30",
+        "callingConvention": "thiscall; ret 0x1C",
+        "stackArguments": ["callback", "origin", "end", "calcDist", "calcNormal", "calcPoint", "usePrefilter"],
+        "nativeFlags": [true, false, false, false],
+        "calcNormalStackOffsetBeforeCallbackPush": "0x0C"
+      },
+      "normalCalculation": {
+        "flagVirtualAddress": "0x006EDDF4",
+        "conditionalWriteGuardRva": "0x00189D76",
+        "normalWriteRva": "0x00189D80",
+        "paramsNormalYOffset": "0x0C"
+      },
+      "evidence": [
+        "Initialized-image D76BF/D76C1 push calcNormal=false and calcDist=true; world+68 resolves to 189E30.",
+        "189E34/189E41 publish calcNormal; 189D76/189D7E skip shared params normal writes when it is false.",
+        "Rework 23c890f CharacterBody.cpp requests CastRay true,true,false before its upward-normal gate.",
+        "D7741 changes only calcNormal for the matching current-player physical-step tick, including mixed stick intent; native-only, other-body and native-pre-injection motion retain the original flags.",
+        "Actual seven-argument ABI host fixture fails before the gateway and passes with it for stale wall/upward normals, both hit normals and physical/mixed intent. No game execution or headset validation."
+      ]
+    },
     "hpl.iPhysicsWorld.CheckShapeWorldCollision": {
       "status": "confirmed-static-mapping",
       "rva": "0x000D4830",
@@ -848,6 +886,203 @@
         "the native input bridge owns adjacent query sites, not these eight action calls",
         "0x5347 is the pressed branch; 0x538A is reached for released/not-held handling and both can occur for a toggle crouch press",
         "0xD790C/0xD7913 are the gravity-disabled branch only; gravity-active player bodies instead reach the later unconditional synchronization calls"
+      ]
+    },
+    "game.cPlayerState_Normal.physicalAndGazeSelection": {
+      "status": "host-tested",
+      "normalUpdateVtableSlotRva": "0x0027D13C",
+      "normalUpdateRva": "0x000AD6C0",
+      "normalRayReturnRva": "0x000AD852",
+      "pickCallbackSize": "0x38",
+      "pickCallbackClearRva": "0x000A4B60",
+      "pickCallbackCalculateRva": "0x000A5910",
+      "playerPickCallbackOffset": "0x27C",
+      "pickWorldPointOffset": "0x1C",
+      "objectInteractionFlagOffset": "0x37",
+      "entityInteractScriptOffset": "0x204",
+      "entityExamineScriptOffset": "0x208",
+      "entityPickScriptOffset": "0x20C",
+      "entityMaxExamineDistanceOffset": "0xB8",
+      "nativePickedDistanceRva": "0x0009BC90",
+      "objectDistanceCallsites": ["0x00042366", "0x00042444", "0x00042C84", "0x00042E14"],
+      "entityDistanceTailJumpRva": "0x00029A09",
+      "physicalCrosshairDistanceReturnRva": "0x00029A1B",
+      "saveArea": {
+        "entityType": 10,
+        "vtableRva": "0x002770B8",
+        "constructorRva": "0x000453C0",
+        "pickRva": "0x00045580",
+        "interactRva": "0x00045670",
+        "nativeDistanceLimitMetres": 2.1,
+        "physicalCollisionEnabled": false
+      },
+      "fixedLampActivation": {
+        "entityType": 12,
+        "vtableRva": "0x002763E8",
+        "constructorVtableStoreRva": "0x0003A86F",
+        "constructorTypeStoreRva": "0x0003A97D",
+        "pickRva": "0x00038C30",
+        "interactRva": "0x00039C80",
+        "nativeDistanceFieldOffset": "0xBC",
+        "requiresBodyMass": 0,
+        "exampleAsset": "models/tech/tech_computer_terminal.ent",
+        "exampleInteractDistanceMetres": 2.1,
+        "exampleCallback": "level06_dr_swansons_room.hps: InteractComputer -> OpenScreenGui"
+      },
+      "sourceCaptureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+      "referenceRevision": "23c890f",
+      "evidence": [
+        "Native callback scratch arbitration preserves all solid/area hits and occlusion before selection publication.",
+        "Exact static Lamp identity admits computer terminals to native gaze activation, preserving Lamp Pick/Interact MaxInteractDist guards; dynamic Lamps and other physical props retain palm selection.",
+        "Physical distance adaptation requires a fresh matching Object body and point within existing 0.40 m palm reach; native SaveArea, Examine and UseItem distances are retained.",
+        "Actual-adapter regressions cover inert overlap masking, SaveArea acquisition/range, gaze occlusion, independent hand/gaze selection, invalid tracking and stale physical contacts.",
+        "No live or headset validation of the reported dream-ship scene is implied."
+      ]
+    },
+    "game.cPlayerHands.equippedLightMenuVisibility": {
+      "status": "host-tested",
+      "playerFlashlightOffset": "0x290",
+      "flashlightInitOffset": "0x20",
+      "initHandsOffset": "0x18C",
+      "handsModelSlotsOffset": "0x6C",
+      "handsModelCountOffset": "0x74",
+      "hudModelMeshOffset": "0x118",
+      "hudModelBillboardVectorOffset": "0xC0",
+      "meshVtableRva": "0x002818F8",
+      "billboardVtableRva": "0x00282E88",
+      "renderedFlagOffset": "0x3EC",
+      "meshIsVisibleRva": "0x00105590",
+      "billboardIsVisibleRva": "0x00125AB0",
+      "renderListAddRva": "0x00135BA0",
+      "renderListIsVisibleCallRva": "0x00135BAF",
+      "sourceCaptureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+      "referenceRevision": "23c890f",
+      "evidence": [
+        "RenderList::Add tests IsVisible at vtable +1C before admitting a mesh or its submeshes; mesh and billboard visibility read their native +3EC rendered flag.",
+        "Existing render-list preparation and RenderWorld owners scope the equipped Flashlight/Glowstick mesh and billboard masks to UI rendering, then restore exact flags without SetRendered propagation or changing equip/light state.",
+        "Actual adapter regression covers menu entry without hands updates, nested render scopes, exact restoration including an already-hidden billboard, and unrelated model isolation. Headset retest is pending."
+      ]
+    },
+    "game.cGameMessage.vrTextLayout": {
+      "status": "host-tested",
+      "entityExamineRva": "0x00029D80",
+      "entityDescriptionOffset": "0x98",
+      "examineMessageAddCallsite": "0x00029DC6",
+      "messageAddRva": "0x0003FB10",
+      "drawRva": "0x0003F380",
+      "wordWrapRva": "0x000EBC10",
+      "wordWrapCallsites": ["0x0003F3E8", "0x0003F452", "0x0003F49D", "0x0003F4E8", "0x0003F533", "0x0003F57E"],
+      "fontLengthRva": "0x000EB5A0",
+      "wordWrapAbi": "thiscall: Vec3 by value, float width, float lineHeight, Vec2 by value, const Color*, int alignment, const legacy wstring*; returns int",
+      "legacyWideString": {"dataOffset": "0x4", "lengthOffset": "0x14", "capacityOffset": "0x18", "inlineCapacityThreshold": 8},
+      "nativeOriginPixels": [30, 300],
+      "nativeFontPixels": [14, 14],
+      "nativeLineHeightPixels": 16,
+      "vrFontMultiplier": 2,
+      "vrBlockCenterPixels": [400, 300],
+      "centerAlignment": 2,
+      "sourceCaptureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+      "referenceRevision": "23c890f",
+      "referenceFiles": ["PenumbraOverture/GameMessageHandler.cpp", "HPL1Engine/sources/graphics/FontData.cpp"],
+      "evidence": [
+        "GameMessage::Draw uses one black-text call or white text plus four shadow passes. Each calls the same native DrawWordWrap with by-value position/size and borrowed legacy text/color; native font is 14 pixels with 16-pixel spacing.",
+        "The VR render owner scopes caller hooks to GameMessage. BP's native GetLength supplies glyph metrics to Rework's line-break counting; the enlarged block is vertically centered and each line uses native center alignment. Depth, shadow offsets, fade and text ownership are preserved.",
+        "Synthetic x86 callers execute all six actual hooks, including multiline and short-string wrapping, payload/return preservation, native non-VR/UI fallback and hook restoration. Headset readability remains pending."
+      ]
+    },
+    "game.cScreenGui.trackedPointer": {
+      "status": "host-tested",
+      "inputState": 1,
+      "inputInitScreenGuiOffset": "0x1AC",
+      "screenGuiActivePredicateRva": "0x000345F0",
+      "screenGuiActiveSetOffset": "0x30",
+      "pointerCallsiteRva": "0x0000476B",
+      "guiSendMousePosRva": "0x000E3190",
+      "guiFocusedSetOffset": "0x30",
+      "guiSetMousePosOffset": "0xD8",
+      "guiSetOnMouseMoveRva": "0x000F8FD0",
+      "guiLeftDownCallsiteRva": "0x000046C2",
+      "guiSendMouseDownRva": "0x000E31E0",
+      "guiLeftUpCallsiteRva": "0x00004707",
+      "guiSendMouseUpRva": "0x000E3230",
+      "canvasPixels": [800, 600],
+      "sourceCaptureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+      "referenceRevision": "23c890f",
+      "referenceFiles": ["HPL1Engine/sources/gui/Gui.cpp", "HPL1Engine/sources/gui/GuiSet.cpp"],
+      "evidence": [
+        "Gameplay input checks init+1AC ScreenGui through 345F0 and forwards absolute/relative float mouse positions to HPL cGui, whose +30 focused GuiSet receives native messages; OnMouseMove stores its cursor at +D8/+DC.",
+        "The separate input state-8 init+1B4 path at 429A is the Schmup minigame: its C3600 fire path references schmup_player_fire_gun. It is not the computer terminal and owns no Framework pointer hook.",
+        "06_swanson_gui.gui authors an 800x600 DeskTop; its script creates the IncomingChat popup using CreateGuiPopUpTrans. Shared menu UV smoothing is forwarded through native SendMousePos so popup attention, hover and cursor artwork remain native.",
+        "Actual adapter regressions cover focused popup cursor movement, mapped select press/release completing Accept, physical absolute mouse priority, invalid tracking, missing focused set and cumulative route diagnostics. Headset cursor/Accept retest is pending."
+      ]
+    },
+    "game.cPlayerState_Push.vrRelease": {
+      "status": "host-tested",
+      "stopInteractRva": "0x000AB1F0",
+      "stopInteractVtableSlotRva": "0x0027D010",
+      "previousActionStateOffset": "0x7C",
+      "playerOffset": "0x10",
+      "nativeChangeStateRva": "0x0009CA80",
+      "transitionCallsiteRva": "0x000AB1FD",
+      "canBeThrownPlayerOffset": "0x50",
+      "callingConvention": "thiscall; ChangeState takes one int stack argument",
+      "sourceEvidence": {
+        "captureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+        "referenceRevision": "23c890f",
+        "referenceFile": "PenumbraOverture/PlayerState_Interact_VR.cpp"
+      },
+      "evidence": [
+        "AB1F0 changes to state+7C at AB1FD, then checks player+50 and adds a captured-camera-forward impulse after native Leave has returned.",
+        "Rework Push VR OnStopInteract changes state without that impulse. The BP spatial owner intercepts this virtual slot only for VR-origin Push; pending and guarded VR cancellations use the same transition.",
+        "Actual-adapter regressions reproduce the late release impulse and preserve existing velocity across service, virtual dispatch, tracking loss and unacquired VR cancellation. Native-origin release retains its impulse."
+      ]
+    },
+    "hpl.cPhysicsBodyNewton.GetMassCentre": {
+      "status": "confirmed-initialized-image",
+      "rva": "0x0019C950",
+      "bodyVtableSlot": "0x74",
+      "newtonBodyOffset": "0x41C",
+      "newtonImportIatRva": "0x002724A8",
+      "callingConvention": "thiscall; 12-byte Vec hidden return buffer on stack, EAX=buffer, ret 4",
+      "coordinateSpace": "body-local",
+      "sourceEvidence": {
+        "captureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295"
+      },
+      "evidence": [
+        "The wrapper reads body+41C and calls NewtonBodyGetCentreOfMass, returning three floats through the hidden return buffer.",
+        "BP hinge application rotates local COM by the current body basis and adds omega cross COM offset to the existing origin-based linear servo; contact radius, angular servo, native limits and callbacks remain owned by their existing boundaries.",
+        "Actual-adapter ABI and shipped-Newton offset-COM lever regressions pass; authored lever activation in headset remains a separate validation gate."
+      ]
+    },
+    "game.cPlayerState_Message.input": {
+      "status": "confirmed-initialized-image",
+      "constructorRva": "0x000AD5B0",
+      "vtableRva": "0x0027D208",
+      "stateIndex": 5,
+      "playerActiveOffset": "0x1DC",
+      "playerActionStateIndexOffset": "0x2BC",
+      "inactivePlayerGateRva": "0x0000505D",
+      "inactiveMessageGateRva": "0x0000506A",
+      "interactQueryRva": "0x0000542A",
+      "examineQueryRva": "0x00005496",
+      "interactVtableSlotRva": "0x0027D218",
+      "examineVtableSlotRva": "0x0027D220",
+      "dismissHandlerRva": "0x000AD5E0",
+      "nativeAdvanceRva": "0x0003F8A0",
+      "initMessageHandlerOffset": "0x160",
+      "callingConvention": "thiscall",
+      "sourceEvidence": {
+        "captureSha256": "2881741D3853DBBACF1342A8A84440AC1F36AF30677888050DA35253235A8295",
+        "referenceRevision": "23c890f",
+        "referenceFiles": [
+          "PenumbraOverture/ButtonHandler.cpp",
+          "PenumbraOverture/PlayerState_Misc_VR.cpp"
+        ]
+      },
+      "evidence": [
+        "ButtonHandler permits an inactive state-5 player to jump to Interact/Examine dispatch while skipping its movement section.",
+        "The Message constructor stores state 5 and vtable 0x27D208; Interact and Examine slots both forward to the native message advancement handler.",
+        "These initialized-image facts do not identify the reported dream-ship scene's runtime state or establish headset validation."
       ]
     },
     "hpl.cLowLevelGraphicsSDL.CopyContextToTexure": {

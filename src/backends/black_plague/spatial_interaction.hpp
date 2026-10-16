@@ -29,9 +29,24 @@ struct SpatialDiagnostics {
 [[nodiscard]] bool RemoveSpatialInteraction(std::string& error) noexcept;
 // Called only by ButtonHandler on the native game thread, never by IPC.
 void RefreshVrSelectionBeforeInteract(void* player) noexcept;
+void RefreshVrSelectionBeforeExamine(void* player) noexcept;
 void ServiceSpatialInteraction(void* player, bool ui) noexcept;
 // Runs from the native character-body update owner on the game thread.
 void ServiceSpatialHandNudge(void* character_body) noexcept;
+// Render-thread transaction: mask equipped light geometry during UI admission
+// and drawing, then restore exact native flags without changing equip/lights.
+class ScopedEquippedLightMenuVisibility final {
+public:
+    ScopedEquippedLightMenuVisibility(void* player, bool menu) noexcept;
+    ~ScopedEquippedLightMenuVisibility();
+    ScopedEquippedLightMenuVisibility(const ScopedEquippedLightMenuVisibility&) = delete;
+    ScopedEquippedLightMenuVisibility& operator=(const ScopedEquippedLightMenuVisibility&) = delete;
+private:
+    struct Entry { void* flag = nullptr; bool rendered = false; };
+    std::array<Entry, 130> entries_{};
+    std::size_t count_ = 0;
+    void Hide(void* renderable, std::uintptr_t vtable_rva) noexcept;
+};
 // Renderer-side presentation hint published by the game-thread tool owner.
 // A stale value expires automatically when the attachment is unequipped.
 [[nodiscard]] bool ReadAttachedToolGrip(

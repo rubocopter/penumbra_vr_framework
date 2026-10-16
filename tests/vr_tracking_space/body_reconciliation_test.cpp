@@ -129,6 +129,36 @@ int main() {
     s = shadow.CompleteTick(tick,physical,{0.02F,0,0.03F},true,physical);
     CHECK(s.valid && Near(s.physical_reconciliation.rejected_distance,0.03F));
 
+    // Default diagnostic callers keep total-minus-physical carry. Production
+    // can instead supply an observed non-physical displacement without the
+    // consumer recreating a discarded collision residual from total travel.
+    const V native_after{0.02F,0.825F,0.03F};
+    const auto projected_physical = Motion(body,{0.02F,0.825F,0});
+    for (const V* observed_carry : {static_cast<const V*>(nullptr), &anchor}) {
+        shadow.Reset();
+        tick = shadow.PrepareTick(Pose(),0,1,body,0.016F);
+        s = shadow.CompleteTick(tick,Motion(body,body),anchor);
+        tick = shadow.PrepareTick(Pose(0.05F),0,1,body,0.016F);
+        s = shadow.CompleteTick(tick,Motion(body,native_after),
+            {0.02F,0,0.03F},true,projected_physical,observed_carry);
+        CHECK(s.valid && Near(s.predicted_anchor[0],0.02F));
+        CHECK(Near(s.predicted_anchor[2],observed_carry == nullptr ? 0.03F : 0.0F));
+        CHECK(Near(s.locomotion_carry_displacement[2],
+            observed_carry == nullptr ? 0.03F : 0.0F));
+    }
+    // Invalid explicit attribution must invalidate placement, not fall back to
+    // carrying the very residual that the backend excluded.
+    shadow.Reset();
+    tick = shadow.PrepareTick(Pose(),0,1,body,0.016F);
+    s = shadow.CompleteTick(tick,Motion(body,body),anchor);
+    tick = shadow.PrepareTick(Pose(0.05F),0,1,body,0.016F);
+    const V invalid_carry{nan,0,0};
+    CHECK(!shadow.CompleteTick(tick,Motion(body,native_after),
+        {0.02F,0,0.03F},true,projected_physical,&invalid_carry).valid);
+    // Restore a completed physical tick for the generation-change case below.
+    tick = shadow.PrepareTick(Pose(),0,1,body,0.016F);
+    s = shadow.CompleteTick(tick,Motion(body,body),anchor);
+
     // Replacement at the same position and recenter-like generation changes
     // reset history instead of interpreting the discontinuity as motion.
     tick = shadow.PrepareTick(Pose(0.2F),0,2,physical.body_after,0.016F);

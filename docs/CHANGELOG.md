@@ -5,6 +5,30 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.8 — 2026-10-16
+
+- Fix Black Plague physical target filtering, native Examine/SaveArea selection
+  and physical-contact distance checks while retaining occlusion and native
+  script/range ownership.
+- Support connected articulated Grab bodies and world-anchored puzzle arms
+  through their native joints. Restore native enabled/active lifecycle, preserve
+  authored masses/limits and keep bucket handles coupled to their containers.
+- Remove BP's camera-directed extra Push-release impulse from VR-owned release;
+  correct native hinge velocity for offset centers of mass so wall levers can
+  cross their authored puzzle activation threshold.
+- Restore fixed computer-terminal activation at native range, tracked HPL GUI
+  cursor movement and popup button press/release. Add focused route diagnostics.
+- Center GameMessage/Examine text as a block and double its font/spacing while
+  preserving native wrapping metrics, fades and shadows. Mask equipped light
+  models during menu rendering without changing equip/light state.
+- Include the host-tested physical-only motion-attribution and current step-ray
+  normal boundary corrections; full low-obstacle/leaning parity remains open.
+- Record scoped maintainer acceptance of puzzle/prop, PC and text corrections.
+  Menu light visibility, flashlight attachment and broader contact still require
+  focused validation. Overture/Requiem gameplay is unchanged in this release.
+- Publish an updated unified installer with matching committed source,
+  dependency sources, checksums and build provenance.
+
 ## 1.0.7 — 2026-10-10
 
 - Recover missing digital release edges in the BP/Requiem shared input router

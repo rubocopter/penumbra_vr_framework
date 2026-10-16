@@ -35,6 +35,13 @@ struct NativeHapticDiagnostics {
     std::uint64_t right_submissions = 0;
 };
 
+struct NativeGuiPointerDiagnostics {
+    std::uint64_t calls = 0, tracked_updates = 0, unavailable = 0;
+    std::uint64_t mouse_overrides = 0, select_presses = 0, select_releases = 0;
+};
+// Cumulative exact ScreenGui route counts; retain edges between log samples.
+[[nodiscard]] NativeGuiPointerDiagnostics ReadNativeGuiPointerDiagnostics() noexcept;
+
 struct BlackPlagueCrouchOwnershipWindow {
     bool session_connected = false;
     bool ui_active = true;

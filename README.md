@@ -100,11 +100,11 @@ Unknown or modified game builds may be rejected by the installer. Check [support
 
 ## Current release status
 
-The current release is **[v1.0.7](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.7)**.
+The current release is **[v1.0.8](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.8)**.
 
-This update prevents stuck digital actions and preserves movement dead zones after temporary input/focus loss in Black Plague and Requiem. VR Settings occupies the same first-level position in all three games, in English and Spanish. The maintainer accepted the installed trilogy checklist, including the new menu routes, BP obstacle movement, Overture visibility/reach and input recovery; exact tested binaries are recorded separately from the new installer.
+This update fixes Black Plague progression interactions: articulated props and puzzle arms, barrel release, wall levers and the bucket handle. Fixed computer terminals can be activated at their native distance, and their cursor and popup buttons work with the controller. Examine text is centered and enlarged. The maintainer accepted these focused cases on the installed local candidates; the acceptance record keeps those runtime hashes separate from the new installer.
 
-Known issues include intermittent Requiem startup failure and a reported finger-pose mismatch. Full progression, conditional Quest 3/Link coverage and other controller families still need broader device validation. See [release status and validation](docs/CLOSURE_STATUS.md) for the current ledger.
+Known issues include intermittent Requiem startup failure and a reported finger-pose mismatch. Black Plague low-obstacle/leaning correction, broader articulated contact, flashlight attachment and equipped-light visibility in menus still need focused validation. Full progression, conditional Quest 3/Link coverage and other controller families remain separate. See [release status and validation](docs/CLOSURE_STATUS.md) for the current ledger.
 
 ## Help and documentation
 
@@ -113,7 +113,7 @@ Known issues include intermittent Requiem startup failure and a reported finger-
 | [Controls](docs/CONTROLS.md) | [Architecture](docs/ARCHITECTURE.md) |
 | [VR configuration](docs/VR_CONFIGURATION.md) | [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | [Supported builds](docs/SUPPORTED_BUILDS.md) |
-| [Release notes](docs/releases/1.0.7.md) | [Roadmap](docs/ROADMAP.md) |
+| [Release notes](docs/releases/1.0.8.md) | [Roadmap](docs/ROADMAP.md) |
 | [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
 
 If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a new bug, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs.

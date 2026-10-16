@@ -53,14 +53,14 @@ The builder validates every input before creating artifacts.
 
 ```powershell
 .\tools\Build-PenumbraVrRelease.ps1 `
-  -OutputDirectory .\dist\v1.0.7-release `
+  -OutputDirectory .\dist\v1.0.8-release `
   -RuntimeDirectory 'C:\path\to\official\x86\Microsoft.VC143.CRT' `
   -SourceDirectory 'C:\path\to\pinned-source-inputs'
 ```
 
 The output directory must be new. The builder compiles/tests root Release and
 the autonomous Overture product, then exports exact committed source, upstream
-sources, notices, `PenumbraVR-Setup-1.0.7.exe`, `PenumbraVR-Source-1.0.7.zip`,
+sources, notices, `PenumbraVR-Setup-1.0.8.exe`, `PenumbraVR-Source-1.0.8.zip`,
 `build-report.json` and `SHA256SUMS.txt`. `-PackageOnly` skips repeating root
 build/tests and records that limitation; it still builds/tests Overture.
 The report records commit, toolchain, x86 PE imports/version/hash, pinned inputs

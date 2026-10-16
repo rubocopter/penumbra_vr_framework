@@ -56,6 +56,59 @@ Normal gameplay validation should exercise the production path.
 
 ## Gate 1 — presentation first
 
+### Focused dream-ship progression retest
+
+Use a save immediately before the ship transition after the sewers and record
+the installed mod/build and controller family. This new report does not reopen
+the accepted tutorial/chair checklist.
+
+- Advance the arrival message with a controller trigger/Examine button, confirm
+  the native completion restores control, and observe whether the world remains
+  stereo during the message. Pausing/overlays must still work.
+- While the message has disabled native player control, try stick movement,
+  turning, crouch and physical translation; none may move the native body or
+  change its scripted stance. Confirm normal control resumes on dismissal.
+- Load Mental Realm and grab the yellow bucket under the table, lift it by
+  the container and handle, turn the wrist, and release it. Confirm the internal
+  hinge remains intact and neither body springs away. Bucket acquisition,
+  throwing/reacquisition, chest opening and egg acquisition have local acceptance.
+- Place the egg on the egg picture on the table near the coffin (`mr_table` /
+  `stickegg`), not on the hand pedestal. Confirm native attachment and the
+  subsequent spider/fire sequence. This sequence and dog appearance now have
+  local acceptance. The earlier hand-altar instruction was wrong.
+- With the articulated Grab candidate, acquire the dog at trunk, neck/head
+  collision region and distal physical limbs. Lift, drag, rotate, release,
+  throw and reacquire different bones. Watch for stretching, violent rotation
+  or intermittent rejected contacts; include a held snap turn and tracking
+  recovery. The visible mesh does not give every anatomical region its own body.
+- While holding an articulated prop, lift/pull and rotate the wrist during
+  sustained smooth turning. Physical motion must continue to drive the held
+  bone. After a half-turn of the wrist, stop and check that a lagging bone
+  converges instead of remaining inverted. These corrections are host-tested;
+  their headset gate remains open.
+- Exercise other reachable free articulated props: worm, human corpses,
+  trash/food bags, pillow and mattress. Repeat endpoint and middle grabs,
+  sustained pulling and release. Host topology/solver tests are not headset
+  acceptance. Keep static/world-anchored cords and hanging props on their
+  existing native ownership boundary.
+- Repeat opening/closing a door, coffin/chest and locker; confirm hinges,
+  stops, locks and script events still behave normally. Recheck the accepted
+  bucket by handle and container, including throw/reacquisition.
+- Test the later dog puzzle separately when reached: attach the trunk to the
+  hand pedestal's hook (`altar01` / `stickdog`). Egg acquisition does not
+  establish either attachment callback or dog progression.
+- Compare reaching a floor prop in open space and beside a blocking prop,
+  without joystick input. Lean forward/down, hold, then retreat; record any
+  backward/lateral world correction and whether reaching becomes easier with
+  the physical-only carry candidate. Repeat with real stick input separately.
+  A passing attribution test does not close broader native body-block severity.
+- Revisit the mattress in the egg/dog room with the fresh step-normal candidate.
+  Approach with joystick and physically in separate trials, then retreat. Record
+  traversal and world correction; do not infer headset acceptance from the
+  synthetic step-ray tests or increase native step height to mask a failure.
+- Examine nearby described objects and activate the kitchen save point near
+  the computer. Record selected entity/body and native state on failure.
+
 Before interpreting body or interaction behavior:
 
 - enter gameplay from the menu;
@@ -158,12 +211,22 @@ not be forced through free-body grab behavior.
 ## Gate 7 — UI and settings
 
 - open inventory and notebook in VR;
+- from the floor beside Swanson's desk, look at the computer and activate it
+  within its native range without climbing onto furniture; move the screen
+  cursor with the tracked controller and accept the initial incoming-call popup
+  by pressing/releasing the mapped select trigger on its Answer button;
+- with flashlight/glowstick equipped, open pause/menu, inventory, notebook and
+  computer UI; verify the held model is hidden, then resumes attachment when
+  gameplay returns without changing which light is equipped;
 - hover an inventory item, press the mapped context-action/Circle input and
   confirm the native item-action popup appears; press it again while the popup
   is active and confirm the native close path still works;
 - validate at least one contextual action and one `UseItem` target, including
   the controller-aim red/green usability beam;
 - verify the captured gameplay HUD/subtitle surface appears in both eyes;
+- examine short and multiline object descriptions: verify the complete text
+  block is centered, its letters are about twice their previous size, wrapping
+  stays readable and native fading/dismissal still works;
 - open the native `VR Settings` page;
 - test left/right value changes, Spanish/English labels as available, save and
   persistence;

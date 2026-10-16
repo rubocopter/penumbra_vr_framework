@@ -238,6 +238,7 @@ add_library(pvr_black_plague_backend_probe STATIC
     src/backends/black_plague/movement_ownership_probe.cpp
     src/backends/black_plague/eye_target_probe.cpp
     src/backends/black_plague/render_world_probe.cpp
+      src/backends/black_plague/message_presentation.cpp
     src/backends/black_plague/room_scale_camera.cpp
     src/backends/black_plague/native_input_bridge.cpp
     src/backends/black_plague/native_vr_settings_menu.cpp
@@ -475,6 +476,14 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_black_plague_particle_stereo_refresh_test)
     add_test(NAME black_plague_particle_stereo_refresh
         COMMAND pvr_black_plague_particle_stereo_refresh_test)
+
+    add_executable(pvr_black_plague_message_presentation_test
+        tests/black_plague_render/message_presentation_test.cpp)
+    target_include_directories(pvr_black_plague_message_presentation_test PRIVATE
+        src/hooks src/backends/black_plague src/adapters/hpl1 src/runtime src/graphics)
+    target_link_libraries(pvr_black_plague_message_presentation_test PRIVATE pvr_rel32_call_hook)
+    pvr_enable_warnings(pvr_black_plague_message_presentation_test)
+    add_test(NAME black_plague_message_presentation COMMAND pvr_black_plague_message_presentation_test)
 
     add_executable(pvr_black_plague_audio_environment_test
         tests/black_plague_audio/audio_environment_policy_test.cpp)

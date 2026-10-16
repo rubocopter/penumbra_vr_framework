@@ -104,7 +104,8 @@ BodyReconciliationShadowSample BodyReconciliationShadow::CompleteTick(
     const runtime::VrAcceptedBodyMotion& native_motion,
     const std::array<float, 3>& feet_after,
     bool physical_observation_available,
-    const runtime::VrAcceptedBodyMotion& physical_motion) noexcept {
+    const runtime::VrAcceptedBodyMotion& physical_motion,
+    const std::array<float, 3>* observed_non_physical_displacement) noexcept {
     BodyReconciliationShadowSample sample;
     runtime::VrAcceptedBodyMotion checked;
     if (!tick.valid || !tick_pending_ || tick.sequence == 0 ||
@@ -112,7 +113,9 @@ BodyReconciliationShadowSample BodyReconciliationShadow::CompleteTick(
         !runtime::ObserveAcceptedBodyMotion(
             native_motion.body_before, native_motion.body_after, checked) ||
         checked.accepted_displacement != native_motion.accepted_displacement ||
-        !SamePosition(checked.body_before, tick.body_before)) {
+        !SamePosition(checked.body_before, tick.body_before) ||
+        (observed_non_physical_displacement != nullptr &&
+            !Finite(*observed_non_physical_displacement))) {
         Reset();
         return {};
     }
@@ -141,18 +144,24 @@ BodyReconciliationShadowSample BodyReconciliationShadow::CompleteTick(
             anchor_ = reconciliation.head_anchor;
         }
 
-        // Black Plague exposes one combined collision solve. The whole accepted
-        // displacement is observed; the physical/stick split supplied here is
-        // derived from that solve. Carry only the derived non-physical part.
+        // Production supplies attributed carry from the exact native phases.
+        // Do not reconstruct excluded physical-only collision residuals from
+        // total motion. Diagnostic callers without that observation keep their
+        // original total-minus-physical semantics.
         auto locomotion_motion = checked;
-        if (physical_observation_available) {
+        if (observed_non_physical_displacement != nullptr) {
+            locomotion_motion.accepted_displacement =
+                *observed_non_physical_displacement;
+        } else if (physical_observation_available) {
             for (const auto axis : {0U, 2U}) {
                 locomotion_motion.accepted_displacement[axis] -=
                     physical_motion.accepted_displacement[axis];
-                locomotion_motion.body_after[axis] =
-                    locomotion_motion.body_before[axis] +
-                    locomotion_motion.accepted_displacement[axis];
             }
+        }
+        for (const auto axis : {0U, 2U}) {
+            locomotion_motion.body_after[axis] =
+                locomotion_motion.body_before[axis] +
+                locomotion_motion.accepted_displacement[axis];
         }
         locomotion_motion.accepted_displacement[1] = 0.0F;
         locomotion_motion.body_after[1] = locomotion_motion.body_before[1];

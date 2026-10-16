@@ -86,6 +86,9 @@ using ChangeMoveState = void(__thiscall*)(void*, std::int32_t, bool);
 constexpr std::uintptr_t kPlayerCharacterBodyOffset = 0x274;
 constexpr std::uintptr_t kCharacterSizeYOffset = 0xC8;
 constexpr std::uintptr_t kPlayerActionStateIndexOffset = 0x2BC;
+// BP's Message constructor (0xAD5B0) stores state 5. ButtonHandler's
+// inactive-player branch at 0x505D/0x506A still dispatches Interact/Examine.
+constexpr std::int32_t kMessageActionState = 5;
 constexpr std::uintptr_t kPlayerMoveStateIndexOffset = 0x2D0;
 constexpr std::uintptr_t kChangeMoveStateRva = 0x9C750;
 constexpr std::uintptr_t kPlayerDamageRva = 0x9BB80;
@@ -122,6 +125,14 @@ constexpr PointerEntry kPointers[]{
     {0x4C70,0x945F0,0x84},
     {0x4FF2,0x6C7C0,0xAC}};
 std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks;
+constexpr std::uintptr_t kGuiPointerSite = 0x476B;
+constexpr std::uintptr_t kGuiSendMousePos = 0xE3190;
+constexpr std::uintptr_t kGuiFocusedSetOffset = 0x30;
+constexpr std::uintptr_t kGuiSetMouseOffset = 0xD8;
+hooks::Rel32CallHook g_gui_pointer_hook;
+std::atomic<std::uint64_t> g_gui_calls{0}, g_gui_tracked_updates{0};
+std::atomic<std::uint64_t> g_gui_unavailable{0}, g_gui_mouse_overrides{0};
+std::atomic<std::uint64_t> g_gui_select_presses{0}, g_gui_select_releases{0};
 hooks::Rel32CallHook g_melee_enemy_damage_hook;
 std::array<hooks::Rel32CallHook, kMeleeHitBodyCallsites.size()>
     g_melee_hit_body_hooks;
@@ -501,11 +512,16 @@ void MarkDirectLocomotionAccepted(void* player) noexcept {
     std::memcpy(&displacement, bytes.data() + 1, sizeof(displacement));
     return call + bytes.size() + displacement;
 }
+[[nodiscard]] bool PlayerAcceptsGameplayInput(const void* player) noexcept {
+    return player && (Read<bool>(player, 0x1DC) ||
+        Read<std::int32_t>(player, kPlayerActionStateIndexOffset) ==
+            kMessageActionState);
+}
 bool UiContext(void* handler) {
     if (Read<int>(handler, 0x3C) != 1) return true;
     const auto* init = Read<void*>(handler, 0x2C);
     const auto* player = Read<void*>(handler, 0x38);
-    if (!init || !player || !Read<bool>(player, 0x1DC)) return true;
+    if (!init || !PlayerAcceptsGameplayInput(player)) return true;
     if (Read<bool>(Read<void*>(player, 0x28C), 0)) return true;
     // These are the same overlay checks/ordering as the mapped native handler.
     return Read<int>(Read<void*>(init, 0x1AC), 0x30) != 0 ||
@@ -514,11 +530,17 @@ bool UiContext(void* handler) {
         Read<bool>(Read<void*>(init, 0x178), 0x44) ||
         Read<bool>(Read<void*>(init, 0x164), 0x5C);
 }
+[[nodiscard]] bool GameplayMotionContext(void* handler) noexcept {
+    // Message dismissal is gameplay input, but a script-deactivated player
+    // must not acquire VR turn, crouch or stick movement ownership.
+    return !UiContext(handler) &&
+        Read<bool>(Read<void*>(handler, 0x38), 0x1DC);
+}
 NativeUiSurface UiSurface(void* handler) noexcept {
     if (Read<int>(handler,0x3C)!=1) return NativeUiSurface::fullscreen;
     auto* const init = Read<void*>(handler, 0x2C);
     auto* const player=Read<void*>(handler,0x38);
-    if (!init || !player || !Read<bool>(player,0x1DC) ||
+    if (!init || !PlayerAcceptsGameplayInput(player) ||
         Read<bool>(Read<void*>(player,0x28C),0) ||
         Read<int>(Read<void*>(init,0x1AC),0x30)!=0 ||
         Read<bool>(Read<void*>(init,0x180),0x2D) ||
@@ -599,6 +621,8 @@ bool HandleMappedQuery(const Entry& entry, void* input, LegacyString name) {
         return false;
     }
     bool vr = g_intents && g_intents->Query(entry.action, entry.query);
+    if (vr && entry.site == 0x46B5) ++g_gui_select_presses;
+    if (vr && entry.site == 0x46FA) ++g_gui_select_releases;
     if (g_intents && entry.site == kInventoryLeftPressSite &&
         entry.query == Q::pressed && InventoryContextActive(g_input_handler)) {
         // Rework activates the highlighted inventory-context row with the same
@@ -620,6 +644,8 @@ bool HandleMappedQuery(const Entry& entry, void* input, LegacyString name) {
     }
     if (vr && entry.action == A::interact && entry.query == Q::pressed)
         RefreshVrSelectionBeforeInteract(g_input_player);
+    if (vr && entry.action == A::examine && entry.query == Q::pressed)
+        RefreshVrSelectionBeforeExamine(g_input_player);
     return native || vr;
 }
 
@@ -731,6 +757,38 @@ void __fastcall HookedPointer(void* menu, void*, const std::array<float, 2>* phy
     }
 }
 
+bool __fastcall HookedGuiPointer(void* gui, void*,
+    const std::array<float, 2>* absolute,
+    const std::array<float, 2>* relative) {
+    CallbackScope scope;
+    ++g_gui_calls;
+    using SendMousePos = bool(__thiscall*)(void*,
+        const std::array<float, 2>*, const std::array<float, 2>*);
+    std::array<float, 2> point{}, delta{};
+    if (!ReadBytes(absolute, point.data(), sizeof(point)) ||
+        !ReadBytes(relative, delta.data(), sizeof(delta))) return false;
+    const auto now = GetTickCount64();
+    if (std::abs(delta[0]) > 0.01F || std::abs(delta[1]) > 0.01F)
+        g_mouse_override_until = now + 1500;
+    auto* const focused_set = Read<void*>(gui, kGuiFocusedSetOffset);
+    if (!g_pointer_valid || !focused_set) ++g_gui_unavailable;
+    else if (now < g_mouse_override_until) ++g_gui_mouse_overrides;
+    if (g_intents && g_pointer_valid && focused_set && now >= g_mouse_override_until) {
+        const auto current = Read<std::array<float, 2>>(focused_set, kGuiSetMouseOffset);
+        std::array<float, 2> smoothed{};
+        if (runtime::SmoothMenuPointerUv(
+                {current[0]/800.0F, current[1]/600.0F}, g_pointer_uv, 0.40F, smoothed)) {
+            point = {smoothed[0]*800.0F, smoothed[1]*600.0F};
+            delta = {point[0]-current[0], point[1]-current[1]};
+            ++g_gui_tracked_updates;
+        }
+    }
+    // Rework's cGui::SendMousePos delivers absolute GUI coordinates and a
+    // relative delta to the focused set. Keep native hover, popup attention,
+    // cursor artwork and MouseDown/MouseUp callbacks as the only GUI owners.
+    return reinterpret_cast<SendMousePos>(g_image + kGuiSendMousePos)(gui, &point, &delta);
+}
+
 void __fastcall HookedPlayerDamage(
     void* player, void*, float damage, std::int32_t damage_type) {
     CallbackScope scope;
@@ -785,6 +843,7 @@ void __fastcall HookedMeleeHitBody(void* melee, void*, void* body) {
 void __fastcall HookedUpdate(void* handler, void*, float dt) {
     CallbackScope scope;
     const bool ui = UiContext(handler);
+    const bool motion = GameplayMotionContext(handler);
     const auto context = ui ? runtime::VrInputContext::ui : runtime::VrInputContext::gameplay;
     g_ui.store(ui, std::memory_order_release);
     g_ui_surface.store(UiSurface(handler), std::memory_order_release);
@@ -844,17 +903,17 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         g_frame.input.state.move = frame.input.state.move;
     }
     const float turn = g_turn.Update(
-        frame.input.state.turn, !ui && frame.focused,
+        frame.input.state.turn, motion && frame.focused,
         g_settings.turn_mode, dt, g_settings.snap_turn_angle, g_settings.smooth_turn_speed,
         g_settings.turn_dead_zone);
-    const auto timing=g_update_timing.Update(dt,GetTickCount64(),!ui && frame.focused);
+    const auto timing=g_update_timing.Update(dt,GetTickCount64(),motion && frame.focused);
     if (timing.ready) g_timing_sample=timing;
     ReleaseSRWLockExclusive(&g_session_lock);
     runtime::VrPhysicalCrouchStatus crouch_policy_status;
     if (consumed_release == 0) {
         const bool openvr_crouch_press = frame.input.state.crouch.just_pressed;
         float head_height = 0.0F;
-        const bool gameplay_active = !ui && frame.focused;
+        const bool gameplay_active = motion && frame.focused;
         const bool tracking_valid = gameplay_active &&
             TrackedHeadTrackingHeight(head_height);
         BlackPlagueCrouchEdgeToken native_crouch_token;
@@ -910,9 +969,14 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     auto* previous = g_intents;
     auto* previous_player = g_input_player;
     g_input_player = current_player;
-    BlackPlagueNativeCrouchStatus crouch_status;
+    auto crouch_status = ReadNativePhysicalCrouchStatus();
     crouch_status.policy = crouch_policy_status;
-    ServiceNativeVrCrouch(g_input_player, desired_vr_crouch, crouch_status);
+    if (ui || motion) {
+        ServiceNativeVrCrouch(g_input_player, desired_vr_crouch, crouch_status);
+    }
+    // Otherwise suspend the same player's owned stance without writing native
+    // state. Standing/blocked-stand retries resume when control returns;
+    // ObserveNativePlayerForUpdate already discards ownership on replacement.
     AcquireSRWLockExclusive(&g_crouch_lock);
     g_crouch_status = crouch_status;
     ReleaseSRWLockExclusive(&g_crouch_lock);
@@ -930,7 +994,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     g_direct_sprinting = false;
     g_direct_player_generation = 0;
     runtime::VrMatrix44 head_world_pose;
-    if (!ui && frame.focused && raw_move.active &&
+    if (motion && frame.focused && raw_move.active &&
         BlackPlagueDirectLocomotionAvailable(g_input_player) &&
         TrackedHeadWorldPose(head_world_pose)) {
         g_direct_move = raw_move;
@@ -944,7 +1008,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
         // Buttons and sprint still enter their native owners; only the VR
         // analog move is replaced by the collision-aware metric request.
         frame.input.state.move = {};
-    } else if (!ui && !TrackedMovementYaw(movement_yaw)) {
+    } else if (!motion || !TrackedMovementYaw(movement_yaw)) {
         frame.input.state.move = {};
     }
     if (!g_direct_locomotion) {
@@ -953,7 +1017,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) {
     intents.Begin(frame.input.state, context, movement_yaw);
     g_intents = &intents;
     g_vr_crouch_query_owner = BlackPlagueVrOwnsCrouchQuery({
-        session_connected, ui, frame.focused,
+        session_connected, !motion, frame.focused,
         consumed_release != 0, current_player != nullptr});
     g_crouch_query_session_generation =
         g_session_generation.load(std::memory_order_acquire);
@@ -1012,6 +1076,11 @@ runtime::VrUpdateTimingSample ConsumeNativeUpdateTiming() noexcept {
     ReleaseSRWLockExclusive(&g_session_lock);
     return result;
 }
+NativeGuiPointerDiagnostics ReadNativeGuiPointerDiagnostics() noexcept {
+    return {g_gui_calls.load(), g_gui_tracked_updates.load(),
+        g_gui_unavailable.load(), g_gui_mouse_overrides.load(),
+        g_gui_select_presses.load(), g_gui_select_releases.load()};
+}
 NativeMovementBoundaryStatus ReadNativeMovementBoundaryStatus() noexcept {
     NativeMovementBoundaryStatus result;
     constexpr std::array<std::uintptr_t, 2> sites{0x51CD, 0x5227};
@@ -1068,14 +1137,14 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         g_update_hook.installed() &&
         all_installed(g_query_hooks) && all_installed(g_move_hooks) &&
         all_installed(g_pointer_hooks) && all_installed(g_damage_hooks) &&
-        g_inventory_double_query_hook.installed() &&
+        g_inventory_double_query_hook.installed() && g_gui_pointer_hook.installed() &&
         g_melee_enemy_damage_hook.installed() &&
         all_installed(g_melee_hit_body_hooks);
     const bool any = g_inventory_right_guard_patched ||
         g_update_hook.installed() ||
         any_installed(g_query_hooks) || any_installed(g_move_hooks) ||
         any_installed(g_pointer_hooks) || any_installed(g_damage_hooks) ||
-        g_inventory_double_query_hook.installed() ||
+        g_inventory_double_query_hook.installed() || g_gui_pointer_hook.installed() ||
         g_melee_enemy_damage_hook.installed() ||
         any_installed(g_melee_hit_body_hooks);
     if (g_installed.load(std::memory_order_acquire)) {
@@ -1126,6 +1195,31 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         std::array<std::uint8_t, 5> actual{};
         if (!ReadBytes(g_image + entry.site, actual.data(), actual.size()) || actual != CallBytes(entry.site, entry.target)) {
             error = "Native menu pointer call mismatch"; return false;
+        }
+    }
+    {
+        std::array<std::uint8_t, 5> actual{};
+        if (!ReadBytes(g_image + kGuiPointerSite, actual.data(), actual.size()) ||
+            actual != CallBytes(kGuiPointerSite, kGuiSendMousePos)) {
+            error = "Native ScreenGui mouse-position call mismatch"; return false;
+        }
+    }
+    struct PointerSignature {
+        std::uintptr_t rva;
+        std::array<std::uint8_t, 6> bytes;
+        std::size_t size;
+    };
+    constexpr PointerSignature computer_pointer_signatures[]{
+        {0x45DD, {0x8B,0x8A,0xAC,0x01,0,0}, 6},
+        {0x345F0, {0x8B,0x51,0x30}, 3},
+        {0xE3190, {0x8B,0x49,0x30}, 3},
+        {0xF8FDD, {0x89,0x87,0xD8,0,0,0}, 6},
+        {0xF8FE6, {0x89,0x8F,0xDC,0,0,0}, 6}};
+    for (const auto& signature : computer_pointer_signatures) {
+        std::array<std::uint8_t, 6> actual{};
+        if (!ReadBytes(g_image + signature.rva, actual.data(), signature.size) ||
+            std::memcmp(actual.data(), signature.bytes.data(), signature.size) != 0) {
+            error = "Native computer pointer layout mismatch"; return false;
         }
     }
     for (const auto site : kPlayerDamageCallsites) {
@@ -1223,6 +1317,11 @@ bool InstallNativeInputBridge(std::string& error) noexcept {
         ok = hooks::InstallRel32CallHook(g_image + entry.site, CallBytes(entry.site, entry.target),
             reinterpret_cast<void*>(&HookedPointer), g_pointer_hooks[i], error);
     }
+    if (ok) {
+        ok = hooks::InstallRel32CallHook(g_image + kGuiPointerSite,
+            CallBytes(kGuiPointerSite, kGuiSendMousePos),
+            reinterpret_cast<void*>(&HookedGuiPointer), g_gui_pointer_hook, error);
+    }
     for (std::size_t i = 0; ok && i < kPlayerDamageCallsites.size(); ++i) {
         const auto site = kPlayerDamageCallsites[i];
         ok = hooks::InstallRel32CallHook(
@@ -1306,6 +1405,10 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
         next.clear();
         if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
     }
+    next.clear();
+    if (!hooks::RemoveRel32CallHook(g_gui_pointer_hook, next)) {
+        ok = false; append_error(next);
+    }
     for (auto& hook : g_damage_hooks) {
         next.clear();
         if (!hooks::RemoveRel32CallHook(hook, next)) { ok = false; append_error(next); }
@@ -1331,7 +1434,7 @@ bool RemoveNativeInputBridge(std::string& error) noexcept {
     const bool any_hook = g_update_hook.installed() ||
         std::any_of(g_query_hooks.begin(), g_query_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
-        g_inventory_double_query_hook.installed() ||
+        g_inventory_double_query_hook.installed() || g_gui_pointer_hook.installed() ||
         std::any_of(g_move_hooks.begin(), g_move_hooks.end(),
             [](const auto& hook) noexcept { return hook.installed(); }) ||
         std::any_of(g_pointer_hooks.begin(), g_pointer_hooks.end(),
@@ -1487,6 +1590,33 @@ void ContractWrite(void* object, std::uintptr_t offset, const T& value) noexcept
 bool __fastcall ContractNativeQuery(void*, void*, LegacyString) noexcept {
     return g_contract_native_query_result;
 }
+void __fastcall ContractNativeInputUpdate(void*, void*, float) noexcept {}
+
+bool g_contract_gui_down = false;
+int g_contract_gui_accepted = 0;
+bool __fastcall ContractGuiPointer(void* gui, void*,
+    const std::array<float, 2>* absolute,
+    const std::array<float, 2>*) noexcept {
+    auto* set = Read<void*>(gui, 0x30);
+    if (!set) return false;
+    ContractWrite(set, 0xD8, *absolute);
+    return true;
+}
+bool ContractGuiPopupHit(void* gui) noexcept {
+    auto* set = Read<void*>(gui, 0x30);
+    return set && std::abs(Read<float>(set, 0xD8) - 480) < 1 &&
+        std::abs(Read<float>(set, 0xDC) - 360) < 1;
+}
+bool __fastcall ContractGuiDown(void* gui, void*, int button) noexcept {
+    g_contract_gui_down = button == 1 && ContractGuiPopupHit(gui);
+    return g_contract_gui_down;
+}
+bool __fastcall ContractGuiUp(void* gui, void*, int button) noexcept {
+    if (button == 1 && g_contract_gui_down && ContractGuiPopupHit(gui))
+        ++g_contract_gui_accepted;
+    g_contract_gui_down = false;
+    return true;
+}
 
 bool __fastcall ContractNativeDoubleQuery(
     void*, void*, LegacyString, float) noexcept {
@@ -1561,6 +1691,12 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         g_contract_walk_accepted = true;
         g_direct_head_world_pose = runtime::IdentityMatrix();
         g_intents = nullptr;
+        g_pointer_valid = false;
+        g_pointer_uv = {};
+        g_mouse_override_until = 0;
+        g_gui_calls = 0; g_gui_tracked_updates = 0; g_gui_unavailable = 0;
+        g_gui_mouse_overrides = 0; g_gui_select_presses = 0; g_gui_select_releases = 0;
+        g_contract_gui_down = false; g_contract_gui_accepted = 0;
         g_input_player = nullptr;
         g_input_handler = nullptr;
         g_ui.store(true, std::memory_order_release);
@@ -1650,6 +1786,63 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         return fail("invalid captured Push axes dispatched native force");
     g_direct_head_world_pose = runtime::IdentityMatrix();
 
+    // The real terminal uses HPL cGui, including its focused popup GuiSet.
+    // Exercise native pointer, press and release boundaries together; the
+    // unrelated Schmup relative-mouse handler cannot drive this GUI.
+    std::array<std::uint8_t, 0x80> gui{};
+    std::array<std::uint8_t, 0x120> popup_set{};
+    ContractWrite(gui.data(), 0x30, static_cast<void*>(popup_set.data()));
+    ContractWrite(popup_set.data(), 0xD8, std::array<float, 2>{400,300});
+    ContractJump(image + 0xE3190, reinterpret_cast<void*>(&ContractGuiPointer));
+    ContractJump(image + 0xE31E0, reinterpret_cast<void*>(&ContractGuiDown));
+    ContractJump(image + 0xE3230, reinterpret_cast<void*>(&ContractGuiUp));
+    ContractJump(image + 0xDA5B0, reinterpret_cast<void*>(&ContractNativeQuery));
+    ContractJump(image + 0xDA510, reinterpret_cast<void*>(&ContractNativeQuery));
+    runtime::VrInputState gui_input{};
+    gui_input.ui_select = {true,true,true,false};
+    runtime::VrNativeIntents gui_intents{};
+    gui_intents.Begin(gui_input, runtime::VrInputContext::ui, 0);
+    g_intents = &gui_intents;
+    g_pointer_valid = true;
+    g_pointer_uv = {0.75F,0.75F};
+    g_mouse_override_until = 0;
+    const std::array<float, 2> native_absolute{50,60}, zero_relative{};
+    if (!HookedGuiPointer(gui.data(), nullptr, &native_absolute, &zero_relative) ||
+        !ContractGuiPopupHit(gui.data()))
+        return fail("tracked pointer did not reach the terminal's focused HPL popup");
+    if (!HandleMappedQuery({0x46B5,A::select}, nullptr, {}) ||
+        !reinterpret_cast<bool(__thiscall*)(void*,int)>(image+0xE31E0)(gui.data(),1) ||
+        g_contract_gui_accepted != 0)
+        return fail("terminal popup did not preserve native mouse-down semantics");
+    gui_input.ui_select = {true,false,false,true};
+    gui_intents.Begin(gui_input, runtime::VrInputContext::ui, 0);
+    if (!HandleMappedQuery({0x46FA,A::select,Q::released}, nullptr, {}) ||
+        !reinterpret_cast<bool(__thiscall*)(void*,int)>(image+0xE3230)(gui.data(),1) ||
+        g_contract_gui_accepted != 1)
+        return fail("terminal popup Accept did not complete on VR release");
+    const std::array<float, 2> physical_relative{3,4};
+    HookedGuiPointer(gui.data(), nullptr, &native_absolute, &physical_relative);
+    if (Read<std::array<float,2>>(popup_set.data(), 0xD8) != native_absolute)
+        return fail("HPL GUI lost native absolute mouse priority");
+    HookedGuiPointer(gui.data(), nullptr, &native_absolute, &zero_relative);
+    if (Read<std::array<float,2>>(popup_set.data(), 0xD8) != native_absolute)
+        return fail("HPL GUI ignored physical mouse override");
+    g_mouse_override_until = 0;
+    g_pointer_valid = false;
+    HookedGuiPointer(gui.data(), nullptr, &native_absolute, &zero_relative);
+    if (Read<std::array<float,2>>(popup_set.data(), 0xD8) != native_absolute)
+        return fail("HPL GUI injected a pointer without tracking");
+    ContractWrite(gui.data(), 0x30, static_cast<void*>(nullptr));
+    g_pointer_valid = true;
+    if (HookedGuiPointer(gui.data(), nullptr, &native_absolute, &zero_relative))
+        return fail("HPL GUI bypassed a missing focused set");
+    const auto gui_diagnostics = ReadNativeGuiPointerDiagnostics();
+    if (gui_diagnostics.calls != 5 || gui_diagnostics.tracked_updates != 1 ||
+        gui_diagnostics.unavailable != 2 || gui_diagnostics.mouse_overrides != 2 ||
+        gui_diagnostics.select_presses != 1 || gui_diagnostics.select_releases != 1)
+        return fail("terminal pointer/click diagnostics lost route evidence");
+    g_intents = nullptr;
+
     const auto has_pointer_entry = [](std::uintptr_t site,
                                       std::uintptr_t target,
                                       std::uintptr_t cursor) noexcept {
@@ -1681,6 +1874,10 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     if (!has_pointer_entry(0x4AFA, 0x8AC0, 0x38)) {
         return fail("secondary overlay pointer call is not hooked");
     }
+    if (!has_query_entry(0x46B5,A::select,Q::pressed) ||
+        !has_query_entry(0x46FA,A::select,Q::released)) {
+        return fail("ScreenGui popup must retain native left down/up routing");
+    }
 
     // Model only the exact fields read by UiContext. This proves that the
     // native inventory/notebook active bytes drive the existing tracked-menu
@@ -1709,6 +1906,47 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     if (UiContext(handler.data())) {
         return fail("normal Black Plague gameplay was treated as a UI context");
     }
+    if (!GameplayMotionContext(handler.data())) {
+        return fail("active Black Plague gameplay lost VR motion ownership");
+    }
+    // Native ButtonHandler permits inactive Message players to reach
+    // Interact/Examine. Menus must still supersede that dismissal route.
+    ContractWrite(ui_player.data(), 0x1DC, false);
+    ContractWrite(ui_player.data(), 0x2BC, std::int32_t{5});
+    if (UiContext(handler.data())) {
+        return fail("inactive Black Plague Message lost gameplay dismissal/stereo context");
+    }
+    if (GameplayMotionContext(handler.data())) {
+        return fail("inactive Message enabled VR turn/crouch/locomotion");
+    }
+    ContractWrite(player_overlay.data(), 0, true);
+    if (!UiContext(handler.data()) ||
+        UiSurface(handler.data()) != NativeUiSurface::fullscreen) {
+        return fail("death overlay failed to supersede inactive Message");
+    }
+    ContractWrite(player_overlay.data(), 0, false);
+    ContractWrite(notebook.data(), 0x44, true);
+    if (!UiContext(handler.data()) ||
+        UiSurface(handler.data()) != NativeUiSurface::notebook) {
+        return fail("notebook failed to supersede inactive Message");
+    }
+    ContractWrite(notebook.data(), 0x44, false);
+    ContractWrite(inventory.data(), 0x5C, true);
+    if (!UiContext(handler.data()) ||
+        UiSurface(handler.data()) != NativeUiSurface::inventory) {
+        return fail("inventory failed to supersede inactive Message");
+    }
+    ContractWrite(inventory.data(), 0x5C, false);
+    ContractWrite(handler.data(), 0x3C, std::int32_t{0});
+    if (!UiContext(handler.data())) {
+        return fail("main menu failed to supersede inactive Message");
+    }
+    ContractWrite(handler.data(), 0x3C, std::int32_t{1});
+    ContractWrite(ui_player.data(), 0x2BC, std::int32_t{0});
+    if (!UiContext(handler.data())) {
+        return fail("inactive non-Message player escaped the UI context");
+    }
+    ContractWrite(ui_player.data(), 0x1DC, true);
     ContractWrite(notebook.data(), 0x44, true);
     if (!UiContext(handler.data()) ||
         UiSurface(handler.data())!=NativeUiSurface::notebook) {
@@ -1907,6 +2145,31 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
     g_intents = &inventory_intents;
     g_input_handler = handler.data();
 
+    ContractWrite(inventory.data(), 0x5C, false);
+    ContractWrite(ui_player.data(), 0x1DC, false);
+    ContractWrite(ui_player.data(), 0x2BC, std::int32_t{5});
+    runtime::VrInputState message_input{};
+    message_input.interact = {true, true, true, false};
+    message_input.examine = {true, true, true, false};
+    const auto message_context = UiContext(handler.data())
+        ? runtime::VrInputContext::ui : runtime::VrInputContext::gameplay;
+    inventory_intents.Begin(message_input, message_context);
+    if (!HandleMappedQuery({0x542A, A::interact}, nullptr, legacy_name) ||
+        HandleMappedQuery({0x542A, A::interact}, nullptr, legacy_name) ||
+        !HandleMappedQuery({0x5496, A::examine}, nullptr, legacy_name)) {
+        return fail("Message dismissal did not reach each existing native action owner once");
+    }
+    message_input = {};
+    inventory_intents.Begin(message_input, message_context);
+    g_contract_native_query_result = true;
+    if (!HandleMappedQuery({0x542A, A::interact}, nullptr, legacy_name)) {
+        return fail("Message dismissal lost native mouse fallback");
+    }
+    g_contract_native_query_result = false;
+    ContractWrite(ui_player.data(), 0x2BC, std::int32_t{0});
+    ContractWrite(ui_player.data(), 0x1DC, true);
+    ContractWrite(inventory.data(), 0x5C, true);
+
     // The exact Black Plague cInventory::OnMouseDown entry has a single
     // `cmp button, 2 / je return` guard at 0x46EEC5/0x46EEC8. Rework routes
     // uiBack through this inventory-level method, so the framework only removes
@@ -2055,6 +2318,29 @@ bool RunNativeInputBridgeContractHarness(std::string& error) noexcept {
         !status.native_shape_known || !status.native_crouched) {
         return fail("crouch entry did not reach ChangeMoveState(4)");
     }
+    // Exercise the actual input wrapper while inactive Message suspends an
+    // already-owned crouch. Standing and blocked-stand retries must resume
+    // after dismissal, without a native stance write during the message.
+    if (!ContractJump(image + 0x3BF0,
+            reinterpret_cast<void*>(&ContractNativeInputUpdate))) {
+        return fail("could not create synthetic native input Update");
+    }
+    ContractWrite(handler.data(), 0x38, static_cast<void*>(player_b.data()));
+    ContractWrite(inventory.data(), 0x5C, false);
+    ContractWrite(player_b.data(), 0x1DC, false);
+    ContractWrite(player_b.data(), 0x2BC, std::int32_t{5});
+    const auto exits_before_message = g_native_crouch_exits;
+    HookedUpdate(handler.data(), nullptr, 0.016F);
+    if (!g_vr_crouch_owned || g_vr_crouch_owner_player != player_b.data() ||
+        g_native_crouch_exits != exits_before_message ||
+        Read<std::int32_t>(player_b.data(), kPlayerMoveStateIndexOffset) !=
+            kCrouchMoveState) {
+        return fail("inactive Message discarded suspended crouch ownership or changed stance");
+    }
+    ContractWrite(player_b.data(), 0x1DC, true);
+    ContractWrite(player_b.data(), 0x2BC, std::int32_t{0});
+    ContractWrite(handler.data(), 0x38, ui_player_pointer);
+    ContractWrite(inventory.data(), 0x5C, true);
     g_contract_block_stand = true;
     ServiceNativeVrCrouch(player_b.data(), false, status);
     if (!status.vr_stance_owned || !status.stand_blocked ||

@@ -7,14 +7,24 @@
 namespace penumbra_vr::backends::black_plague {
 namespace {
 runtime::VrControllerFrame test_frame;
+Matrix test_controller_world_basis=runtime::IdentityMatrix();
 int test_joints=0, test_leaves=0, test_native_updates=0;
 int test_move_leaves=0, test_native_move_updates=0;
 int test_push_leaves=0, test_native_push_updates=0;
+int test_native_push_release_impulses=0;
 void* test_joint=nullptr;
 void* test_joint_secondary=nullptr;
+void* test_unjointed_companion=nullptr;
+void* test_joint_count_fault_body=nullptr;
+std::vector<std::pair<void*,std::vector<void*>>> test_joint_graph;
 int test_active_calls=0, test_auto_freeze_calls=0;
 bool test_active_value=false, test_auto_freeze_value=true;
 Vec test_move_force{},test_move_force_position{};
+int test_matrix_writes=0, test_contact_impulses=0;
+void* test_matrix_body=nullptr;
+void* test_impulse_body=nullptr;
+Vec test_impulse_delta{},test_impulse_position{};
+Vec test_impulse_added_angular{};
 Vec test_push_force{};
 bool test_ui=false;
 std::array<void*,2> test_palm_held{};
@@ -63,8 +73,18 @@ void __fastcall NativeStop(void* state, void*) {
     HookedLeave(state,nullptr,nullptr);
     Put(Read<void*>(state,0x10),0x2BC,0);
 }
-int __fastcall JointCount(void*,void*) { return test_joints; }
-void* __fastcall BodyJoint(void*,void*,int index) {
+int __fastcall JointCount(void* body,void*) {
+    if (body==test_joint_count_fault_body)
+        RaiseException(EXCEPTION_ACCESS_VIOLATION,0,0,nullptr);
+    for (const auto& entry:test_joint_graph)
+        if (entry.first==body) return static_cast<int>(entry.second.size());
+    return body==test_unjointed_companion ? 0 : test_joints;
+}
+void* __fastcall BodyJoint(void* body,void*,int index) {
+    for (const auto& entry:test_joint_graph)
+        if (entry.first==body) return index>=0 &&
+            static_cast<std::size_t>(index)<entry.second.size()
+                ? entry.second[index] : nullptr;
     if (index==0) return test_joint;
     if (index==1) return test_joint_secondary;
     return nullptr;
@@ -83,12 +103,41 @@ void __fastcall NativePushLeave(void*,void*,void*) { ++test_push_leaves; }
 void __fastcall NativePushUpdate(void*,void*,float) { ++test_native_push_updates; }
 void __fastcall NativePushStop(void* state,void*) {
     HookedPushLeave(state,nullptr,nullptr);
-    Put(Read<void*>(state,0x10),0x2BC,0);
+    auto* player=Read<void*>(state,0x10);
+    Put(player,0x2BC,0);
+    // Exact BP AB1F0 adds the camera-forward impulse AFTER ChangeState/Leave
+    // whenever player+50 says CanBeThrown. Rework's VR release only changes state.
+    if (Read<bool>(player,0x50)) {
+        ++test_native_push_release_impulses;
+        auto* body=Read<void*>(state,0x50);
+        auto velocity=Read<Vec>(body,0x450);
+        velocity[2]-=6;
+        Put(body,0x450,velocity);
+    }
+}
+void __fastcall NativeChangeActionState(void* player,void*,int next) {
+    auto** states=Read<void**>(player,0x2C4);
+    const int current=Read<int>(player,0x2BC);
+    if (current==1) HookedPushLeave(states[current],nullptr,states[next]);
+    Put(player,0x2BC,next);
 }
 void __fastcall MaxLinear(void* body,void*,float value) { Put(body,0x42C,value); }
 void __fastcall MaxAngular(void* body,void*,float value) { Put(body,0x430,value); }
 void __fastcall Linear(void* body,void*,const Vec* value) { Put(body,0x450,*value); }
 void __fastcall Angular(void* body,void*,const Vec* value) { Put(body,0x460,*value); }
+// The actual BP getters return a 12-byte Vec by value under x86 __thiscall.
+// Model that ABI using class members, including the hidden return pointer.
+struct TestVelocityGetters {
+    Vec GetLinear() const { return Read<Vec>(this,0x450); }
+    Vec GetAngular() const { return Read<Vec>(this,0x460); }
+    Vec GetMassCentre() const { return Read<Vec>(this,0x480); }
+};
+template<class Method> void* NativeMemberEntry(Method method) {
+    static_assert(sizeof(method)==sizeof(void*));
+    void* entry=nullptr;
+    std::memcpy(&entry,&method,sizeof(entry));
+    return entry;
+}
 void __fastcall Gravity(void* body,void*,bool value) { Put(body,0x428,value); }
 void __fastcall Active(void*,void*,bool value) {
     ++test_active_calls;
@@ -98,21 +147,138 @@ void __fastcall AutoFreeze(void*,void*,bool value) {
     ++test_auto_freeze_calls;
     test_auto_freeze_value=value;
 }
-void __fastcall BodyMatrix(void* body,void*,const Matrix* value) { Put(body,0x34,*value); }
+void __fastcall BodyMatrix(void* body,void*,const Matrix* value) {
+    ++test_matrix_writes;
+    test_matrix_body=body;
+    Put(body,0x34,*value);
+}
+void __fastcall BodyImpulseAtPosition(void* body,void*,const Vec* delta,
+    const Vec* position) {
+    ++test_contact_impulses;
+    test_impulse_body=body;
+    test_impulse_delta=*delta;
+    test_impulse_position=*position;
+    const auto angular=Read<Vec>(body,0x460);
+    Put(body,0x460,Vec{angular[0]+test_impulse_added_angular[0],
+        angular[1]+test_impulse_added_angular[1],angular[2]+test_impulse_added_angular[2]});
+}
 void __fastcall BodyForceAtPosition(void*,void*,const Vec* force,const Vec* position) {
     test_move_force=*force;
     test_move_force_position=*position;
 }
 void __fastcall BodyForce(void*,void*,const Vec* force) { test_push_force=*force; }
+void* test_pick_rejected_body=nullptr;
 struct TestPickCallback {
     struct VTable {
         bool (__thiscall *before)(void*,void*);
         bool (__thiscall *intersect)(void*,void*,void*);
     };
     VTable* vtable=nullptr;
-    static bool __fastcall Before(void*,void*,void*) { return true; }
-    static bool __fastcall Intersect(void*,void*,void*,void*) { return true; }
+    void* body=nullptr;
+    void* area=nullptr;
+    float maximum_distance=10.0F;
+    float distance=20.0F;
+    float area_distance=20.0F;
+    int last_entity_type=0x16;
+    Vec point{};
+    Vec area_point{};
+    float minimum_static_distance=20.0F;
+    static bool __fastcall Before(void*,void*,void* body) {
+        return body!=test_pick_rejected_body;
+    }
+    static bool __fastcall Intersect(void* self,void*,void* candidate,void* params) {
+        auto* pick=static_cast<TestPickCallback*>(self);
+        struct Params { float t; float dist; Vec normal; Vec point; } hit{};
+        std::memcpy(&hit,params,sizeof(hit));
+        if (!std::isfinite(hit.dist) || hit.dist<0 ||
+            hit.dist>pick->maximum_distance) return true;
+        auto* entity=Read<void*>(candidate,kBodyUserDataOffset);
+        const int type=entity ? Read<int>(entity,kEntityTypeOffset) : -1;
+        if (type==9) return true;
+        if (type==4 || type==0xE || type==0xF || type==0x15) {
+            if (hit.dist<pick->area_distance) {
+                pick->area=candidate; pick->area_distance=hit.dist;
+                pick->area_point=hit.point;
+            }
+        } else if (hit.dist<pick->distance) {
+            pick->body=entity ? candidate : nullptr;
+            pick->distance=hit.dist; pick->point=hit.point;
+        }
+        return true;
+    }
 };
+static_assert(sizeof(TestPickCallback)==0x38);
+struct TestHeadHit { void* body; float distance; Vec point; };
+std::vector<TestHeadHit> test_head_hits;
+int test_head_rays=0;
+Vec test_head_ray_from{},test_head_ray_to{};
+void __fastcall NativeTestRay(void*,void*,void* callback,const Vec* from,
+    const Vec* to,bool,bool,bool,bool) {
+    const Vec delta{(*to)[0]-(*from)[0],(*to)[1]-(*from)[1],(*to)[2]-(*from)[2]};
+    if (std::hypot(delta[0],delta[1],delta[2])<1.0F) return;
+    ++test_head_rays; test_head_ray_from=*from; test_head_ray_to=*to;
+    auto** table=*reinterpret_cast<void***>(callback);
+    for (const auto& hit : test_head_hits) {
+        using Before=bool(__thiscall*)(void*,void*);
+        if (!reinterpret_cast<Before>(table[0])(callback,hit.body)) continue;
+        struct Params { float t; float dist; Vec normal; Vec point; }
+            params{0,hit.distance,{},hit.point};
+        using Intersect=bool(__thiscall*)(void*,void*,void*);
+        reinterpret_cast<Intersect>(table[1])(callback,hit.body,&params);
+    }
+}
+void __fastcall NativeTestPickClear(void* self,void*) {
+    auto* pick=static_cast<TestPickCallback*>(self);
+    pick->body=nullptr; pick->area=nullptr;
+    pick->distance=pick->area_distance=pick->maximum_distance+10.0F;
+}
+void __fastcall NativeTestPickResults(void* self,void*) {
+    auto* pick=static_cast<TestPickCallback*>(self);
+    if (pick->area && pick->area_distance<pick->distance) {
+        pick->body=pick->area; pick->distance=pick->area_distance;
+        pick->point=pick->area_point;
+    }
+}
+float __fastcall NativeTestPickedDistance(void* player,void*) {
+    auto* pick=Read<void*>(player,0x27C);
+    const Vec point=Read<Vec>(pick,0x1C);
+    const Vec position=Read<Vec>(Read<void*>(player,0x274),0x48);
+    return std::hypot(point[0]-position[0],point[1]-position[1],point[2]-position[2]);
+}
+int __fastcall NativeTestCrosshair(void* entity,void*,void*) {
+    auto* player=Read<void*>(Read<void*>(entity,0x10),0x15C);
+    const float distance=NativeTestPickedDistance(player,nullptr);
+    return distance<=Read<float>(entity,0xB8) ? 4 : 10;
+}
+float __fastcall NativeTestEntityDistance(void* entity,void*) {
+    return NativeTestPickedDistance(Read<void*>(Read<void*>(entity,0x10),0x15C),nullptr);
+}
+bool __cdecl NativeTestWideNotEmpty(const void* value,const std::uint16_t*) {
+    return Read<bool>(value,0);
+}
+void* test_normal_world=nullptr;
+TestPickCallback* test_normal_callback=nullptr;
+int test_native_normal_calls=0,test_native_save_calls=0,test_native_lamp_calls=0;
+void __fastcall NativeTestNormalUpdate(void* state,void*,float) {
+    ++test_native_normal_calls;
+    NativeTestPickClear(test_normal_callback,nullptr);
+    const Vec from{0,1,0},to{0,1,-10};
+    reinterpret_cast<Ray>(g_image+0xAD835)(test_normal_world,test_normal_callback,
+        &from,&to,true,false,true,false);
+    NativeTestPickResults(test_normal_callback,nullptr);
+    const int cue=test_normal_callback->body ? 1 : 10;
+    Put(Read<void*>(state,0x10),0x2E4,cue);
+}
+void __fastcall NativeTestSaveInteract(void* entity,void*) {
+    auto* player=Read<void*>(Read<void*>(entity,0x10),0x15C);
+    if (static_cast<double>(NativeTestPickedDistance(player,nullptr))<=2.1)
+        ++test_native_save_calls;
+}
+void __fastcall NativeTestLampInteract(void* entity,void*) {
+    auto* player=Read<void*>(Read<void*>(entity,0x10),0x15C);
+    if (NativeTestPickedDistance(player,nullptr)<=Read<float>(entity,0xBC))
+        ++test_native_lamp_calls;
+}
 void Jump(std::uintptr_t rva,void* target) {
     auto* entry=g_image+rva;
     entry[0]=0xE9;
@@ -126,7 +292,9 @@ void NativeControllerHaptic(runtime::VrHand,runtime::VrHapticEvent,float) noexce
 bool NativeInputUiActive() noexcept { return test_ui; }
 bool ControllerWorldPose(const runtime::VrHmdPose& hand, Matrix& pose, Vec& velocity, Vec& angular) noexcept {
     if (!test_head_pose_valid || !hand.device_connected || !hand.pose_valid) return false;
-    pose=runtime::ExpandMatrix(hand.device_to_absolute); velocity=hand.velocity; angular=hand.angular_velocity; return true;
+    pose=runtime::Multiply(test_controller_world_basis,
+        runtime::ExpandMatrix(hand.device_to_absolute));
+    velocity=hand.velocity; angular=hand.angular_velocity; return true;
 }
 bool TrackedHeadWorldPose(runtime::VrMatrix44& pose) noexcept {
     if (!test_head_pose_valid) return false;
@@ -168,6 +336,295 @@ bool QueryGameplayPalmOverlaps(std::size_t,
     return true;
 }
 int RunSpatialTest() {
+    {
+        // A stationary wrist can be opposite the lagging bone. The angular
+        // controller must still converge, including at the exact half-turn.
+        for (int axis=0;axis<3;++axis) {
+            const auto current=runtime::IdentityMatrix();
+            auto destination=current;
+            for (int other=0;other<3;++other)
+                if (other!=axis) destination.values[other*4+other]=-1;
+            Vec corrected{};
+            if (!ArticulatedAngularDrive(current,destination,{},{},0.016F,corrected) ||
+                !FiniteVec(corrected) || std::abs(corrected[axis])<0.19F ||
+                std::hypot(corrected[0],corrected[1],corrected[2])>0.20001F)
+                return 225;
+        }
+        // Near pi, select the shortest direction on either side. An oblique
+        // exact half-turn also exercises recovery beyond a diagonal matrix.
+        for (float angle : {3.1410F,-3.1410F}) {
+            const auto current=runtime::IdentityMatrix();
+            auto destination=current;
+            destination.values[0]=destination.values[5]=std::cos(angle);
+            destination.values[1]=-std::sin(angle);
+            destination.values[4]=std::sin(angle);
+            Vec corrected{};
+            if (!ArticulatedAngularDrive(current,destination,{},{},0.016F,corrected) ||
+                corrected[2]*angle<=0 || std::abs(corrected[2])<0.19F) return 227;
+        }
+        auto oblique=runtime::IdentityMatrix();
+        const Vec axis{0.6F,0.8F,0};
+        for (int row=0;row<3;++row)
+            for (int col=0;col<3;++col)
+                oblique.values[row*4+col]=2*axis[row]*axis[col]-(row==col ? 1.0F : 0.0F);
+        Vec corrected{};
+        if (!ArticulatedAngularDrive(runtime::IdentityMatrix(),oblique,{},{},0.016F,corrected) ||
+            std::abs(Dot(axis,corrected))<0.19F) return 228;
+    }
+    {
+        // Run the articulated contact controller against the shipped Newton
+        // solver, with several chain sizes and selected endpoints/interior
+        // bodies. Synthetic ABI tests alone cannot detect joint separation.
+        for (const unsigned count : {2U,3U,7U,14U,18U,24U}) {
+            for (const unsigned selected : {0U,count/2,count-1}) {
+                const NewtonWorld* world=NewtonCreate(nullptr,nullptr);
+                NewtonCollision* shape=NewtonCreateBox(world,0.08F,0.08F,0.08F,nullptr);
+                std::vector<NewtonBody*> bodies;
+                for (unsigned index=0;index<count;++index) {
+                    auto* body=NewtonCreateBody(world,shape);
+                    auto matrix=runtime::IdentityMatrix();
+                    matrix.values[12]=static_cast<float>(index)*0.1F;
+                    NewtonBodySetMatrix(body,matrix.values.data());
+                    const float original_mass=count==2 && index==1 ? 2.2F : 3.0F;
+                    const float mass=index==selected ? original_mass/14.0F : original_mass;
+                    NewtonBodySetMassMatrix(body,mass,0.01F*mass,0.01F*mass,0.01F*mass);
+                    NewtonBodySetAutoFreeze(body,0);
+                    if (index!=selected) {
+                        // Native Grab disables gravity only on the selected
+                        // bone. The rest of the ragdoll must still be lifted.
+                        NewtonBodySetForceAndTorqueCallback(body,[](const NewtonBody* falling) {
+                            float body_mass=0,ix=0,iy=0,iz=0;
+                            NewtonBodyGetMassMatrix(falling,&body_mass,&ix,&iy,&iz);
+                            const Vec gravity{0,-9.81F*body_mass,0};
+                            NewtonBodySetForce(falling,gravity.data());
+                        });
+                    }
+                    if (index) {
+                        const Vec pivot{static_cast<float>(index)*0.1F-0.05F,0,0};
+                        if (count==2) {
+                            const Vec pin{0,0,1};
+                            NewtonConstraintCreateHinge(world,pivot.data(),pin.data(),body,bodies.back());
+                        } else NewtonConstraintCreateBall(world,pivot.data(),bodies.back(),body);
+                    }
+                    bodies.push_back(body);
+                }
+                bool stable=true;
+                const Vec local_contact{0.03F,0,0};
+                const auto read_pose=[](const NewtonBody* body) {
+                    Matrix native{},pose{};
+                    NewtonBodyGetMatrix(body,native.values.data());
+                    for (unsigned row=0;row<4;++row)
+                        for (unsigned col=0;col<4;++col)
+                            pose.values[row*4+col]=native.values[col*4+row];
+                    return pose;
+                };
+                const auto start=read_pose(bodies[selected]);
+                for (unsigned tick=0;tick<360;++tick) {
+                    constexpr float dt=1.0F/90.0F;
+                    auto destination=start;
+                    destination.values[7]=static_cast<float>(tick)*dt*0.15F;
+                    const auto current=read_pose(bodies[selected]);
+                    Vec linear{},angular{},impulse{},point{},driven{};
+                    NewtonBodyGetVelocity(bodies[selected],linear.data());
+                    NewtonBodyGetOmega(bodies[selected],angular.data());
+                    if (!ArticulatedContactImpulse(current,destination,local_contact,
+                            {0,0.15F,0},linear,angular,dt,impulse,point) ||
+                        !ArticulatedAngularDrive(current,destination,{},angular,dt,driven)) {
+                        stable=false; break;
+                    }
+                    NewtonAddBodyImpulse(bodies[selected],impulse.data(),point.data());
+                    for (unsigned index=0;index<count;++index) {
+                        if (index==selected) continue;
+                        Vec carried{};
+                        NewtonBodyGetVelocity(bodies[index],carried.data());
+                        for (int axis=0;axis<3;++axis) carried[axis]+=impulse[axis];
+                        NewtonBodySetVelocity(bodies[index],carried.data());
+                    }
+                    NewtonBodyGetOmega(bodies[selected],angular.data());
+                    if (!ArticulatedAngularDrive(current,destination,{},angular,dt,driven)) {
+                        stable=false; break;
+                    }
+                    NewtonBodySetOmega(bodies[selected],driven.data());
+                    NewtonUpdate(world,dt);
+                    for (unsigned index=1;index<count;++index) {
+                        const auto a=TransformPoint(read_pose(bodies[index-1]),{0.05F,0,0});
+                        const auto b=TransformPoint(read_pose(bodies[index]),{-0.05F,0,0});
+                        const Vec error{a[0]-b[0],a[1]-b[1],a[2]-b[2]};
+                        if (!FiniteVec(error) || std::hypot(error[0],error[1],error[2])>0.04F)
+                            stable=false;
+                    }
+                }
+                const auto final=read_pose(bodies[selected]);
+                NewtonReleaseCollision(world,shape);
+                NewtonDestroy(world);
+                const float target_height=start.values[7]+359.0F/90.0F*0.15F;
+                if (!stable || std::abs(final.values[7]-target_height)>0.08F) {
+                    std::cerr << "articulated Newton chain failed: bodies=" << count
+                        << " selected=" << selected << " y=" << final.values[7] << '\n';
+                    return 219;
+                }
+            }
+        }
+    }
+    {
+        // A world-rooted three-hinge arm must rise through the native solver.
+        // Exercise world and explicit static endpoints, all selectable bones,
+        // native-like selected mass reduction/gravity and live joint limits.
+        for (const bool static_root : {false,true}) {
+            for (const unsigned selected : {0U,1U,2U}) {
+                const auto* world=NewtonCreate(nullptr,nullptr);
+                auto* shape=NewtonCreateBox(world,0.18F,0.06F,0.06F,nullptr);
+                NewtonBody* fixed=static_root ? NewtonCreateBody(world,shape) : nullptr;
+                std::array<NewtonBody*,3> bodies{};
+                std::array<NewtonJoint*,3> joints{};
+                const auto read_pose=[](const NewtonBody* body) {
+                    Matrix native{},pose{};
+                    NewtonBodyGetMatrix(body,native.values.data());
+                    for (unsigned row=0;row<4;++row)
+                        for (unsigned col=0;col<4;++col)
+                            pose.values[row*4+col]=native.values[col*4+row];
+                    return pose;
+                };
+                const Vec pin{0,0,1};
+                for (unsigned index=0;index<3;++index) {
+                    auto* bone=NewtonCreateBody(world,shape);
+                    bodies[index]=bone;
+                    auto pose=runtime::IdentityMatrix();
+                    pose.values[12]=0.1F+0.2F*index;
+                    NewtonBodySetMatrix(bone,pose.values.data());
+                    const float mass=index==selected ? (4.0F-index)/14.0F : 4.0F-index;
+                    NewtonBodySetMassMatrix(bone,mass,0.01F*mass,0.01F*mass,0.01F*mass);
+                    NewtonBodySetAutoFreeze(bone,0);
+                    if (index!=selected)
+                        NewtonBodySetForceAndTorqueCallback(bone,[](const NewtonBody* falling) {
+                            float mass,ix,iy,iz;
+                            NewtonBodyGetMassMatrix(falling,&mass,&ix,&iy,&iz);
+                            const Vec gravity{0,-9.81F*mass,0};
+                            NewtonBodySetForce(falling,gravity.data());
+                        });
+                    const Vec pivot{0.2F*index,0,0};
+                    joints[index]=NewtonConstraintCreateHinge(world,pivot.data(),pin.data(),
+                        bone,index ? bodies[index-1] : fixed);
+                    NewtonHingeSetUserCallback(joints[index],[](const NewtonJoint* hinge,
+                        NewtonHingeSliderUpdateDesc* desc)->unsigned {
+                        const float angle=NewtonHingeGetJointAngle(hinge);
+                        if (angle>=-0.7F && angle<=0.7F) return 0;
+                        desc->m_accel=NewtonHingeCalculateStopAlpha(hinge,desc,
+                            std::clamp(angle,-0.7F,0.7F));
+                        return 1;
+                    });
+                }
+                const Vec contact{0.1F,0,0};
+                const auto start=read_pose(bodies[selected]);
+                const float reach=0.2F*(selected+1);
+                bool stable=true;
+                for (unsigned tick=0;tick<360;++tick) {
+                    constexpr float dt=1.0F/90.0F;
+                    const float angle=std::min(tick*dt*0.3F,0.6F);
+                    auto destination=start;
+                    destination.values[3]=reach*std::cos(angle)-contact[0];
+                    destination.values[7]=reach*std::sin(angle);
+                    const auto current=read_pose(bodies[selected]);
+                    Vec linear{},angular{},impulse{},point{};
+                    NewtonBodyGetVelocity(bodies[selected],linear.data());
+                    NewtonBodyGetOmega(bodies[selected],angular.data());
+                    if (!ArticulatedContactImpulse(current,destination,contact,{},
+                            linear,angular,dt,impulse,point)) { stable=false; break; }
+                    NewtonAddBodyImpulse(bodies[selected],impulse.data(),point.data());
+                    for (unsigned index=0;index<3;++index) {
+                        if (index==selected) continue;
+                        Vec carried{};
+                        NewtonBodyGetVelocity(bodies[index],carried.data());
+                        for (int axis=0;axis<3;++axis) carried[axis]+=impulse[axis];
+                        NewtonBodySetVelocity(bodies[index],carried.data());
+                    }
+                    NewtonUpdate(world,dt);
+                    for (unsigned index=0;index<3;++index) {
+                        const auto a=TransformPoint(read_pose(bodies[index]),{-0.1F,0,0});
+                        const auto b=index ? TransformPoint(read_pose(bodies[index-1]),{0.1F,0,0}) : Vec{};
+                        const Vec separation{a[0]-b[0],a[1]-b[1],a[2]-b[2]};
+                        if (!FiniteVec(separation) ||
+                            std::hypot(separation[0],separation[1],separation[2])>0.04F ||
+                            std::abs(NewtonHingeGetJointAngle(joints[index]))>0.75F) stable=false;
+                    }
+                }
+                const auto final=TransformPoint(read_pose(bodies[selected]),contact);
+                if (fixed && !MatrixNearlyEqual(read_pose(fixed),runtime::IdentityMatrix())) stable=false;
+                NewtonReleaseCollision(world,shape);
+                NewtonDestroy(world);
+                if (!stable || final[1]<reach*std::sin(0.6F)-0.08F) {
+                    std::cerr << "anchored arm failed: static=" << static_root
+                        << " selected=" << selected << " y=" << final[1] << '\n';
+                    return 246;
+                }
+            }
+        }
+    }
+    {
+        // tech_lever's activation is 110 degrees, with native stops near
+        // -1/130 degrees. Offset COM exposes the origin-velocity mismatch;
+        // the zero-COM control preserves the prior mathematical behavior.
+        for (const Vec local_com : {Vec{},Vec{0.156F,0.416F,0}}) {
+            const auto* world=NewtonCreate(nullptr,nullptr);
+            auto* shape=NewtonCreateBox(world,0.08F,0.4F,0.06F,nullptr);
+            auto* body=NewtonCreateBody(world,shape);
+            NewtonBodySetMassMatrix(body,2,0.04F,0.04F,0.04F);
+            NewtonBodySetCentreOfMass(body,local_com.data());
+            NewtonBodySetAutoFreeze(body,0);
+            const Vec pivot{0.093F,0.151F,0},pin{0,0,1};
+            auto* hinge=NewtonConstraintCreateHinge(world,pivot.data(),pin.data(),body,nullptr);
+            NewtonHingeSetUserCallback(hinge,[](const NewtonJoint* joint,
+                NewtonHingeSliderUpdateDesc* desc)->unsigned {
+                const float angle=NewtonHingeGetJointAngle(joint);
+                constexpr float minimum=-0.0174533F,maximum=2.268928F;
+                if (angle>=minimum && angle<=maximum) return 0;
+                desc->m_accel=NewtonHingeCalculateStopAlpha(joint,desc,
+                    std::clamp(angle,minimum,maximum));
+                return 1;
+            });
+            const auto read_pose=[&] {
+                Matrix native{},pose{};
+                NewtonBodyGetMatrix(body,native.values.data());
+                for (unsigned row=0;row<4;++row)
+                    for (unsigned col=0;col<4;++col)
+                        pose.values[row*4+col]=native.values[col*4+row];
+                return pose;
+            };
+            const Vec local_contact{0.16F,0.55F,0};
+            const Vec radial{local_contact[0]-pivot[0],local_contact[1]-pivot[1],0};
+            bool stable=true,activated=false;
+            for (unsigned tick=0;tick<540;++tick) {
+                constexpr float dt=1.0F/90.0F;
+                const float angle=std::min(tick*dt*1.2F,2.1F);
+                const Vec target{pivot[0]+radial[0]*std::cos(angle)-radial[1]*std::sin(angle),
+                    pivot[1]+radial[0]*std::sin(angle)+radial[1]*std::cos(angle),0};
+                const auto pose=read_pose();
+                const auto contact=TransformPoint(pose,local_contact);
+                const Vec delta{target[0]-contact[0],target[1]-contact[1],target[2]-contact[2]};
+                auto plan=runtime::vr_mechanism_policy::PlanHinge(delta,pin,pivot,contact,
+                    {pose.values[3],pose.values[7],pose.values[11]},1.35F);
+                if (!CorrectHingeMassCentreVelocity(pose,local_com,plan)) { stable=false; break; }
+                if (tick==0 && (!VecNearlyEqual(plan.linear_velocity,{}) ||
+                        !VecNearlyEqual(plan.angular_velocity,{}))) stable=false;
+                NewtonBodySetVelocity(body,plan.linear_velocity.data());
+                NewtonBodySetOmega(body,plan.angular_velocity.data());
+                NewtonUpdate(world,dt);
+                const auto retained_pivot=TransformPoint(read_pose(),pivot);
+                const Vec error{retained_pivot[0]-pivot[0],retained_pivot[1]-pivot[1],retained_pivot[2]-pivot[2]};
+                const float actual_angle=NewtonHingeGetJointAngle(hinge);
+                if (actual_angle>=1.919862F) activated=true;
+                if (!FiniteVec(error) || std::hypot(error[0],error[1],error[2])>0.01F ||
+                    actual_angle < -0.04F || actual_angle>2.30F) stable=false;
+            }
+            NewtonReleaseCollision(world,shape);
+            NewtonDestroy(world);
+            if (!stable || !activated) {
+                std::cerr << "offset-COM lever failed to reach native activation: COM="
+                    << local_com[0] << ',' << local_com[1] << '\n';
+                return 254;
+            }
+        }
+    }
     {
         // BP's 0x19C3D0 wrapper forwards the vector unchanged to
         // NewtonAddBodyImpulse(pointDeltaVeloc, pointPosit). Exercise the real
@@ -291,17 +748,22 @@ int RunSpatialTest() {
     Jump(0xAA690,reinterpret_cast<void*>(&NativeMoveUpdate)); Jump(0xAA030,reinterpret_cast<void*>(&NativeMoveStop));
     Jump(0xAB370,reinterpret_cast<void*>(&NativePushEnter)); Jump(0xAB6A0,reinterpret_cast<void*>(&NativePushLeave));
     Jump(0xAB010,reinterpret_cast<void*>(&NativePushUpdate)); Jump(0xAB1F0,reinterpret_cast<void*>(&NativePushStop));
+    Jump(0x9CA80,reinterpret_cast<void*>(&NativeChangeActionState));
+    Jump(0x19C950,NativeMemberEntry(&TestVelocityGetters::GetMassCentre));
     Jump(0xCCF00,reinterpret_cast<void*>(&JointCount)); Jump(0xCA120,reinterpret_cast<void*>(&BodyMatrix));
     Jump(kGetBodyJoint,reinterpret_cast<void*>(&BodyJoint));
     Jump(kHingeGetType,reinterpret_cast<void*>(&HingeType));
     Jump(kSliderGetType,reinterpret_cast<void*>(&SliderType));
     Jump(0x19C360,reinterpret_cast<void*>(&MaxLinear)); Jump(0x19C380,reinterpret_cast<void*>(&MaxAngular));
     Jump(0x19C2A0,reinterpret_cast<void*>(&Linear)); Jump(0x19C2C0,reinterpret_cast<void*>(&Angular));
+    Jump(kGetLinearVelocity,NativeMemberEntry(&TestVelocityGetters::GetLinear));
+    Jump(kGetAngularVelocity,NativeMemberEntry(&TestVelocityGetters::GetAngular));
     Jump(0x19C590,reinterpret_cast<void*>(&Gravity));
     Jump(0x19C3F0,reinterpret_cast<void*>(&Active));
     Jump(0x19C450,reinterpret_cast<void*>(&AutoFreeze));
     Jump(0x19C9A0,reinterpret_cast<void*>(&BodyForce));
     Jump(0x19C9E0,reinterpret_cast<void*>(&BodyForceAtPosition));
+    Jump(kAddImpulseAtPosition,reinterpret_cast<void*>(&BodyImpulseAtPosition));
     {
         std::array<std::uint8_t,0x500> nudge_body{};
         std::array<std::uint8_t,0x300> nudge_entity{};
@@ -435,6 +897,8 @@ int RunSpatialTest() {
             static_cast<void*>(touched_entity.data()));
         Put(touched_entity.data(),kEntityActiveOffset,true);
         Put(touched_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        // Native SetInteractMode marks a movable Object as interactive.
+        Put(touched_entity.data(),0x37,true);
         test_resolved_palm=runtime::IdentityMatrix();
         test_resolved_palm_valid=true;
         test_palm_overlap={};
@@ -452,6 +916,36 @@ int RunSpatialTest() {
         if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
             selected.body!=touched_body.data() || selected.assisted ||
             std::abs(selected.distance-0.04F)>=0.00001F) return 54;
+        // An inert table/decoration is a different Object entity, so the
+        // assembly-sibling filter cannot protect the nearby usable prop.
+        std::array<std::uint8_t,0x500> inert_body{};
+        std::array<std::uint8_t,0x300> inert_entity{};
+        Put(inert_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(inert_body.data(),kBodyActiveOffset,true);
+        Put(inert_body.data(),kBodyCollideOffset,true);
+        Put(inert_body.data(),kBodyUserDataOffset,
+            static_cast<void*>(inert_entity.data()));
+        Put(inert_entity.data(),kEntityActiveOffset,true);
+        Put(inert_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        test_palm_overlap.hit_count=2;
+        test_palm_overlap.hits[1]={};
+        test_palm_overlap.hits[1].body=inert_body.data();
+        test_palm_overlap.hits[1].contact_sum={0.01F,0,0};
+        test_palm_overlap.hits[1].contact_count=1;
+        if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+            selected.body!=touched_body.data()) return 178;
+        std::swap(test_palm_overlap.hits[0],test_palm_overlap.hits[1]);
+        if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+            selected.body!=touched_body.data()) return 179;
+        std::swap(test_palm_overlap.hits[0],test_palm_overlap.hits[1]);
+        // Native script hooks are still eligible on otherwise static Objects.
+        for (const auto script_offset : {0x204U,0x20CU}) {
+            Put(inert_entity.data(),script_offset,reinterpret_cast<void*>(1));
+            if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+                selected.body!=inert_body.data()) return 180;
+            Put(inert_entity.data(),script_offset,static_cast<void*>(nullptr));
+        }
+        test_palm_overlap.hit_count=1;
         // A locker/vice owns a static frame and a movable child. The closer
         // frame cannot steal the palm pick from its nearby door/handle.
         std::array<std::uint8_t,0x500> static_frame{};
@@ -703,6 +1197,450 @@ int RunSpatialTest() {
     if (g_held.load() || Read<float>(body.data(),0x42C)!=3 ||
         Read<int>(player.data(),0x2BC)!=0) return 8;
     if (test_native_updates!=0) return 9;
+    // boat_bucket01 is a native Grab Object with two movable bodies linked
+    // by an internal hinge. Accept either body, retain native joint ownership,
+    // and consume Rework's slower jointed carry caps.
+    {
+        std::array<std::uint8_t,0x500> handle{};
+        std::array<std::uint8_t,0x300> bucket{};
+        std::array<std::uint8_t,0x180> bucket_joint{};
+        void* parts[]{body.data(),handle.data()};
+        const auto old_entity=Read<void*>(body.data(),kBodyUserDataOffset);
+        Put(handle.data(),0,g_image+kPhysicsBodyVtable);
+        Put(handle.data(),0x434,2.2F);
+        Put(handle.data(),kBodyUserDataOffset,static_cast<void*>(bucket.data()));
+        Put(body.data(),kBodyUserDataOffset,static_cast<void*>(bucket.data()));
+        Put(bucket.data(),kEntityActiveOffset,true);
+        Put(bucket.data(),kEntityTypeOffset,kObjectEntityType);
+        Put(bucket.data(),kEntityBodiesBeginOffset,static_cast<void**>(parts));
+        Put(bucket.data(),kEntityBodiesEndOffset,parts+2);
+        Put(bucket_joint.data(),kJointParentBodyOffset,static_cast<void*>(handle.data()));
+        Put(bucket_joint.data(),kJointChildBodyOffset,static_cast<void*>(body.data()));
+        test_joint=bucket_joint.data();
+        begin();
+        if (!g_held.load() || Read<float>(body.data(),0x42C)!=4 ||
+            Read<float>(body.data(),0x430)!=6) return 190;
+        hand.velocity={12,0,0};
+        test_matrix_writes=test_contact_impulses=0;
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (!g_hold.articulated || test_matrix_writes || !test_contact_impulses) {
+            std::cerr << "two-body bucket bypassed its native hinge solver\n";
+            return 191;
+        }
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        if (g_held.load() || Read<float>(body.data(),0x42C)!=3 ||
+            Read<float>(body.data(),0x430)!=4 ||
+            Read<Vec>(body.data(),0x450)!=Vec{3,0,0}) return 192;
+        // Selecting the other side of the internal hinge uses the same policy.
+        Put(bucket_joint.data(),kJointParentBodyOffset,static_cast<void*>(body.data()));
+        Put(bucket_joint.data(),kJointChildBodyOffset,static_cast<void*>(handle.data()));
+        begin();
+        if (!g_held.load()) return 197;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        Put(bucket_joint.data(),kJointParentBodyOffset,static_cast<void*>(handle.data()));
+        Put(bucket_joint.data(),kJointChildBodyOffset,static_cast<void*>(body.data()));
+        // Native Grab with a static/world endpoint takes the constrained
+        // contact route. Foreign bodies and mechanism entity types stay out.
+        Put(handle.data(),0x434,0.0F); begin();
+        if (!g_held.load() || !g_hold.constrained) return 193;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        Put(handle.data(),0x434,2.2F);
+        // The handle still enumerates this joint, so removing it as an
+        // endpoint makes this an inconsistent graph, not a valid world hinge.
+        Put(bucket_joint.data(),kJointParentBodyOffset,static_cast<void*>(nullptr)); begin();
+        if (g_held.load()) return 194;
+        Put(bucket_joint.data(),kJointParentBodyOffset,static_cast<void*>(handle.data()));
+        Put(handle.data(),kBodyUserDataOffset,old_entity); begin();
+        if (g_held.load()) return 195;
+        Put(handle.data(),kBodyUserDataOffset,static_cast<void*>(bucket.data()));
+        Put(bucket.data(),kEntityTypeOffset,kSwingDoorEntityType); begin();
+        if (g_held.load()) return 196;
+        // Skeletal Grab props enumerate inactive mass-zero animation colliders
+        // beside their dynamic ragdoll bodies. They are not fixed joint anchors.
+        Put(bucket.data(),kEntityTypeOffset,kObjectEntityType);
+        std::array<std::uint8_t,0x500> companion{};
+        Put(companion.data(),0,g_image+kPhysicsBodyVtable);
+        Put(companion.data(),kBodyUserDataOffset,static_cast<void*>(bucket.data()));
+        Put(companion.data(),kBodyActiveOffset,false);
+        Put(companion.data(),kBodyCollideOffset,true);
+        void* ragdoll_parts[]{body.data(),companion.data(),handle.data()};
+        Put(bucket.data(),kEntityBodiesBeginOffset,static_cast<void**>(ragdoll_parts));
+        Put(bucket.data(),kEntityBodiesEndOffset,ragdoll_parts+3);
+        test_unjointed_companion=companion.data();
+        begin();
+        if (!g_held.load()) return 198;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        if (g_held.load() || Read<bool>(companion.data(),kBodyActiveOffset)) return 199;
+        // Entity reactivation can wake all enumerated bodies, including the
+        // unjointed animation colliders. Their non-character policy identifies
+        // them without changing the native activation lifecycle.
+        Put(companion.data(),kBodyActiveOffset,true); begin();
+        if (!g_held.load()) return 205;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        if (!Read<bool>(companion.data(),kBodyActiveOffset)) return 206;
+        Put(companion.data(),0x3C8,true); begin();
+        if (g_held.load()) return 200;
+        Put(companion.data(),0x3C8,false);
+        test_joint_count_fault_body=companion.data(); begin();
+        if (g_held.load()) return 207;
+        test_joint_count_fault_body=nullptr;
+        Put(companion.data(),kBodyActiveOffset,false);
+        // An inactive collider still cannot be a constrained endpoint.
+        Put(bucket_joint.data(),kJointParentBodyOffset,static_cast<void*>(companion.data()));
+        begin();
+        if (g_held.load()) return 201;
+        test_unjointed_companion=nullptr;
+        Put(body.data(),kBodyUserDataOffset,old_entity);
+        test_joint=nullptr;
+        hand.velocity={2,0,0};
+    }
+    // Native Grab can own world-hung or static-rooted Objects too (the mental
+    // realm arms, cryo head and cables). Their constraints must survive VR
+    // manipulation; they must never use the rigid SetMatrix route.
+    for (const bool static_root : {false,true}) {
+        std::array<std::uint8_t,0x500> middle{},root{},companion{};
+        std::array<std::uint8_t,0x300> entity{};
+        std::array<std::uint8_t,0x180> link{},anchor{};
+        const auto old_entity=Read<void*>(body.data(),kBodyUserDataOffset);
+        const auto old_pose=Read<Matrix>(body.data(),0x34);
+        void* parts[]{body.data(),middle.data(),root.data(),companion.data()};
+        Put(entity.data(),kEntityActiveOffset,true);
+        Put(entity.data(),kEntityTypeOffset,kObjectEntityType);
+        Put(entity.data(),kEntityBodiesBeginOffset,static_cast<void**>(parts));
+        Put(entity.data(),kEntityBodiesEndOffset,parts+4);
+        for (void* part : parts) {
+            Put(part,0,g_image+kPhysicsBodyVtable);
+            Put(part,kBodyUserDataOffset,static_cast<void*>(entity.data()));
+        }
+        Put(middle.data(),0x434,3.0F);
+        Put(root.data(),0x434,static_root ? 0.0F : 4.0F);
+        Put(root.data(),0x3C8,true);
+        Put(link.data(),kJointParentBodyOffset,static_cast<void*>(middle.data()));
+        Put(link.data(),kJointChildBodyOffset,static_cast<void*>(body.data()));
+        Put(anchor.data(),kJointParentBodyOffset,static_root ? root.data() : nullptr);
+        Put(anchor.data(),kJointChildBodyOffset,static_cast<void*>(middle.data()));
+        test_joint_graph={{body.data(),{link.data()}},
+            {middle.data(),{link.data(),anchor.data()}},
+            {root.data(),static_root ? std::vector<void*>{anchor.data()} : std::vector<void*>{}},
+            {companion.data(),{}}};
+        const Vec untouched{7,8,9};
+        Put(root.data(),0x450,untouched);
+        Put(companion.data(),0x450,untouched);
+        Matrix contact_palm{}; Vec contact_velocity{},contact_angular{};
+        if (!InteractionHandPose(runtime::VrHand::right,contact_palm,
+                contact_velocity,contact_angular)) return 248;
+        g_interaction_targets[1]={TransformPoint(contact_palm,{0,0.06F,0}),
+            body.data(),GetTickCount64(),true};
+        begin();
+        if (!g_held.load()) {
+            std::cerr << "native anchored Grab rejected (static=" << static_root << ")\n";
+            return 240;
+        }
+        Put(body.data(),0x450,Vec{});
+        Put(body.data(),0x460,Vec{});
+        hand.velocity={};
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (!VecNearlyEqual(test_impulse_delta,{})) {
+            std::cerr << "stationary constrained acquisition pulled the mechanism\n";
+            return 247;
+        }
+        hand.velocity={2,0,0};
+        test_matrix_writes=test_contact_impulses=0;
+        Put(body.data(),0x460,Vec{0.1F,0.2F,0.3F});
+        hand.device_to_absolute.values[7]+=0.05F;
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (test_matrix_writes || !test_contact_impulses ||
+            test_impulse_body!=body.data() || test_impulse_delta[1]<=0 ||
+            !VecNearlyEqual(Read<Vec>(body.data(),0x460),{0.1F,0.2F,0.3F}) ||
+            Read<Vec>(root.data(),0x450)!=untouched ||
+            Read<Vec>(companion.data(),0x450)!=untouched) return 241;
+        test_frame.input.state.interact.pressed=false;
+        hand.velocity={12,0,0};
+        const Vec solver_velocity{0.3F,0.2F,0.1F};
+        Put(body.data(),0x450,solver_velocity);
+        ServiceSpatialInteraction(player.data(),false);
+        if (g_held.load() || Read<Vec>(body.data(),0x450)!=solver_velocity ||
+            Read<float>(body.data(),0x42C)!=3 ||
+            Read<float>(body.data(),0x430)!=4) return 242;
+        hand.velocity={2,0,0};
+        hand.device_to_absolute.values[7]-=0.05F;
+        Put(body.data(),0x34,old_pose);
+        Put(body.data(),kBodyUserDataOffset,old_entity);
+        test_joint_graph.clear();
+        g_interaction_targets={};
+    }
+    // Asset-backed free Grab families: food/trash bags (3), worm (4),
+    // mattress/pillow (6), dog (14), Howard/gas victim (18). Skeletal loaders
+    // enumerate one animation companion per physical bone, including 36 total
+    // entries for the human corpses. Check every selectable physical member.
+    for (const std::size_t count : {2U,3U,4U,6U,14U,18U}) {
+        std::vector<std::array<std::uint8_t,0x500>> bones(count),colliders(count);
+        std::vector<std::array<std::uint8_t,0x180>> joints(count-1);
+        std::array<std::uint8_t,0x300> entity{};
+        std::vector<void*> parts;
+        Put(entity.data(),kEntityActiveOffset,true);
+        Put(entity.data(),kEntityTypeOffset,kObjectEntityType);
+        for (std::size_t index=0;index<count;++index) {
+            for (auto* part : {bones[index].data(),colliders[index].data()}) {
+                Put(part,0,g_image+kPhysicsBodyVtable);
+                Put(part,kBodyUserDataOffset,static_cast<void*>(entity.data()));
+                Put(part,kBodyActiveOffset,true);
+                parts.push_back(part);
+                test_joint_graph.push_back({part,{}});
+            }
+            Put(bones[index].data(),0x434,3.0F);
+            if (index) {
+                Put(joints[index-1].data(),kJointParentBodyOffset,bones[index-1].data());
+                Put(joints[index-1].data(),kJointChildBodyOffset,bones[index].data());
+                test_joint_graph[(index-1)*2].second.push_back(joints[index-1].data());
+                test_joint_graph[index*2].second.push_back(joints[index-1].data());
+            }
+        }
+        Put(entity.data(),kEntityBodiesBeginOffset,parts.data());
+        Put(entity.data(),kEntityBodiesEndOffset,parts.data()+parts.size());
+        for (auto& bone:bones) {
+            bool articulated=false;
+            if (!IsInternalGrabAssembly(bone.data(),&articulated) || !articulated) {
+                std::cerr << "Grab assembly rejected: dynamic=" << count << '\n';
+                return 220;
+            }
+        }
+        // These are distinct native ownership families even with many bodies:
+        // doors/chests/lockers, static-ended cables and world-hung props.
+        Put(bones[0].data(),0x434,0.0F);
+        bool articulated=false;
+        if (IsInternalGrabAssembly(bones.back().data(),&articulated)) return 221;
+        Put(bones[0].data(),0x434,3.0F);
+        Put(joints[0].data(),kJointParentBodyOffset,static_cast<void*>(nullptr));
+        if (IsInternalGrabAssembly(bones.back().data(),&articulated)) return 222;
+        Put(joints[0].data(),kJointParentBodyOffset,bones[0].data());
+        for (const int type : {kSwingDoorEntityType,kLeverEntityType,kWheelEntityType}) {
+            Put(entity.data(),kEntityTypeOffset,type);
+            if (IsInternalGrabAssembly(bones.back().data(),&articulated)) return 223;
+        }
+        test_joint_graph.clear();
+    }
+    // Exercise real Grab-family sizes through native Enter/Leave and palm
+    // acquisition, including the 36-entry human ragdolls, not only the dog.
+    for (const std::size_t bone_count : {2U,3U,4U,6U,14U,18U}) {
+        std::vector<std::array<std::uint8_t,0x500>> bones(bone_count-1);
+        std::vector<std::array<std::uint8_t,0x500>> colliders(bone_count);
+        std::vector<std::array<std::uint8_t,0x180>> joints(bone_count-1);
+        std::array<std::uint8_t,0x300> corpse{};
+        std::vector<void*> parts(bone_count*2);
+        const auto old_entity=Read<void*>(body.data(),kBodyUserDataOffset);
+        const Matrix original_bone_pose=Read<Matrix>(body.data(),0x34);
+        Put(corpse.data(),kEntityActiveOffset,true);
+        Put(corpse.data(),kEntityTypeOffset,kObjectEntityType);
+        Put(corpse.data(),kEntityHasInteractionOffset,true);
+        for (std::size_t index=0;index<bone_count;++index) {
+            void* bone=index==0 ? static_cast<void*>(body.data()) : bones[index-1].data();
+            Put(bone,0,g_image+kPhysicsBodyVtable);
+            Put(bone,0x34,original_bone_pose);
+            Put(bone,0x434,3.0F);
+            Put(bone,kBodyActiveOffset,true);
+            Put(bone,kBodyCollideOffset,true);
+            Put(bone,kBodyUserDataOffset,static_cast<void*>(corpse.data()));
+            Put(colliders[index].data(),0,g_image+kPhysicsBodyVtable);
+            Put(colliders[index].data(),kBodyUserDataOffset,static_cast<void*>(corpse.data()));
+            parts[index*2]=bone;
+            parts[index*2+1]=colliders[index].data();
+            test_joint_graph.push_back({bone,{}});
+            test_joint_graph.push_back({colliders[index].data(),{}});
+        }
+        for (std::size_t index=0;index<bone_count-1;++index) {
+            Put(joints[index].data(),kJointParentBodyOffset,parts[index*2]);
+            Put(joints[index].data(),kJointChildBodyOffset,parts[(index+1)*2]);
+            test_joint_graph[index*2].second.push_back(joints[index].data());
+            test_joint_graph[(index+1)*2].second.push_back(joints[index].data());
+        }
+        Put(corpse.data(),kEntityBodiesBeginOffset,parts.data());
+        Put(corpse.data(),kEntityBodiesEndOffset,parts.data()+parts.size());
+        begin();
+        if (!g_held.load()) return 202;
+        // A chain of connected dynamic bones must follow through Newton, not
+        // a teleport of one bone that pulls the visible skeleton apart.
+        test_matrix_writes=0;
+        test_contact_impulses=0;
+        const Vec sibling_velocity{0.1F,-0.2F,0.3F};
+        const Vec companion_velocity{7,8,9};
+        for (std::size_t index=1;index<bone_count;++index)
+            Put(parts[index*2],0x450,sibling_velocity);
+        for (auto& collider:colliders) Put(collider.data(),0x450,companion_velocity);
+        std::array<std::uint8_t,0x500> detached{};
+        Put(detached.data(),0,g_image+kPhysicsBodyVtable);
+        Put(detached.data(),kBodyUserDataOffset,static_cast<void*>(corpse.data()));
+        Put(detached.data(),0x434,3.0F);
+        Put(detached.data(),0x450,companion_velocity);
+        parts.push_back(detached.data());
+        test_joint_graph.push_back({detached.data(),{}});
+        Put(corpse.data(),kEntityBodiesBeginOffset,parts.data());
+        Put(corpse.data(),kEntityBodiesEndOffset,parts.data()+parts.size());
+        hand.device_to_absolute.values[3]+=0.04F;
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (!g_held.load() || test_matrix_writes!=0 ||
+            test_contact_impulses==0 || test_impulse_body!=body.data() ||
+            !FiniteVec(test_impulse_delta) ||
+            !FiniteVec(test_impulse_position)) return 208;
+        Vec expected_velocity=sibling_velocity;
+        for (int axis=0;axis<3;++axis) expected_velocity[axis]+=test_impulse_delta[axis];
+        for (std::size_t index=1;index<bone_count;++index)
+            if (!VecNearlyEqual(Read<Vec>(parts[index*2],0x450),expected_velocity)) return 230;
+        for (auto& collider:colliders)
+            if (!VecNearlyEqual(Read<Vec>(collider.data(),0x450),companion_velocity)) return 231;
+        if (!VecNearlyEqual(Read<Vec>(detached.data(),0x450),companion_velocity)) return 232;
+        parts.pop_back();
+        test_joint_graph.pop_back();
+        Put(corpse.data(),kEntityBodiesEndOffset,parts.data()+parts.size());
+        hand.device_to_absolute.values[3]-=0.04F;
+        // Off-centre contact impulses also generate native angular motion.
+        // The wrist servo may correct it only by its bounded angular step,
+        // never overwrite the impulse with the pre-impulse velocity.
+        Put(body.data(),0x460,Vec{});
+        test_impulse_added_angular={0,0,1};
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        test_impulse_added_angular={};
+        if (Read<Vec>(body.data(),0x460)[2]<0.79F) return 224;
+        // A yaw epoch can rotate the virtual hand through the world while the
+        // physical controller stays still. The ragdoll must rebase its contact
+        // without receiving an artificial full-distance pull.
+        hand.velocity={};
+        Put(body.data(),0x450,Vec{});
+        Put(body.data(),0x460,Vec{});
+        test_resolved_palm=runtime::IdentityMatrix();
+        test_resolved_palm.values[3]=0.65F;
+        test_resolved_palm_valid=true;
+        ++test_palm_yaw_epoch;
+        test_contact_impulses=0;
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (!g_held.load() || test_contact_impulses!=1 ||
+            std::hypot(std::hypot(test_impulse_delta[0],test_impulse_delta[1]),
+                test_impulse_delta[2])>0.05F) return 209;
+        // Smooth turning changes yaw epochs on consecutive ticks too. Keep
+        // actual tracking-space lift/pull while rejecting the world rebase.
+        for (int tick=0;tick<5;++tick) {
+            hand.device_to_absolute.values[7]+=0.02F;
+            hand.device_to_absolute.values[11]+=0.01F;
+            const float yaw=static_cast<float>(tick+1)*0.2F;
+            test_controller_world_basis.values[0]=test_controller_world_basis.values[10]=std::cos(yaw);
+            test_controller_world_basis.values[2]=std::sin(yaw);
+            test_controller_world_basis.values[8]=-std::sin(yaw);
+            test_resolved_palm=runtime::Multiply(test_controller_world_basis,
+                runtime::ExpandMatrix(hand.device_to_absolute));
+            ++test_palm_yaw_epoch;
+            HookedGrabUpdate(state.data(),nullptr,0.016F);
+            if (!g_held.load() || test_impulse_delta[1]<0.10F ||
+                test_impulse_delta[0]*std::sin(yaw)+
+                    test_impulse_delta[2]*std::cos(yaw)<0.05F) return 226;
+        }
+        test_controller_world_basis=runtime::IdentityMatrix();
+        Put(body.data(),0x460,Vec{});
+        hand.device_to_absolute.values[0]=hand.device_to_absolute.values[5]=std::cos(0.2F);
+        hand.device_to_absolute.values[1]=-std::sin(0.2F);
+        hand.device_to_absolute.values[4]=std::sin(0.2F);
+        test_resolved_palm=runtime::ExpandMatrix(hand.device_to_absolute);
+        ++test_palm_yaw_epoch;
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (Read<Vec>(body.data(),0x460)[2]<0.10F) return 229;
+        hand.device_to_absolute.values[0]=hand.device_to_absolute.values[5]=1;
+        hand.device_to_absolute.values[1]=hand.device_to_absolute.values[4]=0;
+        hand.device_to_absolute.values[7]-=0.10F;
+        hand.device_to_absolute.values[11]-=0.05F;
+        test_resolved_palm_valid=false;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        if (g_held.load()) return 203;
+        // A missing presentation reference suspends VR driving without
+        // erasing the motion Newton is still solving through the joints.
+        begin();
+        Put(body.data(),0x450,Vec{0.3F,-0.2F,0.1F});
+        Put(body.data(),0x460,Vec{0,0.4F,0});
+        test_head_pose_valid=false;
+        test_matrix_writes=test_contact_impulses=0;
+        HookedGrabUpdate(state.data(),nullptr,0.016F);
+        if (!g_held.load() || test_matrix_writes || test_contact_impulses ||
+            !VecNearlyEqual(Read<Vec>(body.data(),0x450),{0.3F,-0.2F,0.1F}) ||
+            !VecNearlyEqual(Read<Vec>(body.data(),0x460),{0,0.4F,0})) return 214;
+        test_head_pose_valid=true;
+        test_frame.input.state.interact.pressed=false;
+        ServiceSpatialInteraction(player.data(),false);
+        // Exercise the palm picker before the native transition: a closer
+        // animation collider cannot steal the physical bone's surface contact.
+        std::array<std::uint8_t,0x100> world{};
+        Put(world.data(),0,g_image+kPhysicsWorldVtable);
+        TestPickCallback::VTable table{
+            reinterpret_cast<bool(__thiscall*)(void*,void*)>(TestPickCallback::Before),
+            reinterpret_cast<bool(__thiscall*)(void*,void*,void*)>(TestPickCallback::Intersect)};
+        TestPickCallback callback{&table};
+        // Repeat at head, middle and tail bones through overlap ranking,
+        // native acceptance, prepared acquisition and Newton manipulation.
+        for (std::size_t index : {std::size_t{0},bone_count/2,bone_count-1}) {
+            void* const alternative=parts[((index+1)%bone_count)*2];
+            test_resolved_palm=runtime::ExpandMatrix(hand.device_to_absolute);
+            test_resolved_palm_valid=true;
+            const Vec centre{test_resolved_palm.values[3],test_resolved_palm.values[7],
+                test_resolved_palm.values[11]};
+            const Vec contact{centre[0]+0.04F,centre[1],centre[2]};
+            test_palm_overlap={};
+            test_palm_overlap.valid=true;
+            test_palm_overlap.hit_count=3;
+            test_palm_overlap.hits[0]={parts[index*2],contact,1};
+            test_palm_overlap.hits[1]={alternative,{centre[0]+0.08F,centre[1],centre[2]},1};
+            test_palm_overlap.hits[2]={parts[index*2+1],centre,1};
+            Put(parts[index*2+1],kBodyActiveOffset,true);
+            Put(parts[index*2+1],kBodyCollideOffset,true);
+            test_palm_overlap_available=true;
+            PalmSelectionCandidate selected{};
+            if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+                selected.body!=parts[index*2] || !VecNearlyEqual(selected.point,contact)) return 215;
+            // Native veto, inactive and collision-disabled bones remain vetoes;
+            // the next eligible dynamic contact wins instead.
+            test_pick_rejected_body=parts[index*2];
+            if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+                selected.body!=alternative) return 216;
+            test_pick_rejected_body=nullptr;
+            for (const auto offset : {kBodyActiveOffset,kBodyCollideOffset}) {
+                Put(parts[index*2],offset,false);
+                if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+                    selected.body!=alternative) return 217;
+                Put(parts[index*2],offset,true);
+            }
+            if (!FindPalmOverlapTarget(world.data(),&callback,runtime::VrHand::right,selected) ||
+                selected.body!=parts[index*2]) return 218;
+            g_interaction_targets[1]={selected.point,selected.body,GetTickCount64(),true};
+            Put(state.data(),0x20,selected.body);
+            begin();
+            if (!g_held.load() || !g_hold.articulated ||
+                g_hold.body!=parts[index*2] ||
+                !VecNearlyEqual(g_hold.local_contact,
+                    InverseTransformPoint(original_bone_pose,contact))) return 211;
+            test_matrix_writes=test_contact_impulses=0;
+            hand.device_to_absolute.values[3]+=0.03F;
+            HookedGrabUpdate(state.data(),nullptr,0.016F);
+            if (!g_held.load() || test_matrix_writes!=0 ||
+                test_contact_impulses!=1 || test_impulse_body!=parts[index*2])
+                return 212;
+            hand.device_to_absolute.values[3]-=0.03F;
+            test_frame.input.state.interact.pressed=false;
+            ServiceSpatialInteraction(player.data(),false);
+            if (g_held.load()) return 213;
+            Put(parts[index*2+1],kBodyActiveOffset,false);
+        }
+        test_palm_overlap_available=false;
+        test_resolved_palm_valid=false;
+        g_interaction_targets[1]={};
+        Put(state.data(),0x20,body.data());
+        hand.velocity={2,0,0};
+        for (const auto& collider:colliders)
+            if (Read<bool>(collider.data(),kBodyActiveOffset)) return 204;
+        test_joint_graph.clear();
+        Put(body.data(),kBodyUserDataOffset,old_entity);
+    }
     test_joints=0; begin();
     hand.device_to_absolute.values[3]+=2;
     ++test_palm_yaw_epoch;
@@ -937,10 +1875,51 @@ int RunSpatialTest() {
     ++test_palm_yaw_epoch;
     HookedPushUpdate(push_state.data(),nullptr,0.016F);
     if (!g_push_held.load() || test_push_force!=Vec{}) return 169;
+    const Vec push_release_velocity{0.1F,0,0.2F};
+    Put(body.data(),0x450,push_release_velocity);
+    Put(player.data(),0x50,true);
     test_resolved_palm_valid=false;
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
-    if (g_push_held.load() || test_push_leaves!=1 || test_palm_held[1]!=nullptr)
+    if (test_native_push_release_impulses ||
+        Read<Vec>(body.data(),0x450)!=push_release_velocity) {
+        std::cerr << "VR Push release added the native camera launch impulse\n";
+        return 249;
+    }
+    Put(player.data(),0x50,false);
+    // Cover the real native virtual release dispatch, tracking-loss cleanup
+    // and a VR transition cancelled before acquisition, not only service release.
+    for (unsigned release_path=0;release_path<3;++release_path) {
+        test_frame.input.state.interact.pressed=true;
+        test_frame.input.state.interact.just_pressed=true;
+        g_vr_selection_ready=true; g_vr_selection_player=player.data();
+        HookedPushEnter(push_state.data(),nullptr,nullptr);
+        Put(player.data(),0x2BC,1);
+        Put(player.data(),0x50,true);
+        Put(body.data(),0x450,push_release_velocity);
+        if (release_path==2) ServiceSpatialInteraction(player.data(),true);
+        else {
+            ServiceSpatialInteraction(player.data(),false);
+            if (!g_push_held.load()) return 251;
+            if (release_path==0) HookedPushStopInteract(push_state.data(),nullptr);
+            else {
+                hand.pose_valid=false;
+                ServiceSpatialInteraction(player.data(),false);
+                hand.pose_valid=true;
+            }
+        }
+        if (g_push_held.load() || test_native_push_release_impulses ||
+            Read<int>(player.data(),0x2BC)!=0 ||
+            Read<Vec>(body.data(),0x450)!=push_release_velocity) return 252;
+    }
+    // Native-origin mouse Push retains its original launch semantics.
+    Put(player.data(),0x2BC,1);
+    HookedPushStopInteract(push_state.data(),nullptr);
+    if (test_native_push_release_impulses!=1 ||
+        Read<Vec>(body.data(),0x450)[2]!=push_release_velocity[2]-6) return 253;
+    Put(player.data(),0x50,false);
+    test_frame.input.state.interact.pressed=false;
+    if (g_push_held.load() || test_push_leaves!=5 || test_palm_held[1]!=nullptr)
         return 170;
 
     // Native-origin Push remains native.
@@ -1101,11 +2080,19 @@ int RunSpatialTest() {
         Read<float>(body.data(),0x42C)!=runtime::vr_mechanism_policy::kJointedMaximumLinearSpeed ||
         std::abs(Read<float>(body.data(),0x430)-10.8F)>0.0001F) return 35;
     hand.device_to_absolute.values[11]=0.05F;
+    const Vec local_mass_centre{0.13F,0.2F,-0.04F};
+    Put(body.data(),0x480,local_mass_centre);
     HookedMoveUpdate(move_state.data(),nullptr,0.016F);
     const auto mechanism_angular=Read<Vec>(body.data(),0x460);
     if (test_native_move_updates!=0 || std::abs(mechanism_angular[1]+6.75F)>0.001F ||
         std::abs(mechanism_angular[0])>0.001F || std::abs(mechanism_angular[2])>0.001F)
         return 36;
+    const auto expected_com_velocity=Cross(mechanism_angular,local_mass_centre);
+    if (!VecNearlyEqual(Read<Vec>(body.data(),0x450),expected_com_velocity)) {
+        std::cerr << "hinge servo applied origin velocity at an offset centre of mass\n";
+        return 250;
+    }
+    Put(body.data(),0x480,Vec{});
     test_frame.input.state.interact.pressed=false;
     ServiceSpatialInteraction(player.data(),false);
     if (g_move_held.load() || Read<float>(body.data(),0x42C)!=3 ||
@@ -1247,6 +2234,38 @@ int RunSpatialTest() {
     left=hand; left.device_to_absolute={{1,0,0,2,0,1,0,3,0,0,1,4}};
     g_updating_hands=hands.data();
     Matrix native=runtime::IdentityMatrix();
+    // Installed emitter lies on model -Y; Rework's grip socket points toward
+    // +Z. Check physical nodes independently of the production socket profile,
+    // for both hands and a rotated wrist, rather than comparing a formula to itself.
+    for (const auto tool_hand : {runtime::VrHand::left,runtime::VrHand::right}) {
+        auto& sample=test_frame.hands[tool_hand==runtime::VrHand::left ? 0U : 1U].grip;
+        const auto saved=sample;
+        for (const float yaw : {0.0F,0.6F}) {
+            sample.device_to_absolute={{std::cos(yaw),0,std::sin(yaw),2,
+                0,1,0,3,-std::sin(yaw),0,std::cos(yaw),4}};
+            test_frame.interact_source=tool_hand==runtime::VrHand::left ?
+                runtime::VrHand::right : runtime::VrHand::left;
+            HookedToolMatrix(body.data(),nullptr,&native);
+            const auto tool=Read<Matrix>(body.data(),0x34);
+            Matrix socket{}; Vec ignored_linear{},ignored_angular{};
+            if (!ToolHandPose(tool_hand,kFlashlightGripRadius,
+                    socket,ignored_linear,ignored_angular)) return 243;
+            const auto grip=TransformPoint(tool,{0,-0.016669F,0});
+            const auto emitter=TransformPoint(tool,{0,-0.103966F,0});
+            const auto expected_emitter=TransformPoint(socket,{0,0,0.087297F});
+            if (!VecNearlyEqual(grip,{socket.values[3],socket.values[7],socket.values[11]}) ||
+                !VecNearlyEqual(emitter,expected_emitter)) {
+                std::cerr << "flashlight emitter points behind the grip socket\n";
+                return 244;
+            }
+            const auto ray=TransformPoint(tool,{0,-0.203767F,0});
+            const Vec ray_to_emitter{ray[0]-emitter[0],ray[1]-emitter[1],ray[2]-emitter[2]};
+            if (std::abs(std::hypot(ray_to_emitter[0],ray_to_emitter[1],ray_to_emitter[2])-
+                    0.099801F)>0.00001F) return 245;
+        }
+        sample=saved;
+    }
+    test_frame.interact_source=runtime::VrHand::right;
     HookedToolMatrix(body.data(),nullptr,&native);
     auto attached=Read<Matrix>(body.data(),0x34);
     Matrix left_palm=runtime::IdentityMatrix();
@@ -1289,6 +2308,297 @@ int RunSpatialTest() {
     HookedToolMatrix(body.data(),nullptr,&native);
     if (Read<Matrix>(body.data(),0x34).values!=native.values) return 20;
     g_updating_hands=nullptr;
+    {
+        // A synthetic native caller reproduces the real AD852 return address;
+        // this exercises HookedRay's production dispatcher without a test-only
+        // branch. Forward the seven thiscall stack arguments to its fastcall
+        // adapter, preserving the native callee's stack cleanup.
+        constexpr std::array<std::uint8_t,35> caller{
+            0x55,0x8B,0xEC,
+            0xFF,0x75,0x20,0xFF,0x75,0x1C,0xFF,0x75,0x18,
+            0xFF,0x75,0x14,0xFF,0x75,0x10,0xFF,0x75,0x0C,
+            0xFF,0x75,0x08,0xE8,0,0,0,0,0x8B,0xE5,0x5D,
+            0xC2,0x1C,0};
+        std::memcpy(g_image+0xAD835,caller.data(),caller.size());
+        const auto displacement=static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(&HookedRay)-
+            reinterpret_cast<std::uintptr_t>(g_image+0xAD852));
+        std::memcpy(g_image+0xAD84E,&displacement,sizeof(displacement));
+        Jump(0x189E30,reinterpret_cast<void*>(&NativeTestRay));
+        Jump(0xA4B60,reinterpret_cast<void*>(&NativeTestPickClear));
+        Jump(0xA5910,reinterpret_cast<void*>(&NativeTestPickResults));
+        FlushInstructionCache(GetCurrentProcess(),g_image+0xAD835,caller.size());
+        std::array<std::uint8_t,0x100> world{};
+        std::array<std::uint8_t,0x500> save_body{};
+        std::array<std::uint8_t,0x300> save_entity{};
+        std::array<std::uint8_t,0x200> gaze_init{};
+        std::array<std::uint8_t,0x400> gaze_player{},gaze_character{};
+        std::array<std::uint8_t,0x40> gaze_normal{};
+        std::array<void*,10> gaze_states{};
+        Put(world.data(),0,g_image+kPhysicsWorldVtable);
+        Put(save_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(save_body.data(),kBodyActiveOffset,true);
+        Put(save_body.data(),kBodyUserDataOffset,
+            static_cast<void*>(save_entity.data()));
+        Put(save_entity.data(),0,g_image+0x2770B8);
+        Put(save_entity.data(),kEntityActiveOffset,true);
+        Put(save_entity.data(),kEntityTypeOffset,10);
+        // SaveArea's native loader deliberately disables physical collision.
+        Put(save_body.data(),kBodyCollideOffset,false);
+        test_head_pose=runtime::IdentityMatrix();
+        test_head_pose.values[7]=1.6F;
+        test_head_pose_valid=true; test_resolved_palm_valid=false;
+        test_palm_overlap_available=false;
+        test_frame.focused=true;
+        test_head_hits={{save_body.data(),1.5F,{0,1.6F,-1.5F}}};
+        test_head_rays=0;
+        TestPickCallback::VTable table{
+            reinterpret_cast<bool(__thiscall*)(void*,void*)>(TestPickCallback::Before),
+            reinterpret_cast<bool(__thiscall*)(void*,void*,void*)>(TestPickCallback::Intersect)};
+        TestPickCallback callback; callback.vtable=&table;
+        Put(gaze_init.data(),0x15C,static_cast<void*>(gaze_player.data()));
+        Put(gaze_player.data(),0x27C,static_cast<void*>(&callback));
+        Put(gaze_player.data(),0x274,static_cast<void*>(gaze_character.data()));
+        Put(gaze_player.data(),0x1DC,true);
+        Put(gaze_character.data(),0x48,Vec{0,1.6F,0});
+        Put(save_entity.data(),0x10,static_cast<void*>(gaze_init.data()));
+        Put(g_image+0x2770B8,0x44,reinterpret_cast<void*>(&NativeTestCrosshair));
+        Put(g_image+0x2770B8,0x48,reinterpret_cast<void*>(&NativeTestEntityDistance));
+        Put(g_image,0x272178,reinterpret_cast<void*>(&NativeTestWideNotEmpty));
+        Put(g_image+0x2770B8,0x28,reinterpret_cast<void*>(&NativeTestSaveInteract));
+        const Vec original_from{0,1,0},original_to{0,1,-10};
+        g_enabled.store(true);
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        if (callback.body!=save_body.data() || test_head_rays!=1 ||
+            !VecNearlyEqual(test_head_ray_from,{0,1.6F,0}) ||
+            !VecNearlyEqual(test_head_ray_to,{0,1.6F,-10}) ||
+            !VecNearlyEqual(callback.point,{0,1.6F,-1.5F})) return 181;
+        // Native save range consumes the published point/body position, not
+        // a short palm distance or Rework's source GetPickedDist()==0.
+        NativeTestSaveInteract(save_entity.data(),nullptr);
+        if (test_native_save_calls!=1) return 182;
+        NativeTestPickClear(&callback,nullptr);
+        test_head_hits={{save_body.data(),2.2F,{0,1.6F,-2.2F}}};
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        NativeTestSaveInteract(save_entity.data(),nullptr);
+        if (test_native_save_calls!=1 ||
+            !VecNearlyEqual(callback.point,{0,1.6F,-2.2F})) return 183;
+        // Every native head hit participates, including unrelated foreground
+        // geometry. Rejecting it must not expose a SaveArea behind it.
+        std::array<std::uint8_t,0x500> foreground{};
+        Put(foreground.data(),0,g_image+kPhysicsBodyVtable);
+        Put(foreground.data(),kBodyActiveOffset,true);
+        for (bool reversed : {false,true}) {
+            NativeTestPickClear(&callback,nullptr);
+            test_head_hits={{foreground.data(),0.5F,{0,1.6F,-0.5F}},
+                {save_body.data(),1.5F,{0,1.6F,-1.5F}}};
+            if (reversed) std::reverse(test_head_hits.begin(),test_head_hits.end());
+            reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+                &original_from,&original_to,true,false,true,false);
+            NativeTestPickResults(&callback,nullptr);
+            if (callback.body || callback.area) return 184;
+        }
+        // Swanson's PC is a fixed Lamp (exact BP type 12), with a native
+        // 2.1 m interaction callback. Interact must reach it across the desk
+        // without admitting dynamic props into the distant activation path.
+        Put(save_entity.data(),0,g_image+0x2763E8);
+        Put(save_entity.data(),kEntityTypeOffset,12);
+        Put(save_entity.data(),0xBC,2.1F);
+        Put(save_body.data(),kBodyCollideOffset,true);
+        Put(save_body.data(),0x434,0.0F);
+        Put(g_image+0x2763E8,0x44,reinterpret_cast<void*>(&NativeTestCrosshair));
+        Put(g_image+0x2763E8,0x48,reinterpret_cast<void*>(&NativeTestEntityDistance));
+        Put(g_image+0x2763E8,0x28,reinterpret_cast<void*>(&NativeTestLampInteract));
+        g_vr_selection_refresh_active=true;
+        NativeTestPickClear(&callback,nullptr);
+        test_head_hits={{save_body.data(),1.5F,{0,1.6F,-1.5F}}};
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        if (callback.body!=save_body.data()) return 260;
+        using LampInteract=void(__thiscall*)(void*);
+        const auto lamp_interact=reinterpret_cast<LampInteract>(
+            Read<void*>(g_image+0x2763E8,0x28));
+        lamp_interact(save_entity.data());
+        if (test_native_lamp_calls!=1) return 261;
+        NativeTestPickClear(&callback,nullptr);
+        test_head_hits={{save_body.data(),2.2F,{0,1.6F,-2.2F}}};
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        lamp_interact(save_entity.data());
+        if (test_native_lamp_calls!=1 ||
+            !VecNearlyEqual(callback.point,{0,1.6F,-2.2F})) return 262;
+        NativeTestPickClear(&callback,nullptr);
+        test_head_hits={{foreground.data(),0.5F,{0,1.6F,-0.5F}},
+            {save_body.data(),1.5F,{0,1.6F,-1.5F}}};
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        if (callback.body || callback.area) return 264;
+        for (const bool dynamic_lamp : {true,false}) {
+            Put(save_body.data(),0x434,dynamic_lamp ? 1.0F : 0.0F);
+            Put(save_entity.data(),0,g_image+(dynamic_lamp ? 0x2763E8 : 0x2770B8));
+            NativeTestPickClear(&callback,nullptr);
+            test_head_hits={{save_body.data(),1.5F,{0,1.6F,-1.5F}}};
+            reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+                &original_from,&original_to,true,false,true,false);
+            if (callback.body || callback.area) return 263;
+        }
+        g_vr_selection_refresh_active=false;
+        std::array<std::uint8_t,0x500> described_body{},hand_body{};
+        std::array<std::uint8_t,0x300> described_entity{},hand_entity{};
+        std::array<void*,20> described_table{};
+        described_table[0x44/4]=reinterpret_cast<void*>(&NativeTestCrosshair);
+        described_table[0x48/4]=reinterpret_cast<void*>(&NativeTestEntityDistance);
+        Put(described_entity.data(),0,described_table.data());
+        Put(described_entity.data(),0x10,static_cast<void*>(gaze_init.data()));
+        Put(described_entity.data(),0xB8,2.0F);
+        Put(described_entity.data(),0x98,true);
+        Put(described_entity.data(),kEntityActiveOffset,true);
+        Put(described_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        Put(described_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(described_body.data(),kBodyActiveOffset,true);
+        Put(described_body.data(),kBodyCollideOffset,true);
+        Put(described_body.data(),kBodyUserDataOffset,
+            static_cast<void*>(described_entity.data()));
+        test_head_hits={{described_body.data(),1.5F,{0,1.6F,-1.5F}}};
+        NativeTestPickClear(&callback,nullptr);
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        if (callback.body!=described_body.data() ||
+            Read<void*>(gaze_player.data(),0x27C)!=&callback) return 185;
+        g_vr_selection_refresh_active=true;
+        NativeTestPickClear(&callback,nullptr);
+        reinterpret_cast<Ray>(g_image+0xAD835)(world.data(),&callback,
+            &original_from,&original_to,true,false,true,false);
+        g_vr_selection_refresh_active=false;
+        if (callback.body || callback.area) return 186;
+        // A physical target A must not suppress B's independent gaze cue or
+        // redirect Interact to B. Explicit Examine owns only the gaze refresh.
+        Put(hand_entity.data(),kEntityActiveOffset,true);
+        Put(hand_entity.data(),kEntityTypeOffset,kObjectEntityType);
+        Put(hand_entity.data(),kEntityHasInteractionOffset,true);
+        Put(hand_body.data(),0,g_image+kPhysicsBodyVtable);
+        Put(hand_body.data(),kBodyActiveOffset,true);
+        Put(hand_body.data(),kBodyCollideOffset,true);
+        Put(hand_body.data(),kBodyUserDataOffset,static_cast<void*>(hand_entity.data()));
+        test_resolved_palm=test_head_pose;
+        test_resolved_palm_valid=true;
+        test_palm_overlap_available=true;
+        test_palm_overlap={}; test_palm_overlap.valid=true;
+        test_palm_overlap.hit_count=1;
+        test_palm_overlap.hits[0]={hand_body.data(),{0.04F,1.6F,0},1};
+        Put(gaze_normal.data(),0,g_image+0x27D138);
+        Put(gaze_normal.data(),0x10,static_cast<void*>(gaze_player.data()));
+        gaze_states[0]=gaze_normal.data();
+        Put(gaze_player.data(),0x2C4,gaze_states.data());
+        test_normal_world=world.data(); test_normal_callback=&callback;
+        Jump(0xAD6C0,reinterpret_cast<void*>(&NativeTestNormalUpdate));
+        const int updates_before=test_native_normal_calls;
+        HookedNormalUpdate(gaze_normal.data(),nullptr,0.016F);
+        if (test_native_normal_calls!=updates_before+1 ||
+            callback.body!=hand_body.data() ||
+            Read<int>(gaze_player.data(),0x2E4)!=4) return 187;
+        RefreshVrSelectionBeforeInteract(gaze_player.data());
+        if (callback.body!=hand_body.data() ||
+            Read<int>(gaze_player.data(),0x2E4)!=1) return 188;
+        // A valid palm contact may be far below the native body centre. BP's
+        // body-origin distance must not veto a physically accepted VR prop.
+        Jump(0x9BC90,reinterpret_cast<void*>(&NativeTestPickedDistance));
+        Put(gaze_character.data(),0x48,Vec{0,3.1F,0});
+        const float native_floor_distance=NativeTestPickedDistance(gaze_player.data(),nullptr);
+        const float physical_floor_distance=HookedPhysicalPickedDistance(gaze_player.data(),nullptr);
+        if (native_floor_distance<1.4F || !std::isfinite(physical_floor_distance) ||
+            physical_floor_distance>runtime::vr_interaction_policy::kInteractionTargetDistance)
+            return 191;
+        const auto expect_native_distance=[&]() {
+            return std::abs(HookedPhysicalPickedDistance(gaze_player.data(),nullptr)-
+                native_floor_distance)<0.00001F;
+        };
+        g_gaze_distance_scope=true;
+        if (!expect_native_distance()) return 192;
+        g_gaze_distance_scope=false;
+        g_vr_examine_selection_active=true;
+        if (!expect_native_distance()) return 193;
+        g_vr_examine_selection_active=false;
+        test_frame.focused=false;
+        if (!expect_native_distance()) return 194;
+        test_frame.focused=true;
+        const auto saved_target=g_interaction_targets[1];
+        g_interaction_targets[1].time=GetTickCount64()-1000;
+        if (!expect_native_distance()) return 195;
+        g_interaction_targets[1]=saved_target;
+        const auto saved_point=callback.point;
+        callback.point[0]+=0.02F;
+        if (std::abs(HookedPhysicalPickedDistance(gaze_player.data(),nullptr)-
+                NativeTestPickedDistance(gaze_player.data(),nullptr))>0.00001F) return 196;
+        callback.point=saved_point;
+        Put(gaze_character.data(),0x48,Vec{0,1.6F,0});
+        RefreshVrSelectionBeforeExamine(gaze_player.data());
+        if (callback.body!=described_body.data() ||
+            !VecNearlyEqual(callback.point,{0,1.6F,-1.5F}) ||
+            g_interaction_targets[1].body!=hand_body.data()) return 189;
+        test_head_pose_valid=false;
+        RefreshVrSelectionBeforeExamine(gaze_player.data());
+        if (callback.body || callback.area) return 190;
+        test_head_pose_valid=true;
+        test_palm_overlap_available=false; test_resolved_palm_valid=false;
+        g_enabled.store(false);
+        test_head_hits.clear();
+    }
+    {
+        // Exercise the actual render transaction without any hands/tool update.
+        // The billboard vector includes an already-hidden ray: restoration must
+        // preserve that native state rather than turning everything back on.
+        std::array<std::uint8_t,0x300> visibility_player{},light_helper{},visibility_init{};
+        std::array<std::uint8_t,0x150> visibility_hands{},flash_model{},glow_model{};
+        std::array<std::uint8_t,0x520> flash_mesh{},glow_mesh{},ray{},hidden_ray{},unrelated{};
+        std::array<void*,2> rays{ray.data(),hidden_ray.data()};
+        Put(visibility_player.data(),0x290,light_helper.data());
+        Put(light_helper.data(),0x20,visibility_init.data());
+        Put(visibility_init.data(),0x18C,visibility_hands.data());
+        Put(visibility_hands.data(),0x74,2);
+        Put(visibility_hands.data(),0x6C,flash_model.data());
+        Put(visibility_hands.data(),0x70,glow_model.data());
+        Put(flash_model.data(),4,static_cast<const char*>("Flashlight"));
+        Put(glow_model.data(),4,static_cast<const char*>("Glowstick"));
+        Put(flash_model.data(),0x118,flash_mesh.data());
+        Put(glow_model.data(),0x118,glow_mesh.data());
+        Put(flash_model.data(),0xC0,rays.data());
+        Put(flash_model.data(),0xC4,rays.data()+rays.size());
+        for (auto* mesh : {flash_mesh.data(),glow_mesh.data(),unrelated.data()}) {
+            Put(mesh,0,g_image+0x2818F8); Put(mesh,0x3EC,true);
+        }
+        for (auto* billboard : {ray.data(),hidden_ray.data()})
+            Put(billboard,0,g_image+0x282E88);
+        Put(ray.data(),0x3EC,true);
+        Put(g_image,0x272138,reinterpret_cast<void*>(&NativeEqual));
+        const auto original_player=visibility_player;
+        const auto original_light=light_helper;
+        g_enabled.store(true);
+        g_updating_hands=nullptr;
+        {
+            {
+                ScopedEquippedLightMenuVisibility menu(visibility_player.data(),true);
+                if (Read<bool>(flash_mesh.data(),0x3EC) || Read<bool>(glow_mesh.data(),0x3EC) ||
+                    Read<bool>(ray.data(),0x3EC) || Read<bool>(hidden_ray.data(),0x3EC) ||
+                    !Read<bool>(unrelated.data(),0x3EC)) {
+                    std::cerr << "UI admits equipped light geometry without a tool callback\n";
+                    return 250;
+                }
+                { ScopedEquippedLightMenuVisibility nested(visibility_player.data(),true); }
+                if (Read<bool>(flash_mesh.data(),0x3EC)) return 251;
+            }
+            ScopedEquippedLightMenuVisibility gameplay(visibility_player.data(),false);
+            if (!Read<bool>(flash_mesh.data(),0x3EC) || !Read<bool>(glow_mesh.data(),0x3EC) ||
+                !Read<bool>(ray.data(),0x3EC) || Read<bool>(hidden_ray.data(),0x3EC) ||
+                visibility_player!=original_player || light_helper!=original_light) return 252;
+        }
+        Put(glow_model.data(),4,static_cast<const char*>("Hammer"));
+        { ScopedEquippedLightMenuVisibility menu(visibility_player.data(),true);
+          if (!Read<bool>(glow_mesh.data(),0x3EC)) return 253; }
+        g_enabled.store(false);
+    }
     VirtualFree(g_image,0,MEM_RELEASE); g_image=nullptr;
     return 0;
 }

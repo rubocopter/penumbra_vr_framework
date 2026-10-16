@@ -7,12 +7,14 @@ This file owns the current work order. Capability state lives in
 
 ## Current priority — post-v1.0 validation and maintenance
 
-Framework [v1.0.7](releases/1.0.7.md) publishes shared BP/Requiem input-release,
-dead-zone and analog-data hardening, plus Windows installer/diagnostics CI.
-The maintainer accepted the installed trilogy checklist; exact local runtime
-hashes and scope are in `releases/1.0.7-headset-acceptance.json`. The installer, matching committed source, checksums and build report are
-identified by the versioned release validation record. Exact new-installer
-headset and independent clean-PC acceptance remain separate from publication.
+Framework [v1.0.8](releases/1.0.8.md) packages focused BP prop/mechanism,
+computer and Examine-text corrections. The maintainer accepts the reported
+barrel/lever/bucket, PC reach/cursor/Accept and centered enlarged text cases;
+exact local hashes and scope are in `releases/1.0.8-headset-acceptance.json`.
+Prepare and verify the updated installer, matching committed source, checksums
+and build report before publication. Exact new-installer headset and independent
+clean-PC acceptance remain separate from publication. Historical trilogy
+acceptance stays scoped to `releases/1.0.7-headset-acceptance.json`.
 Use `CLOSURE_STATUS.md` for release provenance and the remaining deployment matrix.
 Index finger feedback, Quest 3 pointer/cadence coverage, broader per-game
 regression and Requiem startup reliability remain focused follow-up.
@@ -24,6 +26,29 @@ The runtime milestones below retain their evidence but non-blocking polish,
 broader parity and optional improvements do not displace this release task.
 Reopen runtime work only for a concrete release blocker, including the documented
 intermittent Requiem startup crash. Do not automatically launch games.
+
+The newly reported BP dream-ship progression blocker is current focused runtime
+work; see `TRILOGY_PARITY_PLAN.md` for scoped headset acceptance of arrival
+message, kitchen save and consistent local Examine cues. Reporter saves are
+available. Yellow-bucket acquisition by handle/container and lifting received
+local headset acceptance after the internal dynamic Grab assembly adaptation.
+Bucket throwing/reacquisition and correct-table egg/fire/dog appearance are
+accepted. The articulated Grab candidate and the 36-entry human-ragdoll guard
+correction are host-tested. The maintainer now confirms dog lift/altar placement;
+initial acquisition remains irregular. The world-rooted arm puzzle now has
+maintainer completion evidence. Focused host-tested corrections address barrel
+release impulses, wall-lever COM velocity and bucket-handle separation; the
+2026-10-16 maintainer report accepts those corrections. The new focused candidate
+has maintainer acceptance for Swanson's fixed-computer activation at distance.
+The ScreenGui cursor/Accept correction has subsequent maintainer acceptance.
+The requested centered 2x Examine-message text now has maintainer acceptance.
+Equipped-light menu visibility and flashlight socket confirmation remain
+headset retests. Retest these,
+other free/anchored Grab props and doors/chests/lockers
+per `TRILOGY_PARITY_PLAN.md`.
+Physical-only attribution correction did not close the
+reported reach/low-obstacle blocking; investigate step eligibility and continued
+world rejection against Rework. Quest 3 coverage remains an independent gate.
 
 ## Foundation already in place
 

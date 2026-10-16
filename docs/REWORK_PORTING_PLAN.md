@@ -378,6 +378,240 @@ correction is host-tested and the maintainer accepted the mixed-obstacle
 headset checklist on the installed local build; see the scoped 1.0.7 acceptance
 record. Broader collision comfort remains a regression topic.
 
+## Black Plague inactive Message adaptation
+
+Rework `23c890f` `ButtonHandler.cpp` keeps gameplay actions available for
+Message even when the player is inactive; `PlayerState_Misc_VR.cpp` advances
+the native message from Interact or Examine. BP independently demonstrates the
+same exception at `0x505D/0x506A`, reaching the existing action owners at
+`0x542A/0x5496`. Its Message constructor at `0xAD5B0` stores state `5`, and
+the `0xAD5E0` handler forwards through `init+0x160` to native advancement at
+`0x3F8A0`.
+
+The Framework's former inactive-player UI gate prevented this adaptation.
+The BP input adapter now preserves Message's gameplay context with overlay
+precedence, leaving advancement, previous-state restoration and completion
+callbacks native. Motion ownership remains gated by the native active byte;
+the existing body injection owner also rejects previously queued VR requests
+if gameplay becomes inactive. No mouse synthesis, direct advancement call,
+second body update or shared binary enumeration is introduced. Exact evidence
+lives in BP's manifest and `Test-BlackPlagueInputMap.ps1`; validation state and
+scene-specific unknowns belong to `TRILOGY_PARITY_PLAN.md`.
+
+## BP physical selection and independent gaze
+
+Rework `23c890f` rejects non-interactive palm contacts before ranking and runs
+a separate head-origin Examine query with interaction priority suppressed.
+BP's former type-only overlap filter allowed inert Objects to mask usable
+contacts. Its own `SetInteractMode` derives `entity+0x37`, while native callbacks
+use `+0x204` (Interact) and `+0x20C` (Pick). The adapter now skips only known
+inert Objects before ranking, preserving scripted candidates and native final
+acceptance without executing scripts to rank overlaps.
+
+Rework's `GetPickedDist()` returns zero; copying that globally into BP would
+bypass SaveArea and unrelated native limits. BP independently calculates distance
+from the selected callback point to character position. Only fresh, matching
+physical Object contacts within the proven reach adapt its Pick/Grab/Move/Push
+calls and the crosshair caller to palm distance. Other consumers remain native.
+
+BP has one normal pick callback, unlike Rework's separate Examine callback.
+The backend therefore casts tracked-head gaze into a complete scratch callback,
+lets native solid/area arbitration resolve occlusion, and restores the original
+player callback after deriving the evidenced Examine-only branch. Normal Update
+has one owner and publishes the gaze HUD cue independently of physical picking;
+explicit Examine refresh selects the gaze point through the existing input owner.
+Interact fallback is restricted to mapped areas and exact SaveArea identity,
+retaining native callbacks and the save's 2.1 m guard. This narrow target-boundary
+adaptation does not promote parented-body support. Subsequent scene evidence
+identified `boat_bucket01` as native Grab with an internal dynamic hinge.
+BP now consumes Rework's jointed Grab transform and reduced speed caps only
+for closed, entirely dynamic same-Object assemblies after native Grab commitment.
+External/world anchors and native Move mechanisms retain their existing owners.
+Skeletal Grab props also enumerate inactive mass-zero animation colliders:
+Rework's mesh loader creates these separately from dynamic ragdoll bodies/joints.
+BP excludes only mass-zero, unjointed, non-character-colliding companions from
+assembly membership, including when native entity activation has woken them.
+Character-blocking static siblings and any joint to an excluded companion remain
+rejected. The VR Grab owner does not change animation-collider activation or pose.
+Host fixtures cover acquisition, either hinge endpoint orientation, carry/release
+caps, restored settings and rejection of static/foreign/world/mechanism links.
+Bucket acquisition by handle/container, lifting, throwing and reacquisition
+received scoped local headset acceptance; broader assemblies remain open.
+
+### Articulated Grab boundary
+
+Rework `23c890f` directly places the selected Grab body and publishes tracked
+velocities. In BP, doing that to one skeletal body bypasses Newton's joint
+solve and can pull the visible skeleton apart; the maintainer reported extreme
+dog deformation. This is the evidenced reason for a narrow target adaptation
+instead of copying that matrix-write route into articulated Grab.
+
+After native `Grab=6` commitment, the existing same-Object assembly guard
+classifies the selected connected component. Two or more dynamic bodies use
+bounded point-velocity corrections through BP's verified
+`AddImpulseAtPosition(0x19C3D0)` plus bounded angular drive. The impulse argument
+is delta velocity, as verified against the shipped Newton DLL; it is not
+multiplied by mass. Native Grab lightens only the selected body; driving that
+body alone cannot lift the remaining ragdoll against gravity. The same bounded
+translation delta therefore also increments each connected dynamic sibling's
+native linear velocity. Point torque remains on the selected contact. The
+validated joint graph excludes animation companions and disconnected bodies;
+no sibling mass, gravity, transform or speed limit is changed. The selected
+body-local contact is retained. A world-yaw
+rebase preserves the current bone pose while retaining the tick's physical
+controller translation and wrist rotation: previous/current raw grip poses are
+mapped through the same current world basis before rebasing the palm anchor.
+This avoids erasing lift/pull on consecutive smooth-turn yaw epochs. Angular
+error uses the shortest axis-angle rotation, including a stable half-turn axis
+when the cross-product error vanishes at 180 degrees. Existing angular speed
+and per-tick acceleration limits remain in force. Wrist correction consumes the angular
+velocity after the point impulse so it cannot erase Newton's contact torque.
+Temporary world-reference loss
+suspends VR drive without freezing one bone. Single rigid props retain the
+Rework matrix route. The earlier two-body bucket exception was removed after
+headset evidence of its handle separating: moving one of two constrained bodies
+has the same solver-ownership defect as moving one ragdoll bone. Both bucket
+members now consume the existing bounded contact/component drive; gravity-bearing
+two-body hinge fixtures cover either selected body at the authored 3/2.2 kg masses.
+Static/world/foreign endpoints and
+native Move mechanisms remain outside this dynamic Grab adaptation.
+
+BP's world-rooted `mr_hand_ragdoll` is also native Grab, not native Move. The
+closed-assembly guard left it in the mouse/camera update, so tracked lifting
+never reached its joints. Rework's direct selected-body placement is unsuitable
+for this constrained skeleton for the same deformation reason above. A distinct
+constrained Grab route now accepts verified same-Object dynamic graphs ending
+at world or same-Object static roots after native Grab commitment. Acquisition
+preserves the initial palm/contact offset as Rework Move does, avoiding an
+initial pull before tracked hand movement. It applies
+the bounded component contact correction only to connected dynamic members;
+it writes no matrices, anchor state, joint limits or controllers. Wrist angular
+override and tracked throwing are omitted, preserving Newton/native release
+velocity. Foreign endpoints, animation endpoints and other entity/state owners
+remain rejected. The mental-realm script owns its Grab-to-Static transition,
+joint-limit locking and puzzle order. World/static-rooted three-hinge Newton
+fixtures exercise every selected body with gravity, native-like mass reduction,
+lift, fixed pivots and limits. Authored-model headset validation remains open.
+
+BP's flashlight socket previously rotated model -Y into attachment-socket -Z,
+opposite Rework's `VrRotOffset X=-1.57` inside the finger-cylinder grip frame.
+The target-owned profile now rotates -90 degrees about X toward socket +Z,
+matching the direction already validated independently in Requiem. BP retains
+its measured grip, 0.020 m grip radius, resolved-palm owner and native model
+size. Independent installed emitter/grip/ray-node checks cover both hands and
+wrist rotation; BP headset acceptance of this correction remains open.
+
+Human ragdolls require 36 enumerated entries (18 physical plus 18 animation
+companions). Entity enumeration is bounded independently at 64; the dynamic
+graph remains bounded at 32, with an explicit insertion guard. No asset name,
+joint type or model-specific grip value selects the controller. Asset coverage
+and validation state belong to `TRILOGY_PARITY_PLAN.md`.
+
+### Push release and hinge centre of mass
+
+Rework `23c890f` Push VR `OnStopInteract` only changes to the preceding state.
+BP `0xAB1F0` additionally applies a captured-camera-forward impulse after that
+transition when CanBeThrown is enabled. The maintainer's barrel-release clip
+and the saved `3barrels` native Push mode identify this incompatible target
+boundary. The spatial owner now intercepts its virtual release slot for
+VR-owned/pending Push only; service, guarded and failed-acquisition cancellation
+use the same verified native ChangeState call without the later impulse.
+Native entry/leave and existing solver momentum remain intact; native-origin
+mouse release still consumes the original handler. Actual-adapter tests
+reproduce the post-Leave impulse before the correction.
+
+Rework's hinge servo computes linear velocity at the body matrix origin.
+Newton applies linear velocity at the centre of mass. Those differ for BP's
+offset-collider wall lever. The narrow BP application correction reads native
+local COM, rotates it by the current body basis and adds omega cross that offset
+to the existing plan. Contact radius, angular response, lightness, native
+controllers, limits and event thresholds are preserved. This corrects an
+evidenced limitation shared with the Rework formula; it is not a transcription
+change or a new movement multiplier. A shipped-Newton offset-COM lever and
+zero-COM control cross the native 110-degree activation angle within the
+-1/130-degree physical stops while preserving the pivot within 1 cm. BP-only
+host evidence does not establish Overture/Requiem consumption or headset success.
+
+### Fixed computer activation and desktop cursor
+
+Rework `23c890f` Normal VR separates physical palm targets from the native
+head/area ray, retaining original result arbitration and native handlers.
+BP's fixed computer is a collidable Lamp (exact type 12/vtable `0x2763E8`),
+not an HPL interaction area. Applying only the palm path forces the player
+against its desk. The BP boundary now admits verified zero-mass Lamps to the
+existing occluded head activation result. It preserves each Lamp's native
+MaxInteractDist and LampLit/script lifecycle; dynamic Lamps and other props do
+not gain distant physical acquisition. This is an exact target classification
+adaptation, not an increase in shared physical reach or Rework's blanket
+GetPickedDist override.
+
+Overture has no equivalent computer desktop, but Rework's HPL cGui implementation
+demonstrates absolute/relative SendMousePos messages to the focused GuiSet and
+native mouse-down/up delivery. BP's initialized image independently proves that
+same interface at the ScreenGui gameplay input branch. The adapter reuses shared
+tracked-menu UV smoothing, reads the focused set's cursor and forwards both
+position and delta through native SendMousePos. Native popup attention, hover,
+cursor artwork, button callbacks and physical mouse priority remain intact.
+The separate state-8 relative mouse path belongs to Schmup and must not be
+classified as the terminal. Actual pointer and mapped press/release regressions
+exercise a focused popup; headset cursor/Accept use remains a separate gate.
+
+Rework's main/pause menu disables native scene drawing. BP keeps the world for
+inventory/notebook and can render a desktop world while fullscreen ScreenGui
+is active. Merely stopping tool attachment leaves native equipped geometry
+frozen in that world. A BP render transaction now masks the verified mesh and
+attached-billboard admission flags before list construction and drawing, then
+restores their original values. It does not invoke native SetRendered, whose
+submesh propagation would overwrite authored hidden states, or alter native
+equip/light state. Existing render owners call this transaction directly;
+no additional hook is stacked over those callsites.
+
+### Examine message readability
+
+Rework `23c890f` GameMessage draws at y=300 and applies SubtitleScale to font
+size/line height. BP's equivalent uses a 14-pixel font, 16-pixel line height and
+left alignment from (30,300). The maintainer requested centered text at roughly
+double the previous size. The BP render owner now adapts only the six native
+GameMessage WordWrap callers (black text or white plus shadows), forwarding to
+the original native font renderer with 2x size/spacing and center alignment.
+Whole-block vertical centering counts Rework's existing word-wrap breaks using
+BP's native GetLength metrics. It copies borrowed VC7 wide-string contents into
+modern scratch storage without constructing/destructing foreign CRT objects.
+Native fade, duration, color, shadow pixel offsets, depth and text payload remain
+unchanged. This is an explicit BP readability preference beyond the baseline;
+Radio subtitles, menu callers and shared settings defaults are outside it.
+Actual x86 callsite tests establish host evidence, not headset readability.
+
+## Physical-only collision carry
+
+Rework `23c890f`'s player update projects physical travel along the requested
+direction, corrects rejected motion, and carries accepted movement in a separate
+joystick branch. BP previously performed the same physical projection but then
+carried the remainder of total body travel as locomotion even without stick
+intent. The exact BP horizontal-solver observation now separates that residual
+from later native travel for a physical-only solve with no native pre-injection
+horizontal movement and no accepted native step. The adapter supplies explicit non-physical carry to its
+reconciliation consumer, including observed native pre-injection movement.
+Mixed/native movement keeps its existing attribution because BP exposes a
+combined solve rather than Rework's independently sequenced updates. Native
+movement after the horizontal solve and ticks without VR requests are retained.
+No new physics update, collider, tracking offset or velocity multiplier is added.
+
+Rework's step ray requests the surface normal that its upward gate consumes.
+The older BP native step caller instead supplies `calcNormal=false`; the Newton
+callback then leaves its global normal storage unchanged. The BP adapter's
+normal gate therefore needed an additional exact-call boundary: `D7741`
+requests normals for the current physical-step owner before the existing native
+CastRay. The six-byte displaced callback MOV is replayed and execution resumes
+at `D7747`. Native and unrelated-body queries retain their flags. This supplies
+the missing input to the proven eligibility rule rather than relaxing it or
+changing native step geometry, ray count, climb speed or gravity ownership.
+Full step traversal parity is still distinct: Rework retries 0.05 m farther
+forward and directly commits a cleared step pose; BP retains its native angular
+ray search and gradual vertical climb with collision-resolved horizontal travel.
+Those differences are not ported by supplying the missing normal, and must be
+investigated independently if the focused mattress retest remains blocked.
+
 ## Validation rule
 
 Extraction, target implementation and target validation are different facts.

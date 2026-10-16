@@ -51,7 +51,11 @@ public:
         const runtime::VrAcceptedBodyMotion& native_motion,
         const std::array<float, 3>& feet_after,
         bool physical_observation_available = false,
-        const runtime::VrAcceptedBodyMotion& physical_motion = {}) noexcept;
+        const runtime::VrAcceptedBodyMotion& physical_motion = {},
+        // Backend-attributed non-physical travel, including native movement
+        // outside injection. Without an explicit observation retain the
+        // diagnostic callers' original total-minus-physical carry semantics.
+        const std::array<float, 3>* observed_non_physical_displacement = nullptr) noexcept;
 private:
     bool initialized_ = false;
     bool tick_pending_ = false;

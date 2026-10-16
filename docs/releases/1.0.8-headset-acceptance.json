@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "acceptedOn": "2026-10-16",
+  "evidence": "Maintainer confirmed the reported Black Plague fixes, PC cursor/Accept and centered enlarged text in this chat, then requested an updated public release and installer.",
+  "publicationAuthorizedByMaintainer": true,
+  "game": "black_plague",
+  "acceptedLocalCandidates": [
+    {
+      "probeSha256": "AF7F3D113DF7F09B8A23614AF4102E21588D3813EB7B7690D7647E68FE7876C8",
+      "acceptedCases": ["reported barrel release impulse", "reported wall lever activation", "reported bucket-handle separation"],
+      "evidence": "las correcciones anteriores funcionan"
+    },
+    {
+      "probeSha256": "2AB4F0E4E3CDE9C98F4E4B4FC662744C3341B81B33FC153D29553B5108F1CF7D",
+      "acceptedCases": ["fixed computer activation at a good distance"],
+      "excludedCases": ["computer cursor/Accept failed on this candidate"]
+    },
+    {
+      "probeSha256": "1E58611B53FE295124C86B5BA1933269D8B94558558EF4601700DDBEAE3EDE89",
+      "acceptedCases": ["tracked computer cursor and incoming-call popup Accept"],
+      "evidence": "arreglado"
+    },
+    {
+      "probeSha256": "8210CDA50531D491F1886558AF3D30C95058EFCA0D3FD69FDD4B7850814044DB",
+      "acceptedCases": ["centered enlarged Examine text"],
+      "evidence": "si, bien, lo dejamos asi ya"
+    }
+  ],
+  "earlierScopedProgressionAcceptance": ["dog lifted and placed on altar; initial acquisition remained irregular", "articulated arm puzzle completed"],
+  "hardwareIdentifiedInTheseConfirmations": false,
+  "notPromotedByTheseConfirmations": ["equipped-light menu visibility", "flashlight attachment alignment", "physical-only motion/low-obstacle traversal correction", "broader articulated acquisition/drag/rotation/release", "Overture or Requiem gameplay regression", "full game or other hardware support"],
+  "release108ExactInstallerHeadsetAcceptance": "not implied; new versioned artifacts require their own evidence",
+  "independentCleanMachineAcceptance": "pending"
+}

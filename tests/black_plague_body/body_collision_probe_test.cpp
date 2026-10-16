@@ -24,9 +24,67 @@ bool g_replace_player_body_during_native_update = false;
 bool g_activate_death_during_native_update = false;
 void* g_replacement_player_body = nullptr;
 float g_collision_x_adjustment = -0.15F;
+float g_collision_z_adjustment = 0.0F;
+Vec3 g_post_collision_displacement{};
+bool g_observe_horizontal_collision = true;
 float g_collision_seen_forward = 0.0F;
 float g_collision_seen_right = 0.0F;
 float g_collision_seen_push_force = 0.0F;
+bool g_step_ray_calc_normal = false;
+bool g_step_ray_other_flags_valid = false;
+float g_step_ray_stale_normal_y = 0.0F;
+float g_step_ray_hit_normal_y = 1.0F;
+std::array<std::uint8_t, 0x438> g_step_ray_hit_body{};
+
+bool __fastcall FakeStepRayIntersect(void* callback, void*, void*, void* params) {
+    std::memcpy(static_cast<std::uint8_t*>(callback) + 4,
+        static_cast<std::uint8_t*>(params) + 4, sizeof(float));
+    static_cast<std::uint8_t*>(callback)[8] = 1;
+    return true;
+}
+
+// Match the actual seven-argument world+0x68 thiscall ABI (ret 1Ch).
+// Newton leaves its shared params normal stale when calcNormal is false.
+void __fastcall FakeStepCastRay(void*, void*, void* callback, const Vec3*,
+    const Vec3*, bool calc_dist, bool calc_normal, bool calc_point,
+    bool prefilter) {
+    g_step_ray_calc_normal = calc_dist && calc_normal && !calc_point && !prefilter;
+    g_step_ray_other_flags_valid = calc_dist && !calc_point && !prefilter &&
+        callback == Read<void*>(g_tick.character_body, kCharacterRayCallbackOffset);
+    struct Params { float t; float distance; Vec3 normal; };
+    Params params{0.5F,
+        Read<Vec3>(g_tick.character_body, kCharacterSizeOffset).y - 0.05F,
+        {0, calc_normal ? g_step_ray_hit_normal_y : g_step_ray_stale_normal_y, 0}};
+    const float clear_distance = 10000.0F;
+    std::memcpy(static_cast<std::uint8_t*>(callback) + 4,
+        &clear_distance, sizeof(clear_distance));
+    static_cast<std::uint8_t*>(callback)[8] = 0;
+    static_cast<void>(HookedCharacterRayIntersect(callback, nullptr,
+        g_step_ray_hit_body.data(), &params));
+}
+
+// Jump into the real synthetic callsite with the original D7741 stack:
+// origin/end/dist/normal/point/prefilter, callback not yet pushed.
+__declspec(naked) void InvokeStepCastRay(void*, void*) {
+    __asm {
+        mov eax, [esp + 4]
+        mov ecx, [esp + 8]
+        push esi
+        mov esi, ecx
+        lea edx, finished
+        push edx
+        push 0
+        push 0
+        push 0
+        push 1
+        push 0
+        push 0
+        jmp eax
+    finished:
+        pop esi
+        ret
+    }
+}
 
 template<class T>
 void Put(void* object, std::size_t offset, const T& value) {
@@ -56,7 +114,7 @@ bool __fastcall FakeCollision(
     *resolved = {
         requested->values[3] + g_collision_x_adjustment,
         requested->values[7],
-        requested->values[11]};
+        requested->values[11] + g_collision_z_adjustment};
     return true;
 }
 
@@ -90,6 +148,8 @@ void __fastcall FakeUpdate(void* body, void*, float) {
     const Vec3 requested_position = Read<Vec3>(body, kCharacterPositionOffset);
     if (std::abs(requested_position.x - before.x) < 0.00001F &&
         std::abs(requested_position.z - before.z) < 0.00001F) {
+        Put(body, kCharacterPositionOffset,
+            Add(requested_position, g_post_collision_displacement));
         return;
     }
     Matrix requested{};
@@ -99,13 +159,16 @@ void __fastcall FakeUpdate(void* body, void*, float) {
     requested.values[7] = requested_position.y;
     requested.values[11] = requested_position.z;
     Vec3 resolved{};
-    static_cast<void>(HookedCheckShapeWorldCollision(
+    const auto collide = g_observe_horizontal_collision
+        ? &HookedCheckShapeWorldCollision : &FakeCollision;
+    static_cast<void>(collide(
         reinterpret_cast<void*>(0x2222), nullptr, &resolved,
         reinterpret_cast<void*>(0x3333), &requested,
         reinterpret_cast<void*>(0x4444), false, true,
         reinterpret_cast<void*>(0x5555), true, false));
     // A later native phase adds gravity after the horizontal collision result.
     resolved.y -= 0.02F;
+    resolved = Add(resolved, g_post_collision_displacement);
     Put(body, kCharacterPositionOffset, resolved);
 }
 
@@ -148,6 +211,14 @@ int RunBodyCollisionProbeTest() {
     std::memcpy(image + kPhysicalStepRayResultFilter,
         kPhysicalStepRayResultWindow.data(),
         kPhysicalStepRayResultWindow.size());
+    // Original D7741..D7758, including callback push and world+68 call.
+    const std::array<std::uint8_t, 24> step_cast_call{
+        0x8B,0x8E,0x1C,0x02,0,0, 0x8B,0x86,0x40,0x02,0,0,
+        0x8B,0,0x51,0x8B,0x8E,0x40,0x02,0,0,0xFF,0x50,0x68};
+    std::memcpy(image + 0xD7741, step_cast_call.data(), step_cast_call.size());
+    const std::array<std::uint8_t, 4> original_step_flags{0x6A,0,0x6A,1};
+    std::memcpy(image + 0xD76BF, original_step_flags.data(), original_step_flags.size());
+    image[0xD7759] = 0xC3;
     void* const ray_intersect = image + kCharacterRayIntersect;
     std::memcpy(image + kCharacterRayIntersectSlot,
         &ray_intersect, sizeof(ray_intersect));
@@ -196,9 +267,63 @@ int RunBodyCollisionProbeTest() {
     Put(g_player_storage.data(), kPlayerMoveStateVectorOffset,
         static_cast<void*>(g_move_states.data()));
 
+    std::array<void*, 27> step_world_vtable{};
+    step_world_vtable[26] = reinterpret_cast<void*>(&FakeStepCastRay);
+    void* step_world = step_world_vtable.data();
+    std::array<std::uint8_t, 0x10> fresh_step_callback{};
+    const auto saved_ray_intersect = g_original_character_ray_intersect;
+    g_original_character_ray_intersect =
+        reinterpret_cast<CharacterRayIntersect>(&FakeStepRayIntersect);
+    Put(g_body_storage.data(), kCharacterPhysicsWorldOffset,
+        static_cast<void*>(&step_world));
+    Put(g_body_storage.data(), kCharacterRayCallbackOffset,
+        static_cast<void*>(fresh_step_callback.data()));
+    g_tick = {};
+    g_tick.character_body = g_body_storage.data();
+    g_tick.physical_request_injected = true;
+    g_tick.physical_position_before = {0.01F, 0, 0};
+    InvokeStepCastRay(image + 0xD7741, g_body_storage.data());
+    if (g_step_ray_calc_normal) return 155;
+    g_tick.physical_position_before = {};
+    for (const bool mixed : {false, true}) {
+        g_tick.locomotion_request_injected = mixed;
+        for (const float stale : {0.0F, 1.0F}) {
+            for (const float actual : {0.0F, 1.0F}) {
+                g_step_ray_stale_normal_y = stale;
+                g_step_ray_hit_normal_y = actual;
+                InvokeStepCastRay(image + 0xD7741, g_body_storage.data());
+                if (!g_step_ray_calc_normal || !g_step_ray_other_flags_valid ||
+                    ShouldRejectPhysicalStepHit() != (actual < 0.5F)) {
+                    std::cerr << "step CastRay must request fresh normal: mixed="
+                              << mixed << " stale=" << stale << " actual=" << actual << '\n';
+                    return 152;
+                }
+            }
+        }
+    }
+    // Pure native/stick work and another body keep the native false flag.
+    g_tick.physical_request_injected = false;
+    InvokeStepCastRay(image + 0xD7741, g_body_storage.data());
+    if (g_step_ray_calc_normal || !g_step_ray_other_flags_valid) return 153;
+    g_tick.physical_request_injected = true;
+    std::array<std::uint8_t, 0x300> other_step_body = g_body_storage;
+    InvokeStepCastRay(image + 0xD7741, other_step_body.data());
+    if (g_step_ray_calc_normal || !g_step_ray_other_flags_valid) return 154;
+    g_tick = {};
+    g_original_character_ray_intersect = saved_ray_intersect;
+    Put(g_body_storage.data(), kCharacterPhysicsWorldOffset,
+        reinterpret_cast<void*>(0x5678));
+
     const auto physical_boundary = ReadPhysicalBodyDisplacementBoundaryStatus();
     if (!physical_boundary.initialized || physical_boundary.live[0] != 0xE9)
         return 38;
+    image[kPhysicalStepRayNormalRequest + 5] = 1;
+    if (ReadPhysicalBodyDisplacementBoundaryStatus().initialized) return 158;
+    image[kPhysicalStepRayNormalRequest + 5] = 0;
+    image[kPhysicalStepRayNormalRequest] = 0x90;
+    if (ReadPhysicalBodyDisplacementBoundaryStatus().initialized) return 159;
+    image[kPhysicalStepRayNormalRequest] = 0xE9;
+    if (!ReadPhysicalBodyDisplacementBoundaryStatus().initialized) return 160;
 
     // D7281 runs after pushfd/pushad. The original native vPosAdd at ESP+20h
     // is therefore addressed at current ESP+44h and forwarded as arg #3.
@@ -305,6 +430,34 @@ int RunBodyCollisionProbeTest() {
     if (physical.rejected_requests != 1 || physical.pending ||
         physical.latest_result !=
             PhysicalBodyDisplacementResult::invalid_request) return 40;
+
+    // Message input can remain available while a script disables the player.
+    // Even an already-queued VR request must not move that scripted body.
+    if (!QueuePhysicalBodyDisplacement({0.01F, 0.0F, 0.0F}) ||
+        !QueueLocomotionBodyDisplacement({0.0F, 0.0F, 0.01F})) return 150;
+    Put(g_player_storage.data(), 0x1DC, false);
+    Put(g_player_storage.data(), 0x2BC, std::int32_t{5});
+    g_tick = {};
+    g_tick.character_body = g_body_storage.data();
+    Vec3 message_position = start;
+    Vec3 message_native_motion{0.0F, 0.25F, 0.0F};
+    ApplyQueuedPhysicalDisplacement(
+        g_body_storage.data(), &message_position, &message_native_motion);
+    physical = ConsumePhysicalBodyDisplacementTelemetry();
+    if (g_tick.physical_request_injected || g_tick.locomotion_request_injected ||
+        !Near(message_position.x, start.x) ||
+        !Near(message_position.z, start.z) ||
+        !Near(message_native_motion.x, 0.0F) ||
+        !Near(message_native_motion.y, 0.25F) ||
+        !Near(message_native_motion.z, 0.0F) || physical.pending ||
+        physical.injected_requests != 0 || physical.rejected_requests != 1 ||
+        physical.latest_result !=
+            PhysicalBodyDisplacementResult::gameplay_inactive) {
+        return 151;
+    }
+    Put(g_player_storage.data(), 0x1DC, true);
+    Put(g_player_storage.data(), 0x2BC, std::int32_t{0});
+    g_tick = {};
 
     if (!QueuePhysicalBodyDisplacement({0.10F, 123.0F, 0.10F})) return 41;
     physical = ConsumePhysicalBodyDisplacementTelemetry();
@@ -858,6 +1011,103 @@ int RunBodyCollisionProbeTest() {
         !combined_shadow.latest.physical_reconciliation.valid ||
         !Near(combined_shadow.latest.locomotion_carry_displacement[2], 0.02F))
         return 77;
+
+    // Exercise injection -> horizontal solver -> body observation -> adapter
+    // -> CompleteTick. Checking the projection helper alone misses residual
+    // collision travel being carried as locomotion with no stick request.
+    struct CarryCase {
+        const char* name;
+        Vec3 physical;
+        Vec3 stick;
+        bool native_before;
+        Vec3 collision_adjustment;
+        Vec3 native_after;
+        Vec3 expected_anchor_delta;
+        Vec3 expected_carry;
+        bool observe_horizontal = true;
+        bool native_step = false;
+    };
+    const CarryCase carry_cases[]{
+        {"physical lateral rejection", {0.03F,0,0}, {}, false,
+            {-0.03F,0,0.04F}, {}, {}, {}},
+        {"physical backward correction", {0.03F,0,0}, {}, false,
+            {-0.05F,0,0.01F}, {}, {}, {}},
+        {"physical overshoot", {0.03F,0,0}, {}, false,
+            {0.02F,0,0.01F}, {}, {0.03F,0,0}, {}},
+        {"physical partial slide", {0.03F,0,0}, {}, false,
+            {-0.01F,0,0.03F}, {}, {0.02F,0,0}, {}},
+        {"physical negative Z rejection", {0,0,-0.03F}, {}, false,
+            {0.04F,0,0.03F}, {}, {}, {}},
+        {"unobserved solver retains native carry", {0.03F,0,0}, {}, false,
+            {-0.03F,0,0.04F}, {}, {0,0,0.04F}, {0,0,0.04F}, false},
+        {"native step retains completed-step attribution", {0.03F,0,0}, {}, false,
+            {-0.03F,0,0}, {0.03F,0,0.01F},
+            {0.03F,0,0.01F}, {0,0,0.01F}, true, true},
+        {"native movement before injection", {0.03F,0,0}, {}, true,
+            {-0.01F,0,0.03F}, {}, {0.22F,0,0.13F}, {0.20F,0,0.13F}},
+        {"later native travel during rejection", {0.03F,0,0}, {}, false,
+            {-0.03F,0,0.04F}, {0.015F,0,0.02F},
+            {0.015F,0,0.02F}, {0.015F,0,0.02F}},
+        {"native movement without a request", {}, {}, true,
+            {}, {}, {0.20F,0,0.10F}, {0.20F,0,0.10F}},
+        {"later native travel without a request", {}, {}, false,
+            {}, {0.015F,0,0.02F}, {0.015F,0,0.02F}, {0.015F,0,0.02F}},
+        {"mixed opposite requests", {0.03F,0,0}, {-0.03F,0,0}, false,
+            {}, {}, {}, {-0.03F,0,0}},
+        {"mixed orthogonal requests", {0.03F,0,0}, {0,0,0.02F}, false,
+            {}, {}, {0.03F,0,0.02F}, {0,0,0.02F}},
+        {"mixed aligned requests", {0.02F,0,0}, {0.02F,0,0}, false,
+            {}, {}, {0.04F,0,0}, {0.02F,0,0}},
+    };
+    bool carry_cases_passed = true;
+    for (const auto& c : carry_cases) {
+        InvalidateBlackPlagueDirectLocomotionIntent();
+        Put(replacement.data(), kCharacterPositionOffset, start);
+        g_stationary_native_update = true;
+        g_collision_x_adjustment = g_collision_z_adjustment = 0.0F;
+        g_post_collision_displacement = {};
+        g_observe_horizontal_collision = true;
+        g_simulate_native_step_climb = false;
+        head.values[3] = head.values[11] = 0.0F;
+        PublishBlackPlagueShadowTracking(head, 0.0F, true);
+        HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+        static_cast<void>(ConsumeBlackPlagueShadowTelemetry());
+        static_cast<void>(ConsumeBodyCollisionTelemetry());
+
+        g_stationary_native_update = !c.native_before;
+        g_collision_x_adjustment = c.collision_adjustment.x;
+        g_collision_z_adjustment = c.collision_adjustment.z;
+        g_post_collision_displacement = c.native_after;
+        g_observe_horizontal_collision = c.observe_horizontal;
+        g_simulate_native_step_climb = c.native_step;
+        head.values[3] = c.physical.x;
+        head.values[11] = c.physical.z;
+        PublishBlackPlagueShadowTracking(head, 0.0F, false);
+        if (HorizontalLength(c.stick) > 0.0F &&
+            !QueueLocomotionBodyDisplacement(ToArray(c.stick))) return 150;
+        HookedCharacterUpdate(replacement.data(), nullptr, 0.016F);
+        const auto observed = ConsumeBlackPlagueShadowTelemetry().latest;
+        const auto body_sample = ConsumeBodyCollisionTelemetry();
+        if (!observed.valid ||
+            !Near(observed.predicted_anchor[0], start.x + c.expected_anchor_delta.x) ||
+            !Near(observed.predicted_anchor[2], start.z + c.expected_anchor_delta.z) ||
+            !Near(observed.locomotion_carry_displacement[0], c.expected_carry.x) ||
+            !Near(observed.locomotion_carry_displacement[2], c.expected_carry.z) ||
+            (HorizontalLength(c.physical) > 0.0F && !body_sample.physical_request_injected)) {
+            std::cerr << c.name << ": anchor_delta=["
+                      << observed.predicted_anchor[0] - start.x << ','
+                      << observed.predicted_anchor[2] - start.z << "] carry=["
+                      << observed.locomotion_carry_displacement[0] << ','
+                      << observed.locomotion_carry_displacement[2] << "]\n";
+            carry_cases_passed = false;
+        }
+    }
+    g_stationary_native_update = true;
+    g_collision_x_adjustment = g_collision_z_adjustment = 0.0F;
+    g_post_collision_displacement = {};
+    g_observe_horizontal_collision = true;
+    g_simulate_native_step_climb = false;
+    if (!carry_cases_passed) return 151;
     PublishBlackPlagueShadowTracking(head, 0.0F, true);
     if (ReadBlackPlagueRoomScaleCameraSample().valid) return 69;
 
@@ -928,6 +1178,16 @@ int RunBodyCollisionProbeTest() {
     if (!std::equal(kPhysicalStepRayResultWindow.begin(),
             kPhysicalStepRayResultWindow.end(),
             image + kPhysicalStepRayResultFilter)) return 89;
+    if (!std::equal(kPhysicalStepRayNormalSignature.begin(),
+            kPhysicalStepRayNormalSignature.end(),
+            image + kPhysicalStepRayNormalRequest)) return 156;
+    // The sixth byte is outside the JMP but inside the replayed instruction.
+    // Validate it before installing any of the body owner's hooks.
+    image[kPhysicalStepRayNormalRequest + 5] = 1;
+    if (InstallForImage(image, error) || error.empty() ||
+        g_update_hook.installed() || g_physical_step_ray_normal_hook.installed())
+        return 157;
+    image[kPhysicalStepRayNormalRequest + 5] = 0;
 
     image[kPhysicsWorldCharacterUpdateCall] = 0x90;
     if (InstallForImage(image, error) || error.empty()) {

@@ -261,6 +261,8 @@ const char* PhysicalBodyDisplacementResultName(
             return "body_mismatch";
         case PhysicalBodyDisplacementResult::owner_mismatch:
             return "owner_mismatch";
+        case PhysicalBodyDisplacementResult::gameplay_inactive:
+            return "gameplay_inactive";
         default:
             return "none";
     }
@@ -674,6 +676,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
         float movement_yaw = 0.0F;
         const bool movement_yaw_valid =
             penumbra_vr::backends::black_plague::TrackedMovementYaw(movement_yaw);
+        const auto gui_pointer = penumbra_vr::backends::black_plague::
+            ReadNativeGuiPointerDiagnostics();
         penumbra_vr::probe::WriteLog(
             "frame=%llu telemetry_dropped_updates=%llu render_world_calls=%lu renderer=%p world=%p camera=%p frame_time=%.6f "
             "gl_context=%u gl_version=%s framebuffer_api=%s viewport=[%ld,%ld,%ld,%ld] "
@@ -709,6 +713,8 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             "presentation_submit_age_valid=%u presentation_submit_age_ms=%llu "
             "hmd_visibility_camera_restored=%u hmd_visibility_error=%s "
             "eye_scissor_remapped=%lu eye_scissor_bypassed=%lu "
+            "gui_pointer_calls=%llu gui_pointer_updates=%llu gui_pointer_unavailable=%llu "
+            "gui_mouse_overrides=%llu gui_select_presses=%llu gui_select_releases=%llu "
             "controller_samples=%lu controller_failures=%lu controller_focus=%u "
             "controller_grips=%u controller_aims=%u controller_move=[%.3f,%.3f] controller_turn=%.3f "
             "controller_moving_sample_unchanged_ms=%llu controller_frozen_release=%u "
@@ -820,6 +826,12 @@ void OnFrame(std::uint64_t frame_number) noexcept {
             render_world.hmd_visibility_error.data(),
             static_cast<unsigned long>(render_world.eye_scissor_remapped),
             static_cast<unsigned long>(render_world.eye_scissor_bypassed),
+            static_cast<unsigned long long>(gui_pointer.calls),
+            static_cast<unsigned long long>(gui_pointer.tracked_updates),
+            static_cast<unsigned long long>(gui_pointer.unavailable),
+            static_cast<unsigned long long>(gui_pointer.mouse_overrides),
+            static_cast<unsigned long long>(gui_pointer.select_presses),
+            static_cast<unsigned long long>(gui_pointer.select_releases),
             static_cast<unsigned long>(render_world.controller_samples),
             static_cast<unsigned long>(render_world.controller_failures),
             render_world.controller_frame.focused ? 1U : 0U,

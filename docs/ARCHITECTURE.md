@@ -178,6 +178,11 @@ movement-state restrictions and player lifecycle checks. Physical HMD motion
 must never credit lateral/backward collision correction as accepted head motion;
 the current release projects actual body motion onto the requested physical
 direction and clamps it to the request length.
+The BP body observer also owns motion attribution: a pure physical request's
+initial horizontal collision residual must not re-enter the head anchor as
+locomotion carry. Native motion outside that solve and real mixed stick intent
+retain their independently observed carry; shared reconciliation consumes the
+backend's explicit attribution rather than inferring it from total travel.
 
 ### Hands and interaction
 
@@ -190,8 +195,24 @@ ownership families. Free-body placement can be Framework-owned after native
 selection, while doors/sliders/hinges preserve native lifecycle and joints and
 consume only demonstrated shared servo/contact behavior. Unknown mechanism
 families fail closed. While a Framework-owned `Grab=6` body is held, Black Plague
-reproduces Rework's active/enabled/non-autodisable lifecycle before publishing
-the tracked transform; release restores native ownership.
+reproduces Rework's active/enabled/non-autodisable lifecycle. Single rigid props
+consume its tracked transform. A closed dynamic
+component with at least two bodies instead receives bounded Newton contact
+velocity corrections across its connected dynamic bodies and contact/angular
+drive on the selected body; it never writes
+one bone's matrix independently of the joint solver. Animation companions do
+not consume dynamic-graph capacity. Release restores native ownership.
+Native `Grab=6` Objects with world/static endpoints have a separate constrained
+contact route using that bounded dynamic-component correction. Static roots,
+animation companions and disconnected components receive no writes. Newton
+retains joint limits and script ownership; constrained holds receive neither a
+wrist angular-velocity override nor tracked throwing velocity on release.
+VR Push release consumes Rework's transition-only behavior through the native
+state owner; it omits BP's subsequent camera-directed release impulse, including
+guarded cancellation. Native-origin Push retains its original release handler.
+Hinge application converts the origin-based servo's linear velocity to velocity
+at the native centre of mass. Joint limits, controllers and script callbacks
+remain game-owned.
 
 Palm collision controls visible/resolved hand placement; raw controller aim
 remains available for pointing and bounded acquisition assistance. Tool sockets
@@ -222,15 +243,24 @@ boundary: the VR context-action edge is forwarded directly to the active native
 context or hovered inventory widget while all other inventory dispatch remains
 native.
 The native 800x600 draw queue is captured once into a transparent surface and
-composited into both eyes. During gameplay it carries HUD/messages at the lower
-center with configurable `SubtitleScale`; this scales the whole captured queue,
-not the native font alone. Inventory keeps the stereo world visible and places
+composited into both eyes. During gameplay it carries HUD/messages on the
+head-relative plane with configurable `SubtitleScale`; this scales the whole
+captured queue. BP's GameMessage-only font-call adapter additionally centers
+the complete message block and doubles its native font/spacing, using Rework
+wrapping with native glyph metrics. Radio/menu callers retain their native
+layout; fade and shadow state stay game-owned. Inventory keeps the stereo world visible and places
 that queue on a world-anchored panel at Rework's 1.1 m / 1:750 geometry.
 Notebook follows the off hand at Rework's 1:1450 geometry. Full-screen menus
 retain their separate captured-panel route. Panel projection and pointer use
 the same world transform. The maintainer accepted inventory/notebook, context
 actions and UseItem in the installed trilogy checklist. Subtitle scaling and
 broader layout/hardware coverage remain separate validation gates.
+
+Black Plague masks equipped flashlight/glowstick mesh and attached billboard
+admission during UI visibility preparation and world drawing. This render-only
+transaction restores the exact native flags, including already-hidden parts,
+without changing the equipped item or its light state. It is independent of
+hands updates, which may stop while an interface is active.
 
 ### Audio and visuals
 

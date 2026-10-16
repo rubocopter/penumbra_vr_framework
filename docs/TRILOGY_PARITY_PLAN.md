@@ -234,6 +234,276 @@ it does not establish device compatibility or public support.
 
 ## Black Plague release-regression state
 
+### Dream-ship progression feedback
+
+An external report identifies a progression blocker in the dream ship reached
+after the sewers: the yellow bucket under a table and the dead animal required
+on the hand altar could not be grabbed. The same report describes mouse-only
+message advancement on arrival, rare Examine cues and an unusable kitchen save
+point near the computer. Quest 3 is reported; the mod is presumed current but
+its installed version, controller binding and exact save are not yet verified.
+Prior tutorial/chair acceptance does not close these cases.
+
+The inactive Message input exception is implemented and host-tested. BP's
+native handler accepts Interact/Examine in state `5` even when the player is
+inactive; the previous Framework UI gate instead removed those VR actions and
+selected full-screen presentation. The adapter now preserves that native route
+and world-rendering eligibility while real overlays retain priority. VR turn,
+crouch and stick ownership still require an active player; queued physical and
+stick displacement is rejected at the existing body injection boundary when
+native gameplay becomes inactive. Both actual-adapter regressions failed before
+their fixes and pass afterwards; the initialized-image input verifier passes.
+The installed feedback candidate received maintainer headset acceptance for
+controller arrival-message dismissal and the kitchen save point on 2026-10-15.
+Examine cues worked consistently in the tested saves on that setup; Quest 3
+coverage remains separate. The scene script confirms inactive Message ownership.
+
+The code-only follow-up corrects three independently reproduced adapter defects:
+inert Object contacts no longer mask a usable palm candidate; physical Object
+distance consumers use a fresh matching contact within the existing 0.40 m
+reach instead of measuring from the native body centre; and a separate tracked
+head query restores Examine selection/cues and nonphysical area/SaveArea
+fallback. The scoped headset observations above do not validate every branch.
+
+Head selection retains native solid/area arbitration and occlusion. Explicit
+Examine refreshes the gaze target while Interact retains the hand target;
+described props cannot become distant gaze grabs. SaveArea is independently
+mapped as type `10`, with a non-colliding body and its native 2.1 m save guard.
+Its callback point and native distance are preserved. Physical distance changes
+are limited to four Object calls and the verified crosshair distance caller;
+native Examine, SaveArea, UseItem and generic interaction-script distance
+consumers retain their original policy. Stale targets, changed points, UI/focus
+loss and out-of-reach contacts fall back to native distance.
+
+The reporter saves reproduced the remaining yellow-bucket failure in visor:
+chest opening and egg acquisition worked, but the bucket could
+only be pushed with the egg. `boat_bucket01.ent` defines native Grab and two
+dynamic bodies (3 kg bucket, 2.2 kg handle); its DAE links them with an internal
+hinge. Framework's blanket joint rejection differed from Rework's jointed Grab.
+The new host-tested adaptation accepts only entirely dynamic, same-Object body
+assemblies with all joint endpoints internal. Native Grab must already own the
+transition; world anchors, foreign bodies and mechanism entity types are rejected.
+Rework's 4/6 body speed caps and 3 m/s carried velocity apply to these assemblies;
+release remains bounded to 3 m/s and restores native saved settings. Newton owns
+the joint solver and only the selected body receives the tracked transform.
+The maintainer's next headset test accepted bucket acquisition by both handle
+and container. The supplied 58-second clip shows lifting/rotation in the egg
+room. This closes the reported ungrabbable-bucket case on that local setup;
+The following maintainer test also accepted throwing and reacquiring the bucket;
+broader assembly regression remains separate.
+The later dog puzzle was not exercised; egg placement must not be recorded as
+dog acceptance. Placing the egg on the hand pedestal produced no event; earlier
+test instructions incorrectly equated that pedestal with `stickegg`. Map/save
+evidence places `stickegg` on the `mr_table` table near the coffin, while
+`stickdog` is at `altar01` (`mr_hand_altar`), almost 2.8 m away horizontally.
+The egg belongs on the table's egg picture. Native egg attachment triggers a
+spider encounter and enables the dog after the subsequent fire sequence; dog
+Hips/Spine2 attachment then belongs at the hand pedestal's hook.
+The maintainer then confirmed correct-table egg attachment, the fire sequence
+and dog appearance. Dog acquisition still failed. Its native Grab model
+`character_dog.ent` has 14 dynamic ragdoll bones, while the save enumerates 28
+bodies alternating those bones and mass-zero animation colliders. Exact Rework
+`23c890f` creates these companions inactive, non-character-colliding and separate
+from the ragdoll joint graph; native entity reactivation can wake all enumerated
+bodies. BP's assembly guard previously rejected every zero-mass sibling.
+The host-tested correction ignores only unjointed, non-character-colliding
+mass-zero companions of the same Object; they are not valid joint endpoints
+and their native activation is never changed by Grab. Character-blocking static
+bodies and world/foreign anchors remain rejected.
+The actual adapter regression failed before this change and passes afterwards;
+a 28-body ragdoll fixture covers the graph, and both inactive and reactivated
+companion fixtures preserve native lifecycle state.
+The following headset report acquired the dog but found limited anatomical
+acquisition and extreme skeletal stretching. The dog altar was not tested:
+the maintainer tried the wall instead. The altar event is untested, not a
+confirmed failure.
+
+The articulated Grab candidate is host-tested. Closed dynamic components of
+at least two physical bodies now use Newton contact/angular drive instead
+of assigning one bone's matrix; the native joint solver retains the assembly.
+Human corpses previously failed the 32-entry enumeration guard before their
+animation companions could be filtered. A regression reproduces that rejection
+at 18+18 entries and passes with separate enumeration/dynamic-graph bounds.
+
+The installed base-game asset audit examined 759 `.ent` files and 551 referenced
+DAEs. All 15 explicit Grab assets with multiple creatable joints divide into
+these groups (counts are authored topology, not live observations):
+
+| Asset stem under `models/` | Physical + animation bodies | Joints | Grab candidate route |
+| --- | --- | --- | --- |
+| `characters/dog/character_dog` | 14 + 14 | 13 ball | Yes |
+| `corpse/corpse_gas_victim_ragdoll`, `corpse/corpse_howard_ragdoll` | 18 + 18 each | 17 each | Yes; old enumeration limit rejected both |
+| `corpse/corpse_worm` | 4 + 4 | 3 ball | Yes |
+| `cleaning/cleaning_trashbag` | 3 + 3 | 2 hinge | Yes |
+| `furniture/furniture_madrass` | 6 + 6 | 7 mixed | Yes |
+| `furniture/furniture_pillow01` | 6 + 6 | 6 ball | Yes |
+| `kitchen/kitchen_foodbag_flour`, `_rice`, `_sugar` | 3 + 3 each | 2 ball each | Yes |
+| `lab/lab_cryo_head` | 3 + 3 | 2 mixed | Constrained contact: static neck endpoint |
+| `mental_realm/mr_hand_ragdoll` | 3 + 3 | 3 hinge | Constrained contact: world endpoint |
+| `tech/tech_electric_box_cord`, `_static` | 8 + 8 each | 7 ball each | Constrained contact: static endpoints |
+| `boat/boat_dynamicparaffin` | 2 + 2 | 2 ball | Constrained contact: world endpoint; one extra declared joint has no child body |
+
+The one-joint `boat_bucket01` now uses the same Newton contact/component drive.
+Its earlier acquisition/throw acceptance did not cover strong handle pulls;
+the later headset report identifies handle/container separation. The old
+selected-body matrix exception is removed and an actual-adapter regression
+rejects matrix writes for this two-body assembly. Shipped-Newton hinge fixtures
+lift from either member using authored bucket/handle masses; live retest remains
+open for that correction.
+Coffin/chest variants and lockers use native Move with fixed boxes/frames or
+world hinges; their owners and constraints are preserved. Anchored native Grab
+props above use the constrained contact route, selected by the live graph rather
+than asset name; authored topology does not establish live/headset validation.
+The single-joint `kitchen/kitchen_rotten_meat` (one 35 kg body, world ball joint)
+and `lab/lab_s_hatch_physics` (9 kg lid, static frame, 0–0.40 m slider) expose
+the same native Grab boundary. They are eligible for the constrained route too.
+The hatch's native opened/closed controllers remain game-owned; no headset
+coverage or controller compatibility is inferred from the multi-joint audit.
+
+Host regressions exercise every physical member of 2/3/4/6/14/18-body graphs,
+and endpoint/interior palm selection through native acceptance and prepared
+Grab. Active auxiliary colliders, disabled bones and native callback vetoes
+retain their respective selection policies. Real Newton tests pull 2/3/7/14/18/24
+body chains by both ends and the middle for 360 ticks, with native-like selected
+mass reduction; pivot separation remains within the 4 cm test bound. These
+synthetic chains do not prove stability for every authored joint limit/contact.
+
+The subsequent headset report describes only about half a centimetre of dog
+motion, as if its weight were infinite. The earlier chain fixture omitted
+gravity. Enabling native-like gravity on the non-selected bodies reproduces
+insufficient lift: Grab lightens only the selected bone, so its bounded contact
+impulse cannot carry the rest. The host-tested correction distributes the same
+bounded translation delta through the selected connected dynamic component,
+preserving each body's existing velocity and native gravity/joints. Animation
+companions and disconnected dynamic bodies remain untouched. Gravity-bearing
+chain lift and actual-adapter isolation regressions pass. The next maintainer
+headset report confirms lifting the dog and placing it on the altar. It also
+reports irregular initial acquisition that recovered after opening/closing the
+menu; that recovery's cause remains unclassified.
+
+The same report identifies the following raised-arm puzzle as blocked and the
+flashlight attachment as incorrect at 00:49 in the supplied clip. Asset/script
+inspection establishes the arm as native Grab with a world-rooted three-hinge
+chain; the closed-assembly guard rejected its VR acquisition. A separate
+constrained contact route now preserves the native graph, script locking and
+limits, applying bounded corrections only to the connected dynamic members.
+It does not write static/animation transforms, override wrist angular velocity,
+or throw the anchored object. Initial palm/contact separation is preserved so
+stationary acquisition does not pull the mechanism. Actual-adapter world/static-root acquisition,
+release and isolation tests pass. Shipped-Newton three-hinge fixtures exercise
+both anchor types and every selected bone with gravity and native-like mass
+reduction: lift reaches within 8 cm of the target, pivots stay within 4 cm and
+joint limits within the test's 0.05 rad tolerance. These synthetic fixtures do
+not prove the authored puzzle event. The flashlight's target-owned socket now
+matches Rework's grip-relative forward direction, preserving the measured
+grip and native size; independent node tests pass for both hands and wrist
+rotation. The next maintainer headset report confirms moving the articulated
+arms to complete the puzzle on installed probe `111F7D…0520`. That scoped
+progression gate is accepted. Flashlight confirmation remains separate.
+
+The same session reports barrel slingshot release and a wall lever that moves
+but never starts the next puzzle. Saved `3barrels` Objects use native Push;
+the original release handler adds a camera-forward impulse after native Leave.
+VR-origin release and cancellation now use the transition-only behavior proven
+in Rework. Tests reproduce and remove that late impulse without erasing existing
+body velocity, and preserve native-origin release semantics.
+
+The `3barrellever` is native Lever/Move with a 2 kg offset-collider body.
+Its native update owns the 110-degree maximum state and the `BarrelLever`
+callback that enables puzzle rings; physical stops are approximately -1/130
+degrees. BP's hinge servo used model-origin linear velocity where Newton needs
+COM velocity. The application now adds the rotated native local-COM contribution
+to the existing hinge plan. Actual-adapter ABI and shipped-Newton offset/zero-COM
+fixtures pass activation-angle, stationary-acquisition, pivot and limit checks.
+This preserves the original script/controller lifecycle. The maintainer's
+2026-10-16 headset report accepts these previous corrections on installed probe
+`AF7F3D…6C8`; this closes the reported barrel, wall-lever and handle-separation
+cases on that local setup.
+
+That report identifies the next progression boundary: the fixed computer in
+Swanson's room was difficult to activate across its desk, and its screen cursor
+required a physical mouse. The authored terminal is a native static Lamp with
+2.1 m InteractDist and a LampLit callback opening ScreenGui. Exact Lamp identity
+and zero body mass now admit it to the existing occluded head activation query;
+native Lamp range checks remain authoritative. Dynamic Lamps and other physical
+props retain palm selection. The next maintainer headset report on installed
+probe `2AB4F0…CF7D` accepts activating the terminal at a good distance; this
+closes that reported reach case. The IncomingChat popup still had no usable
+controller cursor and could not be accepted. That report exposed a wrong native
+cursor-family attribution: state 8 is the Schmup minigame; the computer instead
+uses gameplay ScreenGui and HPL cGui's absolute mouse messages. The adapter now
+feeds the existing tracked-menu UV policy into that verified native message
+boundary and focused GuiSet, preserving popup attention, cursor artwork,
+physical mouse priority and native left-down/up dispatch. The incorrect minigame
+hook is removed. Actual-adapter tests reproduce cursor failure before the fix
+and exercise popup movement plus Accept on VR release afterward. Cumulative
+pointer/press/release diagnostics make the next live route observable.
+The next maintainer report on installed probe `1E5861…DE89` accepts the fix;
+the reported PC cursor/Accept and reach gates are closed on that local setup.
+
+The maintainer then requested centered, approximately double-size text when
+examining objects. BP GameMessage now uses native center alignment, 2x font
+size/line spacing and whole-block vertical centering in the captured HUD plane.
+Rework's wrapping algorithm counts lines using BP's native glyph measurement;
+the original text, native fades, black-text mode, shadow offsets and depth
+layers remain authoritative. Six exact caller hooks cover GameMessage only;
+Radio subtitles, menu font calls and the existing SubtitleScale setting retain
+their behavior. Synthetic x86 tests exercise all six calls, explicit/word-wrapped
+lines, heap/inline text, native fallback and hook restoration. This readability
+change subsequently received maintainer headset acceptance on installed probe
+`8210CD…44DB`: centered placement and enlarged size are accepted on that local
+setup. The scoped record is `releases/1.0.8-headset-acceptance.json`; it does not
+promote the separate menu-light, flashlight or physical-step gates.
+
+The same report identifies equipped light geometry frozen over menus. Stopping
+tracked tool transforms did not suppress native mesh/billboard rendering.
+The render owner now masks verified equipped flashlight/glowstick geometry
+before native render-list admission and during drawing, restoring its exact
+native flags afterward. Equip and light state remain untouched; the transaction
+does not depend on a hands update while UI is active. Menu hide/resume behavior
+still requires headset confirmation.
+
+Reliable anatomical acquisition, sustained dragging/rotation/release of these
+actual props and broader mechanism regression remain
+headset gates. Dog head/jaw/hands have no separate physical bodies; the Neck
+body owns compound colliders. That authored topology alone does not establish
+the cause of the reported contact failures. Do not enlarge reach or bypass
+native selection vetoes without new evidence.
+
+The maintainer also reports backward world correction when leaning down/forward
+to reach props and excessive body blocking. Local telemetry confirms a
+physical-only solver residual being carried into the camera with no stick
+request. Rework carries joystick movement separately after reconciling physical
+acceptance. The new host-tested BP correction excludes residual from the initial
+horizontal solve only for a physical-only tick with no native pre-injection
+horizontal movement, a valid solver observation and no accepted native step.
+Explicit backend carry preserves native travel outside the solve, no-request
+ticks and existing mixed stick/HMD attribution. Actual probe-to-camera fixtures
+failed before the fix and pass afterwards, including lateral rejection,
+backward correction, overshoot, missing observation, native-step fallback and
+native movement before/after injection. Release build, all 59 host tests and
+exact-image/metadata checks pass. Leaning/reach improvement is not yet
+headset-validated: the subsequent retest still reports world rejection and
+excessive low-obstacle blocking. The correction fixes an attribution defect
+but does not close that symptom. Synthetic native-phase tests do not validate real moving
+platforms; later native travel cannot identify every platform/correction source.
+Broader body-block severity remains unresolved; no collider/offset retuning is
+included in this attribution correction.
+The maintainer identifies a mattress in the egg/dog room and confirms blocking
+with both joystick and physical approach. A subsequent exact-image audit found
+that BP's native step CastRay requests distance but not normals, while the VR
+positive/upward filter reads the shared ray-normal storage. That storage can
+retain a previous query's normal. The host-tested `D7741` gateway now requests
+the fresh normal only for the matching physical-step tick (including mixed
+stick/HMD), without changing the native ray count, step height or solver.
+The actual seven-argument native-call fixture failed before the fix and passes
+afterwards for stale/fresh floor and wall normals, scope exclusions, signature
+rejection and restoration. Combined Release build, 59 host tests, exact-image
+and metadata checks pass; independent review found no blockers. Mattress
+traversal and continued backward-world correction remain new headset gates.
+Independent final review of the preceding candidate was unavailable due to an
+agent usage limit; local review, compilation and host checks completed.
+
 Black Plague is the established second backend and has real headset evidence,
 including gameplay VR from Steam's ordinary **Play** path. Publication in
 v1.0.0 does not promote every capability to `supported`. Current-release

@@ -697,13 +697,28 @@ void ObserveBlackPlagueNativeBodyTick(void* player, void* character_body,
                 }
             }
             const auto completed_tick = g_pending_physical_validation.tick;
+            std::array<float, 3> observed_non_physical{};
+            const std::array<float, 3>* observed_carry = nullptr;
+            if (physical_tick.request_injected) {
+                // The probe attributes only travel from the injection onward.
+                // Preserve native movement before injection explicitly; with
+                // no request CompleteTick still carries the whole native tick.
+                for (const auto axis : {0U, 2U}) {
+                    observed_non_physical[axis] =
+                        physical_tick.position_before_injection[axis] -
+                        body_before[axis] +
+                        physical_tick.locomotion_accepted_displacement[axis];
+                }
+                observed_carry = &observed_non_physical;
+            }
             auto shadow_sample = room_scale_sample_safe
                 ? g_shadow.CompleteTick(
                     completed_tick,
                     accepted,
                     feet_after,
                     matched_physical_observation,
-                    physical_motion)
+                    physical_motion,
+                    observed_carry)
                 : BodyReconciliationShadowSample{};
             if (matched_physical_observation && shadow_sample.valid &&
                 !shadow_sample.reset) {

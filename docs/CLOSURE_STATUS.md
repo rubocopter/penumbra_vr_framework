@@ -18,7 +18,28 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.7
+## Current release — 1.0.8
+
+Framework v1.0.8 packages focused Black Plague interaction/progression and text
+readability corrections. See [release notes](releases/1.0.8.md), the
+[changelog](CHANGELOG.md) and the scoped
+[maintainer acceptance record](releases/1.0.8-headset-acceptance.json).
+The accepted cases include reported barrel/lever/bucket behavior, PC reach and
+cursor/Accept, and centered enlarged Examine text. Earlier dog/altar and arm
+puzzle completion evidence remains scoped in the capability ledger.
+
+The standalone installer and matching committed source are built and verified
+as a new versioned artifact set. Its build provenance and final host/installer
+checks are recorded separately from the accepted local runtime hashes. Exact
+new-Setup headset and independent clean-PC acceptance are not implied.
+
+Equipped-light menu visibility, flashlight attachment, broader articulated
+contact and physical-only/low-obstacle/leaning correction remain focused gates.
+The included motion-attribution and step-normal changes have host evidence;
+low-obstacle traversal is not declared fixed. Requiem's intermittent startup
+cause and other-device limitations remain unchanged.
+
+## Historical release — 1.0.7
 
 Framework v1.0.7 publishes BP/Requiem release-edge recovery, transient movement
 dead-zone preservation and analog-data guards, with Windows installer/diagnostics

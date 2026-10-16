@@ -100,6 +100,11 @@ input hardening with versioned PE/artifact identities recorded in
 `releases/1.0.7-validation.json`; exact new Setup,
 other hardware and full-game support are not implied by this acceptance.
 
+Version 1.0.8 packages the Black Plague progression/interaction, computer and
+message-readability fixes. Focused local headset acceptance is identified in
+`releases/1.0.8-headset-acceptance.json`; it does not transfer to new Setup
+artifacts, other games/devices or the remaining physics/presentation gates.
+
 ## Support rules
 
 - Unknown executable hashes fail closed.

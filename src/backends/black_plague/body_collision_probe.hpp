@@ -74,6 +74,7 @@ enum class PhysicalBodyDisplacementResult : std::uint8_t {
     invalid_request,
     body_mismatch,
     owner_mismatch,
+    gameplay_inactive,
 };
 
 struct PhysicalBodyDisplacementTelemetry {
@@ -89,8 +90,9 @@ struct PhysicalBodyDisplacementTelemetry {
     std::array<float, 3> bounded_displacement{};
 };
 
-// Exact-build, read-only observation hooks for the initialized FD316F... image.
-// They do not enable positional HMD translation or alter native movement.
+// Exact-build body owner for the initialized FD316F... image. Positional intent
+// stays at D7281; the scoped D7741 gateway requests fresh native step-ray normals
+// for the existing physical-step filter, without changing native Update ownership.
 [[nodiscard]] bool InstallBodyCollisionProbe(std::string& error) noexcept;
 [[nodiscard]] bool RemoveBodyCollisionProbe(std::string& error) noexcept;
 [[nodiscard]] BodyCollisionTelemetry ConsumeBodyCollisionTelemetry() noexcept;
