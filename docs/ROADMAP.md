@@ -12,6 +12,7 @@ Framework [v1.0.9](releases/1.0.9.md) distributes the reported movement/jump,
 BP/Requiem audio, uphill overshoot and BP filing-cabinet corrections for user
 feedback. The new runtime behavior has host tests; the reported Quest 3 cases
 and new-build headset acceptance remain pending in the focused checklist.
+Exact installer host checks and hashes are pinned in the [1.0.9 artifact record](releases/1.0.9-validation.json).
 
 Framework [v1.0.8](releases/1.0.8.md) shipped focused Black Plague interaction,
 computer and Examine-text corrections. The reported barrel/lever/bucket,

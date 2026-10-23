@@ -31,7 +31,13 @@ regressions. Historical headset results do not validate these new binaries.
 The reported long-jump platform, perceived audio direction, affected surfaces
 and drawers remain pending in the [acceptance checklist](VR_HEADSET_TEST_CHECKLIST.md#trilogy-feedback-candidate--independent-acceptance).
 The public installer, matching committed source, dependency sources and checksums
-are built through the existing release workflow. Requiem's intermittent startup
+are built through the existing release workflow. The [artifact record](releases/1.0.9-validation.json)
+pins clean build source `8abb554ec3724c6bbf65deec81190fe28ee7e8f7`, the final
+English/Spanish standalone extraction, topology A-F and upgrade/repair/exact
+restoration from 1.0.8. Root tests ran before documentation-only version-reference
+corrections; package-only mode records that distinction, and Overture was
+built/tested by the product packager. The release tag adds documentation only.
+Requiem's intermittent startup
 root cause, other-controller limitations and independent clean-PC/headset
 acceptance remain open.
 

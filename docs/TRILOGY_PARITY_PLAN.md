@@ -60,9 +60,9 @@ installed executable matches the candidate build hash. This validates the
 observed acquisition/gameplay sequence, including visibility-before-ranking;
 it does not certify every Overture mechanism or Quest 3 pointer alignment.
 
-## Current feedback corrections — host evidence
+## Current feedback corrections — v1.0.9 host evidence
 
-The 2026-10-23 maintenance candidate addresses the concrete Quest 3 report;
+Framework v1.0.9 publishes corrections for the concrete Quest 3 report;
 these changes have no new live/headset acceptance. Historical accepted binaries
 and their scoped results remain unchanged.
 
