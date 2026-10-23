@@ -78,9 +78,9 @@ int main() {
         return 1;
     }
     // Integrate one second of requested travel through the production helper.
-    // 120 Hz keeps each request below the native queue's 5 cm step cap.
+    // Queue/body-phase coverage at low rates lives in gameplay_bridge_test.
     for (const bool sprinting : {false, true}) {
-        const float expected_distance = sprinting ? 4.5F : 1.5F;
+        const float expected_distance = sprinting ? 4.5F : 3.0F;
         for (const std::array<float, 3> direction : {
                  std::array<float, 3>{0.0F, 0.0F, -1.0F},
                  std::array<float, 3>{1.0F, 0.0F, 0.0F},

@@ -113,7 +113,7 @@ SubtitleScale=1.35
 HRTF=Auto
 ```
 
-`MoveSpeed` scales the shared `1.5/2.25 m/s` walk/sprint policy. `UiDistance` is
+`MoveSpeed` scales the shared `3/4.5 m/s` normal walk/sprint policy. `UiDistance` is
 in metres and `UiScale` changes panel size. `RenderScale` multiplies the OpenVR
 recommended per-eye dimensions before allocation fallback.
 

@@ -5,6 +5,22 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.9 — 2026-10-23
+
+- Share the normal 3/4.5 m/s walk/sprint profile across the trilogy and keep
+  metric stick travel independent of the physical HMD displacement bound.
+- Correct Requiem's final held-jump query and inactive-player guard. Adapt
+  Overture's normal jump envelope to headset cadence, merge native keyboard/VR
+  Jump ownership and preserve native release/repress and script/solver handoff.
+- Drive BP/Requiem positional audio from the reconciled central head pose with
+  native listener/context fallback and restoration.
+- Limit accepted native uphill advance to the ray-measured surface rise and
+  preserve native collision selection and single physics-update ownership.
+- Suspend BP slider endpoint stickiness only while VR owns the held drawer;
+  preserve joints, limits, scripts and restoration on release.
+- Add actual-consumer, native gateway and real OpenAL/Newton host regressions.
+  Publish for user feedback with new live/headset acceptance explicitly pending.
+
 ## 1.0.8 — 2026-10-16
 
 - Fix Black Plague physical target filtering, native Examine/SaveArea selection

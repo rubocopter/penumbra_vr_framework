@@ -167,7 +167,7 @@ observes/filters the displacement accepted by the native collision solver.
 
 Shared policy provides:
 
-- HMD-relative metric walk/sprint (`1.5/2.25 m/s` reference policy);
+- HMD-relative metric walk/sprint (`3/4.5 m/s` normal trilogy policy);
 - physical room-scale translation;
 - accepted-motion reconciliation and tracking-anchor carry;
 - physical/button/hybrid crouch intent;
@@ -183,6 +183,14 @@ initial horizontal collision residual must not re-enter the head anchor as
 locomotion carry. Native motion outside that solve and real mixed stick intent
 retain their independently observed carry; shared reconciliation consumes the
 backend's explicit attribution rather than inferring it from total travel.
+
+Physical room-scale requests retain the Rework 5 cm bound. Stick locomotion
+keeps its metric displacement independently of that bound, including mixed
+requests, so its speed does not depend on update frequency. Both binary hosts
+also adapt their independently verified native step-success blocks: an accepted
+VR ascent cannot advance past the ray-measured surface height. Native step
+selection, collision and the one physics update remain backend-owned; the shared
+policy contains only the positive-height bound.
 
 ### Hands and interaction
 
@@ -268,6 +276,13 @@ HRTF configuration is written before OpenAL device creation. Black Plague also
 has an exact-build OpenAL/EFX consumer for the shared mine-gallery reverb/bus
 trim. The separate Rework distance/occlusion low-pass behavior still lacks a
 safe target boundary.
+
+Both binary backends publish their reconciled central head pose to a shared
+tracked-listener adapter before temporary eye-camera overrides. The adapter owns
+the named OpenAL listener/context imports, preserving native listener attributes
+for fallback and restoring them on tracking/focus/presentation loss or teardown.
+Position and physical head orientation use Rework's listener convention; no HPL
+Scene layout is assumed and no audio context is created or made current.
 
 The transferable Enhanced Visuals eye stage is available through a renderer-
 neutral intermediate/MSAA/final-treatment path with direct-eye fallback. HPL

@@ -308,9 +308,16 @@
         "Interact.released": "0x5444",
         "Examine.pressed": "0x546C",
         "Examine.released": "0x5494",
-        "Holster.pressed": "0x54BC"
+        "Holster.pressed": "0x54BC",
+        "Jump.finalHeldReleaseCheck": "0x56BF"
       },
-      "evidence": "Each decoded initialized-image callsite follows construction of its literal legacy action string and calls the matching native pressed/held/released query. The bridge calls the native query first and adds focused Sense intent only at these owned callsites; runtime game behavior remains unverified."
+      "evidence": "Each decoded initialized-image callsite follows construction of its literal legacy action string and calls the matching native pressed/held/released query. Both Jump held consumers (0x5297 and 0x56BF) must receive focused VR intent: otherwise the final native false query clears the button and exhausts the 0.3-second counter. The actual gameplay_bridge consumer has host hold/release/focus/native-input tests; live/headset parity remains pending.",
+      "playerActiveGuard": {
+        "offset": "0x1DC",
+        "proofRva": "0x4FA9",
+        "proofBytes": "8A 88 DC 01 00 00",
+        "ownership": "Suppress added VR Jump for missing/inactive native player; preserve native query result."
+      }
     },
     "requiem.cPlayer.MoveForward": {
       "status": "confirmed-static-mapping",
@@ -466,5 +473,274 @@
       "spanish": "Espanol_exp.lang"
     },
     "supportedSettingRows": 9
+  },
+  "vrStepClimb": {
+    "status": "implemented-host-tested; live/headset validation pending",
+    "initializedImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "successRva": "0xD826F",
+    "resumeRva": "0xD8289",
+    "successSignature": "D9 84 24 F4 05 00 00 C6 86 38 02 00 00 01 D8 8E 2C 02 00 00 D8 46 4C D9 5E 4C",
+    "nativeFrameOffsets": {
+      "timeStep": "0x5F4",
+      "rayReferenceHeight": "0x40",
+      "rayDistances": "0x5C",
+      "selectedRayIndex": "EBX"
+    },
+    "characterOffsets": {
+      "positionY": "0x4C",
+      "climbSpeed": "0x22C",
+      "climbingFlag": "0x238"
+    },
+    "ownership": "Single exact success-block hook; backend predicate admits only the tracked body with injected VR intent. Native collision/step selection and one Update remain native.",
+    "adaptation": "Clamp accepted native dt*climbSpeed to the positive ray-measured rise; nonpositive floor/downward hits do not rise or suppress gravity. Other bodies retain native advance.",
+    "hostEvidence": "native_step_climb CPU gateway executes the complete original block before/after adaptation; body_collision_probe exercises the BP-installed predicate. A 1 cm surface no longer receives 5.17 cm at 60 Hz.",
+    "heightRecovery": {
+      "nativeHeightCalculationRva": "0xD813C",
+      "nativeHeightCalculationBytes": "D9 44 24 40 D8 64 9C 5C D9 54 24 58",
+      "oldHeightLocalReuseRva": "0xD81BC",
+      "oldHeightLocalReuseBytes": "89 64 24 7C",
+      "contract": "At success recompute rayReferenceHeight - rayDistances[EBX]. The former +0x58 height local has been overwritten with a stack pointer by shape construction after ESP moved by 0x24; never read it as height.",
+      "hostEvidence": "CPU gateway and BP consumer fixtures reproduce the actual pointer overwrite and distinct ray distances, including successful EBX indices 0 and 1. Original local-based adapter fails with zero rise; corrected recovery passes."
+    }
+  },
+  "trackedAudioListener": {
+    "status": "implemented-host-tested; live/headset validation pending",
+    "initializedImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "imports": {
+      "alListenerfv": "0x273654",
+      "alcMakeContextCurrent": "0x27364c",
+      "alcDestroyContext": "0x27367c",
+      "alcGetCurrentContext": "0x2736c8"
+    },
+    "listenerCalls": [
+      {
+        "parameter": "0x1004",
+        "rva": "0x1a0c9f",
+        "window_rva": "0x1a0c8f",
+        "bytes": "00 E8 0B 16 02 00 8B 4C 24 54 51 68 04 10 00 00 FF 15 54 36 67 00 83 C4 0C"
+      },
+      {
+        "parameter": "0x1006",
+        "rva": "0x1a0d9f",
+        "window_rva": "0x1a0d8f",
+        "bytes": "00 E8 0B 15 02 00 8B 4C 24 54 51 68 06 10 00 00 FF 15 54 36 67 00 83 C4 0C"
+      },
+      {
+        "parameter": "0x100f",
+        "rva": "0x1a0ecf",
+        "window_rva": "0x1a0ebf",
+        "bytes": "40 08 51 68 0F 10 00 00 89 54 24 20 89 44 24 24 FF 15 54 36 67 00 83 C4 0C"
+      }
+    ],
+    "reference": {
+      "repository": "rubocopter/penumbra_vr_rework",
+      "revision": "23c890f7dbd06b939be9951d282e6e948d9a6623",
+      "listener": "HPL1Engine/sources/scene/Scene.cpp:889",
+      "final_openal_sign": "HPL1Engine/sources/impl/LowLevelSoundOpenAL.cpp:104-128",
+      "mapping": "position=head translation; forward=-head column 2; up=head column 1; velocity=0"
+    },
+    "ownership": "Named executable OpenAL32.dll IAT owner for alListenerfv, alcMakeContextCurrent and alcDestroyContext. Backend publishes reconciled central head before scoped eye camera overrides; no Scene/player layout is assumed.",
+    "fallback": "Restore native listener on invalid/stale tracking, focus/UI/presentation loss, context switch/destruction and shutdown. OpenAL context is never made current by the adapter.",
+    "hostConsumer": {
+      "test": "tracked_audio_listener",
+      "openAlSoftSha256": "606CF8B4C22C7AE00813585279AC045115907BC66D1483EB26355907021EA4B0",
+      "device": "null; no game or audio hardware launched"
+    }
+  },
+  "normalJumpProfile": {
+    "status": "confirmed-static-mapping; host consumer tested; live/headset parity pending",
+    "initializedImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "nativeLogicHz": 60,
+    "authoredStartForce": 350,
+    "characterMassKg": 80,
+    "customGravityY": -18,
+    "heldSeconds": 0.3,
+    "launchVelocityBeforeGravity": "350 / 60 m/s; half when entered from crouch",
+    "verticalOwnership": "Native Jump state queues forces; the native physics loop integrates and clears them once per tick. Horizontal VR intent never owns this pipeline.",
+    "heldForce": "First Jump update skips boost; later held updates before the 0.3-second counter expires counteract gravity by 0.4 + 0.5 * (1 - count / 0.3). Releasing exhausts the counter and rising release adds -20 m/s^2. A fresh native Jump() press resets the counter even while airborne, renewing held ascent without a second launch.",
+    "referenceAdaptation": "Overture source alone samples this native 60 Hz normal envelope through AddForce at HMD logic cadence; non-normal profiles, script/solver velocity changes, pending external forces and disabled/custom-gravity changes retain native ownership.",
+    "hostEvidence": "overture_jump_state extracts the production Jump class; native-equation boundary tests cover tap/hold/release/crouch and 30/60/72/90/120 Hz, plus script and collision handoff. This is not live solver or headset acceptance.",
+    "decodedWindows": [
+      {
+        "name": "jump_constructor",
+        "rva": "0x9b300",
+        "length": 630,
+        "sha256": "D8B522298CFA05BDA3C903FBC461F9A0BAF37174B31A8DF4F70D2D1323E5C9A2"
+      },
+      {
+        "name": "jump_vtable",
+        "rva": "0x27d620",
+        "length": 24,
+        "sha256": "944FBC80139AE8E52DF1A632701B419621664B2E0452F28235EDDB6C8A2F7D6B"
+      },
+      {
+        "name": "jump_enter",
+        "rva": "0x9c8c0",
+        "length": 513,
+        "sha256": "B24916BE97A9AEDDE6508107974BB02BC401E4E36AE44AF8B0152A782EF06701"
+      },
+      {
+        "name": "jump_update",
+        "rva": "0x9da40",
+        "length": 455,
+        "sha256": "CE70584B1C6C56BC9C2E64B00CCD85EC1A517B2BF98BED1B48A77E98ED0B21D5"
+      },
+      {
+        "name": "jump_leave",
+        "rva": "0x9b580",
+        "length": 110,
+        "sha256": "B22C347C6981F852002F4358E62E8BDB3D1AD338BDB3F033B812693711B1E750"
+      },
+      {
+        "name": "jump_button_setter",
+        "rva": "0x9ab70",
+        "length": 60,
+        "sha256": "819F939435BA4CEAAB1FB90252BBD9583AB5103EB4D894132594B1E18846A398"
+      },
+      {
+        "name": "jump_pressed_and_first_held_queries",
+        "rva": "0x526f",
+        "length": 59,
+        "sha256": "EF0398F050A55EA04787B6651BAB1483BF88876C5250F0976D8FBCD96A6FA709"
+      },
+      {
+        "name": "jump_second_held_query_and_clear",
+        "rva": "0x56bf",
+        "length": 27,
+        "sha256": "A54222B0D191A8468723DB53BEF7E0D3C6C51C4BE2C2FD987E69CA4EC864E801"
+      },
+      {
+        "name": "player_jump",
+        "rva": "0x9d300",
+        "length": 150,
+        "sha256": "1B7DB47E0332B69B50322928252E54BE304AF6AE87641D317239E8D5D518E247"
+      },
+      {
+        "name": "config_mass_and_hold",
+        "rva": "0xa13b6",
+        "length": 323,
+        "sha256": "3F034C71008BF16C00A9877D75D3617B03ECD306B3C95BA2E92B9CD1FCA42C49"
+      },
+      {
+        "name": "player_body_mass_gravity_init",
+        "rva": "0x9d56a",
+        "length": 160,
+        "sha256": "AFB7D570B5608432DC41F8D298696E9BD1F94FDF952CE8276DE8E116BEA0705A"
+      },
+      {
+        "name": "body_mass_getter",
+        "rva": "0xd57a0",
+        "length": 4,
+        "sha256": "F95341A99D51F5475633B0A992FA6BB809C41744FE61F8DE030D059A5D1F6BB6"
+      },
+      {
+        "name": "body_mass_setter",
+        "rva": "0xd57b0",
+        "length": 10,
+        "sha256": "A639A128FEB1AE38B52F55276D7CA51324CE2668E53E1D2073C4282C568521E1"
+      },
+      {
+        "name": "body_gravity_getter",
+        "rva": "0xd5ba0",
+        "length": 24,
+        "sha256": "FA02246ED062210A1F8B51E98D8250E52486E1AD03C902DB6F3865CA0E07B179"
+      },
+      {
+        "name": "body_gravity_setter",
+        "rva": "0xd5b80",
+        "length": 24,
+        "sha256": "2986BA7DEF0AF22834A4A8684148724CD6B6B6FE26588B2090F9F9A2FDC00197"
+      },
+      {
+        "name": "body_add_force",
+        "rva": "0xd5bc0",
+        "length": 51,
+        "sha256": "67EBF3F1B712E042EF9EF354E47367FA19670132B5C142ACFF7ED38860864453"
+      },
+      {
+        "name": "body_update_prologue",
+        "rva": "0xd77a0",
+        "length": 46,
+        "sha256": "DACAF0252141AADD8F434AE60F9BD0B3660906588020AC162935D2CED9BB5CE6"
+      },
+      {
+        "name": "force_gravity_integration_and_clear",
+        "rva": "0xd82cf",
+        "length": 421,
+        "sha256": "A3DBFBFDF5D1705DB25019E7E83A984E4E443355B19BC308534AAB20E2A32E0D"
+      },
+      {
+        "name": "vertical_position_integration",
+        "rva": "0xd85cf",
+        "length": 40,
+        "sha256": "B907E9320D166AE4B67E4D972EC08A2D676CA178AF9AB2E60641F896D417E44F"
+      },
+      {
+        "name": "native_world_body_call",
+        "rva": "0xd4f62",
+        "length": 13,
+        "sha256": "84DE76D3DA52F941C4DC4EA56C12A4C75EEBDFE199E85479C45AB6EBAC07C30E"
+      },
+      {
+        "name": "game_get_step_size",
+        "rva": "0xc8f60",
+        "length": 8,
+        "sha256": "7E3A6CC978BFB0F524210668705884D5DB1F6F8653984019D8D68457B96AE5CE"
+      },
+      {
+        "name": "timer_get_step_size",
+        "rva": "0x1411e0",
+        "length": 10,
+        "sha256": "020BED319E9866D185790F045FEF0526AC635D174A4643E9EC9B96691339633B"
+      },
+      {
+        "name": "game_sets_logic_rate_60",
+        "rva": "0x65bd7",
+        "length": 56,
+        "sha256": "3BA3301947A40DA68CC3172A38797A1C68FC06F24D8B5B7BC26CCD2720CDD1E4"
+      },
+      {
+        "name": "engine_reads_logic_rate_creates_timer",
+        "rva": "0xca026",
+        "length": 81,
+        "sha256": "0B2F56EBAE5D373133BB2AF988B8BF88EAA293CC1AA8D01D85B4B92EC51D8267"
+      },
+      {
+        "name": "system_creates_timer",
+        "rva": "0x128ff0",
+        "length": 66,
+        "sha256": "E0EEB3302549A8236ADF5CB51766FD410270341593F3CB4CEE336DA6660CB3CB"
+      },
+      {
+        "name": "timer_constructor",
+        "rva": "0x1411f0",
+        "length": 68,
+        "sha256": "DA185DDB6B9F1356DBD30C4AB9A9543194D96081053A19DDE4A4A40F7C89C348"
+      },
+      {
+        "name": "timer_rate_numerator_double",
+        "rva": "0x2867c0",
+        "length": 8,
+        "sha256": "139107FD63D004E94CB64ABB75361DD8490810C6709A9311896CA17496F5ECDE"
+      },
+      {
+        "name": "game_loop_passes_timer_step_to_updater",
+        "rva": "0xc91f3",
+        "length": 22,
+        "sha256": "0F8AFBAA684B8D02ECE3D47E038CCC844AE3633574B0581B7AED1E7062A0BBBF"
+      },
+      {
+        "name": "scene_forwards_dt_to_world",
+        "rva": "0xee095",
+        "length": 27,
+        "sha256": "A91321644FECE96CC97BEDDF3DB33166512B6EB47DDE4B9CB01CDBED436A056A"
+      },
+      {
+        "name": "world_forwards_dt_to_physics",
+        "rva": "0xc6810",
+        "length": 27,
+        "sha256": "85DBB3A06AD6DC8F04A765885539EEB82AFB97A81E9EFB1A03376498E2C29F5D"
+      }
+    ]
   }
 }

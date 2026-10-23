@@ -242,8 +242,22 @@ void cButtonHandler::Update(float afTimeStep)
 		!vrUIContext && mpPlayer->IsActive() && !mpPlayer->GetLookAt()->IsActive();
 	const bool frameworkPlayerUpdateExpected =
 		mpInit->mpGame->GetUpdater()->GetCurrentContainerName() == "Default";
+	// Publish Jump once after combining native keyboard and VR input. A later
+	// keyboard-only release would otherwise erase VR hold; publishing both
+	// independently also increments/exhausts the native hold counter twice.
+	cVRInputState frameworkInput = vrInput;
+	if(frameworkGameplayActive)
+	{
+		const bool keyboardJumpHeld = mpInput->IsTriggerd("Jump");
+		const bool keyboardJumpPressed = mpInput->BecameTriggerd("Jump");
+		frameworkInput.jump.active = frameworkInput.jump.active ||
+			keyboardJumpHeld || keyboardJumpPressed;
+		frameworkInput.jump.pressed = frameworkInput.jump.pressed || keyboardJumpHeld;
+		frameworkInput.jump.justPressed = frameworkInput.jump.justPressed || keyboardJumpPressed;
+		if(frameworkInput.jump.pressed) frameworkInput.jump.justReleased = false;
+	}
 	mpPlayer->HandleFrameworkVRInput(
-		vrInput, afTimeStep, frameworkGameplayActive,
+		frameworkInput, afTimeStep, frameworkGameplayActive,
 		frameworkPlayerUpdateExpected);
 
   if(vrInput.recenter.justPressed)
@@ -777,15 +791,7 @@ if(actionInputActive && vrUIContext && vrInput.uiSelect.justPressed)
 					}
 					
 
-					if(mpInput->BecameTriggerd("Jump"))
-					{
-						mpPlayer->Jump();
-					}
-					if(mpInput->IsTriggerd("Jump"))
-					{
-						mpPlayer->SetJumpButtonDown(true);
-					}
-					
+					// Framework input above owns combined keyboard/VR Jump.
 					if(mpInput->BecameTriggerd("Run"))
 					{
 						mpPlayer->StartRun();
@@ -861,7 +867,7 @@ if(mpInput->BecameTriggerd("Holster") || vrInput.holster.justPressed)
 				}
 			}
 		}
-		if(mpInput->IsTriggerd("Jump")==false || bPlayerStateIsActive==false)
+		if(bPlayerStateIsActive==false)
 		{
 			mpPlayer->SetJumpButtonDown(false);
 		}

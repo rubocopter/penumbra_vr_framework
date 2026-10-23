@@ -73,6 +73,37 @@ public:
 } // namespace
 
 int main() {
+    // Exercise Overture's real frame consumer at rates that previously hid the
+    // binary-backend queue truncation. Physical bounds remain independent.
+    for (const int hz : {30, 60, 72, 90, 120}) {
+        for (const bool sprint : {false, true}) {
+            for (const bool mixed : {false, true}) {
+                OvertureBackend rate_backend;
+                FakeBody rate_body;
+                std::string rate_error;
+                auto pose = Pose(0,1.7F,0);
+                if (!rate_backend.Initialize(pose, rate_body, rate_error)) return 10;
+                OvertureInputFrame rate_input;
+                rate_input.delta_seconds = 1.0F / static_cast<float>(hz);
+                rate_input.gameplay_active = true;
+                rate_input.input.move = {true,0,1};
+                rate_input.input.sprint.pressed = sprint;
+                OverturePlayerFrame rate_frame;
+                rate_frame.delta_seconds = rate_input.delta_seconds;
+                rate_frame.body_motion_enabled = true;
+                OvertureFrameResult rate_result;
+                for (int tick=0; tick<hz; ++tick) {
+                    if (mixed) pose.values[3] += 0.001F;
+                    rate_frame.head_tracking_pose = pose;
+                    if (!rate_backend.HandleInput(rate_input, rate_body, rate_error) ||
+                        !rate_backend.UpdatePlayer(rate_frame, rate_body, rate_result, rate_error)) return 11;
+                }
+                if (!Near(rate_body.position[2], sprint ? -4.5F : -3.0F) ||
+                    rate_body.stick_moves != hz) return 12;
+            }
+        }
+    }
+
     OvertureBackend backend;
     FakeBody body;
     std::string error;
@@ -103,9 +134,9 @@ int main() {
         !body.jump_held || !Near(result.requested_room_scale_distance, 0.05F) ||
         !Near(result.rejected_room_scale_distance, 0.05F) ||
         !Near(body.last_delta_seconds, 0.10F) ||
-        !Near(body.position[2], -0.15F) ||
+        !Near(body.position[2], -0.30F) ||
         !Near(result.head_anchor[0], 0.05F) ||
-        !Near(result.head_anchor[2], -0.15F)) {
+        !Near(result.head_anchor[2], -0.30F)) {
         std::cerr << "Overture collision/locomotion equivalence failed\n";
         return 3;
     }

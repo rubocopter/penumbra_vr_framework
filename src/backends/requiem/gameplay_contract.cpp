@@ -91,12 +91,8 @@ std::array<float, 3> RequiemLocomotionDisplacement(
     float delta_seconds,
     bool sprinting,
     bool pushing) noexcept {
-    // Requiem requests twice the standard 2.25 m/s sprint; walking stays 1.5 m/s.
-    constexpr float kRequiemSprintMultiplier = 2.0F;
     return runtime::LocomotionDisplacement(
-        world_direction, delta_seconds,
-        pushing ? 1.0F : sprinting ? kRequiemSprintMultiplier : 1.0F,
-        pushing, sprinting);
+        world_direction, delta_seconds, 1.0F, pushing, sprinting);
 }
 
 DirectLocomotionPublication PlanDirectLocomotionPublication(

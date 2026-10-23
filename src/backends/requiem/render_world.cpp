@@ -1,6 +1,7 @@
 #include "render_world.hpp"
 
 #include "camera_matrix_override.hpp"
+#include "tracked_audio_listener.hpp"
 #include "camera_capture.hpp"
 #include "frame_presentation_gate.hpp"
 #include "gameplay_contract.hpp"
@@ -582,7 +583,13 @@ void LogFailureOnce(const char* phase, const std::string& error) noexcept {
     return collapsed;
 }
 
+bool AudioListenerEligible() noexcept {
+    return g_presenting.load(std::memory_order_acquire) &&
+        ReadNativeControllerFrame().focused && !NativeUiActive();
+}
+
 void ResetTrackedHeadWorldPose() noexcept {
+    adapters::hpl1::InvalidateTrackedAudioListener();
     AcquireSRWLockExclusive(&g_head_world_pose_lock);
     g_head_world_pose = {};
     g_head_world_pose_sampled_at_ms = 0;
@@ -611,6 +618,9 @@ void PublishTrackedHeadWorldPose(
         g_menu_tracking_height_at = sampled_at_ms;
     }
     ReleaseSRWLockExclusive(&g_head_world_pose_lock);
+    // This central head is independent of the scoped per-eye camera overrides.
+    if (valid) adapters::hpl1::PublishTrackedAudioListener(head_world_pose);
+    else adapters::hpl1::InvalidateTrackedAudioListener();
 }
 
 [[nodiscard]] std::array<float, 2> AlignToolsForRender(
@@ -825,6 +835,7 @@ struct WorldPanelGeometry final {
 [[nodiscard]] bool RenderStereo(RenderWorld original,
     void* renderer, void* world, void* camera, float frame_time,
     bool& frame_time_consumed, std::string& error) noexcept {
+    adapters::hpl1::InvalidateTrackedAudioListener();
     auto* session = g_session.load(std::memory_order_acquire);
     if (session == nullptr || wglGetCurrentContext() == nullptr) {
         error = "OpenVR session or OpenGL context is unavailable";
@@ -2899,6 +2910,8 @@ bool StartPresentation(runtime::OpenVrSession& session,
             return false;
         }
     }
+    if (!adapters::hpl1::InstallTrackedAudioListener(&AudioListenerEligible, error))
+        return false;
     g_tracking_anchor_valid = false;
     g_tracking_world_yaw.store(0.0F, std::memory_order_release);
     g_world_timing_frames.store(0, std::memory_order_relaxed);
@@ -2952,7 +2965,7 @@ bool StopPresentation(std::string& error) noexcept {
         if (g_active_calls.load(std::memory_order_acquire) == 0 &&
             g_targets_destroyed.load(std::memory_order_acquire)) {
             g_session.store(nullptr, std::memory_order_release);
-            return true;
+            return adapters::hpl1::RemoveTrackedAudioListener(error);
         }
         Sleep(1);
     }
@@ -3046,6 +3059,7 @@ RequiemInteractionCounters ConsumeInteractionCounters() noexcept {
 }
 
 void OnSdlSwap(std::uint64_t) noexcept {
+    if (!AudioListenerEligible()) adapters::hpl1::InvalidateTrackedAudioListener();
     if (g_destroy_requested.load(std::memory_order_acquire)) {
         if (g_active_calls.load(std::memory_order_acquire) != 0 ||
             g_targets_destroyed.load(std::memory_order_acquire)) return;

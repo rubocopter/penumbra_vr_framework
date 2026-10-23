@@ -5,6 +5,7 @@
 #include "hand_contact_probe.hpp"
 
 #include "camera_matrix_override.hpp"
+#include "tracked_audio_listener.hpp"
 #include "opengl_eye_scissor.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
@@ -433,7 +434,13 @@ void ResetTrackedWorldYawForRecenter() noexcept {
     return true;
 }
 
+bool AudioListenerEligible() noexcept {
+    return TrackedStereoPresentationActive() &&
+        ReadNativeControllerFrame().focused && !NativeInputUiActive();
+}
+
 void InvalidateWorldTracking() {
+    adapters::hpl1::InvalidateTrackedAudioListener();
     InvalidateBlackPlagueShadowTracking();
     AcquireSRWLockExclusive(&g_presentation_lock);
     g_presentation_snapshot = {};
@@ -1341,6 +1348,7 @@ void __fastcall HookedUpdateRenderList(
     void* camera,
     float frame_time) noexcept {
     StereoProcessingResult result;
+    adapters::hpl1::InvalidateTrackedAudioListener();
     // Full-screen menus still use the desktop capture at SwapBuffers.
     // Inventory/notebook keep the stereoscopic world and their native 800x600
     // DrawAll queue is composited as an alpha surface after the eye passes.
@@ -1546,6 +1554,9 @@ void __fastcall HookedUpdateRenderList(
         g_calibration_head_height = pose.device_to_absolute.values[7];
         g_calibration_tracking_time = g_world_tracking_time;
         ReleaseSRWLockExclusive(&g_world_tracking_lock);
+        // Publish the composed central head before either temporary eye camera.
+        if (movement_head_pose_valid)
+            adapters::hpl1::PublishTrackedAudioListener(movement_head_pose);
         // Same yaw basis as ComposeYawRecenteredTrackedHeadView. Use the
         // original rotational anchor, not g_world_anchor whose translation
         // is deliberately overwritten for rotation-only hand rendering.
@@ -2582,6 +2593,11 @@ bool StartTrackedStereoPresentation(
         }
     }
 
+    if (!adapters::hpl1::InstallTrackedAudioListener(&AudioListenerEligible, error)) {
+        g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
+        g_stereo_session.store(nullptr, std::memory_order_release);
+        return false;
+    }
     g_stereo_error = {};
     g_stereo_eyes = eyes;
     g_stereo_projections = projections;
@@ -2610,7 +2626,7 @@ bool StopTrackedStereoPresentation(std::string& error) noexcept {
     InvalidateWorldTracking();
     ResetCalibrationTracking();
     if (!g_stereo_persistent.load(std::memory_order_acquire)) {
-        return true;
+        return adapters::hpl1::RemoveTrackedAudioListener(error);
     }
 
     g_stereo_cancel.store(true, std::memory_order_release);
@@ -2629,7 +2645,7 @@ bool StopTrackedStereoPresentation(std::string& error) noexcept {
             g_stereo_persistent.store(false, std::memory_order_release);
             g_stereo_cancel.store(false, std::memory_order_release);
             g_stereo_state.store(StereoMatrixState::idle, std::memory_order_release);
-            return true;
+            return adapters::hpl1::RemoveTrackedAudioListener(error);
         }
         Sleep(1);
     }
@@ -2668,6 +2684,7 @@ void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
 }
 
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
+    if (!AudioListenerEligible()) adapters::hpl1::InvalidateTrackedAudioListener();
     if (!TrackedStereoPresentationActive()) return;
     ActiveStereoFrame active;
     if (!TrackedStereoPresentationActive() || g_stereo_cancel.load(std::memory_order_acquire)) return;

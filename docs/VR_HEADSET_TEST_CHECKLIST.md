@@ -269,6 +269,35 @@ is not part of a passing audio gate yet.
 The probe DLL intentionally remains resident until process exit; validation is
 about restored hooks/resources and clean process lifetime, not live DLL unload.
 
+## Trilogy feedback candidate — independent acceptance
+
+Run these checks on each changed game/build; record the exact candidate hashes,
+Quest 3 connection/audio route and active SteamVR bindings. Host tests do not
+close these checks.
+
+- On an unobstructed measured route, compare full-stick walk and sprint at the
+  same `MoveSpeed` setting. Normal targets are 3 and 4.5 m/s. Repeat while making
+  small physical head/body movements; cadence or mixed input must not reduce the
+  intended stick speed. Test stopping, wall rejection and a map transition.
+- Compare a short jump press and a held jump from standing in all three games;
+  include sprint takeoff, crouched takeoff, a low ceiling, landing and releasing
+  input/focus during ascent. Reproduce the reported Requiem long platform jump
+  using the affected save/map. The supplied non-VR video at 18:31 identifies a
+  reference obstacle; it does not validate the VR candidate.
+- In BP and Requiem, use a fixed world sound and keep the character/stick still
+  while turning only the HMD by 90 and 180 degrees. Repeat with room-scale
+  translation and after recenter. Check player-relative sounds separately,
+  then open/close UI, lose/regain focus and change maps. Confirm perceived
+  direction and HRTF on the actual headset output device.
+- Traverse the same slope/stair surface up and down using stick alone, physical
+  motion alone and mixed input. Include the reported Requiem area and BP
+  cave/snow surfaces. Check for vertical world oscillation, stepping onto low
+  obstacles and retaining proper collision at walls/ceilings.
+- In BP, compare a closed filing-cabinet drawer with a working desk drawer.
+  Keep head/stick still and pull the interacting hand; then repeat while walking
+  backward. Check both travel stops, obstruction/recovery, release/focus loss
+  and reopening. Native limits and puzzle/script behavior must remain intact.
+
 ## What to retain after a run
 
 Keep durable evidence small:

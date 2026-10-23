@@ -1792,7 +1792,10 @@ void cPlayer::OnWorldLoad()
 	
 	mpCharBody->SetMaxGravitySpeed(40.0f);
 	mpCharBody->SetCustomGravityActive(true);
-	mpCharBody->SetCustomGravity(cVector3f(0,-10.0f,0));
+	// Normal trilogy profile: BP/Requiem initialize their player body with
+	// -18 m/s^2. Set this only at native body creation; scripted gravity and
+	// special movement states retain their later native overrides.
+	mpCharBody->SetCustomGravity(cVector3f(0,-18.0f,0));
 
 	mpCharBody->SetMaxPushMass(mpInit->mpGameConfig->GetFloat("Player","MaxPushMass",1));
 	mpCharBody->SetPushForce(mpInit->mpGameConfig->GetFloat("Player","PushForce",1));

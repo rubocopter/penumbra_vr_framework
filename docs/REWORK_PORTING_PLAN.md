@@ -36,6 +36,50 @@ with their owner even when the surrounding policy becomes shared.
 
 ## Current portability boundary
 
+The 2026-10-23 feedback corrections deliberately adapt three incompatible native
+boundaries. Rework bounds physical HMD displacement separately from stick
+motion; the binary hosts' combined queue incorrectly imposed the same 5 cm cap
+on both. Its Scene explicitly derives the listener from the current head pose;
+the binary consumers instead require a named OpenAL import adapter because their
+temporary render camera overrides do not provide that contract. Rework's accepted
+step placement uses the measured surface height, whereas the independently
+decoded BP/Requiem success blocks advance by `dt * climbSpeed`, overshooting
+shallow rises. The binary adapter bounds that accepted advance without changing
+native collision or physics-update ownership.
+
+BP's native slider callback also cancels the ported Rework velocity servo in an
+authored sticky endpoint zone. The held-child Move adapter suspends only that
+native rest policy during VR ownership, retaining joints, limits and script
+callbacks and restoring endpoint data on release. A real Newton consumer test
+demonstrates the difference. These are host-tested adaptations, not new headset
+acceptance. The maintainer explicitly requested common normal trilogy movement
+speeds rather than retaining Rework's slower comfort defaults; the shared normal
+walk/run values are now `3/4.5 m/s`.
+
+Normal jump parity also requires a source-host adaptation. Rework multiplies
+Overture's authored launch by `1.7` and uses custom gravity `-10`; the independently
+decoded BP and Requiem pipelines use the original `350`, mass `80`, gravity
+`-18`, a `0.3 s` held counter and a native `60 Hz` logic/physics timestep.
+Copying those one-tick forces directly into Overture's HMD-rate logic changes
+height with cadence. Its backend therefore samples that native 60 Hz normal
+vertical envelope and submits the required acceleration through `AddForce`.
+This is an Overture-owned interface adaptation, not shared horizontal movement
+policy or a new binary-host vertical hook. Native collision/state transitions
+remain authoritative; external force/velocity changes, altered profile values
+or disabled gravity stop sampling and retain the inherited scripted pipeline.
+The extracted production Jump state has host cadence and ownership regressions;
+actual solver contacts and the reported long-jump platform still need headset
+acceptance. Exact native window hashes and profile values live in each binary
+manifest's `normalJumpProfile`.
+
+Overture's input boundary must also merge legacy keyboard and VR Jump before
+publishing the native held counter. The inherited later keyboard-only release
+erased a valid VR hold; separate true publications can increment that counter
+twice. ButtonHandler now publishes the combined input through its existing
+Framework owner and retains inactive-state cancellation. The native airborne
+`Jump()` counter reset remains observable by the sampler, renewing held ascent
+without applying a second launch.
+
 | Capability | Shared destination | Target-owned part |
 | --- | --- | --- |
 | OpenVR poses/compositor lifecycle | runtime | frame/render entry point |

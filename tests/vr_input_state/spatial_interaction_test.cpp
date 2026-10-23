@@ -123,8 +123,16 @@ void __fastcall NativeChangeActionState(void* player,void*,int next) {
 }
 void __fastcall MaxLinear(void* body,void*,float value) { Put(body,0x42C,value); }
 void __fastcall MaxAngular(void* body,void*,float value) { Put(body,0x430,value); }
-void __fastcall Linear(void* body,void*,const Vec* value) { Put(body,0x450,*value); }
-void __fastcall Angular(void* body,void*,const Vec* value) { Put(body,0x460,*value); }
+void __fastcall Linear(void* body,void*,const Vec* value) {
+    Put(body,0x450,*value);
+    if (const auto* native=Read<const NewtonBody*>(body,0x41C))
+        NewtonBodySetVelocity(native,value->data());
+}
+void __fastcall Angular(void* body,void*,const Vec* value) {
+    Put(body,0x460,*value);
+    if (const auto* native=Read<const NewtonBody*>(body,0x41C))
+        NewtonBodySetOmega(native,value->data());
+}
 // The actual BP getters return a 12-byte Vec by value under x86 __thiscall.
 // Model that ABI using class members, including the hidden return pointer.
 struct TestVelocityGetters {
@@ -335,6 +343,8 @@ bool QueryGameplayPalmOverlaps(std::size_t,
     result=test_palm_overlap;
     return true;
 }
+#include "native_slider_fixture.hpp"
+
 int RunSpatialTest() {
     {
         // A stationary wrist can be opposite the lagging bone. The angular
@@ -2051,6 +2061,9 @@ int RunSpatialTest() {
         Put(body.data(),0x34,runtime::IdentityMatrix());
         Put(player.data(),0x2BC,0);
     }
+
+    if (const int slider_result=RunNativeSliderRegression(
+            player.data(),move_state.data(),body.data(),hand)) return slider_result;
 
     // A representative cGameLever with one recognized hinge consumes the
     // shared Rework servo while native Move Enter/Leave retain lifecycle

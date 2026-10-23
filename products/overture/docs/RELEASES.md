@@ -1,5 +1,14 @@
 # Release history
 
+## v1.0.9 — Trilogy movement and normal jump parity (2026-10-23)
+
+Normal walk/run uses the shared 3/4.5 m/s profile. Normal jump follows the
+independently verified native BP/Requiem 60 Hz envelope through native forces
+at HMD logic cadence; native scripts and solver changes retain ownership.
+Keyboard/VR Jump is merged once and preserves native held/release/repress
+counter semantics. Full Release and host regressions pass; new headset
+acceptance remains pending. See the [Framework notes](../../../docs/releases/1.0.9.md).
+
 ## v1.0.8 — Black Plague fixes and coordinated packaging (2026-10-16)
 
 Overture receives the coordinated 1.0.8 executable/package identity with no

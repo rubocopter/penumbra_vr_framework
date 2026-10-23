@@ -73,6 +73,19 @@ target_include_directories(pvr_opengl_eye_targets PUBLIC src/graphics)
 target_link_libraries(pvr_opengl_eye_targets PUBLIC opengl32 pvr_vr_math)
 pvr_enable_warnings(pvr_opengl_eye_targets)
 
+add_library(pvr_hpl1_step_climb_adapter STATIC
+    src/adapters/hpl1/native_step_climb.cpp)
+target_include_directories(pvr_hpl1_step_climb_adapter PUBLIC
+    src/adapters/hpl1 PRIVATE src/runtime)
+target_link_libraries(pvr_hpl1_step_climb_adapter PUBLIC pvr_rel32_call_hook)
+pvr_enable_warnings(pvr_hpl1_step_climb_adapter)
+
+add_library(pvr_hpl1_audio_adapter STATIC
+    src/adapters/hpl1/tracked_audio_listener.cpp)
+target_include_directories(pvr_hpl1_audio_adapter PUBLIC src/adapters/hpl1)
+target_link_libraries(pvr_hpl1_audio_adapter PUBLIC pvr_spatial_audio pvr_iat_hook)
+pvr_enable_warnings(pvr_hpl1_audio_adapter)
+
 add_library(pvr_visual_calibration STATIC
     src/graphics/visual_calibration.cpp
 )
@@ -86,8 +99,10 @@ pvr_enable_warnings(pvr_opengl_eye_scissor)
 
 add_library(pvr_spatial_audio STATIC
     src/audio/spatial_audio.cpp
+    src/audio/tracked_listener.cpp
 )
 target_include_directories(pvr_spatial_audio PUBLIC src/audio)
+target_link_libraries(pvr_spatial_audio PUBLIC pvr_vr_math)
 pvr_enable_warnings(pvr_spatial_audio)
 
 add_library(pvr_vr_math STATIC
@@ -256,6 +271,8 @@ target_link_libraries(
         pvr_opengl_eye_scissor
         pvr_openvr_session
         pvr_hpl1_camera_adapter
+        pvr_hpl1_step_climb_adapter
+        pvr_hpl1_audio_adapter
         pvr_vr_math
         pvr_black_plague_body_adapter
         pvr_black_plague_settings
@@ -314,6 +331,8 @@ target_link_libraries(pvr_requiem_backend PUBLIC
     pvr_opengl_eye_targets
     pvr_opengl_eye_scissor
     pvr_hpl1_camera_adapter
+    pvr_hpl1_step_climb_adapter
+    pvr_hpl1_audio_adapter
     pvr_openvr_session
     pvr_vr_native_intents
     pvr_stereo_render_policy
@@ -398,6 +417,81 @@ add_custom_target(pvr_overture_package
     VERBATIM)
 
 if(BUILD_TESTING)
+    add_custom_command(
+        OUTPUT "${CMAKE_BINARY_DIR}/generated/overture_jump_state_under_test.hpp"
+               "${CMAKE_BINARY_DIR}/generated/overture_body_gravity_under_test.inl"
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSOURCE=${CMAKE_SOURCE_DIR}/products/overture/PenumbraOverture/PlayerMoveStates.h"
+            "-DOUTPUT=${CMAKE_BINARY_DIR}/generated/overture_jump_state_under_test.hpp"
+            "-DPLAYER_SOURCE=${CMAKE_SOURCE_DIR}/products/overture/PenumbraOverture/Player.cpp"
+            "-DGRAVITY_OUTPUT=${CMAKE_BINARY_DIR}/generated/overture_body_gravity_under_test.inl"
+            -P "${CMAKE_SOURCE_DIR}/tests/overture_jump/extract_jump_state.cmake"
+        DEPENDS products/overture/PenumbraOverture/PlayerMoveStates.h
+                products/overture/PenumbraOverture/Player.cpp
+                tests/overture_jump/extract_jump_state.cmake
+        VERBATIM)
+    add_executable(pvr_overture_jump_state_test
+        tests/overture_jump/jump_state_test.cpp
+        "${CMAKE_BINARY_DIR}/generated/overture_jump_state_under_test.hpp"
+        "${CMAKE_BINARY_DIR}/generated/overture_body_gravity_under_test.inl")
+    pvr_enable_warnings(pvr_overture_jump_state_test)
+    add_test(NAME overture_jump_state COMMAND pvr_overture_jump_state_test)
+
+    add_custom_command(
+        OUTPUT "${CMAKE_BINARY_DIR}/generated/overture_jump_input_under_test.hpp"
+        COMMAND "${CMAKE_COMMAND}" "-DROOT=${CMAKE_SOURCE_DIR}"
+            "-DOUTPUT=${CMAKE_BINARY_DIR}/generated/overture_jump_input_under_test.hpp"
+            -P "${CMAKE_SOURCE_DIR}/tests/overture_jump_input/extract_input.cmake"
+        DEPENDS products/overture/PenumbraOverture/ButtonHandler.cpp
+                products/overture/PenumbraOverture/Player.cpp
+                products/overture/HPL1Engine/include/input/SteamVRInput.h
+                src/adapters/overture_source/overture_source_integration.cpp
+                tests/overture_jump_input/extract_input.cmake
+        VERBATIM)
+    add_executable(pvr_overture_jump_input_test
+        tests/overture_jump_input/jump_input_test.cpp
+        "${CMAKE_BINARY_DIR}/generated/overture_jump_input_under_test.hpp")
+    target_link_libraries(pvr_overture_jump_input_test PRIVATE pvr_overture_backend)
+    pvr_enable_warnings(pvr_overture_jump_input_test)
+    add_test(NAME overture_jump_input COMMAND pvr_overture_jump_input_test)
+
+    add_executable(pvr_requiem_gameplay_bridge_test
+        tests/requiem_gameplay/gameplay_bridge_test.cpp src/probe/log.cpp)
+    target_include_directories(pvr_requiem_gameplay_bridge_test PRIVATE
+        src/hooks src/probe src/adapters/hpl1)
+    target_link_libraries(pvr_requiem_gameplay_bridge_test PRIVATE pvr_requiem_backend)
+    # The telemetry fixture emits a partial OPENGL32.dll into the common bin.
+    # This consumer needs the actual system imports used by its linked backend.
+    set_target_properties(pvr_requiem_gameplay_bridge_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/requiem_gameplay_consumer")
+    pvr_enable_warnings(pvr_requiem_gameplay_bridge_test)
+    add_test(NAME requiem_jump_queries COMMAND pvr_requiem_gameplay_bridge_test jump)
+    add_test(NAME requiem_locomotion_consumer COMMAND pvr_requiem_gameplay_bridge_test movement)
+    set_tests_properties(requiem_jump_queries requiem_locomotion_consumer
+        PROPERTIES TIMEOUT 30)
+
+    add_executable(pvr_tracked_audio_listener_test
+        tests/spatial_audio/tracked_audio_listener_test.cpp)
+    target_include_directories(pvr_tracked_audio_listener_test PRIVATE
+        products/overture/dependencies/include)
+    target_link_libraries(pvr_tracked_audio_listener_test PRIVATE
+        pvr_hpl1_audio_adapter
+        "${CMAKE_SOURCE_DIR}/products/overture/dependencies/lib/win32/OpenAL32.lib")
+    pvr_enable_warnings(pvr_tracked_audio_listener_test)
+    set_target_properties(pvr_tracked_audio_listener_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/tracked_audio")
+    add_custom_command(TARGET pvr_tracked_audio_listener_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${CMAKE_SOURCE_DIR}/products/overture/dependencies/bin/win32/OpenAL32.dll"
+            "$<TARGET_FILE_DIR:pvr_tracked_audio_listener_test>/OpenAL32.dll")
+    add_test(NAME tracked_audio_listener COMMAND pvr_tracked_audio_listener_test)
+
+    add_executable(pvr_native_step_climb_test
+        tests/native_step_climb/native_step_climb_test.cpp)
+    target_link_libraries(pvr_native_step_climb_test PRIVATE pvr_hpl1_step_climb_adapter)
+    pvr_enable_warnings(pvr_native_step_climb_test)
+    add_test(NAME native_step_climb COMMAND pvr_native_step_climb_test)
+
     target_compile_definitions(pvr_opengl_telemetry PUBLIC
         PVR_OPENGL_TELEMETRY_TEST_ACCESS=1)
     target_compile_definitions(pvr_black_plague_backend_probe PRIVATE
@@ -416,7 +510,7 @@ if(BUILD_TESTING)
     target_include_directories(pvr_body_collision_probe_test PRIVATE
         src/hooks src/backends/black_plague src/runtime)
     target_link_libraries(pvr_body_collision_probe_test PRIVATE
-        pvr_rel32_call_hook pvr_vr_math pvr_black_plague_body_adapter)
+        pvr_rel32_call_hook pvr_vr_math pvr_black_plague_body_adapter pvr_hpl1_step_climb_adapter)
     pvr_enable_warnings(pvr_body_collision_probe_test)
     add_test(NAME body_collision_probe COMMAND pvr_body_collision_probe_test)
 

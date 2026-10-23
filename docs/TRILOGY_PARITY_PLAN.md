@@ -49,7 +49,7 @@ conditional and have no separately identified evidence in that confirmation.
 | Native mechanisms / Push | Shared math only where the native mechanism proves compatible | Slider/hinge/Object adapters keep native lifecycle ownership; native `Push=1` tracked-palm adapter host-tested for the tutorial heavy crate; native Move Wheel hinge and dynamic-over-frame acquisition headset-accepted on the feedback build | Representative Push cube and jointed `Move=2` monolith puzzle headset-tested; monolith rings showed some resistance/springback | Broader BP mechanism regression; Requiem mechanism comfort investigation |
 | Tracked UI | Shared panel/input policy | Inventory/notebook/context/UseItem accepted on installed local checklist | Menu, inventory and notebook visible; shared spatial UI consumed | Headset layout/action regression, subtitles/legibility |
 | VR settings/config | Shared schema/editor policy plus per-game data | First-level settings, shared extraction and calibration accepted on installed local build | First-level native page, live edits, persistence and calibration accepted on installed local build | Broader device/profile coverage; exact new Setup acceptance separate |
-| Haptics/audio | Shared event, HRTF and reverb policy | Haptics/HRTF/reverb consumers implemented | Only applicable shared startup/runtime pieces consumed so far | Audio-device validation; map safe BP low-pass boundary |
+| Haptics/audio | Shared event, HRTF/reverb and tracked-listener pose policy | Haptics/HRTF/reverb implemented; new head-listener consumer host-tested | New head-listener consumer host-tested through native OpenAL imports | Per-game head-rotation/audio-device validation; map safe BP low-pass boundary |
 | Enhanced visuals/effects | Shared final eye-stage calibration where proven | BP final stage remains disabled; observed special effects now render correctly in headset with native full-eye copy/resize telemetry | Requiem's exact-build full-eye refraction copy removed the portal's large rectangular/striped artifact in headset with Refractions enabled | Coverage of all smoke/material variants and subtle ghosting remains unestablished |
 | Deployment/package ownership | Shared deployment/settings/localization manifests | Existing shared-redist transaction extended for exact Requiem probe/localization; direct fixture host-tested | Runtime backend has headset evidence; shared deployment transaction host-tested only | v1.0.0 package/selector/GUI host-tested with maintainer real-install, uninstall and game-entry acceptance; independent clean-PC breadth remains open |
 
@@ -59,6 +59,60 @@ drawer, repeated crank/mechanism interactions and accepted the result. The
 installed executable matches the candidate build hash. This validates the
 observed acquisition/gameplay sequence, including visibility-before-ranking;
 it does not certify every Overture mechanism or Quest 3 pointer alignment.
+
+## Current feedback corrections — host evidence
+
+The 2026-10-23 maintenance candidate addresses the concrete Quest 3 report;
+these changes have no new live/headset acceptance. Historical accepted binaries
+and their scoped results remain unchanged.
+
+- Normal metric walk/run policy is shared at `3/4.5 m/s`. Binary-host stick
+  requests no longer inherit the physical HMD request's 5 cm cap; room-scale
+  translation retains that bound. Requiem owns both independently mapped
+  held-jump queries, including the final native release check. Consumer tests
+  cover VR-only hold/release and motion at different update cadences, including
+  mixed physical/stick requests and collision rejection.
+- Normal jump targets the independently decoded BP/Requiem 60 Hz profile:
+  authored launch `350`, mass `80`, custom gravity `-18` and `0.3 s` held input.
+  Overture replaces Rework's `1.7` launch/`-10` gravity defaults for this normal
+  profile and samples the native vertical envelope through forces at its HMD
+  cadence. Extracted production-state tests cover tap/held ascent at
+  30/60/72/90/120 Hz, crouch, release and native script/collision handoff. The
+  Overture input owner combines keyboard and VR before publishing the held
+  counter once; a later keyboard release cannot erase VR hold. Production
+  input-chain tests cover either/both devices and cancellation. A fresh native
+  Jump press while airborne resets the held counter without relaunching; the
+  sampler preserves that native renewal and its test executes the real setter
+  and Jump method. The binary hosts retain their native vertical pipeline. These are host boundary
+  tests; actual ceiling/landing contacts and the reported long-jump platform
+  remain independent headset gates.
+- Both binary hosts consume Rework's tracked head-listener convention through
+  their own verified named OpenAL imports. A real OpenAL Soft null-device test
+  exercises physical-only head rotation, position, recenter, native overwrites,
+  fallback, context switching/recreation and restoration. It does not establish
+  perceived direction, headset HRTF quality or every listener-relative sound.
+- The independently mapped native step-success blocks advanced by climb speed
+  times timestep even when the measured rise was smaller. A CPU execution
+  regression reproduces 5.17 cm of ascent for a 1 cm surface at 60 Hz. The shared
+  bounded advance and exact-build adapters limit VR ascent to that measured rise,
+  recovered from the surviving ray-height/distance data and accepted ray index;
+  the old height local is already reused by native shape construction. This keeps
+  native collision/step selection and one physics update. Host coverage
+  includes shallow/tall rises, nonpositive hits, cadence, native fallback and
+  instruction restoration. The reported Requiem uphill surfaces and BP cave/snow
+  surfaces still need independent headset reproduction.
+- BP's filing-cabinet joints declare sticky endpoint distances absent from the
+  inspected desks. The independently mapped native callback zeros drawer
+  velocity in those regions. The committed VR `Move=2` consumer suspends only
+  the held child's endpoint rest distances and restores them on release,
+  preserving native joints, limits and nonzero script changes. A real Newton
+  consumer regression reproduces the stalled cabinet before correction and
+  covers desks, masses, both stops, obstruction/recovery and cancellation.
+
+Exact-build data and evidence provenance belong in each game's manifest.
+The new runtime candidate does not inherit support or headset acceptance from
+v1.0.8; the reported long platform jump, ascent comfort and cabinet gesture
+remain live/headset gates.
 
 ## Controller profiles and distribution
 

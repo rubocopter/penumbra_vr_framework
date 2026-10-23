@@ -10,6 +10,7 @@
 #include "vr_crouch_policy.hpp"
 #include "vr_native_intents.hpp"
 #include "legacy_input_abi.hpp"
+#include "native_step_climb.hpp"
 #include "vr_action_input.hpp"
 #include "log.hpp"
 
@@ -100,6 +101,8 @@ constexpr QueryEntry kGameplayQueries[]{
     {0x5107, 0xDAFB0, NativeAction::light, NativeQuery::pressed},
     {0x526F, 0xDAFB0, NativeAction::jump, NativeQuery::pressed},
     {0x5297, 0xDAE70, NativeAction::jump, NativeQuery::held},
+    // The final native release check must see the same VR-only hold as 5297.
+    {0x56BF, 0xDAE70, NativeAction::jump, NativeQuery::held},
     {0x52C1, 0xDAFB0, NativeAction::sprint, NativeQuery::pressed},
     {0x52E9, 0xDAF10, NativeAction::sprint, NativeQuery::released},
     {0x5400, 0xDAFB0, NativeAction::interact, NativeQuery::pressed},
@@ -122,6 +125,19 @@ constexpr PointerEntry kPointers[]{
 };
 constexpr std::uintptr_t kInventoryDoubleQuerySite = 0x4C8C;
 constexpr std::uintptr_t kInventoryDoubleQueryRva = 0xDB050;
+// Requiem 4FA6 loads the handler player, then 4FA9 tests its active byte.
+// This is independently decoded from this build, not an assumed HPL layout.
+constexpr std::uintptr_t kPlayerActiveOffset = 0x1DC;
+constexpr std::uintptr_t kPlayerActiveProofRva = 0x4FA9;
+constexpr std::array<std::uint8_t,6> kPlayerActiveProof{
+    0x8A,0x88,0xDC,0x01,0x00,0x00};
+// Independently decoded Requiem success block, D826F..D8289. The native
+// stack exposes dt at +5F4, ray reference height at +40 and distances at +5C+EBX*4.
+// Shape construction has already reused the old +58 height local as a pointer.
+constexpr adapters::hpl1::NativeStepClimbLayout kStepClimbLayout{
+    0xD826F, 0x5F4, 0x40, 0x5C, 0x4C, 0x22C, 0x238,
+    {0xD9,0x84,0x24,0xF4,0x05,0,0, 0xC6,0x86,0x38,0x02,0,0,0x01,
+     0xD8,0x8E,0x2C,0x02,0,0, 0xD8,0x46,0x4C, 0xD9,0x5E,0x4C}};
 using DoubleQuery = bool(__thiscall*)(void*, LegacyString, float);
 
 struct Vec3 final {
@@ -202,6 +218,10 @@ SRWLOCK g_head_tracking_lock = SRWLOCK_INIT;
 HeadTrackingInput g_head_tracking;
 PhysicalState g_physical_state;
 thread_local PhysicalTick g_physical_tick;
+
+[[nodiscard]] bool ShouldAdaptStepClimb(void* body) noexcept {
+    return g_physical_tick.body == body && g_physical_tick.injected;
+}
 
 SRWLOCK g_session_lock = SRWLOCK_INIT;
 runtime::OpenVrSession* g_session = nullptr;
@@ -450,20 +470,16 @@ void MarkDirectLocomotionAccepted(void* player) noexcept {
         return false;
     }
 
-    std::array<float, 3> bounded{displacement[0], 0.0F, displacement[2]};
-    const float length = std::hypot(bounded[0], bounded[2]);
+    const std::array<float, 3> direct{displacement[0], 0.0F, displacement[2]};
+    const float length = std::hypot(direct[0], direct[2]);
     if (!std::isfinite(length) || length <= 0.000001F) return false;
-    if (length > runtime::vr_locomotion_policy::kMaximumPhysicalBodyStep) {
-        const float scale =
-            runtime::vr_locomotion_policy::kMaximumPhysicalBodyStep / length;
-        bounded[0] *= scale;
-        bounded[2] *= scale;
-    }
 
     AcquireSRWLockExclusive(&g_pending_lock);
     g_pending.character_body = body;
-    g_pending.displacement = bounded;
-    g_pending.direct_request = bounded;
+    // Rework bounds HMD translation separately. Stick already carries metric
+    // speed * dt; clipping it to the physical bound loses travel at low rates.
+    g_pending.displacement = direct;
+    g_pending.direct_request = direct;
     g_pending.physical_request = {};
     g_pending.active = true;
     ReleaseSRWLockExclusive(&g_pending_lock);
@@ -637,32 +653,11 @@ void __fastcall HookedCharacterUpdate(
         ? g_pending.direct_request : std::array<float, 3>{};
     const auto physical = plan.physical_request;
     if (std::hypot(physical[0], physical[2]) > 0.000001F) {
-        // Physical tracking has priority at the native 5 cm step cap. Reduce
-        // only stick displacement when both requests share this one solve.
-        std::array<float, 3> bounded_direct = direct;
-        const float combined_length = std::hypot(
-            physical[0] + direct[0], physical[2] + direct[2]);
-        const float limit = runtime::vr_locomotion_policy::kMaximumPhysicalBodyStep;
-        if (combined_length > limit) {
-            const float a = direct[0] * direct[0] + direct[2] * direct[2];
-            if (a > 0.000000000001F) {
-                const float b = 2.0F *
-                    (physical[0] * direct[0] + physical[2] * direct[2]);
-                const float c = physical[0] * physical[0] +
-                    physical[2] * physical[2] - limit * limit;
-                const float scale = std::clamp(
-                    (-b + std::sqrt(std::max(0.0F, b*b - 4.0F*a*c))) /
-                        (2.0F*a), 0.0F, 1.0F);
-                bounded_direct[0] *= scale;
-                bounded_direct[2] *= scale;
-            } else {
-                bounded_direct = {};
-            }
-        }
+        // PlanBodyReconciliation bounds only physical tracking, as Rework
+        // does. Both components still pass through the single native solve.
         g_pending = {character_body,
-            {physical[0] + bounded_direct[0], 0.0F,
-             physical[2] + bounded_direct[2]},
-            bounded_direct, physical, true};
+            {physical[0] + direct[0], 0.0F, physical[2] + direct[2]},
+            direct, physical, true};
     }
     ReleaseSRWLockExclusive(&g_pending_lock);
 
@@ -819,6 +814,8 @@ bool __fastcall HookedQuery(
             g_image + entry.target)(input, name);
         bool vr = g_intents != nullptr &&
             g_intents->Query(entry.action, entry.query);
+        if (entry.action == NativeAction::jump &&
+            !Read<bool>(g_current_player,kPlayerActiveOffset)) vr = false;
         if (vr && entry.action == NativeAction::interact &&
             entry.query == NativeQuery::pressed) {
             g_vr_interact_presses.fetch_add(1, std::memory_order_relaxed);
@@ -1225,6 +1222,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         append_error(next);
     }
     next.clear();
+    if (adapters::hpl1::NativeStepClimbAdapterInstalled() &&
+        !adapters::hpl1::RemoveNativeStepClimbAdapter(next)) {
+        ok = false;
+        append_error(next);
+    }
+    next.clear();
     if (g_physical_move_hook.installed() &&
         !hooks::RemoveRel32JumpHook(g_physical_move_hook, next)) {
         ok = false;
@@ -1248,7 +1251,8 @@ bool InstallGameplayBridge(std::string& error) noexcept {
         query_hook_installed ||
         pointer_hook_installed || g_inventory_double_query_hook.installed() ||
         g_move_hooks[0].installed() ||
-        g_move_hooks[1].installed() || g_physical_move_hook.installed()) {
+        g_move_hooks[1].installed() || g_physical_move_hook.installed() ||
+        adapters::hpl1::NativeStepClimbAdapterInstalled()) {
         error = "Requiem gameplay bridge is partially installed";
         return false;
     }
@@ -1269,6 +1273,17 @@ bool InstallGameplayBridge(std::string& error) noexcept {
     }
 
     const auto& contract = GameplayContract();
+    // Validate the entire replayed block before publishing any hook, including
+    // bytes beyond the five-byte jump window.
+    if (!ImageBytesMatch(kStepClimbLayout.success_rva,
+            kStepClimbLayout.success_signature)) {
+        error = "Requiem native step-climb block does not match the observed build";
+        return false;
+    }
+    if (!ImageBytesMatch(kPlayerActiveProofRva,kPlayerActiveProof)) {
+        error = "Requiem native player active test does not match the observed build";
+        return false;
+    }
     for (const auto& entry : kGameplayQueries) {
         if (!ImageBytesMatch(entry.site,
                 CallBytes(entry.site, entry.target))) {
@@ -1317,6 +1332,13 @@ bool InstallGameplayBridge(std::string& error) noexcept {
             contract.physical_move_owner_window,
             reinterpret_cast<void*>(&PhysicalMoveGateway),
             g_physical_move_hook, error)) {
+        return false;
+    }
+
+    if (!adapters::hpl1::InstallNativeStepClimbAdapter(
+            g_image, kStepClimbLayout, &ShouldAdaptStepClimb, error)) {
+        std::string rollback;
+        static_cast<void>(RemoveHookSet(rollback));
         return false;
     }
 
@@ -1417,7 +1439,8 @@ bool GameplayBridgeInstalled() noexcept {
         pointers_installed && g_inventory_double_query_hook.installed() &&
         g_update_hook.installed() && g_character_update_hook.installed() &&
         g_move_hooks[0].installed() &&
-        g_move_hooks[1].installed() && g_physical_move_hook.installed();
+        g_move_hooks[1].installed() && g_physical_move_hook.installed() &&
+        adapters::hpl1::NativeStepClimbAdapterMatchesLive();
 }
 
 bool RemoveGameplayBridge(std::string& error) noexcept {

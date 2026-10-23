@@ -5,6 +5,7 @@
 
 #include "hand_contact_probe.hpp"
 #include "native_input_bridge.hpp"
+#include "native_step_climb.hpp"
 #include "rel32_call_hook.hpp"
 #include "spatial_interaction.hpp"
 #include "vr_locomotion.hpp"
@@ -68,6 +69,15 @@ constexpr std::uintptr_t kCharacterRayVtable = 0x27F7B0;
 constexpr std::uintptr_t kCharacterRayIntersectSlot = kCharacterRayVtable + 4;
 constexpr std::uintptr_t kPhysicalStepRayResultFilter = 0xD7772;
 constexpr std::uintptr_t kPhysicalStepRayNormalRequest = 0xD7741;
+// BP initialized-image D78CF..D78E8 independently proves these locals/fields.
+// Native checks the measured step height but otherwise advances by dt*speed,
+// which can overshoot shallow surfaces and fall back on the following tick.
+constexpr adapters::hpl1::NativeStepClimbLayout kNativeStepClimbLayout{
+    0xD78CF, 0x5F4, 0x40, 0x5C, 0x4C, 0x22C, 0x238,
+    {0xD9,0x84,0x24,0xF4,0x05,0x00,0x00,
+     0xC6,0x86,0x38,0x02,0x00,0x00,0x01,
+     0xD8,0x8E,0x2C,0x02,0x00,0x00,
+     0xD8,0x46,0x4C,0xD9,0x5E,0x4C}};
 
 constexpr std::array<std::uint8_t, 5> kUpdateCall{
     0xE8, 0xF1, 0x27, 0x00, 0x00};
@@ -249,24 +259,6 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
         (physical_length - physical_rejected) / physical_length);
 }
 
-[[nodiscard]] Vec3 LocomotionWithinCombinedLimit(
-    const Vec3& physical,
-    const Vec3& locomotion) noexcept {
-    const float maximum = runtime::vr_locomotion_policy::kMaximumPhysicalBodyStep;
-    const Vec3 combined = Add(physical, locomotion);
-    if (HorizontalLength(combined) <= maximum) return locomotion;
-    const float a = locomotion.x * locomotion.x + locomotion.z * locomotion.z;
-    if (a <= 1.0e-12F) return {};
-    const float b = 2.0F *
-        (physical.x * locomotion.x + physical.z * locomotion.z);
-    const float c = physical.x * physical.x + physical.z * physical.z -
-        maximum * maximum;
-    const float discriminant = std::max(0.0F, b * b - 4.0F * a * c);
-    const float scale = std::clamp(
-        (-b + std::sqrt(discriminant)) / (2.0F * a), 0.0F, 1.0F);
-    return Scale(locomotion, scale);
-}
-
 [[nodiscard]] std::array<float, 3> ToArray(const Vec3& value) noexcept {
     return {value.x, value.y, value.z};
 }
@@ -330,7 +322,8 @@ bool ReplacePointer(void** slot, void* expected, void* replacement) noexcept {
     std::memcpy(&displacement, live.data() + 1, sizeof(displacement));
     return reinterpret_cast<std::uintptr_t>(
         image + kPhysicalStepRayNormalRequest + live.size()) + displacement ==
-        reinterpret_cast<std::uintptr_t>(&PhysicalStepRayNormalGateway);
+        reinterpret_cast<std::uintptr_t>(&PhysicalStepRayNormalGateway) &&
+        adapters::hpl1::NativeStepClimbAdapterMatchesLive();
 }
 
 void RejectPendingPhysicalRequest(PhysicalBodyDisplacementResult result) noexcept {
@@ -481,6 +474,11 @@ bool PhysicalRoomScaleStepTick() noexcept {
     return g_tick.character_body != nullptr &&
         g_tick.physical_request_injected &&
         HorizontalLength(native_horizontal_before_injection) <= 1.0e-6F;
+}
+
+bool VrStepClimbEligible(void* character_body) noexcept {
+    return g_tick.character_body == character_body &&
+        (g_tick.physical_request_injected || g_tick.locomotion_request_injected);
 }
 
 void __cdecl RequestPhysicalStepRayNormal(
@@ -926,14 +924,16 @@ template<std::size_t Size>
     const bool character_ray_installed = g_character_ray_intersect_slot != nullptr;
     const bool physical_step_ray_normal_installed =
         g_physical_step_ray_normal_hook.installed();
+    const bool step_climb_installed =
+        adapters::hpl1::NativeStepClimbAdapterInstalled();
     if (update_installed && collision_installed && physical_request_installed &&
         physical_step_ray_filter_installed && character_ray_installed &&
-        physical_step_ray_normal_installed) {
+        physical_step_ray_normal_installed && step_climb_installed) {
         return true;
     }
     if (update_installed || collision_installed || physical_request_installed ||
         physical_step_ray_filter_installed || character_ray_installed ||
-        physical_step_ray_normal_installed) {
+        physical_step_ray_normal_installed || step_climb_installed) {
         error = "Body/collision probe is only partially installed";
         return false;
     }
@@ -948,6 +948,11 @@ template<std::size_t Size>
         return false;
     }
     g_image = image;
+    if (!Matches(kNativeStepClimbLayout.success_rva,
+            kNativeStepClimbLayout.success_signature)) {
+        error = "The Black Plague step-climb block does not match the exact build";
+        return false;
+    }
     if (!Matches(kCharacterUpdate + 0x15, kUpdateSignature) ||
         !Matches(kCheckShapeWorldCollision + 0x15, kCollisionSignature) ||
         !Matches(kPhysicsWorldCharacterUpdateCall, kUpdateCall) ||
@@ -1133,6 +1138,13 @@ template<std::size_t Size>
     }
     g_physical_step_ray_normal_owner_installed.store(
         true, std::memory_order_release);
+    if (!adapters::hpl1::InstallNativeStepClimbAdapter(
+            image, kNativeStepClimbLayout, VrStepClimbEligible, error)) {
+        std::string rollback;
+        static_cast<void>(RemoveBodyCollisionProbe(rollback));
+        if (!rollback.empty()) error += "; " + rollback;
+        return false;
+    }
     AcquireSRWLockExclusive(&g_telemetry_lock);
     g_telemetry = {};
     g_jump_burst = {};
@@ -1161,11 +1173,17 @@ bool RemoveBodyCollisionProbe(std::string& error) noexcept {
     if (!ShutdownGameplayPalmResolver(error)) {
         return false;
     }
-    bool success = hooks::RemoveRel32JumpHook(
-        g_physical_step_ray_normal_hook, error);
-    if (success) {
+    bool success = adapters::hpl1::RemoveNativeStepClimbAdapter(error);
+    std::string normal_error;
+    const bool normal_removed = hooks::RemoveRel32JumpHook(
+        g_physical_step_ray_normal_hook, normal_error);
+    if (normal_removed) {
         g_physical_step_ray_normal_owner_installed.store(
             false, std::memory_order_release);
+    } else {
+        success = false;
+        if (!error.empty()) error += "; ";
+        error += normal_error;
     }
     std::string step_error;
     const bool step_removed = hooks::RemoveRel32JumpHook(
@@ -1274,14 +1292,10 @@ bool QueuePhysicalBodyDisplacement(
     const bool preserve_locomotion = g_pending_body_request_active &&
         g_pending_physical_body == body;
     g_pending_physical_request = {bounded_x, 0.0F, bounded_z};
-    if (preserve_locomotion) {
-        const Vec3 physical{bounded_x, 0.0F, bounded_z};
-        const Vec3 bounded_locomotion = LocomotionWithinCombinedLimit(
-            physical, pending_locomotion);
-        g_pending_locomotion_request = ToArray(bounded_locomotion);
-    } else {
-        g_pending_locomotion_request = {};
-    }
+    // The 5 cm bound belongs to HMD translation. A later physical publisher
+    // must preserve the full metric stick request regardless of queue order.
+    g_pending_locomotion_request = preserve_locomotion
+        ? ToArray(pending_locomotion) : std::array<float, 3>{};
     g_pending_body_request_active = true;
     g_pending_physical_body = body;
     ++g_physical_request_telemetry.queued_requests;
@@ -1316,11 +1330,9 @@ bool QueueLocomotionBodyDisplacement(
         g_pending_physical_body = body;
         g_pending_body_request_active = true;
     }
-    const Vec3 physical{
-        g_pending_physical_request[0], 0.0F,
-        g_pending_physical_request[2]};
-    const Vec3 bounded = LocomotionWithinCombinedLimit(physical, requested);
-    g_pending_locomotion_request = {bounded.x, 0.0F, bounded.z};
+    // The native collision owner still consumes this once per body tick.
+    // Stick speed * dt is independent of the separately bounded HMD request.
+    g_pending_locomotion_request = ToArray(requested);
     ReleaseSRWLockExclusive(&g_physical_request_lock);
     return true;
 }
@@ -1416,7 +1428,8 @@ ReadPhysicalBodyDisplacementBoundaryStatus() noexcept {
         g_physical_step_ray_filter_owner_installed.load(
             std::memory_order_acquire) &&
         g_physical_step_ray_normal_owner_installed.load(
-            std::memory_order_acquire);
+            std::memory_order_acquire) &&
+        adapters::hpl1::NativeStepClimbAdapterInstalled();
     auto* const image = g_published_image.load(std::memory_order_acquire);
     if (image != nullptr) {
         static_cast<void>(ReadBytes(image + kPhysicalRequestInjection,

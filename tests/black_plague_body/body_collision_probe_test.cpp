@@ -91,6 +91,34 @@ void Put(void* object, std::size_t offset, const T& value) {
     std::memcpy(static_cast<std::uint8_t*>(object) + offset, &value, sizeof(value));
 }
 
+// Enter the actual installed BP success gateway using its native frame.
+__declspec(naked) void InvokeNativeStep(void*, void*, float, float) {
+    __asm {
+        push ebp
+        mov ebp, esp
+        push esi
+        push ebx
+        sub esp, 600h
+        mov esi, [ebp + 0Ch]
+        mov eax, [ebp + 10h]
+        mov [esp + 5F0h], eax
+        mov ebx, 1
+        mov dword ptr [esp + 3Ch], 3F800000h
+        mov dword ptr [esp + 58h], 3F000000h
+        fld1
+        fsub dword ptr [ebp + 14h]
+        fstp dword ptr [esp + 5Ch]
+        mov [esp + 54h], esp
+        mov eax, [ebp + 8]
+        call eax
+        add esp, 600h
+        pop ebx
+        pop esi
+        pop ebp
+        ret
+    }
+}
+
 void Jump(std::uint8_t* image, std::uintptr_t rva, void* target) {
     auto* instruction = image + rva;
     instruction[0] = 0xE9;
@@ -205,6 +233,11 @@ int RunBodyCollisionProbeTest() {
         kCollisionCall.data(), kCollisionCall.size());
     std::memcpy(image + kPhysicalRequestInjection,
         kPhysicalRequestWindow.data(), kPhysicalRequestWindow.size());
+    std::memcpy(image + kNativeStepClimbLayout.success_rva,
+        kNativeStepClimbLayout.success_signature.data(),
+        kNativeStepClimbLayout.success_signature.size());
+    image[kNativeStepClimbLayout.success_rva +
+        kNativeStepClimbLayout.success_signature.size()] = 0xC3;
     std::memcpy(image + kCharacterRayIntersect,
         kCharacterRayIntersectSignature.data(),
         kCharacterRayIntersectSignature.size());
@@ -242,6 +275,14 @@ int RunBodyCollisionProbeTest() {
     const Vec3 start{10.0F, 2.0F, -3.0F};
     const Vec3 size{0.8F, 1.8F, 0.6F};
     Put(g_body_storage.data(), kCharacterPositionOffset, start);
+    Put(g_body_storage.data(), kNativeStepClimbLayout.climb_speed_offset, 3.1F);
+    g_tick.character_body = g_body_storage.data();
+    g_tick.locomotion_request_injected = true;
+    InvokeNativeStep(image + kNativeStepClimbLayout.success_rva,
+        g_body_storage.data(), 1.0F/60.0F, 0.01F);
+    if (!Near(Read<float>(g_body_storage.data(), 0x4C), start.y + 0.01F)) return 160;
+    Put(g_body_storage.data(), kCharacterPositionOffset, start);
+    g_tick = {};
     Put(g_body_storage.data(), kCharacterSizeOffset, size);
     Put(g_body_storage.data(), kCharacterPhysicsBodyOffset,
         reinterpret_cast<void*>(0x1234));
@@ -487,8 +528,7 @@ int RunBodyCollisionProbeTest() {
         !Near(injected_position.z, injected_once.z)) return 43;
 
     // Rework locomotion shares the one exact-build injection point. The
-    // physical component keeps priority and the combined request never
-    // exceeds the proven 0.05 m step.
+    // physical component stays bounded independently of stick travel.
     if (!QueuePhysicalBodyDisplacement({0.02F, 0.0F, 0.0F}) ||
         !QueueLocomotionBodyDisplacement({0.04F, 0.0F, 0.0F})) return 71;
     g_tick = {};
@@ -500,10 +540,10 @@ int RunBodyCollisionProbeTest() {
     if (!g_tick.physical_request_injected ||
         !g_tick.locomotion_request_injected ||
         !Near(g_tick.physical_injected.x, 0.02F) ||
-        !Near(g_tick.locomotion_injected.x, 0.03F) ||
-        !Near(g_tick.combined_injected.x, 0.05F) ||
-        !Near(injected_position.x, start.x + 0.05F) ||
-        !Near(native_step_motion.x, 0.05F) ||
+        !Near(g_tick.locomotion_injected.x, 0.04F) ||
+        !Near(g_tick.combined_injected.x, 0.06F) ||
+        !Near(injected_position.x, start.x + 0.06F) ||
+        !Near(native_step_motion.x, 0.06F) ||
         !Near(native_step_motion.y, 0.25F) ||
         !Near(native_step_motion.z, 0.0F)) return 139;
     const Vec3 accepted_partition = PhysicalAcceptedFromCombined(
@@ -550,7 +590,7 @@ int RunBodyCollisionProbeTest() {
         !Near(physical_only_overshoot.z, 0.0F)) return 134;
 
     // Queue order is not an ownership contract. A physical plan published
-    // after input must retain and re-bound the already queued locomotion.
+    // after input must retain the already queued locomotion in full.
     if (!QueueLocomotionBodyDisplacement({0.04F, 0.0F, 0.0F}) ||
         !QueuePhysicalBodyDisplacement({0.02F, 0.0F, 0.0F})) return 79;
     g_tick.character_body = g_body_storage.data();
@@ -559,8 +599,8 @@ int RunBodyCollisionProbeTest() {
     if (!g_tick.physical_request_injected ||
         !g_tick.locomotion_request_injected ||
         !Near(g_tick.physical_injected.x, 0.02F) ||
-        !Near(g_tick.locomotion_injected.x, 0.03F) ||
-        !Near(g_tick.combined_injected.x, 0.05F)) return 80;
+        !Near(g_tick.locomotion_injected.x, 0.04F) ||
+        !Near(g_tick.combined_injected.x, 0.06F)) return 80;
     g_tick = {};
     static_cast<void>(ConsumePhysicalBodyDisplacementTelemetry());
 
@@ -967,8 +1007,7 @@ int RunBodyCollisionProbeTest() {
         !Near(room_scale_camera.horizontal_world_offset[2], 0.0F)) return 67;
 
     // Input publishes a logical latest-state intent. The body owner converts
-    // it with the native physics dt, so 20 ms at Rework's 1.5 m/s produces a
-    // 0.03 m step regardless of the input callback cadence.
+    // it with native physics dt: 20 ms at 3 m/s produces 0.06 m.
     BlackPlagueDirectLocomotionIntent direct_intent;
     direct_intent.move = {0.0F, 1.0F};
     direct_intent.head_world_pose = runtime::IdentityMatrix().values;
@@ -978,9 +1017,40 @@ int RunBodyCollisionProbeTest() {
     HookedCharacterUpdate(replacement.data(), nullptr, 0.020F);
     const auto direct_body = ConsumeBodyCollisionTelemetry();
     if (!direct_body.locomotion_request_injected ||
-        !Near(direct_body.locomotion_requested_displacement[2], -0.03F) ||
-        !Near(direct_body.locomotion_accepted_displacement[2], -0.03F))
+        !Near(direct_body.locomotion_requested_displacement[2], -0.06F) ||
+        !Near(direct_body.locomotion_accepted_displacement[2], -0.06F))
         return 84;
+
+    // Actual intent -> body owner -> queue -> native update/collision path.
+    // Neither low-rate stick nor concurrent physical movement may lose its
+    // metric distance. Exactly one native update and one consumption per tick.
+    for (const int hz : {30, 60, 72, 90, 120}) {
+        for (const bool sprint : {false, true}) {
+            for (const bool mixed : {false, true}) {
+                const auto before_rate = Read<Vec3>(replacement.data(), kCharacterPositionOffset);
+                const auto calls_before_rate = g_native_update_calls;
+                direct_intent.sprinting = sprint;
+                for (int tick = 0; tick < hz; ++tick) {
+                    if (mixed) head.values[3] += 0.001F;
+                    PublishBlackPlagueShadowTracking(head, 0.0F, true);
+                    if (!PublishBlackPlagueDirectLocomotionIntent(g_test_player, direct_intent)) return 158;
+                    HookedCharacterUpdate(replacement.data(), nullptr, 1.0F / static_cast<float>(hz));
+                    const auto actual = ConsumeBodyCollisionTelemetry();
+                    const float expected_step = (sprint ? -4.5F : -3.0F) / static_cast<float>(hz);
+                    if (!actual.locomotion_request_injected ||
+                        std::fabs(actual.locomotion_requested_displacement[2] - expected_step) > 0.00001F ||
+                        std::fabs(actual.locomotion_accepted_displacement[2] - expected_step) > 0.00001F) {
+                        std::cerr << "BP metric consumer hz=" << hz << " sprint=" << sprint << " mixed=" << mixed << '\n';
+                        return 159;
+                    }
+                }
+                const auto after_rate = Read<Vec3>(replacement.data(), kCharacterPositionOffset);
+                if (g_native_update_calls != calls_before_rate + static_cast<unsigned>(hz) ||
+                    std::fabs((after_rate.z - before_rate.z) - (sprint ? -4.5F : -3.0F)) > 0.001F) return 160;
+            }
+        }
+    }
+    direct_intent.sprinting = false;
 
     direct_intent.player_generation = NativePlayerGeneration() + 1;
     if (!PublishBlackPlagueDirectLocomotionIntent(

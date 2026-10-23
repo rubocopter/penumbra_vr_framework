@@ -18,7 +18,24 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.8
+## Current release — 1.0.9
+
+Framework v1.0.9 publishes the Quest 3 feedback corrections for normal trilogy
+movement/jump, tracked BP/Requiem positional audio, uphill step advance and BP
+filing cabinets. See [release notes](releases/1.0.9.md) and [capability evidence](TRILOGY_PARITY_PLAN.md).
+The maintainer explicitly authorized public distribution to collect feedback.
+
+The changed runtime paths have automated host evidence: 66 Framework tests,
+298 Overture checks, independent exact-build mapping and production-consumer
+regressions. Historical headset results do not validate these new binaries.
+The reported long-jump platform, perceived audio direction, affected surfaces
+and drawers remain pending in the [acceptance checklist](VR_HEADSET_TEST_CHECKLIST.md#trilogy-feedback-candidate--independent-acceptance).
+The public installer, matching committed source, dependency sources and checksums
+are built through the existing release workflow. Requiem's intermittent startup
+root cause, other-controller limitations and independent clean-PC/headset
+acceptance remain open.
+
+## Historical release — 1.0.8
 
 Framework v1.0.8 packages focused Black Plague interaction/progression and text
 readability corrections. See [release notes](releases/1.0.8.md), the

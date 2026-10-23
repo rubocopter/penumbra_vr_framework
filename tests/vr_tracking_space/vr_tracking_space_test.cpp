@@ -101,7 +101,7 @@ using penumbra_vr::runtime::VrTrackingSpace;
     const auto walk = LocomotionDisplacement(forward, 0.1F, 1.0F, false, false);
     const auto run = LocomotionDisplacement(forward, 0.1F, 1.0F, false, true);
     const auto constrained = LocomotionDisplacement(forward, 0.1F, 1.0F, true, true);
-    if (!Near(walk[2], -0.15F) || !Near(run[2], -0.225F) ||
+    if (!Near(walk[2], -0.30F) || !Near(run[2], -0.45F) ||
         !Near(constrained[2], -0.05F)) {
         return false;
     }

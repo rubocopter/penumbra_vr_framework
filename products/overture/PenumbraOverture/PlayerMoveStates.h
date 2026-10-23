@@ -19,6 +19,8 @@
 #ifndef GAME_PLAYER_MOVE_STATES_H
 #define GAME_PLAYER_MOVE_STATES_H
 
+#include "native_jump_envelope.hpp"
+
 class cPlayer;
 
 //////////////////////////////////////////////////////////////////////////
@@ -271,6 +273,10 @@ public:
 class cPlayerMoveState_Jump : public iPlayerMoveState
 {
 public:
+	penumbra_vr::backends::overture::NativeJumpEnvelope mNativeJumpEnvelope;
+	bool mbNativeJumpEnvelope = false;
+	float mfExpectedJumpVelocityY = 0.0f;
+	float mfFallbackJumpForce = 0.0f;
 	bool mbFirstUpdate;
 	float mfStartForce;
 	float mfMaxForward;
@@ -306,7 +312,7 @@ public:
 
 		msStepType = "run";
 
-		mfStartForce = mpInit->mpGameConfig->GetFloat("Player","JumpStartForce",1) * 1.7f;
+		mfStartForce = mpInit->mpGameConfig->GetFloat("Player","JumpStartForce",1);
 
 		mType = ePlayerMoveState_Jump;
 	}
@@ -320,7 +326,8 @@ public:
 		else
 			mPrevMoveState = ePlayerMoveState_Walk;
 		
-		float fForce = mfStartForce;
+		// Keep Rework's original launch for non-normal/scripted profiles.
+		float fForce = mfStartForce * 1.7f;
 		if(mPrevMoveState==ePlayerMoveState_Crouch)
 		{
 			fForce *= 0.5f;
@@ -347,7 +354,21 @@ public:
 		pBody->SetMoveSpeed(eCharDir_Right,0);
 		
 		//Add jump force
-		pBody->AddForce(cVector3f(0,fForce * mpPlayer->GetDefaultMass(),0));
+		// Normal jump follows the exact BP/Requiem 60 Hz envelope despite
+		// Overture's HMD-rate logic. Scripted mass/gravity/force profiles retain
+		// the native state below; no policy writes body gravity or position.
+		mfFallbackJumpForce = fForce * mpPlayer->GetDefaultMass();
+		mbNativeJumpEnvelope = NormalJumpProfileMatches() &&
+			fabsf(pBody->GetForceVelocity().y) <= 0.02f &&
+			pBody->GetForce().y == 0.0f;
+		if(mbNativeJumpEnvelope) {
+			const float launch = mfStartForce / 60.0f *
+				(mPrevMoveState == ePlayerMoveState_Crouch ? 0.5f : 1.0f);
+			mNativeJumpEnvelope.Begin(launch, -18.0f, 0.3f, 1.0f / 60.0f);
+			mfExpectedJumpVelocityY = pBody->GetForceVelocity().y;
+		} else {
+			pBody->AddForce(cVector3f(0,mfFallbackJumpForce,0));
+		}
 		
 		mbFirstUpdate = true;
 
@@ -375,10 +396,21 @@ public:
 	{
 		iCharacterBody *pBody = mpPlayer->GetCharacterBody();
 
+		if(mbNativeJumpEnvelope &&
+			(!NormalJumpProfileMatches() || pBody->GetForce().y != 0.0f ||
+			 !(fabsf(pBody->GetForceVelocity().y - mfExpectedJumpVelocityY) <= 0.02f))) {
+			mbNativeJumpEnvelope = false;
+			// Enter deferred only the normal launch until this first update.
+			// If a script changes the pipeline in between, retain native launch.
+			if(mbFirstUpdate) pBody->AddForce(cVector3f(0,mfFallbackJumpForce,0));
+		}
 		if(mbFirstUpdate){
 			mbFirstUpdate = false;
+			if(mbNativeJumpEnvelope) ApplyNativeJumpEnvelope(afTimeStep);
 			return;
 		}
+		// Native collision/ceiling/landing and script changes win. Never drive
+		// the reference envelope back through a velocity the solver rejected.
 
 		//Check so that speed is correct
 		cVector3f vForceVel = pBody->GetForceVelocity();
@@ -403,7 +435,10 @@ public:
 		//Skip sideways here, it is sucha strange way to jump anyway.
 		
 		//Check if the jumpbutton is down.
-		if(	mpPlayer->GetJumpButtonDown() && 
+		if(mbNativeJumpEnvelope) {
+			ApplyNativeJumpEnvelope(afTimeStep);
+		}
+		else if(	mpPlayer->GetJumpButtonDown() && 
 			mpPlayer->GetJumpCount() < mpPlayer->GetMaxJumpCount())
 		{
 			float fMul = 0.4f + 0.5f * (1 - mpPlayer->GetJumpCount() / mpPlayer->GetMaxJumpCount());
@@ -426,6 +461,35 @@ public:
 			mpPlayer->SetLandedFromJump(false);
 			mpPlayer->ChangeMoveState(mPrevMoveState);
 		}
+	}
+
+	void ApplyNativeJumpEnvelope(float afTimeStep)
+	{
+		iCharacterBody* pBody = mpPlayer->GetCharacterBody();
+		if(!(afTimeStep > 0.0f && afTimeStep <= 0.25f)) {
+			mbNativeJumpEnvelope = false;
+			return;
+		}
+		const float travel = mNativeJumpEnvelope.Advance(
+			afTimeStep, mpPlayer->GetJumpButtonDown(), mpPlayer->GetJumpCount());
+		const float velocity = travel / afTimeStep;
+		const float acceleration =
+			(velocity - pBody->GetForceVelocity().y) / afTimeStep;
+		pBody->AddForce(cVector3f(0,
+			(acceleration - pBody->GetCustomGravity().y) * pBody->GetMass(), 0));
+		mfExpectedJumpVelocityY = velocity;
+	}
+
+	bool NormalJumpProfileMatches()
+	{
+		iCharacterBody* pBody = mpPlayer->GetCharacterBody();
+		return mfStartForce == 350.0f && pBody->GetMass() == 80.0f &&
+			mpPlayer->GetDefaultMass() == 80.0f && pBody->GravityIsActive() &&
+			pBody->GetCustomGravityActive() &&
+			pBody->GetCustomGravity().x == 0.0f &&
+			pBody->GetCustomGravity().y == -18.0f &&
+			pBody->GetCustomGravity().z == 0.0f &&
+			mpPlayer->GetMaxJumpCount() == 0.3f;
 	}
 };
 

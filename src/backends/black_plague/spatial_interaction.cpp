@@ -76,6 +76,10 @@ constexpr std::uintptr_t kSliderGetType = 0x1499B0;
 constexpr std::uintptr_t kJointTypeVtableSlot = 0x14;
 constexpr std::uintptr_t kJointPinDirectionOffset = 0xB8;
 constexpr std::uintptr_t kJointPivotPointOffset = 0xC4;
+// BP initialized image SHA256 2881741D...A8295, slider callback 0x19F390:
+// +E8/+EC are sticky min/max distances. In-range static-parent joints zero
+// child velocities at 0x19F51D/0x19F542. Travel limits (+260/+25C) are separate.
+constexpr std::uintptr_t kJointStickyDistancesOffset = 0xE8;
 constexpr std::uintptr_t kBodyBoundingVolumeOffset = 0xB4;
 constexpr std::uintptr_t kBodyUserDataOffset = 0x414;
 constexpr std::uintptr_t kBodyCollideOffset = 0x418;
@@ -277,6 +281,9 @@ struct MoveHold {
     Mode mode = Mode::free_body;
     Vec joint_pin{};
     Vec joint_pivot{};
+    void* slider_joint = nullptr;
+    std::array<float,2> slider_sticky_distances{};
+    bool slider_sticky_suspended = false;
     float hinge_lightness = 1.0F;
 } g_move_hold;
 struct PushHold {
@@ -890,6 +897,7 @@ struct GrabComponent {
     if (!FiniteVec(hold.joint_pin) || !FiniteVec(hold.joint_pivot) ||
         runtime::vr_mechanism_policy::Length(hold.joint_pin)<=1.0e-6F)
         return false;
+    if (hold.mode==MoveHold::Mode::slider) hold.slider_joint=joint;
     return true;
 }
 [[nodiscard]] bool BuildNudgePlan(void* body, const Vec& hand_velocity,
@@ -2099,6 +2107,33 @@ void __fastcall HookedMoveEnter(void* state, void*, void* previous) {
     reinterpret_cast<Transition>(g_image+0xAAC80)(state,previous);
 }
 
+[[nodiscard]] bool SuspendMoveSliderStickiness(MoveHold& hold) noexcept {
+    if (!hold.slider_joint) return true; // includes Rework's no-joint slide axis
+    auto* const joint=static_cast<std::uint8_t*>(hold.slider_joint);
+    // ReworkMoveJoint can also discover a neighbouring body's drive joint.
+    // Only the held child itself proves ownership for this temporary override.
+    if (Read<void*>(joint,kJointChildBodyOffset)!=hold.body) return true;
+    void* const parent=Read<void*>(joint,kJointParentBodyOffset);
+    if (parent) {
+        if (!BodyMatches(parent)) return false;
+        const float parent_mass=Read<float>(parent,0x434);
+        if (!std::isfinite(parent_mass) || parent_mass<0) return false;
+        if (parent_mass>0) return true; // native sticky branch cannot run
+    }
+    if (!Copy(joint+kJointStickyDistancesOffset,hold.slider_sticky_distances.data(),
+            sizeof(hold.slider_sticky_distances))) return false;
+    for (const float distance:hold.slider_sticky_distances)
+        if (!std::isfinite(distance) || distance<0) return false;
+    if (hold.slider_sticky_distances==std::array<float,2>{}) return true;
+    // Rework's velocity servo is cancelled by BP's native sticky callback
+    // before Newton integrates it. Suspend only that endpoint rest policy
+    // while VR owns Move; keep the callback, limits and scripts native.
+    const std::array<float,2> zero{};
+    if (!Store(joint+kJointStickyDistancesOffset,zero.data(),sizeof(zero))) return false;
+    hold.slider_sticky_suspended=true;
+    return true;
+}
+
 void AcquirePendingMove(void* state, std::uint64_t player_generation,
     runtime::VrHand pending_hand) {
     const auto frame=ReadNativeControllerFrame();
@@ -2188,6 +2223,11 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
     }
     hold.previous_palm_pose=palm;
     hold.palm_yaw_epoch=GameplayPalmYawEpoch();
+    if (!SuspendMoveSliderStickiness(hold)) {
+        PublishGameplayPalmHeldBody(hand_index,nullptr);
+        ++g_mechanism_rejected;
+        return;
+    }
     g_move_hold=hold;
     // Rework 23c890f disables Newton auto-sleep for every body owned by the
     // Move state. Without this, a free prop can remain acquired while Newton
@@ -2212,6 +2252,18 @@ void AcquirePendingMove(void* state, std::uint64_t player_generation,
 
 void RestoreMoveBody(const MoveHold& hold) noexcept {
     if (!BodyMatches(hold.body)) return;
+    if (hold.slider_sticky_suspended && ReworkMoveJoint(hold.body)==hold.slider_joint &&
+        Read<void*>(hold.slider_joint,0)==g_image+kPhysicsJointSliderNewtonVtable &&
+        Read<void*>(hold.slider_joint,kJointChildBodyOffset)==hold.body) {
+        auto* const joint=static_cast<std::uint8_t*>(hold.slider_joint);
+        for (std::size_t index=0;index<hold.slider_sticky_distances.size();++index) {
+            auto* const distance=joint+kJointStickyDistancesOffset+index*sizeof(float);
+            float current=0;
+            // Preserve a script's nonzero sticky setting written during Move.
+            if (Copy(distance,&current,sizeof(current)) && current==0)
+                static_cast<void>(Store(distance,&hold.slider_sticky_distances[index],sizeof(float)));
+        }
+    }
     SetFloat(hold.body,0x19C360,hold.max_linear);
     SetFloat(hold.body,0x19C380,hold.max_angular);
     // Match Rework's Move LeaveState lifecycle after the native state has

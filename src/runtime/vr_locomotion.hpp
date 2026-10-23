@@ -22,12 +22,13 @@ struct NativePushAxes {
 
 namespace vr_locomotion_policy {
 
-// Values preserved from Rework Player.cpp at revision 23c890f.
+// Rework Player.cpp 23c890f supplies the physical bounds and constrained
+// movement. Normal speed follows the trilogy's native 3/4.5 m/s profile.
 inline constexpr float kWorldUnitsPerMeter = 1.0F;
 inline constexpr float kMaximumHeadBodySeparation = 0.8F;
 inline constexpr float kMaximumPhysicalBodyStep = 0.05F;
 inline constexpr float kRejectedMotionEpsilon = 0.002F;
-inline constexpr float kNormalSpeedMetersPerSecond = 1.5F;
+inline constexpr float kNormalSpeedMetersPerSecond = 3.0F;
 inline constexpr float kConstrainedSpeedMetersPerSecond = 0.5F;
 inline constexpr float kSprintMultiplier = 1.5F;
 inline constexpr float kVrStepDistanceMeters = 0.85F;
