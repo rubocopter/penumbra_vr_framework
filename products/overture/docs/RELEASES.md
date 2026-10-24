@@ -1,5 +1,12 @@
 # Release history
 
+## v1.0.10 — Requiem maintenance and coordinated packaging (2026-10-25)
+
+Overture receives the coordinated 1.0.10 executable/package identity with no
+gameplay changes. The focused throw/selection corrections belong to Requiem;
+historical Overture headset evidence remains scoped to its recorded binaries.
+See the [Framework notes](../../../docs/releases/1.0.10.md).
+
 ## v1.0.9 — Trilogy movement and normal jump parity (2026-10-23)
 
 Normal walk/run uses the shared 3/4.5 m/s profile. Normal jump follows the
