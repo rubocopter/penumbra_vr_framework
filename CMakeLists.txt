@@ -470,6 +470,21 @@ if(BUILD_TESTING)
     set_tests_properties(requiem_jump_queries requiem_locomotion_consumer
         PROPERTIES TIMEOUT 30)
 
+    add_executable(pvr_requiem_interaction_consumer_test
+        tests/requiem_gameplay/interaction_consumer_test.cpp src/probe/log.cpp)
+    target_include_directories(pvr_requiem_interaction_consumer_test PRIVATE
+        src/hooks src/probe src/adapters/hpl1)
+    target_link_libraries(pvr_requiem_interaction_consumer_test PRIVATE pvr_requiem_backend)
+    target_compile_definitions(pvr_requiem_interaction_consumer_test PRIVATE
+        PVR_TEST_NEWTON_DLL=L"${CMAKE_SOURCE_DIR}/products/overture/dependencies/lib/win32/Newton.dll")
+    set_target_properties(pvr_requiem_interaction_consumer_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/requiem_interaction")
+    pvr_enable_warnings(pvr_requiem_interaction_consumer_test)
+    add_test(NAME requiem_selection_consumer COMMAND pvr_requiem_interaction_consumer_test)
+    add_test(NAME requiem_throw_consumer COMMAND pvr_requiem_interaction_consumer_test throw)
+    set_tests_properties(requiem_throw_consumer PROPERTIES TIMEOUT 30)
+    set_tests_properties(requiem_selection_consumer PROPERTIES TIMEOUT 30)
+
     add_executable(pvr_tracked_audio_listener_test
         tests/spatial_audio/tracked_audio_listener_test.cpp)
     target_include_directories(pvr_tracked_audio_listener_test PRIVATE

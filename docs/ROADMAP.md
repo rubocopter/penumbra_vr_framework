@@ -8,6 +8,12 @@ As of 2026-10-12, the maintainer considers the intended Penumbra trilogy VR feat
 
 Only consider runtime or installer changes in response to a concrete, reproducible problem that prevents normal installation, launch, input, save/load or progression, or causes destructive repair/uninstall. Preserve the existing evidence gates and avoid speculative fixes, unnecessary refactoring and additional validation cycles without a reported failure. The intermittent Requiem startup crash is known but has no confirmed root-cause fix; investigate it only if new discriminating evidence becomes available. Do not automatically launch games.
 
+Framework [v1.0.10](releases/1.0.10.md) addresses Caelus's Requiem level03 bottle
+throw and Examine/ladder cue report. The implementation has host consumer
+regressions; puzzle completion and aiming/cue usability require headset
+feedback. The new candidate does not change the accepted movement profile.
+See `TRILOGY_PARITY_PLAN.md` and the focused headset checklist for scope.
+
 Framework [v1.0.9](releases/1.0.9.md) distributes the reported movement/jump,
 BP/Requiem audio, uphill overshoot and BP filing-cabinet corrections for user
 feedback. The new runtime behavior has host tests; the reported Quest 3 cases

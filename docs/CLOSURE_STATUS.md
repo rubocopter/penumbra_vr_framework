@@ -18,7 +18,22 @@ full hardware/headset certification matrix.
 Compile, host, live and headset evidence remain separate. Build identity and
 validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-## Current release — 1.0.9
+## Current release — 1.0.10
+
+Framework v1.0.10 addresses the reported Requiem level03 bottle throw and
+Examine/ladder selection difficulties. Native assisted throw uses the holding
+controller's aim; independent head selection preserves native admission,
+range and occlusion. Movement/jump behavior is unchanged. See [release notes](releases/1.0.10.md)
+and [capability evidence](TRILOGY_PARITY_PLAN.md).
+
+Production consumer regressions exercise selection, action refresh, native
+throw ordering/mass guards, gesture release and hook restoration with host
+fixtures and the shipped Newton DLL. Level03 completion and aiming/cue
+usability remain pending headset feedback. Public distribution continues under
+the maintainer's authorization; a host pass does not establish headset support.
+The artifact validation record is added after the exact final package checks.
+
+## Historical release — 1.0.9
 
 Framework v1.0.9 publishes the Quest 3 feedback corrections for normal trilogy
 movement/jump, tracked BP/Requiem positional audio, uphill step advance and BP

@@ -60,7 +60,40 @@ installed executable matches the candidate build hash. This validates the
 observed acquisition/gameplay sequence, including visibility-before-ranking;
 it does not certify every Overture mechanism or Quest 3 pointer alignment.
 
-## Current feedback corrections — v1.0.9 host evidence
+## Requiem progression feedback — v1.0.10 host evidence
+
+Caelus reports on Quest 3 that walking/jumping now work correctly; audio seems
+correct but was only briefly exercised. The exact installed version/hash was
+not supplied, so this is scoped user feedback, not artifact-pinned acceptance.
+The new report identifies a level03 explosive ketchup-bottle throw blocker and
+hard-to-find Examine/ladder cues. It does not close ascent/cabinet gates.
+
+Requiem now consumes Rework's independent head Examine query through its own
+mapped native callback; physical hand selection remains separate. Native
+solid/area arbitration, occlusion, Examine distances/description-once policy
+and Ladder's own admission/activation guards remain authoritative. Examine
+refreshes its head target at action time; distant described props cannot become
+remote VR grabs. The Normal Update/ray owners preserve the native callback.
+
+Native Grab Examine (default Touch B in the right-handed layout) originally
+unprojected the camera/cursor after leaving Grab. Its direction now uses the
+current aim of the hand holding the body, with grip fallback, captured before
+Leave clears ownership. Native CanBeThrown, restored mass, impulse profile,
+central/point application and state/script lifecycle remain unchanged. Gesture
+release keeps Rework's tracked velocity gain/caps; invalid focus, UI, stale
+reference or mismatched tracking epoch produces no release momentum. The
+unused never-fed velocity-history fallback was removed.
+
+Actual `render_world` consumer tests reproduce the previous selection/aim
+failures and cover independent head/hand targets, native range/once policy,
+occlusion, head rotation, ladder guards, action refresh and hook restoration.
+Throw tests execute production hooks with characterized native boundaries and
+the shipped Newton DLL, preserving native transition/reset/impulse ordering,
+mass profiles, CanBeThrown and off-center impulse behavior. Reaching the
+level03 trigger and perceived aiming/cue usability remain headset gates.
+Exact mappings and evidence windows are in Requiem's manifest.
+
+## Previous feedback corrections — v1.0.9 host evidence
 
 Framework v1.0.9 publishes corrections for the concrete Quest 3 report;
 these changes have no new live/headset acceptance. Historical accepted binaries

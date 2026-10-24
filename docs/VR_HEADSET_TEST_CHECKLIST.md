@@ -269,6 +269,32 @@ is not part of a passing audio gate yet.
 The probe DLL intentionally remains resident until process exit; validation is
 about restored hooks/resources and clean process lifetime, not live DLL unload.
 
+## Requiem throw and selection — independent acceptance
+
+Record the installed Framework version/hash, Quest 3 connection and active
+bindings. Caelus's positive walking/jumping report and brief favorable audio
+observation are not pinned to an exact artifact; they do not validate this
+new throw/selection candidate.
+
+- At level03's explosive ketchup bottle, hold the bottle and aim the holding
+  controller at the bridge/chain trigger; press Examine (default B with the
+  right-handed Touch layout). Repeat with the body/head facing elsewhere and
+  with either hand holding it. Confirm a predictable trajectory and puzzle
+  progression. Remapped/left-handed bindings may assign Examine differently.
+- Compare ordinary gesture release with the assisted button throw. Carry with
+  stick movement, turn, release/reacquire and try a nonthrowable prop. Native
+  script events and CanBeThrown must remain intact. Lose focus/tracking or open
+  UI while holding; there must be no unintended release momentum.
+- Look at a described object with the hand pointing elsewhere; its Examine cue
+  should be easy to find and the action should examine that head target even
+  while the hand is near another object. Check repeatable and once-only text,
+  native distance limits and foreground walls. Distant props must not become
+  remotely grabbable.
+- Approach an accessible ladder while the hand points away. Confirm its native
+  cue and climbing action follow the visible head target within native range.
+  Repeat outside horizontal/vertical reach and behind foreground geometry;
+  native admission and occlusion must still reject those cases.
+
 ## Trilogy feedback candidate — independent acceptance
 
 Run these checks on each changed game/build; record the exact candidate hashes,

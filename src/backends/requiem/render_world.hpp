@@ -64,6 +64,7 @@ void OnSdlSwap(std::uint64_t frame_number) noexcept;
 void RequestTrackedRecenter() noexcept;
 void AddTrackedWorldYaw(float radians) noexcept;
 void RefreshVrSelectionBeforeInteract(void* player) noexcept;
+void RefreshVrSelectionBeforeExamine(void* player) noexcept;
 void ConfigurePresentationSettings(runtime::VrSettings settings) noexcept;
 [[nodiscard]] bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose,
     std::array<float, 2>& uv) noexcept;

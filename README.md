@@ -90,13 +90,13 @@ Unknown or modified game builds may be rejected by the installer. Check [support
 
 ## Release and maintenance status
 
-The latest release is **[v1.0.9](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.9)** (23 October 2026). **The intended VR feature set is complete; the project is now in maintenance-only mode.** No additional features, cosmetic polish or broad hardware certification are planned. Future fixes may be considered for reproducible problems that prevent normal installation, launch, input or progression.
+The latest release is **[v1.0.10](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.10)** (25 October 2026). **The intended VR feature set is complete; the project is now in maintenance-only mode.** No additional features, cosmetic polish or broad hardware certification are planned. Future fixes may be considered for reproducible problems that prevent normal installation, launch, input or progression.
 
-This update shares normal walk/run speeds across the trilogy and corrects jump input/cadence, tracked positional audio in Black Plague/Requiem, native uphill overshoot and sticky Black Plague filing-cabinet drawers. These changes have automated host validation; the reported Quest 3 cases and new build's headset acceptance remain pending user feedback.
+This update corrects Requiem's assisted throw direction and independent head selection for Examine and ladders. Aim the controller holding the object and press Examine (default Touch B in the right-handed layout); native throw power and puzzle rules remain intact. These changes have automated host validation; level03 puzzle completion and headset usability remain pending user feedback.
 
 The maintainer has accepted focused in-headset tests of the installed trilogy on the primary PS VR2 setup; this is not a claim of full playthroughs or universal headset compatibility. An intermittent Requiem startup crash remains without an identified fix, and a finger-pose mismatch has been reported on Index. Other controller families and independent clean-PC installations have not received equivalent validation.
 
-See [v1.0.9 release notes](docs/releases/1.0.9.md) for changes and [release status and validation](docs/CLOSURE_STATUS.md) for precise evidence and known limitations.
+See [v1.0.10 release notes](docs/releases/1.0.10.md) for changes and [release status and validation](docs/CLOSURE_STATUS.md) for precise evidence and known limitations.
 
 ## Help and documentation
 
@@ -105,7 +105,7 @@ See [v1.0.9 release notes](docs/releases/1.0.9.md) for changes and [release stat
 | [Controls](docs/CONTROLS.md) | [Architecture](docs/ARCHITECTURE.md) |
 | [VR configuration](docs/VR_CONFIGURATION.md) | [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | [Supported builds](docs/SUPPORTED_BUILDS.md) |
-| [Release notes](docs/releases/1.0.9.md) | [Roadmap](docs/ROADMAP.md) |
+| [Release notes](docs/releases/1.0.10.md) | [Roadmap](docs/ROADMAP.md) |
 | [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
 
 If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a reproducible regression, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs. The project is not accepting new feature requests as active work.

@@ -5,6 +5,18 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.10 — 2026-10-25
+
+- Correct Requiem's assisted Grab throw to follow the holding controller aim,
+  preserving native CanBeThrown, mass profile, impulse and state/script order.
+- Add independent tracked-head Examine/ladder selection and action-time
+  Examine refresh while preserving physical hand selection, native range,
+  description-once policy, solid occlusion and ladder activation guards.
+- Guard gesture release against stale tracking references/epochs, focus and
+  UI loss; retain Rework's velocity gains/caps. Remove unused empty history.
+- Add production consumer regressions and exact-build evidence. Publish for
+  feedback; level03 progression and headset aiming/cue usability remain pending.
+
 ## 1.0.9 — 2026-10-23
 
 - Share the normal 3/4.5 m/s walk/sprint profile across the trilogy and keep

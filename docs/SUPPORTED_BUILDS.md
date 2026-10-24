@@ -37,6 +37,13 @@ Use these states consistently:
 
 Current product-level evidence:
 
+The subsequent Requiem throw/selection correction is independently mapped and
+host-tested only. Native assisted throw now uses the holding controller's aim;
+Examine/ladder selection has an independent tracked-head query. Level03 puzzle
+completion and new-build headset usability remain pending. The favorable Quest 3
+movement report and partial audio observation have no exact installed hash and
+do not promote unrelated capabilities or this new candidate.
+
 The 2026-10-23 trilogy feedback candidate changes normal movement/jump,
 binary-host tracked audio and ascent, and BP sticky filing-cabinet interaction.
 Its new evidence is host-only; it does not inherit historical binary acceptance

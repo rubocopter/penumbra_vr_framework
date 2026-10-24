@@ -77,6 +77,19 @@ constexpr std::uintptr_t kNormalVtableRva = 0x0027E2A8;
 constexpr std::uintptr_t kNormalRayCallRva = 0x000ADCCF;
 constexpr std::uintptr_t kGetPickedBodyRva = 0x0009AB30;
 constexpr std::uintptr_t kNormalInteractRva = 0x000ADFA0;
+constexpr std::uintptr_t kPickClearRva = 0xA5000;
+constexpr std::uintptr_t kPickResolveRva = 0xA5D50;
+constexpr std::uintptr_t kLadderVtableRva = 0x277288;
+constexpr std::uintptr_t kLadderPickRva = 0x38760;
+constexpr std::uintptr_t kWideNotEmptyIatRva = 0x27312C;
+constexpr std::array<std::uint8_t,27> kPickClearEntry{
+    0xD9,0x41,0x0C,0x33,0xC0,0xD8,0x05,0x40,0x3A,0x67,0x00,
+    0x89,0x41,0x04,0x89,0x41,0x08,0xD9,0x51,0x10,0xD9,0x51,0x14,
+    0xD9,0x59,0x34,0xC3};
+constexpr std::array<std::uint8_t,8> kPickResolveEntry{0x56,0x8B,0xF1,0x8B,0x46,0x08,0x85,0xC0};
+constexpr std::array<std::uint8_t,9> kLadderPickEntry{0x83,0xEC,0x18,0x56,0x8B,0xF1,0x8B,0x46,0x10};
+constexpr std::array<std::uint8_t,10> kLadderTypeStore{0xC7,0x86,0xC0,0,0,0,0x0D,0,0,0};
+constexpr std::array<std::uint8_t,6> kExamineStringCall{0xFF,0x15,0x2C,0x31,0x67,0};
 constexpr std::array<std::uint8_t, 10> kGetPickedBodyEntry{
     0x8B, 0x81, 0x80, 0x02, 0x00, 0x00, 0x8B, 0x40, 0x04, 0xC3};
 constexpr std::array<std::uint8_t, 12> kNormalInteractEntry{
@@ -93,6 +106,15 @@ constexpr std::uintptr_t kGrabLeaveSlotRva = 0x0027E2A0;
 constexpr std::uintptr_t kGrabUpdateRva = 0x000ABF60;
 constexpr std::uintptr_t kGrabEnterRva = 0x000ACE40;
 constexpr std::uintptr_t kGrabLeaveRva = 0x000AA920;
+constexpr std::uintptr_t kGrabExamineSlotRva = 0x0027E258;
+constexpr std::uintptr_t kGrabExamineRva = 0x000AA520;
+constexpr std::uintptr_t kThrowDirectionCallRva = 0x000AA5C7;
+constexpr std::uintptr_t kCameraUnprojectRva = 0x00113B20;
+constexpr std::array<std::uint8_t,13> kGrabExamineEntry{
+    0x83,0xEC,0x30,0x56,0x8B,0xF1,0x8B,0x46,0x28,0x8B,0x4E,0x10,0x50};
+constexpr std::array<std::uint8_t,16> kCameraUnprojectEntry{
+    0x81,0xEC,0xA0,0,0,0,0x56,0x8B,0xF1,0x8B,0x8C,0x24,0xB0,0,0,0};
+constexpr std::array<std::uint8_t,5> kThrowDirectionCall{0xE8,0x54,0x95,0x06,0};
 constexpr std::uintptr_t kGrabExitRva = 0x000AA3A0;
 constexpr std::uintptr_t kMoveExitRva = 0x000AA490;
 constexpr std::uintptr_t kPhysicsBodyVtableRva = 0x00293DD8;
@@ -174,10 +196,12 @@ hooks::Rel32CallHook g_hook;
 hooks::Rel32CallHook g_visibility_hook;
 hooks::Rel32CallHook g_draw_all_hook;
 hooks::Rel32CallHook g_tool_matrix_hook;
+hooks::Rel32CallHook g_throw_direction_hook;
 hooks::IatHook g_hands_update_hook;
+hooks::IatHook g_normal_update_hook;
 hooks::IatHook g_refraction_copy_hook;
 hooks::IatHook g_ray_hook;
-std::array<hooks::IatHook, 3> g_grab_hooks{};
+std::array<hooks::IatHook, 4> g_grab_hooks{};
 std::array<hooks::IatHook, 3> g_move_state_hooks{};
 std::array<hooks::IatHook, 3> g_push_state_hooks{};
 std::atomic<RenderWorld> g_original{nullptr};
@@ -245,6 +269,7 @@ struct ToolAttachment final {
 };
 thread_local std::array<ToolAttachment, 2> g_tool_attachments{};
 thread_local bool g_selection_refresh_active = false;
+thread_local bool g_examine_selection_active = false;
 thread_local bool g_vr_selection_ready = false;
 thread_local void* g_vr_selection_player = nullptr;
 struct VrSelectionContact final {
@@ -253,6 +278,31 @@ struct VrSelectionContact final {
     std::uint64_t sampled_at = 0;
 };
 thread_local VrSelectionContact g_vr_selection_contact{};
+// Requiem A5000/A5D50 and its pick constructor independently establish this
+// callback layout. Keep the native callback/vtable and solid/area arbitration.
+struct NativePickResult {
+    void* vtable = nullptr;
+    void* body = nullptr;
+    void* area = nullptr;
+    float maximum_distance = 0;
+    float distance = 0;
+    float area_distance = 0;
+    int last_entity_type = 0;
+    std::array<float,3> point{};
+    std::array<float,3> area_point{};
+    float minimum_static_distance = 0;
+};
+static_assert(sizeof(NativePickResult)==0x38);
+struct GazeSelection {
+    NativePickResult result{};
+    void* entity = nullptr;
+    void* player = nullptr;
+    int cue = 10;
+    bool queried = false;
+    bool valid = false;
+    bool ladder = false;
+};
+thread_local GazeSelection g_normal_gaze{};
 thread_local std::uint32_t g_refresh_entity_hits = 0;
 thread_local float g_refresh_winner_distance = -1.0F;
 thread_local float g_refresh_winner_mass = -1.0F;
@@ -263,7 +313,6 @@ struct GrabHold final {
     void* body = nullptr;
     runtime::VrHand hand = runtime::VrHand::right;
     runtime::VrGrabPose pose;
-    runtime::VrReleaseVelocity release_velocity;
     std::array<float,3> previous_palm{};
     std::array<float,3> previous_tracking{};
     std::uint64_t yaw_epoch = 0;
@@ -274,6 +323,11 @@ struct GrabHold final {
 thread_local void* g_pending_grab_state = nullptr;
 thread_local runtime::VrHand g_pending_grab_hand = runtime::VrHand::right;
 thread_local GrabHold g_grab_hold;
+struct ThrowAim {
+    void* camera = nullptr;
+    std::array<float,3> direction{};
+};
+thread_local ThrowAim g_throw_aim{};
 enum class MoveMode { free_body, slider, hinge };
 struct MoveHold final {
     void* state = nullptr;
@@ -1165,6 +1219,95 @@ template <typename T>
     runtime::VrMatrix44& pose) noexcept;
 [[nodiscard]] bool RequiemBodyMatches(void* body) noexcept;
 
+[[nodiscard]] int NativeGazeCue(void* native_callback,
+    GazeSelection& gaze) noexcept {
+    // RQ 29A70 and 38760 prove entity+10 -> init+15C -> player. Never
+    // substitute a callback belonging to another player or frame context.
+    gaze.player=ReadNative<void*>(ReadNative<void*>(gaze.entity,0x10),0x15C);
+    if(!gaze.player || ReadNative<void*>(gaze.player,0x280)!=native_callback) return 10;
+    const int previous_cue=ReadNative<int>(gaze.player,0x2E8);
+    if(!StoreNative(gaze.player,0x280,static_cast<void*>(&gaze.result))) return 10;
+    int cue=10;
+    __try {
+        if(gaze.ladder) {
+            // The native Ladder callback alone owns its horizontal/vertical
+            // admission and cue 9. No reach/height offset is invented here.
+            static_cast<void>(StoreNative(gaze.player,0x2E8,10));
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+kLadderPickRva)(gaze.entity);
+            cue=ReadNative<int>(gaze.player,0x2E8);
+        } else {
+            // Rework requests noInteract for its independent Examine query.
+            // RQ has a one-argument getter: adapt only its decoded Examine
+            // branch (29B00..29B3D), retaining the native distance getter.
+            using NotEmpty=bool(__cdecl*)(const void*,const std::uint16_t*);
+            const bool examinable=ReadNative<void*>(gaze.entity,0x208) ||
+                reinterpret_cast<NotEmpty>(ReadNative<void*>(g_image,kWideNotEmptyIatRva))(
+                    static_cast<const std::uint8_t*>(gaze.entity)+0x98,
+                    reinterpret_cast<const std::uint16_t*>(g_image+0x273FE4));
+            if(examinable) {
+                auto* table=ReadNative<void*>(gaze.entity,0);
+                using Distance=float(__thiscall*)(void*);
+                const float distance=reinterpret_cast<Distance>(ReadNative<void*>(table,0x48))(gaze.entity);
+                if(std::isfinite(distance) && distance<=ReadNative<float>(gaze.entity,0xB8)) cue=4;
+            }
+        }
+    } __except(EXCEPTION_EXECUTE_HANDLER) { cue=10; }
+    static_cast<void>(StoreNative(gaze.player,0x2E8,previous_cue));
+    if(!StoreNative(gaze.player,0x280,native_callback)) return 10;
+    return cue;
+}
+
+[[nodiscard]] GazeSelection CastTrackedHeadSelection(void* world,
+    void* native_callback,float native_length,
+    bool distance,bool normal,bool point,bool prefilter) noexcept {
+    GazeSelection gaze{};
+    runtime::VrMatrix44 head{};
+    if(!ReadNativeControllerFrame().focused || !TrackedHeadWorldPose(head)) return gaze;
+    gaze.result=ReadNative<NativePickResult>(native_callback,0);
+    const std::array<float,3> from{head.values[3],head.values[7],head.values[11]};
+    const std::array<float,3> to{from[0]-head.values[2]*native_length,
+        from[1]-head.values[6]*native_length,from[2]-head.values[10]*native_length};
+    __try {
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+kPickClearRva)(&gaze.result);
+        reinterpret_cast<Ray>(g_image+kCastRayRva)(world,&gaze.result,&from,&to,
+            distance,normal,point,prefilter);
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+kPickResolveRva)(&gaze.result);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return {}; }
+    gaze.queried=true;
+    if(!RequiemBodyMatches(gaze.result.body)) return gaze;
+    gaze.entity=ReadNative<void*>(gaze.result.body,0x414);
+    if(!gaze.entity || !ReadNative<bool>(gaze.entity,0x14)) return gaze;
+    // Constructor 381C5/38227, vtable 277288, and native Pick 38760 prove
+    // RQ Ladder type 13. Distant described Objects remain Examine-only.
+    gaze.ladder=ReadNative<int>(gaze.entity,0xC0)==13 &&
+        ReadNative<void*>(gaze.entity,0)==g_image+kLadderVtableRva;
+    gaze.cue=NativeGazeCue(native_callback,gaze);
+    gaze.valid=gaze.player!=nullptr;
+    // Resolve has already arbitrated the area's point. Outer Normal::Update
+    // must not promote a preliminary area again after a hand target wins.
+    gaze.result.area=nullptr;
+    gaze.result.area_distance=gaze.result.maximum_distance+10.0F;
+    return gaze;
+}
+
+void __fastcall HookedNormalUpdate(void* state,void*,float dt) noexcept {
+    ActiveCall active_call;
+    const auto previous=g_normal_gaze;
+    g_normal_gaze={};
+    auto* player=ReadNative<void*>(state,0x10);
+    reinterpret_cast<HandsUpdate>(g_image+kNormalUpdateRva)(state,dt);
+    if(g_presenting.load(std::memory_order_acquire) &&
+        g_normal_gaze.valid && g_normal_gaze.player==player &&
+        g_normal_gaze.cue==4 &&
+        !(ReadNative<bool>(g_normal_gaze.entity,0x38) &&
+            ReadNative<bool>(g_normal_gaze.entity,0xB4)) &&
+        (!g_selection_refresh_active || g_examine_selection_active) &&
+        ReadNative<int>(player,0x2C0)==0 && ReadNativeControllerFrame().focused && !NativeUiActive()) {
+        static_cast<void>(StoreNative(player,0x2E8,4));
+    }
+    g_normal_gaze=previous;
+}
+
 // Black Plague's ranked ray adapter preserves the native eligibility callback
 // while gathering all hits from the palm centre and four adjacent fingers.
 struct RankedRayCallback final {
@@ -1313,6 +1456,18 @@ void __fastcall HookedRay(void* world, void*, void* callback,
         return_rva == kNormalRayCallRva + kNormalRayCall.size() &&
         origin != nullptr && end != nullptr) {
         const auto frame = ReadNativeControllerFrame();
+        const float native_length=std::hypot((*end)[0]-(*origin)[0],
+            (*end)[1]-(*origin)[1],(*end)[2]-(*origin)[2]);
+        if(!std::isfinite(native_length) || native_length<=0 || native_length>20) {
+            original(world,callback,origin,end,distance,normal,point,prefilter);
+            return;
+        }
+        g_normal_gaze=CastTrackedHeadSelection(world,callback,native_length,
+            distance,normal,point,prefilter);
+        if(g_examine_selection_active) {
+            if(g_normal_gaze.valid) static_cast<void>(StoreNative(callback,0,g_normal_gaze.result));
+            return;
+        }
         runtime::VrMatrix44 palm{};
         if (InteractionPalm(frame.interact_source, palm)) {
             PalmSelectionCandidate contact{};
@@ -1336,10 +1491,6 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                     return;
                 }
             }
-            const auto native_length = std::hypot(
-                std::hypot((*end)[0] - (*origin)[0],
-                           (*end)[1] - (*origin)[1]),
-                (*end)[2] - (*origin)[2]);
             if (std::isfinite(native_length) && native_length > 0.0F &&
                 native_length <= 20.0F) {
                 RankedRayCallback::VTable table{
@@ -1379,8 +1530,17 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                             std::memory_order_relaxed);
                     }
                 }
+                if(!ranked.best_body && g_normal_gaze.valid &&
+                    (g_normal_gaze.ladder || (!g_selection_refresh_active && g_normal_gaze.cue==4)))
+                    static_cast<void>(StoreNative(callback,0,g_normal_gaze.result));
                 return;
             }
+        }
+        if(g_normal_gaze.queried) {
+            if(g_normal_gaze.valid && (g_normal_gaze.ladder ||
+                (!g_selection_refresh_active && g_normal_gaze.cue==4)))
+                static_cast<void>(StoreNative(callback,0,g_normal_gaze.result));
+            return;
         }
     }
     original(world, callback, origin, end,
@@ -1620,15 +1780,24 @@ void RestoreGrab(const GrabHold& hold) noexcept {
     const auto& grip = frame.hands[hold.hand == runtime::VrHand::left
         ? 0U : 1U].grip;
     std::array<float,3> linear{}, angular{};
-    if (frame.focused && grip.pose_valid && grip.device_connected) {
+    if (frame.focused && !NativeUiActive() && grip.pose_valid &&
+        grip.device_connected &&
+        runtime::vr_mechanism_policy::Finite(grip.velocity) &&
+        runtime::vr_mechanism_policy::Finite(grip.angular_velocity)) {
         runtime::VrMatrix44 transform{};
+        runtime::VrTrackingSampleIdentity identity{};
         AcquireSRWLockShared(&g_tracking_world_lock);
         transform = g_world_from_tracking;
         const auto sampled_at = g_world_from_tracking_time;
+        const auto yaw_epoch = g_world_from_tracking_yaw_epoch;
+        identity = g_world_from_tracking_identity;
         ReleaseSRWLockShared(&g_tracking_world_lock);
         const auto now = GetTickCount64();
         if (sampled_at != 0 && now >= sampled_at &&
-            now - sampled_at <= 100) {
+            now - sampled_at <= 100 &&
+            yaw_epoch == g_world_yaw_epoch.load(std::memory_order_acquire) &&
+            (identity.pose_epoch == 0 || grip.identity.pose_epoch == 0 ||
+                runtime::SameTrackingEpoch(identity, grip.identity))) {
             for (std::size_t row = 0; row < 3; ++row) {
                 for (std::size_t column = 0; column < 3; ++column) {
                     linear[row] += transform.values[row * 4 + column] *
@@ -1637,8 +1806,8 @@ void RestoreGrab(const GrabHold& hold) noexcept {
                         grip.angular_velocity[column];
                 }
             }
-        } else hold.release_velocity.Estimate(linear, angular);
-    } else hold.release_velocity.Estimate(linear, angular);
+        }
+    }
     SetBodyVelocity(hold.body, 0x19CA00,
         runtime::LimitTrackedVelocity(linear, 1.25F, 9.0F));
     SetBodyVelocity(hold.body, 0x19CA20,
@@ -1678,6 +1847,54 @@ void __fastcall HookedGrabLeave(void* state, void*, void* next) noexcept {
     reinterpret_cast<Transition>(g_image + kGrabLeaveRva)(state, next);
     if (owned) RestoreGrab(hold);
     if (owned) g_grabs_released.fetch_add(1, std::memory_order_relaxed);
+}
+
+// AA520 exits Grab before asking the native camera for its throw direction.
+// Capture the owning controller now: Leave clears g_grab_hold. Native code
+// retains CanBeThrown, mass restoration, velocity reset and impulse ownership.
+void __fastcall HookedGrabExamine(void* state, void*) noexcept {
+    ActiveCall active_call;
+    const auto previous = g_throw_aim;
+    g_throw_aim = {};
+    AcquireSRWLockShared(&g_tracking_world_lock);
+    const auto reference_yaw_epoch = g_world_from_tracking_yaw_epoch;
+    ReleaseSRWLockShared(&g_tracking_world_lock);
+    const auto& hold = g_grab_hold;
+    if (reference_yaw_epoch == g_world_yaw_epoch.load(std::memory_order_acquire) &&
+        hold.state == state && hold.player != nullptr &&
+        ReadNative<void*>(state,0x10) == hold.player &&
+        ReadNative<void*>(state,0x20) == hold.body &&
+        RequiemBodyMatches(hold.body) &&
+        ReadNative<int>(hold.player,0x2C0) == 6 &&
+        ReadNative<void*>(ReadNative<void*>(hold.player,0x2C8),6*sizeof(void*)) == state) {
+        runtime::VrMatrix44 pose{};
+        if (TrackedControllerPose(hold.hand,true,pose) ||
+            TrackedControllerPose(hold.hand,false,pose)) {
+            std::array<float,3> direction{
+                -pose.values[2],-pose.values[6],-pose.values[10]};
+            const float length = std::hypot(direction[0],direction[1],direction[2]);
+            if (runtime::vr_mechanism_policy::Finite(direction) &&
+                std::isfinite(length) && length > 1.0e-6F) {
+                for (float& component : direction) component /= length;
+                g_throw_aim = {ReadNative<void*>(hold.player,0x1E0),direction};
+            }
+        }
+    }
+    reinterpret_cast<void(__thiscall*)(void*)>(g_image+kGrabExamineRva)(state);
+    g_throw_aim = previous;
+}
+
+using ThrowDirection = std::array<float,3>*(__thiscall*)(void*,
+    std::array<float,3>*,const std::array<float,2>*,void*);
+std::array<float,3>* __fastcall HookedThrowDirection(void* camera, void*,
+    std::array<float,3>* output,const std::array<float,2>* cursor,void* graphics) noexcept {
+    ActiveCall active_call;
+    if (output != nullptr && camera != nullptr && g_throw_aim.camera == camera) {
+        *output = g_throw_aim.direction;
+        return output;
+    }
+    return reinterpret_cast<ThrowDirection>(g_image+kCameraUnprojectRva)(
+        camera,output,cursor,graphics);
 }
 
 void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
@@ -2510,7 +2727,9 @@ bool InstallRenderWorld(std::string& error) noexcept {
     error.clear();
     if (g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_hands_update_hook.installed() ||
+        g_normal_update_hook.installed() ||
         g_refraction_copy_hook.installed() ||
+        g_throw_direction_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
@@ -2569,7 +2788,20 @@ bool InstallRenderWorld(std::string& error) noexcept {
         return false;
     }
     const auto* hands_slot = image + kHandsUpdateSlotRva;
+    if (ReadNative<void*>(image,kGrabExamineSlotRva) != image+kGrabExamineRva ||
+        !std::equal(kGrabExamineEntry.begin(),kGrabExamineEntry.end(),image+kGrabExamineRva) ||
+        !std::equal(kCameraUnprojectEntry.begin(),kCameraUnprojectEntry.end(),image+kCameraUnprojectRva) ||
+        !std::equal(kThrowDirectionCall.begin(),kThrowDirectionCall.end(),image+kThrowDirectionCallRva)) {
+        error = "Requiem native throw boundary does not match the exact build";
+        return false;
+    }
     if (ReadNative<void*>(hands_slot, 0) != image + kHandsUpdateRva ||
+        !std::equal(kPickClearEntry.begin(),kPickClearEntry.end(),image+kPickClearRva) ||
+        !std::equal(kPickResolveEntry.begin(),kPickResolveEntry.end(),image+kPickResolveRva) ||
+        !std::equal(kLadderPickEntry.begin(),kLadderPickEntry.end(),image+kLadderPickRva) ||
+        !std::equal(kLadderTypeStore.begin(),kLadderTypeStore.end(),image+0x38227) ||
+        !std::equal(kExamineStringCall.begin(),kExamineStringCall.end(),image+0x29B16) ||
+        ReadNative<void*>(image+kLadderVtableRva,0x24)!=image+kLadderPickRva ||
         !std::equal(kHandsUpdateEntry.begin(), kHandsUpdateEntry.end(),
             image + kHandsUpdateRva) ||
         !std::equal(kToolMatrixCall.begin(), kToolMatrixCall.end(),
@@ -2687,6 +2919,12 @@ bool InstallRenderWorld(std::string& error) noexcept {
         error = "Requiem HUD string comparison import mismatch";
         return false;
     }
+    const auto wide_compare=crt ? GetProcAddress(crt,
+        "??$?9GU?$char_traits@G@std@@V?$allocator@G@1@@std@@YA_NABV?$basic_string@GU?$char_traits@G@std@@V?$allocator@G@2@@0@PBG@Z") : nullptr;
+    if(!wide_compare || ReadNative<void*>(image,kWideNotEmptyIatRva)!=reinterpret_cast<void*>(wide_compare)) {
+        error="Requiem Examine legacy wide-string comparison import mismatch";
+        return false;
+    }
     g_image = image;
     g_original.store(reinterpret_cast<RenderWorld>(image + kRenderWorldRva),
         std::memory_order_release);
@@ -2750,14 +2988,34 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if (!rolled_back) error += "; rollback failed: " + rollback_error;
         return false;
     }
-    constexpr std::array<std::uintptr_t,3> grab_slots{
-        kGrabUpdateSlotRva, kGrabEnterSlotRva, kGrabLeaveSlotRva};
-    constexpr std::array<std::uintptr_t,3> grab_targets{
-        kGrabUpdateRva, kGrabEnterRva, kGrabLeaveRva};
-    const std::array<void*,3> grab_replacements{
+    if(!hooks::InstallPointerHook(reinterpret_cast<void**>(image+kNormalVtableRva+4),
+            image+kNormalUpdateRva,reinterpret_cast<void*>(&HookedNormalUpdate),g_normal_update_hook,error)) {
+        const std::string install_error=error;
+        std::string rollback_error;
+        const bool rolled_back=RemoveRenderWorld(rollback_error);
+        error=install_error;
+        if(!rolled_back) error+="; rollback failed: "+rollback_error;
+        return false;
+    }
+    if (!hooks::InstallRel32CallHook(image+kThrowDirectionCallRva,
+            kThrowDirectionCall,reinterpret_cast<void*>(&HookedThrowDirection),
+            g_throw_direction_hook,error)) {
+        const std::string install_error=error;
+        std::string rollback_error;
+        const bool rolled_back=RemoveRenderWorld(rollback_error);
+        error=install_error;
+        if(!rolled_back) error+="; rollback failed: "+rollback_error;
+        return false;
+    }
+    constexpr std::array<std::uintptr_t,4> grab_slots{
+        kGrabUpdateSlotRva, kGrabEnterSlotRva, kGrabLeaveSlotRva, kGrabExamineSlotRva};
+    constexpr std::array<std::uintptr_t,4> grab_targets{
+        kGrabUpdateRva, kGrabEnterRva, kGrabLeaveRva, kGrabExamineRva};
+    const std::array<void*,4> grab_replacements{
         reinterpret_cast<void*>(&HookedGrabUpdate),
         reinterpret_cast<void*>(&HookedGrabEnter),
-        reinterpret_cast<void*>(&HookedGrabLeave)};
+        reinterpret_cast<void*>(&HookedGrabLeave),
+        reinterpret_cast<void*>(&HookedGrabExamine)};
     for (std::size_t index = 0; index < grab_slots.size(); ++index) {
         if (hooks::InstallPointerHook(
                 reinterpret_cast<void**>(image + grab_slots[index]),
@@ -2823,7 +3081,9 @@ bool InstallRenderWorld(std::string& error) noexcept {
 bool RenderHooksInstalled() noexcept {
     return g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_hands_update_hook.installed() ||
+        g_normal_update_hook.installed() ||
         g_refraction_copy_hook.installed() ||
+        g_throw_direction_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
@@ -2844,6 +3104,8 @@ bool RemoveRenderWorld(std::string& error) noexcept {
         !hooks::RemoveIatHook(g_refraction_copy_hook, error)) return false;
     if (g_ray_hook.installed() &&
         !hooks::RemoveIatHook(g_ray_hook, error)) return false;
+    if(g_normal_update_hook.installed() &&
+        !hooks::RemoveIatHook(g_normal_update_hook,error)) return false;
     for (auto& hook : g_grab_hooks)
         if (hook.installed() && !hooks::RemoveIatHook(hook, error))
             return false;
@@ -2853,6 +3115,7 @@ bool RemoveRenderWorld(std::string& error) noexcept {
     for (auto& hook : g_push_state_hooks)
         if (hook.installed() && !hooks::RemoveIatHook(hook, error))
             return false;
+    if (!hooks::RemoveRel32CallHook(g_throw_direction_hook,error)) return false;
     if (!hooks::RemoveRel32CallHook(g_tool_matrix_hook, error)) return false;
     if (g_hands_update_hook.installed() &&
         !hooks::RemoveIatHook(g_hands_update_hook, error)) return false;
@@ -2886,7 +3149,8 @@ bool StartPresentation(runtime::OpenVrSession& session,
         !g_draw_all_hook.installed() ||
         !g_refraction_copy_hook.installed() ||
         !g_hands_update_hook.installed() || !g_tool_matrix_hook.installed() ||
-        !g_ray_hook.installed() ||
+        !g_normal_update_hook.installed() ||
+        !g_ray_hook.installed() || !g_throw_direction_hook.installed() ||
         !std::all_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
         !std::all_of(g_move_state_hooks.begin(),
@@ -3223,7 +3487,7 @@ void AddTrackedWorldYaw(float radians) noexcept {
     g_world_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
 }
 
-void RefreshVrSelectionBeforeInteract(void* player) noexcept {
+void RefreshVrSelectionBeforeAction(void* player,bool examine) noexcept {
     g_vr_selection_ready = false;
     g_vr_selection_player = nullptr;
     g_vr_selection_contact = {};
@@ -3238,13 +3502,15 @@ void RefreshVrSelectionBeforeInteract(void* player) noexcept {
             g_image + kNormalVtableRva ||
         ReadNative<void*>(normal, 0x10) != player) return;
     g_selection_refresh_active = true;
+    g_examine_selection_active = examine;
     g_refresh_entity_hits = 0;
     g_refresh_winner_distance = -1.0F;
     g_refresh_winner_mass = -1.0F;
     g_selection_refreshes.fetch_add(1, std::memory_order_relaxed);
-    reinterpret_cast<HandsUpdate>(g_image + kNormalUpdateRva)(normal, 0.0F);
+    HookedNormalUpdate(normal,nullptr,0.0F);
     g_selection_refresh_active = false;
-    if (g_vr_selection_ready) g_vr_selection_player = player;
+    g_examine_selection_active = false;
+    if (g_vr_selection_ready && !examine) g_vr_selection_player = player;
     // The ray winner is only a candidate. Requiem's pick callback copies it
     // into pick+4 after its own eligibility/range checks; OnStartInteract
     // consumes that native field, not our ranked-ray result.
@@ -3265,6 +3531,13 @@ void RefreshVrSelectionBeforeInteract(void* player) noexcept {
         g_refresh_winner_mass,
         accepted_entity != nullptr
             ? ReadNative<float>(accepted_entity, 0xBC) : -1.0F);
+}
+
+void RefreshVrSelectionBeforeInteract(void* player) noexcept {
+    RefreshVrSelectionBeforeAction(player,false);
+}
+void RefreshVrSelectionBeforeExamine(void* player) noexcept {
+    RefreshVrSelectionBeforeAction(player,true);
 }
 
 bool TrackedMenuPointer(const runtime::VrHmdPose& pointer_pose,

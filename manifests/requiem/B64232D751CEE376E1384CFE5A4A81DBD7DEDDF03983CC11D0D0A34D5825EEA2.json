@@ -742,5 +742,223 @@
         "sha256": "85DBB3A06AD6DC8F04A765885539EEB82AFB97A81E9EFB1A03376498E2C29F5D"
       }
     ]
+  },
+  "vrTrackedSelectionAndThrow": {
+    "status": "implemented-host-tested; reported level03 progression and headset aiming/cues pending",
+    "evidence": {
+      "derivedOfflineImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+      "mappedImageSha256": "CE4133C5E0BAFCA2888375B47FBB355D6B9278FFE687F17A3C8B6808520558BD",
+      "method": "Independent Capstone disassembly, native vtables/imports and entity asset/script inspection of the exact canonical build; actual render_world consumer tests and shipped Newton DLL. No new live/headset evidence.",
+      "reference": "Rework 23c890f7dbd06b939be9951d282e6e948d9a6623 independent Examine ray and controller local -Z; BP independent head/hand selection. BP AB1F0 is Push StopInteract, not a free Grab throw."
+    },
+    "ownership": "Requiem render_world owns Normal Update vtable+4, Grab Examine vtable+18 and only AA5C7 direction call; existing ray and Grab Leave owners retained. gameplay_bridge fans out action-specific Normal Examine refresh.",
+    "selection": {
+      "normalVtableRva": "0x27E2A8",
+      "normalUpdateRva": "0xADB40",
+      "normalRayCallRva": "0xADCCF",
+      "normalExamineRva": "0xADFD0",
+      "pickAllocationBytes": 56,
+      "pickClearRva": "0xA5000",
+      "pickResolveRva": "0xA5D50",
+      "pickLayout": {
+        "body": 4,
+        "area": 8,
+        "maximumDistance": 12,
+        "distance": 16,
+        "areaDistance": 20,
+        "lastType": 24,
+        "point": 28,
+        "areaPoint": 40,
+        "minimumStaticDistance": 52
+      },
+      "playerPickOffset": "0x280",
+      "entityInitPlayerOffsets": [
+        "0x10",
+        "0x15C"
+      ],
+      "wideNotEmptyIatRva": "0x27312C",
+      "wideNotEmptyImport": "??$?9GU?$char_traits@G@std@@V?$allocator@G@1@@std@@YA_NABV?$basic_string@GU?$char_traits@G@std@@V?$allocator@G@2@@0@PBG@Z",
+      "emptyWideStringRva": "0x273FE4",
+      "nativeExaminePolicy": "callback at entity+208 or nonempty description+98; native virtual distance getter at +48 <= entity+B8. Hide repeat cue only when HasBeenExamined+38 and DescriptionOnce+B4. Never promote a described distant prop to VR Grab.",
+      "ladder": {
+        "type": 13,
+        "vtableRva": "0x277288",
+        "onPickRva": "0x38760",
+        "onInteractRva": "0x387E0",
+        "cue": 9,
+        "horizontalMaximum": 1.4,
+        "verticalExclusiveMaximum": 1.1,
+        "characterPositionGetterRva": "0xD5830",
+        "horizontalDistanceRva": "0x38520",
+        "horizontalSource": "player character position versus origin of the first body in entity+14C; vertical guard alone uses selected point Y"
+      },
+      "occlusion": "Scratch native callback uses original Clear/CastRay/Resolve and native solid/area arbitration. Temporarily bind scratch callback only while invoking native cue/distance, then restore player callback and cue."
+    },
+    "throw": {
+      "grabVtableRva": "0x27E240",
+      "examineSlotRva": "0x27E258",
+      "examineRva": "0xAA520",
+      "directionCallRva": "0xAA5C7",
+      "directionCallBytes": "E8 54 95 06 00",
+      "cameraUnprojectRva": "0x113B20",
+      "directionAbi": "thiscall ECX=camera; stack out Vec3*, cursor Vec2*, graphics*; EAX=out, RET 0C",
+      "aim": "Capture VR Grab owning hand before native Leave clears ownership; current aim pose, grip fallback, normalized world local -Z. Scope to AA520/camera; native-origin/invalid tracking retain native unprojection.",
+      "nativeOrder": [
+        "ChangeState calls Leave, restores original mass and enters next state",
+        "CanBeThrown player+50 check",
+        "zero linear and angular velocity",
+        "direction AA5C7",
+        "mass-profile impulse through native central or point slot"
+      ],
+      "nativeMassProfile": {
+        "minimumMass": 8,
+        "maximumMass": 30,
+        "minimumImpulse": 2,
+        "maximumImpulse": 13,
+        "interpolation": "linear from 13 at <=8 kg to 2 at >=30 kg; use restored mass"
+      },
+      "gesture": "Fresh owner grip velocities rotated by tracking-to-world rotation only; Rework gain 1.25 and max9 m/s, angular gain0.5/max6 rad/s; focus/UI/tracking age/epoch invalid => zero. Remove unused never-fed history; no arbitrary power increase. Reject an otherwise fresh reference from before the current world-yaw epoch; B uses native fallback until its reference refreshes.",
+      "level03": "level03_ketchup_bottle.ent declares Grab and mass1.1; loader defaults CanBeThrown true. BottleInArea breakbridge callback destroys bottle, breaks bridge01_joint2 and disables collision/area; no minimum-speed check in that callback. Puzzle assets/scripts unchanged.",
+      "newtonDllSha256": "69E6F1BA9D02E7FEBEFCB6DF9BFC6A5A8D8ED78FA659E86B06CA301BFAC894EE"
+    },
+    "hostTests": [
+      "requiem_selection_consumer",
+      "requiem_throw_consumer"
+    ],
+    "windows": [
+      {
+        "name": "pick-allocation",
+        "rva": "0xA1CAD",
+        "length": 56,
+        "sha256": "3F7362A9A37BC7C978B78D8D727ABEE038DD747980140298B07ACC17F9189772",
+        "entryBytes": "6A 38 C6 44 24 78 0B 89 86 7C 02 00 00 E8 49 D7"
+      },
+      {
+        "name": "pick-constructor",
+        "rva": "0xA5BF0",
+        "length": 81,
+        "sha256": "3C4DB6AEA19261BC661410C140304F904FF441BE7D12E8CBF9505DB21F116CC0",
+        "entryBytes": "8B C1 33 C9 C7 00 08 DE 67 00 89 48 1C 89 48 20"
+      },
+      {
+        "name": "pick-clear",
+        "rva": "0xA5000",
+        "length": 27,
+        "sha256": "9DEFFAB0E358236D24F8E5F2CCEBC8D025A7F29AA1CF2EB4E47D07C347EA7287",
+        "entryBytes": "D9 41 0C 33 C0 D8 05 40 3A 67 00 89 41 04 89 41"
+      },
+      {
+        "name": "pick-resolve",
+        "rva": "0xA5D50",
+        "length": 112,
+        "sha256": "22007AFD23F6B7226E697E125F46F508FFFC116888E63EB3BF5880029F178598",
+        "entryBytes": "56 8B F1 8B 46 08 85 C0 0F 84 95 00 00 00 D9 46"
+      },
+      {
+        "name": "entity-picked-distance",
+        "rva": "0x29A70",
+        "length": 16,
+        "sha256": "1A42F0572996E8939CEA523EDE200B7DF69DE4C1B0AF3378F0B9E5471959A599",
+        "entryBytes": "8B 41 10 8B 88 5C 01 00 00 E9 62 26 07 00 CC CC"
+      },
+      {
+        "name": "entity-examine-cue",
+        "rva": "0x29B00",
+        "length": 62,
+        "sha256": "B49184FEB322DEC5C15192189F5AE89F8F93A1B319B6C2E7861BC028CDDCD118",
+        "entryBytes": "8B 86 08 02 00 00 85 C0 75 19 8D 86 98 00 00 00"
+      },
+      {
+        "name": "normal-description-once",
+        "rva": "0xADD10",
+        "length": 22,
+        "sha256": "A847F5A5964C26B4F2C8CA9D5E0D246B5A44C54217E7E5C823356C624E8917C6",
+        "entryBytes": "83 F8 04 75 11 8A 4F 38 84 C9 74 28 8A 8F B4 00"
+      },
+      {
+        "name": "ladder-vtable-constructor",
+        "rva": "0x381C5",
+        "length": 6,
+        "sha256": "14D1E3F422A72DD9BA5F703E3CDF2AD33DFDFA76A5B2A9765C2068EF56B7F53B",
+        "entryBytes": "C7 06 88 72 67 00"
+      },
+      {
+        "name": "ladder-type-constructor",
+        "rva": "0x38227",
+        "length": 10,
+        "sha256": "6303A9B9B0B4809EB0E9A22D861B0724D982C909301B1544918C3320B4D0121B",
+        "entryBytes": "C7 86 C0 00 00 00 0D 00 00 00"
+      },
+      {
+        "name": "ladder-pick",
+        "rva": "0x38760",
+        "length": 123,
+        "sha256": "C2FCDA2D0395A4E78E10109EB2549117357ECAE6C9C9AECAFC75EBEA8DB9953F",
+        "entryBytes": "83 EC 18 56 8B F1 8B 46 10 8B 88 5C 01 00 00 8B"
+      },
+      {
+        "name": "ladder-interact-guards",
+        "rva": "0x387E0",
+        "length": 105,
+        "sha256": "CF034AE1A8B04034438CEE94AAB2A6E9434A5AAC3470CA7B6954CE3CFCF77A1C",
+        "entryBytes": "83 EC 58 56 8B F1 8B 46 10 8B 88 5C 01 00 00 8B"
+      },
+      {
+        "name": "normal-ray-call",
+        "rva": "0xADCCF",
+        "length": 3,
+        "sha256": "902E38A4EBFCB12B191166117E5A40725AD65D43736022D56786955A9655C232",
+        "entryBytes": "FF 57 68"
+      },
+      {
+        "name": "normal-update",
+        "rva": "0xADB40",
+        "length": 8,
+        "sha256": "1B551C91F50A4334584A6D118403BDC7FADB44ABA25FDE5E83B900835CD12239",
+        "entryBytes": "83 EC 34 53 55 56 8B F1"
+      },
+      {
+        "name": "normal-examine",
+        "rva": "0xADFD0",
+        "length": 37,
+        "sha256": "66A00882F2E1FCF21419618DDFEACBB4B59531D049CAB80DF859FD6677F345B4",
+        "entryBytes": "56 8B F1 8B 4E 10 E8 55 CB FE FF 85 C0 74 14 8B"
+      },
+      {
+        "name": "grab-examine",
+        "rva": "0xAA520",
+        "length": 426,
+        "sha256": "06572383B4811BE28621587F4A70ABB5C2062755E35575E1CF268B36F748BDC3",
+        "entryBytes": "83 EC 30 56 8B F1 8B 46 28 8B 4E 10 50 E8 AE 29"
+      },
+      {
+        "name": "grab-leave",
+        "rva": "0xAA920",
+        "length": 171,
+        "sha256": "10DC78246DA1513A61C2B536C509EBFFE425CD52DB4BFD116AEF17097CDFEE2C",
+        "entryBytes": "83 EC 18 56 8B F1 8B 46 20 8A 8E E0 00 00 00 88"
+      },
+      {
+        "name": "throw-direction-call",
+        "rva": "0xAA5C7",
+        "length": 5,
+        "sha256": "25B7A42875AC2934E18DCB1B8AAC581DA9FEBD5E95C0A49151ECF78FB338843F",
+        "entryBytes": "E8 54 95 06 00"
+      },
+      {
+        "name": "camera-unproject",
+        "rva": "0x113B20",
+        "length": 257,
+        "sha256": "0AC602163B881420713FB6F9024A257C9AC2AF6337E2401839DED5E97F86B996",
+        "entryBytes": "81 EC A0 00 00 00 56 8B F1 8B 8C 24 B0 00 00 00"
+      },
+      {
+        "name": "ladder-horizontal-distance",
+        "rva": "0x38520",
+        "length": 94,
+        "sha256": "FD8F4489654FA01046D6BFF6335D8172B8D6C1D47DD2D9A25EA24C2E1E2C6D76",
+        "entryBytes": "83 EC 18 56 8B F1 8B 46 10 8B 88 5C 01 00 00 8B"
+      }
+    ]
   }
 }

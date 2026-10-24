@@ -821,6 +821,8 @@ bool __fastcall HookedQuery(
             g_vr_interact_presses.fetch_add(1, std::memory_order_relaxed);
             RefreshVrSelectionBeforeInteract(g_current_player);
         }
+        if(vr && entry.action==NativeAction::examine && entry.query==NativeQuery::pressed)
+            RefreshVrSelectionBeforeExamine(g_current_player);
         if (vr && entry.action == NativeAction::inventory)
             g_vr_inventory_presses.fetch_add(1, std::memory_order_relaxed);
         if (vr && entry.action == NativeAction::jump) {
