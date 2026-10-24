@@ -31,7 +31,12 @@ throw ordering/mass guards, gesture release and hook restoration with host
 fixtures and the shipped Newton DLL. Level03 completion and aiming/cue
 usability remain pending headset feedback. Public distribution continues under
 the maintainer's authorization; a host pass does not establish headset support.
-The artifact validation record is added after the exact final package checks.
+The [artifact validation record](releases/1.0.10-validation.json) pins clean
+build source `d491fca45dd2c9b2a019284198731455a79cf7b2`, all 68 Framework
+tests and 298 Overture checks, exact English/Spanish Setup extraction, isolated
+topology A-F and upgrade/repair/exact restoration from 1.0.9. Root tests ran
+before a documentation-only Overture release-history correction; packaging
+records that distinction and the release tag adds only documentation.
 
 ## Historical release — 1.0.9
 
