@@ -56,8 +56,8 @@ function Assert-RecoveryJournal([string]$Product, [string]$InstallRoot, [string]
             (Join-Path $gameRoot 'PenumbraVR.BlackPlague.install.json'), (Destination 'requiem_probe'),
             (Destination 'requiem_spanish_localization'), (Join-Path $gameRoot 'PenumbraVR_Espanol_exp_original.lang'),
             (Join-Path $gameRoot 'OpenAL32.dll'), (Join-Path $gameRoot 'PenumbraVR_OpenAL_original.dll')
-        ) + $settings
-        if ($entries.Count -notin @(12,15,17,21)) { throw 'Recovery journal has the wrong managed set.' }
+        ) + $settings + @(Join-Path $gameRoot 'PenumbraVR_OpenALSoft.dll')
+        if ($entries.Count -notin @(12,15,17,21,22)) { throw 'Recovery journal has the wrong managed set.' }
     }
     $seen = [Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
     for ($i = 0; $i -lt $entries.Count; $i++) {

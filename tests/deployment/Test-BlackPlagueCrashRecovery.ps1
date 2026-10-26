@@ -101,6 +101,12 @@ if ($global:CrashOnRestore) {
         throw 'Black Plague started another deployment while recovery was pending.'
     }
     $journalRecord = Get-Content -LiteralPath (Join-Path $gameRoot '.penumbravr-bp-journal/journal.json') -Raw | ConvertFrom-Json
+    Remove-Item -LiteralPath $exe -Force
+    $discovered=@(& (Join-Path $repoRoot 'tools/Get-PenumbraInstallations.ps1') -SteamRoot (Join-Path $fixture 'NoSteam') -ManualPaths @($gameRoot))
+    if ($journalRecord.Entries.Count -ne 22 -or $discovered.Count -ne 1 -or
+        $discovered[0].ManagedProduct -ne 'Black Plague' -or -not $discovered[0].NeedsRecovery) {
+        throw 'Discovery rejected the current transaction journal with a missing executable.'
+    }
     $alutCopy = @($journalRecord.Entries | Where-Object { $_.Target -ieq $alut })[0].Copy
     [System.IO.File]::AppendAllText($alutCopy, 'altered')
     $rejectedCorruptCopy = $false
@@ -110,7 +116,6 @@ if ($global:CrashOnRestore) {
         throw 'Black Plague recovery used a corrupt journal copy or wrote before validation.'
     }
     Copy-Item -LiteralPath $RetailAlut -Destination $alutCopy -Force
-    Remove-Item -LiteralPath $exe -Force
     & $installer -GamePath $exe -Recover 6>$null | Out-Null
     Assert-Hash $exe $originalExe
     Assert-Hash $alut $originalAlut

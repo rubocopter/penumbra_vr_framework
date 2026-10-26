@@ -191,9 +191,9 @@ function Resolve-PackageRoot([string]$requestedRoot, [string]$configuration) {
             Sort-Object LastWriteTime -Descending |
             Select-Object -First 1
         if ($newestSource -and $newestSource.LastWriteTime -gt $packagedExe.LastWriteTime) {
-            throw ("Package is stale: '{0}' ({1}) is newer than the packaged exe ({2}). " +
-                   "Run scripts/build.ps1 -Deploy instead of deploy.ps1 alone.") -
-                  $newestSource.Name, $newestSource.LastWriteTime, $packagedExe.LastWriteTime
+            throw (("Package is stale: '{0}' ({1}) is newer than the packaged exe ({2}). " +
+                    "Run scripts/build.ps1 -Deploy instead of deploy.ps1 alone.") -f
+                   $newestSource.Name, $newestSource.LastWriteTime, $packagedExe.LastWriteTime)
         }
     }
     return $candidate
@@ -514,14 +514,16 @@ if ($Restore) {
         }
     }
 
+    $removedLanguages=@($previousState.Files | Where-Object {([string]$_.Path).Replace('\','/') -eq 'config/Espanol.lang' -and -not [bool]$_.HadOriginal} | ForEach-Object {'Espanol.lang'})
+    $previousConfiguration=@(Get-PvrConfigurationRestoreRecords -Game overture -RedistRoot $redistRoot -Previous $previousConfiguration -RemovedLanguageFiles $removedLanguages)
     $restoreTargets = @($previousState.Files | ForEach-Object {
         Get-PathUnderRoot $redistRoot ([string]$_.Path)
     }) + @($stateRoot) + @($previousConfiguration | ForEach-Object {$_.Path})
-    foreach($plan in $previousConfiguration){Test-PvrConfigurationPlan -Plan $plan -Restore}
+    foreach($plan in $previousConfiguration){Test-PvrConfigurationPlan -Plan $plan -Restore -RedistRoot $redistRoot -RemovedLanguageFiles $removedLanguages}
     if($Preflight) { [pscustomobject]@{Files=@($restoreTargets);Configuration=@($previousConfiguration);Operation='restore'}; return }
     $deploymentSnapshot = New-DeploymentSnapshot $restoreTargets $gameRoot
     try {
-    foreach($plan in $previousConfiguration){Restore-PvrConfiguration -Plan $plan}
+    foreach($plan in $previousConfiguration){Restore-PvrConfiguration -Plan $plan -RedistRoot $redistRoot -RemovedLanguageFiles $removedLanguages}
     foreach ($entry in $previousState.Files) {
         $relativePath = [string]$entry.Path
         $targetPath = Get-PathUnderRoot $redistRoot $relativePath

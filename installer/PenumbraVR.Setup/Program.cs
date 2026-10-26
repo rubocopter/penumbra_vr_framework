@@ -161,7 +161,8 @@ internal static class Program
         if (!File.Exists(sums)) throw new InvalidDataException("Installer payload checksums missing.");
         if (File.Exists(sums))
         {
-            string prefix = Path.GetFullPath(root) + Path.DirectorySeparatorChar;
+            string prefix = Path.GetFullPath(root);
+            if (!Path.EndsInDirectorySeparator(prefix)) prefix += Path.DirectorySeparatorChar;
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (string line in File.ReadLines(sums))
             {

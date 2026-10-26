@@ -148,6 +148,11 @@ void SyncTrackingBeforeUpdate(
         init.mpGame->vr_tracking.GetWorldYaw());
     backend.tracking_space().SetPostureOffset(
         init.mpGame->vr_tracking.GetPostureOffset());
+    // Input continues in menu containers while cPlayer::Update does not.
+    // Publishing the current pose does not advance the motion baseline;
+    // HandleInput advances it only when a recenter is actually consumed.
+    backend.tracking_space().SetHeadTrackingPose(
+        ToRuntimePose(init.mpGame->vr_tracking.GetHeadTrackingPose()));
 }
 
 void SyncTrackingToHpl(
@@ -207,6 +212,13 @@ bool OvertureSourceIntegration::HandleInput(
     // runs in Default. Suppress that container's duplicate input call; outside
     // Default every call is a new frame and must remain usable for recentering.
     if (player_update_expected && input_pending_for_player_) {
+        error.clear();
+        return true;
+    }
+    if (player.GetCharacterBody() == nullptr) {
+        // Rework's menu action owns orientation independently of body lifetime.
+        if (input.recenter.justPressed)
+            init.mpGame->vr_tracking.RecenterOrientation();
         error.clear();
         return true;
     }

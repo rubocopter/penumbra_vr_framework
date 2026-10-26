@@ -743,6 +743,34 @@
       }
     ]
   },
+  "vrMoveSliderEndpoints": {
+    "status": "implemented-host-tested; live/headset drawer endpoints pending",
+    "derivedOfflineImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "method": "Independent x86 disassembly of both native slider callbacks; actual render_world ownership/restore consumer tests. These offsets belong only to this Requiem build.",
+    "layout": {
+      "parentBody": "0x2C",
+      "childBody": "0x30",
+      "stickyDistances": ["0xE8", "0xEC"],
+      "endpointDistances": ["0x25C", "0x260"]
+    },
+    "nativePolicy": "Skip endpoint rest for a dynamic parent (mass virtual slot +0x6C). Otherwise compare current distance with +0x25C/+0x260 inside the +0xEC/+0xE8 ranges; zero held child's angular (+0x3C) and linear (+0x34) velocity. Zero sticky distances disable those ranges without changing limits.",
+    "vrOwnership": "Only a VR Move=2 held child with world/static parent suspends the two sticky distances. Restore unchanged zero values before native Move::Leave only while the same joint remains linked; retain script overrides. Control-thread removal waits for that game-thread Leave.",
+    "hostTests": ["requiem_selection_consumer"],
+    "windows": [
+      {
+        "name": "slider-static-parent-sticky-endpoints-a",
+        "rva": "0x19F7FD",
+        "length": 197,
+        "sha256": "466B3FD1FC2E467B3115B2B5A9655F9A14063338D1815E0E45F0D94FF11ABDFF"
+      },
+      {
+        "name": "slider-static-parent-sticky-endpoints-b",
+        "rva": "0x19FC1E",
+        "length": 199,
+        "sha256": "5BAD6AB4917519421F8D773D91AD78CEC6120EC1BAACA69A26401FF9D13A7472"
+      }
+    ]
+  },
   "vrTrackedSelectionAndThrow": {
     "status": "implemented-host-tested; reported level03 progression and headset aiming/cues pending",
     "evidence": {

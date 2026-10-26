@@ -467,6 +467,11 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_requiem_gameplay_bridge_test)
     add_test(NAME requiem_jump_queries COMMAND pvr_requiem_gameplay_bridge_test jump)
     add_test(NAME requiem_locomotion_consumer COMMAND pvr_requiem_gameplay_bridge_test movement)
+    add_test(NAME requiem_turn_disconnect COMMAND pvr_requiem_gameplay_bridge_test turn)
+    foreach(mode IN ITEMS shutdown shutdown-timeout shutdown-body)
+        add_test(NAME requiem_bridge_${mode} COMMAND pvr_requiem_gameplay_bridge_test ${mode})
+        set_tests_properties(requiem_bridge_${mode} PROPERTIES TIMEOUT 30)
+    endforeach()
     set_tests_properties(requiem_jump_queries requiem_locomotion_consumer
         PROPERTIES TIMEOUT 30)
 
@@ -547,6 +552,10 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_requiem_hand_contact_probe_test)
     add_test(NAME requiem_hand_contact_probe
         COMMAND pvr_requiem_hand_contact_probe_test)
+    foreach(mode IN ITEMS empty-shutdown same-thread-shutdown failed-shutdown remote-shutdown)
+        add_test(NAME requiem_palm_${mode} COMMAND pvr_requiem_hand_contact_probe_test ${mode})
+        set_tests_properties(requiem_palm_${mode} PROPERTIES TIMEOUT 30)
+    endforeach()
 
     add_executable(pvr_black_plague_body_adapter_test
         tests/black_plague_body/black_plague_body_adapter_test.cpp
@@ -746,6 +755,7 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_overture_backend_test PRIVATE pvr_overture_backend)
     pvr_enable_warnings(pvr_overture_backend_test)
     add_test(NAME overture_backend COMMAND pvr_overture_backend_test)
+    add_subdirectory(tests/overture_backend)
 
     add_executable(pvr_stereo_render_policy_test
         tests/stereo_render_policy/stereo_render_policy_test.cpp

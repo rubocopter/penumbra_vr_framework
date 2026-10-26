@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <cstdlib>
+#include <thread>
 
 namespace penumbra_vr::backends::requiem {
 namespace {
@@ -40,6 +41,127 @@ void __fastcall NativeUpdateStub(void* body, void*, float) {
     Put(body, GameplayContract().character_position_offset, position);
 }
 bool Near(float actual, float expected) { return std::fabs(actual - expected) < 0.0002F; }
+
+void __fastcall HandlerUpdateStub(void*, void*, float) {}
+
+bool TurnDisconnect(std::uint8_t* image) {
+    Branch(image, GameplayContract().button_handler_update_rva, 0xE9,
+        reinterpret_cast<void*>(&HandlerUpdateStub));
+    const runtime::VrAnalogState right{true, 1.0F, 0.0F};
+    const auto update = [&] {
+        return g_turn.Update(right, true, runtime::VrTurnMode::snap,
+            1.0F / 90.0F, 45.0F, 90.0F, 0.2F);
+    };
+    g_turn = {};
+    static_cast<void>(g_turn.Update({true, 0.0F, 0.0F}, true,
+        runtime::VrTurnMode::snap, 1.0F / 90.0F, 45.0F, 90.0F, 0.2F));
+    std::thread control([] { ConnectGameplayInput(nullptr); });
+    control.join();
+    // Disconnect may request a reset, but cannot touch the native owner's
+    // armed turn state. This deterministic assertion also catches a reset
+    // moved back onto the control thread without relying on a race detector.
+    if (!Near(update(), 0.78539816F)) {
+        std::cerr << "control-thread disconnect mutated native turn state\n";
+        return false;
+    }
+    HookedUpdate(nullptr, nullptr, 1.0F / 90.0F);
+    if (!Near(update(), 0.0F)) {
+        std::cerr << "native update failed to consume disconnected turn reset\n";
+        return false;
+    }
+    std::thread repeated([] {
+        for (int i = 0; i < 2000; ++i) ConnectGameplayInput(nullptr);
+    });
+    for (int i = 0; i < 2000; ++i)
+        HookedUpdate(nullptr, nullptr, 1.0F / 90.0F);
+    repeated.join();
+    HookedUpdate(nullptr, nullptr, 1.0F / 90.0F);
+    return true;
+}
+
+std::array<std::array<std::uint8_t, 0x100>, 2> g_palm_shapes{};
+unsigned g_palm_creates = 0;
+unsigned g_palm_destroys = 0;
+DWORD g_palm_owner = 0;
+bool g_palm_destroy_before_detach = true;
+bool __fastcall PalmQueryStub(void*, void*, Vec3*, void*,
+    const runtime::VrMatrix44*, void*, bool, bool, void*, bool, bool) { return false; }
+void* __fastcall PalmCreateStub(void* world, void*, const Vec3* size,
+    runtime::VrMatrix44*) {
+    if (g_palm_creates >= g_palm_shapes.size()) return nullptr;
+    auto* shape = g_palm_shapes[g_palm_creates++].data();
+    Put(shape, 0, g_image + 0x293F10);
+    Put(shape, 4, *size);
+    Put(shape, 0x10, std::int32_t{1});
+    Put(shape, 0x58, world);
+    return shape;
+}
+void __fastcall PalmDestroyStub(void*, void*, void*) {
+    ++g_palm_destroys;
+    g_palm_destroy_before_detach = g_palm_destroy_before_detach &&
+        g_update_hook.installed() && GetCurrentThreadId() == g_palm_owner;
+}
+
+bool BridgeShutdown(std::uint8_t* image, bool timeout, bool body_tick) {
+    Branch(image, 0x18B3B0, 0xE9, reinterpret_cast<void*>(&PalmCreateStub));
+    Branch(image, 0xD4B70, 0xE9, reinterpret_cast<void*>(&PalmDestroyStub));
+    Branch(image, 0xD5190, 0xE9, reinterpret_cast<void*>(&PalmQueryStub));
+    Branch(image, GameplayContract().button_handler_update_rva, 0xE9,
+        reinterpret_cast<void*>(&HandlerUpdateStub));
+    Branch(image, GameplayContract().character_update_rva, 0xE9,
+        reinterpret_cast<void*>(&HandlerUpdateStub));
+    std::array<std::uint8_t, 0x300> character{};
+    std::array<std::uint8_t, 0x400> physics{};
+    std::array<std::uint8_t, 0x100> world{};
+    Put(world.data(), 0, image + 0x292D50);
+    Put(image, 0x292D50 + 0x30, image + 0x18B3B0);
+    Put(physics.data(), 0, image + 0x293DD8);
+    Put(character.data(), 0x23C, static_cast<void*>(physics.data()));
+    Put(character.data(), 0x240, static_cast<void*>(world.data()));
+    const auto pose = runtime::IdentityMatrix();
+    PublishGameplayPalmTracking({pose, pose}, {true, true}, pose, true, 1);
+    g_palm_owner = GetCurrentThreadId();
+    ServiceGameplayPalmResolver(image, character.data());
+    if (g_palm_creates != 2) return false;
+    auto** slot = reinterpret_cast<void**>(
+        image + GameplayContract().button_handler_vtable_entry_rva);
+    *slot = image + GameplayContract().button_handler_update_rva;
+    std::string error;
+    if (!hooks::InstallPointerHook(slot, *slot, reinterpret_cast<void*>(&HookedUpdate),
+            g_update_hook, error)) return false;
+    // Only one owner installed: partial setup must be removable too.
+    std::atomic<bool> done{false};
+    bool removed = true;
+    std::thread control([&] {
+        removed = RemoveGameplayBridge(error);
+        done.store(true, std::memory_order_release);
+    });
+    if (!timeout) {
+        while (!done.load(std::memory_order_acquire)) {
+            if (body_tick) HookedCharacterUpdate(character.data(), nullptr, 0.01F);
+            else HookedUpdate(nullptr, nullptr, 0.01F); // No game/player loaded.
+            Sleep(1);
+        }
+    }
+    control.join();
+    if (timeout) {
+        if (removed || error.empty() || !g_update_hook.installed() ||
+            g_palm_destroys != 0) {
+            std::cerr << "timed out bridge shutdown detached its native owner\n";
+            return false;
+        }
+        HookedUpdate(nullptr, nullptr, 0.01F);
+        removed = RemoveGameplayBridge(error);
+    }
+    if (!removed || !error.empty() || g_update_hook.installed() ||
+        g_palm_destroys != 2 || !g_palm_destroy_before_detach) {
+        std::cerr << "bridge detached before native palm destruction: " << error << '\n';
+        return false;
+    }
+    PublishGameplayPalmTracking({pose, pose}, {true, true}, pose, true, 2);
+    ServiceGameplayPalmResolver(image, character.data());
+    return RemoveGameplayBridge(error) && g_palm_creates == 2 && g_palm_destroys == 2;
+}
 
 bool JumpQueries(std::uint8_t* image) {
     Branch(image, 0xDAE70, 0xE9, reinterpret_cast<void*>(&NativeQueryStub));
@@ -180,8 +302,13 @@ int main(int argc, char** argv) {
         MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
     if (!image) return 2;
     g_image = image;
-    const bool result = argc > 1 && std::strcmp(argv[1], "jump") == 0
-        ? JumpQueries(image) : Movement(image);
+    const bool result = argc > 1 && std::strcmp(argv[1], "turn") == 0
+        ? TurnDisconnect(image)
+        : argc > 1 && std::strncmp(argv[1], "shutdown", 8) == 0
+            ? BridgeShutdown(image, std::strcmp(argv[1], "shutdown-timeout") == 0,
+                std::strcmp(argv[1], "shutdown-body") == 0)
+        : argc > 1 && std::strcmp(argv[1], "jump") == 0
+            ? JumpQueries(image) : Movement(image);
     VirtualFree(image, 0, MEM_RELEASE);
     return result ? 0 : 1;
 }

@@ -79,6 +79,20 @@ try {
                 Save-Journal $current $manifest
                 Assert-Discovery (-not (Scan $installRoot)[0].ManagedProduct) 'Black Plague rejects foreign untouched settings path'
                 $current.Entries[18].Target=$settings[1]
+                $current.Entries+= [pscustomobject]@{Target=Join-Path $root 'PenumbraVR_OpenALSoft.dll';Copy=Join-Path $journal 'item-21';Kind='absent';SnapshotHash=$null;SnapshotDirectory=$null}
+                Save-Journal $current $manifest
+                Assert-Discovery ((Scan $installRoot)[0].ManagedProduct -eq $product) 'Black Plague accepts the current 22-entry journal'
+                foreach($damage in @('target','copy','kind','count')) {
+                    $bad=$current | ConvertTo-Json -Depth 10 | ConvertFrom-Json
+                    switch($damage) {
+                        'target'{$bad.Entries[21].Target=Join-Path $root 'foreign.dll'}
+                        'copy'{$bad.Entries[21].Copy=Join-Path $journal 'item-22'}
+                        'kind'{$bad.Entries[21].Kind='untouched'}
+                        'count'{$bad.Entries=@($bad.Entries | Select-Object -First 20)}
+                    }
+                    Save-Journal $bad $manifest
+                    Assert-Discovery (-not (Scan $installRoot)[0].ManagedProduct) "Black Plague rejects invalid current journal $damage"
+                }
                 [IO.File]::WriteAllText((Join-Path $journal 'item-18'),'unexpected copy')
                 Save-Journal $current $manifest
                 Assert-Discovery (-not (Scan $installRoot)[0].ManagedProduct) 'Black Plague rejects snapshot copy for untouched settings'
@@ -153,7 +167,11 @@ try {
         foreach($library in $prerequisites.bundledLibraries){
             $source=Join-Path $repo $library.source
             if(-not(Test-Path -LiteralPath $source)){$source=Join-Path $repo ('products/overture/build/package/Release/PenumbraVR/'+$library.path)}
-            $destination=Join-Path $package ('products/overture/'+$library.path)
+            # The two games intentionally ship different OpenAL32.dll files.
+            # Preserve product roots instead of overwriting Overture's pinned
+            # Soft runtime with BP's compatibility proxy in this fixture.
+            $relative=if($library.games -and 'overture' -notin $library.games){'products/black_plague/'+$library.source}else{'products/overture/'+$library.path}
+            $destination=Join-Path $package $relative
             New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
             Copy-Item -LiteralPath $source -Destination $destination
         }
@@ -175,6 +193,7 @@ try {
         & (Join-Path $PSScriptRoot 'New-GameRuntimeFixture.ps1') -Root $oRedist -Game overture
         @{Version=1;RedistRoot=$oRedist;Files=@(@{Path='Penumbra.exe';DeployedHash=(Get-FileHash -LiteralPath (Join-Path $oRedist 'Penumbra.exe')).Hash})} | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $oRoot '.penumbravr/deploy-state.json') -Encoding UTF8
         $row=(Scan $oRoot)[0]
+        if(-not $row.Installable){Write-Host ('Managed Overture fixture issues: '+($row.Issues -join '; '))}
         Assert-Discovery ($row.Game -eq 'Overture' -and $row.Installable -and $row.Status -eq 'available') 'Managed Overture accepts pinned package CRT without target CRT copies'
         Remove-Item -LiteralPath (Join-Path $package 'products/overture/msvcp140.dll')
         $row=(Scan $oRoot)[0]

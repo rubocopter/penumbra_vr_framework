@@ -504,6 +504,9 @@ if ($Restore) {
         }
         Assert-ManagedDirectory $VrAssetsPath (Get-ExpectedVrSnapshot $state)
         $currentHash = Get-Sha256 $AlutPath
+        if((Test-Path -LiteralPath $AlutPath) -and -not(Test-Path -LiteralPath $AlutPath -PathType Leaf)) {
+            throw 'The managed ALUT destination is not a file; restore aborted.'
+        }
         if ($currentHash -and $state.installedProxySha256 -and
             $currentHash -ne [string]$state.installedProxySha256) {
             throw 'alut.dll changed after Penumbra VR installation; restore aborted to avoid overwriting another modification.'
@@ -571,13 +574,24 @@ if ($Restore) {
         throw 'No installation record exists; restore aborted.'
     }
 
-    foreach($plan in $PreviousConfiguration){Test-PvrConfigurationPlan -Plan $plan -Restore}
+    $removedLanguages=@{}
+    $restoreConfiguration=@(foreach($gameId in @('black_plague','requiem')) {
+        $removedLanguages[$gameId]=@(if($gameId -eq 'black_plague') {
+            if((Get-OptionalProperty $state 'spanishLocalizationSha256') -and -not [bool](Get-OptionalProperty $state 'spanishLocalizationHadOriginal')){'Espanol.lang'}
+        } else {
+            if((Get-OptionalProperty $state 'requiemSpanishLocalizationSha256') -and -not [bool](Get-OptionalProperty $state 'requiemSpanishLocalizationHadOriginal')){'Espanol_exp.lang'}
+        })
+        Get-PvrConfigurationRestoreRecords -Game $gameId -RedistRoot $GameRoot -Previous @($PreviousConfiguration | Where-Object {$_.Game -eq $gameId}) -RemovedLanguageFiles $removedLanguages[$gameId]
+    })
+    foreach($plan in $restoreConfiguration){Test-PvrConfigurationPlan -Plan $plan -Restore -RedistRoot $GameRoot -RemovedLanguageFiles $removedLanguages[$plan.Game]}
+    $PreviousConfiguration=$restoreConfiguration
     $ActiveConfigurationPaths=@($PreviousConfiguration | ForEach-Object {$_.Path})
     if($Preflight) { [pscustomobject]@{Files=@($ManagedTransactionPaths | Where-Object {$_ -notin $ConfigurationPaths -or $_ -in $ActiveConfigurationPaths});Configuration=@($PreviousConfiguration);Operation='restore'}; return }
     $deploymentSnapshot = New-DeploymentSnapshot
     try {
-    foreach($plan in $PreviousConfiguration){Restore-PvrConfiguration -Plan $plan}
+    foreach($plan in $PreviousConfiguration){Restore-PvrConfiguration -Plan $plan -RedistRoot $GameRoot -RemovedLanguageFiles $removedLanguages[$plan.Game]}
     Copy-Item -LiteralPath $OriginalAlutPath -Destination $AlutPath -Force
+    if((Get-Sha256 $AlutPath) -ne $ExpectedOriginalAlutHash){throw 'Restored ALUT failed hash verification.'}
     Remove-Item -LiteralPath $OriginalAlutPath -Force
     if (Get-OptionalProperty $state 'openAlProxySha256') {
         if ([bool](Get-OptionalProperty $state 'openAlOriginalHadFile')) {

@@ -57,6 +57,8 @@ namespace hpl {
       mbLeftAimStateKnown(false), mbRightAimStateKnown(false),
       mbLeftPoseWasValid(false), mbRightPoseWasValid(false),
       mbLeftAimWasValid(false), mbRightAimWasValid(false), mbFocusLost(false),
+      mbPointerKnown(false), mbPointerSelectBlocked(false), mbPointerDragBlocked(false),
+      mPointerHand(eSteamVRHand_Right),
       mActiveContext(eSteamVRInputContext_Gameplay),
       mActiveHandedness(eSteamVRHand_Right), mfMoveDeadZone(0.15f),
       mHandedness(eSteamVRHand_Right),
@@ -248,6 +250,12 @@ namespace hpl {
       : (context == eSteamVRInputContext_UI ? mUIActionSet : mGameplayActionSet);
 
     int lActiveSetCount = 2;
+    if (context == eSteamVRInputContext_UI) {
+      // The fallback pointer may change after this frame's pose actions arrive.
+      // Enable both mirrored UI layouts, then read the chosen physical hand.
+      activeSets[2].ulActionSet = bLeftHanded ? mUIActionSet : mUIActionSetLeft;
+      lActiveSetCount = 3;
+    }
     if (context == eSteamVRInputContext_Gameplay) {
       activeSets[2].ulActionSet = mOffhandActionSet;
       activeSets[2].ulRestrictedToDevice = bLeftHanded
@@ -335,15 +343,17 @@ namespace hpl {
         }
 
         nextState.interact.pressed = domInteract.pressed || offInteract.pressed || bOffPressed;
-        nextState.interact.justPressed = domInteract.justPressed ||
-          offInteract.justPressed || bOffJustPressed;
+        nextState.interact.justPressed = !previousState.interact.pressed &&
+          (domInteract.justPressed || offInteract.justPressed || bOffJustPressed);
         nextState.interact.justReleased = previousState.interact.pressed && !nextState.interact.pressed;
         nextState.interact.active = domInteract.active || offInteract.active;
 
-        if (offInteract.justPressed || bOffJustPressed)
-          mInteractSourceHand = mHandedness == eSteamVRHand_Left ? eSteamVRHand_Right : eSteamVRHand_Left;
-        else if (domInteract.justPressed)
-          mInteractSourceHand = mHandedness;
+        if (!previousState.interact.pressed) {
+          if (offInteract.justPressed || bOffJustPressed)
+            mInteractSourceHand = mHandedness == eSteamVRHand_Left ? eSteamVRHand_Right : eSteamVRHand_Left;
+          else if (domInteract.justPressed)
+            mInteractSourceHand = mHandedness;
+        }
 
         // Throttled diagnostics distinguish a dead binding from a raw trigger
         // that SteamVR exposes correctly but does not route to the action.
@@ -378,6 +388,7 @@ namespace hpl {
         nextState.interact.justReleased = previousState.interact.pressed;
       }
 
+      if (!suppressContextEdges) ReconstructReleases(nextState, previousState);
       if (suppressContextEdges) {
         SuppressDigitalEdges(nextState.sprint);
         SuppressDigitalEdges(nextState.interact);
@@ -440,22 +451,15 @@ namespace hpl {
       }
     }
     else {
-      nextState.uiSelect = ReadDigital(ActionFor(mUISelectAction, mUISelectActionLeft));
-      nextState.uiDrag = ReadDigital(ActionFor(mUIDragAction, mUIDragActionLeft));
-      nextState.uiBack = ReadDigital(ActionFor(mUIBackAction, mUIBackActionLeft));
+      const eSteamVRHand pointer = UIPointerHand(mHandedness, leftHand, rightHand);
+      const bool pointerLeft = pointer == eSteamVRHand_Left;
+      nextState.uiSelect = ReadDigital(pointerLeft ? mUISelectActionLeft : mUISelectAction);
+      nextState.uiDrag = ReadDigital(pointerLeft ? mUIDragActionLeft : mUIDragAction);
+      nextState.uiBack = ReadDigital(pointerLeft ? mUIBackActionLeft : mUIBackAction);
       nextState.uiClose = ReadDigital(ActionFor(mUICloseAction, mUICloseActionLeft));
-
-      // Selection and dragging are pointer operations. Closing or backing out
-      // remains available even if optical hand tracking is temporarily lost.
-      TrackedController& pointerHand = mHandedness == eSteamVRHand_Left ? leftHand : rightHand;
-      if (!pointerHand.IsPoseValid()) {
-        nextState.uiSelect.pressed = false;
-        nextState.uiSelect.justPressed = false;
-        nextState.uiSelect.justReleased = previousState.uiSelect.pressed;
-        nextState.uiDrag.pressed = false;
-        nextState.uiDrag.justPressed = false;
-        nextState.uiDrag.justReleased = previousState.uiDrag.pressed;
-      }
+      if (!suppressContextEdges) ReconstructReleases(nextState, previousState);
+      UpdatePointerButtons(nextState, previousState, pointer,
+        (pointerLeft ? leftHand : rightHand).IsPoseValid(), !suppressContextEdges);
 
       if (suppressContextEdges) {
         SuppressDigitalEdges(nextState.uiSelect);
@@ -524,6 +528,9 @@ namespace hpl {
       ReleaseInputFocus(previousState);
       return;
     }
+    const cVRInputState previousState = mState;
+    const bool stableContext = mbHasActiveContext && context == mActiveContext &&
+      mHandedness == mActiveHandedness;
     const TrackedController::ButtonState& leftState = leftHand.GetButtonState();
     const TrackedController::ButtonState& rightState = rightHand.GetButtonState();
     const TrackedController::ButtonState& dominantState =
@@ -592,20 +599,23 @@ namespace hpl {
       legacyState.jump.justReleased = offState.triggerJustReleased;
     }
     else {
-      legacyState.uiSelect.active = dominantState.valid_;
-      legacyState.uiSelect.pressed = dominantState.triggerPressed;
-      legacyState.uiSelect.justPressed = dominantState.triggerJustPressed;
-      legacyState.uiSelect.justReleased = dominantState.triggerJustReleased;
+      const eSteamVRHand pointer = UIPointerHand(mHandedness, leftHand, rightHand);
+      const TrackedController::ButtonState& pointerState =
+        pointer == eSteamVRHand_Left ? leftState : rightState;
+      legacyState.uiSelect.active = pointerState.valid_;
+      legacyState.uiSelect.pressed = pointerState.triggerPressed;
+      legacyState.uiSelect.justPressed = pointerState.triggerJustPressed;
+      legacyState.uiSelect.justReleased = pointerState.triggerJustReleased;
 
-      legacyState.uiDrag.active = dominantState.valid_;
-      legacyState.uiDrag.pressed = dominantState.padPressed;
-      legacyState.uiDrag.justPressed = dominantState.padJustPressed;
-      legacyState.uiDrag.justReleased = dominantState.padJustReleased;
+      legacyState.uiDrag.active = pointerState.valid_;
+      legacyState.uiDrag.pressed = pointerState.padPressed;
+      legacyState.uiDrag.justPressed = pointerState.padJustPressed;
+      legacyState.uiDrag.justReleased = pointerState.padJustReleased;
 
-      legacyState.uiBack.active = dominantState.valid_;
-      legacyState.uiBack.pressed = dominantState.menuPressed;
-      legacyState.uiBack.justPressed = dominantState.menuJustPressed;
-      legacyState.uiBack.justReleased = dominantState.menuJustReleased;
+      legacyState.uiBack.active = pointerState.valid_;
+      legacyState.uiBack.pressed = pointerState.menuPressed;
+      legacyState.uiBack.justPressed = pointerState.menuJustPressed;
+      legacyState.uiBack.justReleased = pointerState.menuJustReleased;
 
       legacyState.uiClose.active = dominantState.valid_ || offState.valid_;
       legacyState.uiClose.pressed = dominantState.gripPressed || offState.menuPressed;
@@ -614,8 +624,18 @@ namespace hpl {
         (dominantState.gripJustReleased || offState.menuJustReleased);
     }
 
+    if (context == eSteamVRInputContext_UI) {
+      const eSteamVRHand pointer = UIPointerHand(mHandedness, leftHand, rightHand);
+      UpdatePointerButtons(legacyState, previousState, pointer,
+        (pointer == eSteamVRHand_Left ? leftHand : rightHand).IsPoseValid(), stableContext);
+    }
+    if (stableContext) ReconstructReleases(legacyState, previousState);
+    else SuppressAllEdges(legacyState);
     ApplyFocusRecovery(legacyState);
     mState = legacyState;
+    mbHasActiveContext = true;
+    mActiveContext = context;
+    mActiveHandedness = mHandedness;
   }
 
   void cSteamVRInput::UpdateSkeletonSummary(vr::VRActionHandle_t action, TrackedController& hand,
@@ -676,6 +696,42 @@ namespace hpl {
     vr::EVRInputError error = vr::VRInput()->TriggerHapticVibrationAction(
       action, 0.0f, durationSeconds, frequency, amplitude, vr::k_ulInvalidInputValueHandle);
     return error == vr::VRInputError_None;
+  }
+
+  eSteamVRHand cSteamVRInput::UIPointerHand(eSteamVRHand preferred,
+    const TrackedController& leftHand, const TrackedController& rightHand) {
+    if (preferred == eSteamVRHand_Left)
+      return leftHand.IsPoseValid() || !rightHand.IsPoseValid() ? eSteamVRHand_Left : eSteamVRHand_Right;
+    return rightHand.IsPoseValid() || !leftHand.IsPoseValid() ? eSteamVRHand_Right : eSteamVRHand_Left;
+  }
+
+  void cSteamVRInput::ReconstructReleases(cVRInputState& state,
+    const cVRInputState& previous) const {
+    for (unsigned int i = 0; i < sizeof(kFocusButtons) / sizeof(kFocusButtons[0]); ++i) {
+      cVRButtonState& button = state.*kFocusButtons[i];
+      button.justReleased = button.justReleased ||
+        ((previous.*kFocusButtons[i]).pressed && !button.pressed);
+    }
+  }
+
+  void cSteamVRInput::UpdatePointerButtons(cVRInputState& state,
+    const cVRInputState& previous, eSteamVRHand hand, bool valid, bool stableContext) {
+    const bool changed = stableContext && mbPointerKnown && hand != mPointerHand;
+    cVRButtonState* buttons[] = { &state.uiSelect, &state.uiDrag };
+    const cVRButtonState* old[] = { &previous.uiSelect, &previous.uiDrag };
+    bool* blocked[] = { &mbPointerSelectBlocked, &mbPointerDragBlocked };
+    for (int i = 0; i < 2; ++i) {
+      if (!valid || changed) {
+        *blocked[i] = buttons[i]->pressed;
+        buttons[i]->pressed = buttons[i]->justPressed = false;
+        buttons[i]->justReleased = stableContext && old[i]->pressed;
+      } else if (*blocked[i]) {
+        *blocked[i] = buttons[i]->pressed;
+        buttons[i]->pressed = buttons[i]->justPressed = buttons[i]->justReleased = false;
+      }
+    }
+    mbPointerKnown = true;
+    mPointerHand = hand;
   }
 
   void cSteamVRInput::SetMoveDeadZone(float deadZone) {

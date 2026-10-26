@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <string>
 #include <vector>
+#include <map>
+#include "../../../products/overture/PenumbraOverture/VRHelper.hpp"
 #include "input/SteamVRInput.h"
 #include "game/Game.h"
 using namespace vr;
@@ -182,6 +184,142 @@ namespace vr { IVRInput* audit_input=nullptr; IVRCompositor* audit_compositor=nu
 
 int failures=0;
 void Check(bool ok,const char* name) { if (!ok) { ++failures; std::fprintf(stderr,"FAIL: %s\n",name); } }
+
+// Programmable device samples; the production reader, controller and pointer
+// projection remain real. Action sets must actually be enabled to expose data.
+class BindingInput final : public FakeInput {
+public:
+    std::map<std::string, VRActionHandle_t> handles;
+    std::map<VRActionHandle_t, InputDigitalActionData_t> samples;
+    std::vector<VRActionSetHandle_t> sets;
+    EVRInputError GetActionSetHandle(const char* name, VRActionSetHandle_t* out) override {
+        return GetActionHandle(name,out);
+    }
+    EVRInputError GetActionHandle(const char* name, VRActionHandle_t* out) override {
+        auto& handle=handles[name];
+        if (!handle) handle=1000+handles.size();
+        *out=handle; return VRInputError_None;
+    }
+    void Button(const std::string& path,bool active,bool down,bool changed=true) {
+        VRActionHandle_t handle; GetActionHandle(path.c_str(),&handle);
+        samples[handle]={}; samples[handle].bActive=active;
+        samples[handle].bState=down; samples[handle].bChanged=changed;
+    }
+    EVRInputError UpdateActionState(VRActiveActionSet_t* data,uint32_t,uint32_t count) override {
+        sets.clear(); for (uint32_t i=0;i<count;++i) sets.push_back(data[i].ulActionSet);
+        return VRInputError_None;
+    }
+    EVRInputError GetDigitalActionData(VRActionHandle_t action,InputDigitalActionData_t* out,uint32_t,VRInputValueHandle_t) override {
+        *out={};
+        for (const auto& entry:handles) if(entry.second==action) {
+            const auto set=handles[entry.first.substr(0,entry.first.find("/in/"))];
+            for (auto enabled:sets) if (set==enabled) *out=samples[action];
+        }
+        return VRInputError_None;
+    }
+    EVRInputError GetAnalogActionData(VRActionHandle_t,InputAnalogActionData_t* out,uint32_t,VRInputValueHandle_t) override {
+        *out={}; return VRInputError_None;
+    }
+    EVRInputError GetPoseActionDataForNextFrame(VRActionHandle_t,ETrackingUniverseOrigin,InputPoseActionData_t* out,uint32_t,VRInputValueHandle_t) override {
+        *out={}; return VRInputError_None;
+    }
+};
+
+void AuditRegressions(FakeSystem& system) {
+    using namespace hpl;
+    for (bool leftDominant : {false,true}) {
+        BindingInput input; audit_input=&input;
+        cGame game{&system}; gGame=&game;
+        game.vr_dominant_hand=leftDominant?eSteamVRHand_Left:eSteamVRHand_Right;
+        auto& left=game.vr_left_hand; auto& right=game.vr_right_hand;
+        auto& dom=leftDominant?left:right; auto& off=leftDominant?right:left;
+        const std::string gameplay=leftDominant?"/actions/gameplay_left":"/actions/gameplay";
+        const std::string ui=leftDominant?"/actions/ui_left":"/actions/ui";
+        const std::string fallback=leftDominant?"/actions/ui":"/actions/ui_left";
+        auto restore=[&] {
+            auto pose=cMatrixf::Identity; pose.m[0][3]=400; pose.m[1][3]=300; pose.m[2][3]=1;
+            left.SetPose(pose,{}, {},1); right.SetPose(pose,{}, {},2);
+        };
+        restore(); focused=true; trigger_held=false;
+        cSteamVRInput reader; reader.SetHandedness(game.vr_dominant_hand);
+        Check(reader.Initialize(),"regression reader initialized");
+        auto update=[&](eSteamVRInputContext context) { ++tick; Check(reader.Update(context,left,right),"action sample consumed"); };
+        input.Button(gameplay+"/in/interact",true,false);
+        input.Button("/actions/offhand/in/interact",true,false);
+        update(eSteamVRInputContext_Gameplay);
+        input.Button(gameplay+"/in/interact",true,true);
+        update(eSteamVRInputContext_Gameplay);
+        const auto owner=reader.GetInteractSourceHand();
+        Check(owner==game.vr_dominant_hand && reader.GetState().interact.justPressed,"first hand owns interact");
+        input.Button(gameplay+"/in/interact",true,true,false);
+        input.Button("/actions/offhand/in/interact",true,true);
+        update(eSteamVRInputContext_Gameplay);
+        Check(reader.GetInteractSourceHand()==owner && !reader.GetState().interact.justPressed,"second trigger cannot steal or restart interaction");
+        dom.SetPoseValid(false); update(eSteamVRInputContext_Gameplay);
+        Check(!reader.GetState().interact.pressed && reader.GetState().interact.justReleased,"original owner tracking loss releases with both triggers held");
+        restore();
+        input.Button(gameplay+"/in/interact",true,false);
+        input.Button("/actions/offhand/in/interact",true,false);
+        update(eSteamVRInputContext_Gameplay);
+        input.Button("/actions/offhand/in/interact",true,true);
+        update(eSteamVRInputContext_Gameplay);
+        Check(reader.GetInteractSourceHand()!=owner && reader.GetState().interact.justPressed,"other hand can own next interaction");
+        input.Button("/actions/offhand/in/interact",true,true,false);
+        input.Button(gameplay+"/in/interact",true,true);
+        update(eSteamVRInputContext_Gameplay);
+        off.SetPoseValid(false); update(eSteamVRInputContext_Gameplay);
+        Check(!reader.GetState().interact.pressed && reader.GetState().interact.justReleased,"offhand owner tracking loss releases");
+
+        restore();
+        input.Button(ui+"/in/back",true,false);
+        input.Button(ui+"/in/drag",true,false);
+        update(eSteamVRInputContext_UI);
+        input.Button(ui+"/in/drag",true,true); update(eSteamVRInputContext_UI);
+        Check(reader.GetState().uiDrag.justPressed,"drag starts in stable context");
+        input.Button(ui+"/in/drag",false,false,false); update(eSteamVRInputContext_UI);
+        Check(reader.GetState().uiDrag.justReleased && !reader.GetState().uiDrag.pressed,"isolated inactive binding releases drag");
+        update(eSteamVRInputContext_UI);
+        Check(!reader.GetState().uiDrag.justReleased,"isolated release occurs once");
+        input.Button(ui+"/in/drag",true,true); update(eSteamVRInputContext_UI);
+        focused=false; update(eSteamVRInputContext_UI);
+        Check(reader.GetState().uiDrag.justReleased,"focus release still works");
+        focused=true; update(eSteamVRInputContext_UI);
+        Check(!reader.GetState().uiDrag.pressed && !reader.GetState().uiDrag.justPressed && !reader.GetState().uiDrag.justReleased,"focus recovery suppresses held drag edges");
+        input.Button(ui+"/in/drag",true,false); update(eSteamVRInputContext_UI);
+        Check(!reader.GetState().uiDrag.justReleased,"blocked held drag release stays suppressed");
+
+        dom.SetPoseValid(false);
+        input.Button(fallback+"/in/select",true,false);
+        input.Button(fallback+"/in/drag",true,false);
+        update(eSteamVRInputContext_UI);
+        cVector2f pixel; bool usesLeft=false;
+        Check(VRHelper::TraceUIPointer(&game,cMatrixf::Identity,false,&pixel,nullptr,nullptr,&usesLeft),"alternate pointer projects onto panel");
+        Check(usesLeft==!leftDominant && std::fabs(pixel.x-400)<0.01f && std::fabs(pixel.y-300)<0.01f,"pointer hand and geometry match alternate controller");
+        input.Button(fallback+"/in/select",true,true);
+        input.Button(fallback+"/in/drag",true,true);
+        update(eSteamVRInputContext_UI);
+        Check(reader.GetState().uiSelect.justPressed && reader.GetState().uiDrag.justPressed,"alternate pointer buttons activate select and drag");
+        restore(); update(eSteamVRInputContext_UI);
+        Check(reader.GetState().uiDrag.justReleased,"pointer hand change ends old drag");
+        input.Button(ui+"/in/drag",true,true); update(eSteamVRInputContext_UI);
+        Check(reader.GetState().uiDrag.justPressed,"restored dominant pointer accepts fresh press");
+        left.SetPoseValid(false); right.SetPoseValid(false); update(eSteamVRInputContext_UI);
+        Check(!reader.GetState().uiDrag.pressed && reader.GetState().uiDrag.justReleased,"loss of both poses releases pointer");
+
+        // Raw polling must select exactly the same alternate pose/buttons.
+        restore(); dom.SetPoseValid(false); trigger_held=false;
+        cSteamVRInput legacy; legacy.SetHandedness(game.vr_dominant_hand);
+        left.UpdateButtonState(); right.UpdateButtonState();
+        legacy.UpdateLegacyState(eSteamVRInputContext_UI,left,right);
+        trigger_held=true; left.UpdateButtonState(); right.UpdateButtonState();
+        legacy.UpdateLegacyState(eSteamVRInputContext_UI,left,right);
+        Check(legacy.GetState().uiSelect.justPressed && legacy.GetState().uiSelect.pressed,"legacy alternate pointer can click");
+        off.SetPoseValid(false); left.UpdateButtonState(); right.UpdateButtonState();
+        legacy.UpdateLegacyState(eSteamVRInputContext_UI,left,right);
+        Check(legacy.GetState().uiSelect.justReleased && !legacy.GetState().uiSelect.pressed,"legacy pointer loss releases click");
+    }
+}
+
 int main() {
     FakeInput input; FakeSystem system; FakeCompositor compositor;
     audit_input=&input; audit_system=&system; audit_compositor=&compositor;
@@ -239,6 +377,7 @@ int main() {
     trigger_held=false; left.UpdateButtonState(); right.UpdateButtonState(); legacy.UpdateLegacyState(hpl::eSteamVRInputContext_Gameplay,left,right);
     trigger_held=true; left.UpdateButtonState(); right.UpdateButtonState(); legacy.UpdateLegacyState(hpl::eSteamVRInputContext_Gameplay,left,right);
     Check(legacy.GetState().interact.justPressed,"raw press resumes after release");
+    AuditRegressions(system);
     std::printf("Overture input consumer: %d failures\n",failures);
     return failures?1:0;
 }

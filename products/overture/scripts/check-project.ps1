@@ -519,14 +519,18 @@ foreach ($requiredInventoryVRSnippet in @(
 $vrHelperSource = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\VRHelper.hpp')
 foreach ($requiredPointerSnippet in @(
     'TraceUIPointer',
-    'DominantHand(game).IsPoseValid()',
-    'OffHand(game).IsPoseValid()',
+    'cSteamVRInput::UIPointerHand(',
+    'if(!hand.IsPoseValid()) return false',
     'pointerDrawActive = true',
     'pointerDrawStart = rayStart'
 )) {
     if ($vrHelperSource -notmatch [regex]::Escape($requiredPointerSnippet)) {
         throw "The shared VR UI pointer is missing '$requiredPointerSnippet'."
     }
+}
+if ($steamVRInputSource -notmatch [regex]::Escape('cSteamVRInput::UIPointerHand(') -or
+    $steamVRInputHeader -notmatch [regex]::Escape('static eSteamVRHand UIPointerHand(')) {
+    throw 'The input consumer and UI ray must share their pointer-hand selector.'
 }
 
 $penumbraProjectSource = Get-Content -Raw -LiteralPath (Join-Path $repositoryRoot 'PenumbraOverture\Penumbra.vcxproj')

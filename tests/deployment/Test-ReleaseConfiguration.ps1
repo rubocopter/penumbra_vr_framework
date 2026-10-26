@@ -26,6 +26,14 @@ try {
     Test-PvrConfigurationPlan -Plan $plan -Restore
     Restore-PvrConfiguration -Plan $plan
     Assert ((Get-FileHash $path).Hash -eq $before) 'Restore recreated a section deleted by the user'
+    Remove-Item -LiteralPath $path
+    Test-PvrConfigurationPlan -Plan $plan -Restore
+    Restore-PvrConfiguration -Plan $plan
+    Assert (-not (Test-Path -LiteralPath $path)) 'Restore recreated settings deleted by the user'
+    New-Item -ItemType Directory -Path $path | Out-Null
+    $failed=$false;try{Test-PvrConfigurationPlan -Plan $plan -Restore}catch{$failed=$true}
+    Assert $failed 'Restore accepted a directory in place of settings'
+    Remove-Item -LiteralPath $path
     [IO.File]::WriteAllText($path,'<!DOCTYPE x [<!ENTITY secret SYSTEM "file:///test">]><Graphics/>')
     $failed=$false;try{Get-PvrConfigurationPlan -Game overture -Path $path | Out-Null}catch{$failed=$true}
     Assert $failed 'External entity accepted'

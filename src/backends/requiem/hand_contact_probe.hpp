@@ -162,6 +162,15 @@ void ServiceGameplayPalmResolver(
     std::uint8_t* image,
     void* character_body) noexcept;
 
+// Rearm only for a new bridge installation after the previous native shapes
+// have been retired. Failed/partial shutdown cannot be rearmed.
+[[nodiscard]] bool StartGameplayPalmResolver(std::string& error) noexcept;
+
+// Native update fan-out, including menus/untracked bodies. Does not sample
+// tracking, create shapes or require a current player; only the recorded
+// resolver owner thread can destroy its native resources.
+void ServiceGameplayPalmShutdown() noexcept;
+
 [[nodiscard]] bool ReadGameplayPalmPose(
     std::size_t hand_index,
     runtime::VrMatrix44& pose) noexcept;

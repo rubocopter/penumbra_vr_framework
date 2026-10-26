@@ -75,6 +75,8 @@ enum class FakeMode {
 std::atomic<FakeMode> g_mode{FakeMode::clear};
 std::atomic<std::uint32_t> g_create_count{0};
 std::atomic<std::uint32_t> g_destroy_count{0};
+std::atomic<bool> g_fail_destroy{false};
+std::atomic<DWORD> g_destroy_thread{0};
 std::uint8_t* g_fake_image = nullptr;
 std::array<std::uint8_t*, 4> g_fake_palm_shapes{};
 std::size_t g_fake_palm_shape_count = 0;
@@ -170,6 +172,8 @@ void* __fastcall FakeCreateBoxShape(
 }
 
 void __fastcall FakeDestroyShape(void*, void*, void* shape) {
+    g_destroy_thread.store(GetCurrentThreadId());
+    if (g_fail_destroy.load()) RaiseException(EXCEPTION_ACCESS_VIOLATION, 0, 0, nullptr);
     for (std::size_t index = 0; index < g_fake_palm_shape_count; ++index) {
         if (shape == g_fake_palm_shapes[index]) {
             ++g_destroy_count;
@@ -348,9 +352,76 @@ bool RunResolverValidation(
     return success;
 }
 
+bool ShutdownRegression(Fixture& fixture, const char* mode) {
+    std::string error;
+    const bool empty = std::strcmp(mode, "empty-shutdown") == 0;
+    const bool same_thread = std::strcmp(mode, "same-thread-shutdown") == 0;
+    const bool failure = std::strcmp(mode, "failed-shutdown") == 0;
+    const auto pose = runtime::IdentityMatrix();
+    const std::array<runtime::VrMatrix44, 2> poses{pose, pose};
+    const std::array<bool, 2> valid{true, true};
+    if (!empty) {
+        rq::PublishGameplayPalmTracking(poses, valid, pose, true, 1);
+        rq::ServiceGameplayPalmResolver(fixture.image, fixture.character.data());
+        if (g_create_count.load() != 2) return false;
+    }
+    if (empty || same_thread) {
+        if (!rq::ShutdownGameplayPalmResolver(error)) {
+            std::cerr << "native owner/empty shutdown failed: " << error << '\n';
+            return false;
+        }
+    } else {
+        // A remote caller cannot destroy native shapes itself. A missing tick
+        // must leave a pending, retryable shutdown, including after a failure.
+        bool result = true;
+        std::thread control([&] { result = rq::ShutdownGameplayPalmResolver(error); });
+        control.join();
+        if (result || error.empty() || g_destroy_count.load() != 0) return false;
+        if (rq::StartGameplayPalmResolver(error) || error.empty()) {
+            std::cerr << "resolver rearmed before retiring its native shapes\n";
+            return false;
+        }
+        g_fail_destroy.store(failure);
+        rq::ServiceGameplayPalmResolver(fixture.image, nullptr);
+        g_fail_destroy.store(false);
+        if (failure && g_destroy_count.load() != 0) return false;
+        if (!rq::ShutdownGameplayPalmResolver(error)) {
+            std::cerr << "shutdown retry failed: " << error << '\n';
+            return false;
+        }
+    }
+    if (!rq::ShutdownGameplayPalmResolver(error)) return false;
+    rq::PublishGameplayPalmTracking(poses, valid, pose, true, 2);
+    rq::ServiceGameplayPalmResolver(fixture.image, fixture.character.data());
+    runtime::VrMatrix44 resolved{};
+    const auto telemetry = rq::ConsumeGameplayPalmResolverTelemetry();
+    if (g_create_count.load() != (empty ? 0U : 2U) ||
+        g_destroy_count.load() != (empty ? 0U : 2U) || telemetry.enabled ||
+        rq::ReadGameplayPalmPose(0, resolved) ||
+        (!empty && g_destroy_thread.load() != GetCurrentThreadId())) {
+        std::cerr << "shutdown leaked/recreated shapes or used the control thread\n";
+        return false;
+    }
+    // A later explicit install can rearm only after successful retirement.
+    if (!rq::StartGameplayPalmResolver(error)) return false;
+    rq::PublishGameplayPalmTracking(poses, valid, pose, true, 3);
+    rq::ServiceGameplayPalmResolver(fixture.image, fixture.character.data());
+    if (g_create_count.load() != (empty ? 2U : 4U) ||
+        !rq::ShutdownGameplayPalmResolver(error) ||
+        g_destroy_count.load() != (empty ? 2U : 4U)) {
+        std::cerr << "resolver failed to rearm and retire on explicit reinstall\n";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
+    if (argc > 1) {
+        Fixture fixture;
+        return fixture.image && ShutdownRegression(fixture, argv[1]) ? 0 : 1;
+    }
     std::array<CollidePoint, 2> points{{
         {{}, {0.0F, 1.0F, 0.0F}, 0.01F},
         {{}, {1.0F, 0.0F, 0.0F}, 0.04F},

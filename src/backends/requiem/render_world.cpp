@@ -343,6 +343,9 @@ struct MoveHold final {
     std::uint64_t yaw_epoch = 0;
     std::array<float,3> joint_pin{};
     std::array<float,3> joint_pivot{};
+    void* slider_joint = nullptr;
+    std::array<float,2> slider_sticky_distances{};
+    bool slider_sticky_suspended = false;
     float hinge_lightness = 1.0F;
     float max_linear = 0.0F;
     float max_angular = 0.0F;
@@ -361,6 +364,10 @@ struct PushHold final {
 thread_local void* g_pending_push_state = nullptr;
 thread_local runtime::VrHand g_pending_push_hand = runtime::VrHand::right;
 thread_local PushHold g_push_hold;
+// Holds and pending native transitions belong to the game thread. Control
+// threads observe only this publication, never another thread's TLS or bodies.
+std::atomic<unsigned> g_interaction_owners{0};
+thread_local bool g_interaction_owner_published = false;
 std::array<runtime::VrEyeConfiguration, 2> g_eyes{};
 std::array<runtime::VrMatrix44, 2> g_projections{};
 runtime::VrMatrix34 g_tracking_anchor{};
@@ -418,7 +425,18 @@ thread_local runtime::VrMatrix44 g_overlay_panel_pose{};
 class ActiveCall final {
 public:
     ActiveCall() noexcept { g_active_calls.fetch_add(1, std::memory_order_acq_rel); }
-    ~ActiveCall() { g_active_calls.fetch_sub(1, std::memory_order_acq_rel); }
+    ~ActiveCall() {
+        const bool owned = g_pending_grab_state != nullptr ||
+            g_pending_move_state != nullptr || g_pending_push_state != nullptr ||
+            g_grab_hold.state != nullptr || g_move_hold.state != nullptr ||
+            g_push_hold.state != nullptr;
+        if (owned != g_interaction_owner_published) {
+            if (owned) g_interaction_owners.fetch_add(1, std::memory_order_acq_rel);
+            else g_interaction_owners.fetch_sub(1, std::memory_order_acq_rel);
+            g_interaction_owner_published = owned;
+        }
+        g_active_calls.fetch_sub(1, std::memory_order_acq_rel);
+    }
     ActiveCall(const ActiveCall&) = delete;
     ActiveCall& operator=(const ActiveCall&) = delete;
 };
@@ -1327,13 +1345,14 @@ struct RankedRayCallback final {
     Hit best{};
     float best_score = INFINITY;
     std::size_t ray_index = 0;
+    NativePickResult native_result{};
 
     static bool __fastcall Before(void* self, void*, void* body) noexcept {
         auto* proxy = static_cast<RankedRayCallback*>(self);
         auto* native = ReadNative<void*>(proxy->original, 0);
         if (native == nullptr) return false;
         auto before = reinterpret_cast<VTable*>(native)->before;
-        return before != nullptr && before(proxy->original, body);
+        return before != nullptr && before(&proxy->native_result, body);
     }
     static bool __fastcall Intersect(void* self, void*, void* body,
         void* params) noexcept {
@@ -1343,13 +1362,19 @@ struct RankedRayCallback final {
         if (!std::isfinite(hit.distance) || hit.distance < 0.0F)
             return true;
         g_ray_hits.fetch_add(1, std::memory_order_relaxed);
-        // Rework's pick callback clears mpPickedBody when the nearest body
-        // has no game entity. The five-ray rank must not replay a floor/wall
-        // hit as its sole winner and mask a valid object on another ray.
-        if (!RequiemBodyMatches(body)) return true;
+        // Preserve this ray's native solid/area eligibility and occlusion.
+        // In particular, a nearer wall clears native_result.body even when
+        // it arrives after our preliminary physical candidate. Other finger
+        // rays retain their own independent native callback state.
+        auto* native = reinterpret_cast<VTable*>(
+            ReadNative<void*>(proxy->original, 0));
+        if (native == nullptr || native->intersect == nullptr) return false;
+        const bool keep_casting = native->intersect(
+            &proxy->native_result, body, params);
+        if (!RequiemBodyMatches(body)) return keep_casting;
         void* const entity = ReadNative<void*>(body, 0x414);
         if (entity == nullptr || !ReadNative<bool>(entity, 0x14))
-            return true;
+            return keep_casting;
         if (g_selection_refresh_active) ++g_refresh_entity_hits;
         const float score = hit.distance +
             (proxy->ray_index == 0 ? 0.0F : 0.002F);
@@ -1358,7 +1383,7 @@ struct RankedRayCallback final {
             proxy->best = hit;
             proxy->best_score = score;
         }
-        return true;
+        return keep_casting;
     }
 };
 
@@ -1443,6 +1468,52 @@ struct PalmSelectionCandidate final {
     return rays;
 }
 
+[[nodiscard]] bool CastNativeHandArea(Ray ray, void* world,
+    void* callback, const PalmRaySegment& segment, bool distance,
+    bool normal, bool point, bool prefilter, float maximum,
+    NativePickResult& selected) noexcept {
+    NativePickResult candidate = ReadNative<NativePickResult>(callback, 0);
+    __try {
+        reinterpret_cast<void(__thiscall*)(void*)>(
+            g_image+kPickClearRva)(&candidate);
+        ray(world, &candidate, &segment.from, &segment.to,
+            distance, normal, point, prefilter);
+        reinterpret_cast<void(__thiscall*)(void*)>(
+            g_image+kPickResolveRva)(&candidate);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {
+        return false;
+    }
+    if (candidate.area == nullptr || candidate.body != candidate.area ||
+        !std::isfinite(candidate.area_distance) ||
+        candidate.area_distance < 0.0F ||
+        candidate.area_distance > maximum) return false;
+    selected = candidate;
+    return true;
+}
+
+[[nodiscard]] bool FindNativeHandArea(Ray ray, void* world,
+    void* callback, const std::array<PalmRaySegment,5>& rays,
+    std::size_t count, bool distance, bool normal, bool point,
+    bool prefilter, float maximum, NativePickResult& selected) noexcept {
+    float closest = INFINITY;
+    for (std::size_t index = 0; index < count; ++index) {
+        NativePickResult candidate{};
+        if (!CastNativeHandArea(ray, world, callback, rays[index],
+                distance, normal, point, prefilter, maximum, candidate) ||
+            candidate.area_distance >= closest) continue;
+        selected = candidate;
+        closest = candidate.area_distance;
+    }
+    return std::isfinite(closest);
+}
+
+[[nodiscard]] bool NativeAreaPrecedesPhysicalTarget(
+    const NativePickResult& area, float physical_distance) noexcept {
+    return area.body != nullptr && area.body == area.area &&
+        std::isfinite(area.area_distance) && area.area_distance >= 0.0F &&
+        area.area_distance < physical_distance;
+}
+
 void __fastcall HookedRay(void* world, void*, void* callback,
     const std::array<float,3>* origin,
     const std::array<float,3>* end,
@@ -1472,6 +1543,23 @@ void __fastcall HookedRay(void* world, void*, void* callback,
         if (InteractionPalm(frame.interact_source, palm)) {
             PalmSelectionCandidate contact{};
             if (FindPalmOverlapTarget(callback, frame.interact_source, contact)) {
+                // Native script areas may overlap the same palm as a nearby
+                // physical body. The overlap fast path must still give the
+                // game's own area/solid/occlusion arbitration a chance.
+                const auto rays = InteractionRaySegments(palm, native_length);
+                NativePickResult area{};
+                if (FindNativeHandArea(original, world, callback, rays,
+                        g_selection_refresh_active ? rays.size() : 1U,
+                        distance, normal, point, prefilter, native_length,
+                        area) && NativeAreaPrecedesPhysicalTarget(
+                            area, contact.distance) &&
+                    StoreNative(callback, 0, area)) {
+                    g_vr_selection_ready = true;
+                    if (g_selection_refresh_active)
+                        g_refresh_winner_distance = area.area_distance;
+                    g_ray_winners.fetch_add(1, std::memory_order_relaxed);
+                    return;
+                }
                 auto* native = reinterpret_cast<RankedRayCallback::VTable*>(
                     ReadNative<void*>(callback, 0));
                 if (native != nullptr && native->intersect != nullptr) {
@@ -1504,11 +1592,39 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                 const std::size_t count = g_selection_refresh_active
                     ? rays.size() : 1U;
                 for (std::size_t index = 0; index < count; ++index) {
-                    ranked.ray_index = index;
+                    RankedRayCallback ray{&table, callback};
+                    ray.ray_index = index;
+                    ray.native_result = ReadNative<NativePickResult>(callback, 0);
+                    reinterpret_cast<void(__thiscall*)(void*)>(
+                        g_image+kPickClearRva)(&ray.native_result);
                     g_redirected_rays.fetch_add(1,
                         std::memory_order_relaxed);
-                    original(world, &ranked, &rays[index].from,
+                    original(world, &ray, &rays[index].from,
                         &rays[index].to, distance, normal, point, prefilter);
+                    if (ray.best_body != nullptr &&
+                        ray.native_result.body == ray.best_body &&
+                        ray.best_score < ranked.best_score) {
+                        ranked.best_body = ray.best_body;
+                        ranked.best = ray.best;
+                        ranked.best_score = ray.best_score;
+                    }
+                }
+                // A native ScriptArea can sit in front of an otherwise valid
+                // physical body. Resolve its native occlusion before choosing
+                // the ranked physical candidate.
+                NativePickResult best_area{};
+                if (FindNativeHandArea(original, world, callback, rays,
+                        count, distance, normal, point, prefilter,
+                        native_length, best_area) &&
+                    NativeAreaPrecedesPhysicalTarget(best_area,
+                        ranked.best_body == nullptr ? INFINITY : ranked.best.distance) &&
+                    StoreNative(callback, 0, best_area)) {
+                    g_vr_selection_ready = true;
+                    if (g_selection_refresh_active)
+                        g_refresh_winner_distance = best_area.area_distance;
+                    g_ray_winners.fetch_add(1,
+                        std::memory_order_relaxed);
+                    return;
                 }
                 if (ranked.best_body != nullptr) {
                     auto* native = reinterpret_cast<
@@ -1757,6 +1873,7 @@ using Vec3 = std::array<float,3>;
     }
     hold.joint_pin = ReadNative<Vec3>(joint, 0xB8);
     hold.joint_pivot = ReadNative<Vec3>(joint, 0xC4);
+    if (hold.mode == MoveMode::slider) hold.slider_joint = joint;
     return runtime::vr_mechanism_policy::Finite(hold.joint_pin) &&
         runtime::vr_mechanism_policy::Finite(hold.joint_pivot) &&
         runtime::vr_mechanism_policy::Length(hold.joint_pin) > 1.0e-6F;
@@ -1827,7 +1944,7 @@ void __fastcall HookedGrabEnter(void* state, void*, void* previous) noexcept {
     g_vr_selection_player = nullptr;
     reinterpret_cast<Transition>(g_image + kGrabEnterRva)(state, previous);
     g_native_grab_enters.fetch_add(1, std::memory_order_relaxed);
-    if (vr_origin) {
+    if (vr_origin && g_presenting.load(std::memory_order_acquire)) {
         g_grab_enters.fetch_add(1, std::memory_order_relaxed);
         g_pending_grab_state = state;
         g_pending_grab_hand = frame.interact_source;
@@ -1908,7 +2025,7 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
         runtime::VrMatrix44 palm{};
         std::array<float,3> tracked{};
         bool held_body_published = false;
-        bool valid = player != nullptr &&
+        bool valid = g_presenting.load(std::memory_order_acquire) && player != nullptr &&
             ReadNative<int>(player, 0x2C0) == 6 &&
             ReadNative<void*>(ReadNative<void*>(player, 0x2C8),
                 6 * sizeof(void*)) == state &&
@@ -2003,6 +2120,11 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
         original(state, dt);
         return;
     }
+    if (!g_presenting.load(std::memory_order_acquire)) {
+        reinterpret_cast<void(__thiscall*)(void*)>(
+            g_image + kGrabExitRva)(state);
+        return;
+    }
     if (!std::isfinite(dt) || dt <= 0.0F || dt > 0.25F) return;
     const auto frame = ReadNativeControllerFrame();
     if (!frame.focused || !frame.input.state.interact.pressed ||
@@ -2067,7 +2189,7 @@ void __fastcall HookedMoveEnter(void* state, void*, void* previous) noexcept {
     reinterpret_cast<Transition>(g_image + kMoveTargets[1])(
         state, previous);
     g_native_move_enters.fetch_add(1, std::memory_order_relaxed);
-    if (vr_origin) {
+    if (vr_origin && g_presenting.load(std::memory_order_acquire)) {
         g_pending_move_state = state;
         g_pending_move_hand = frame.interact_source;
     }
@@ -2087,7 +2209,7 @@ void __fastcall HookedPushEnter(void* state, void*, void* previous) noexcept {
     // cPlayer::ChangeState (0x9CEE0) publishes player+0x2C0 at 0x9CF1B,
     // after the virtual Enter call at 0x9CF11. Validate the committed state
     // in HookedPushUpdate instead of rejecting every VR-origin Push here.
-    if (vr_origin) {
+    if (vr_origin && g_presenting.load(std::memory_order_acquire)) {
         g_pending_push_state = state;
         g_pending_push_hand = frame.interact_source;
     }
@@ -2111,7 +2233,8 @@ void __fastcall HookedPushUpdate(void* state, void*, float dt) noexcept {
         auto* player = ReadNative<void*>(state, 0x10);
         auto* body = ReadNative<void*>(state, 0x50);
         const auto frame = ReadNativeControllerFrame();
-        bool valid = player != nullptr && RequiemBodyMatches(body) &&
+        bool valid = g_presenting.load(std::memory_order_acquire) &&
+            player != nullptr && RequiemBodyMatches(body) &&
             ReadNative<int>(player, 0x2C0) == 1 &&
             ReadNative<void*>(ReadNative<void*>(player, 0x2C8),
                 sizeof(void*)) == state &&
@@ -2167,7 +2290,8 @@ void __fastcall HookedPushUpdate(void* state, void*, float dt) noexcept {
         return;
     }
     const auto frame = ReadNativeControllerFrame();
-    if (!frame.focused || !frame.input.state.interact.pressed ||
+    if (!g_presenting.load(std::memory_order_acquire) ||
+        !frame.focused || !frame.input.state.interact.pressed ||
         frame.interact_source != g_push_hold.hand ||
         !RequiemBodyMatches(g_push_hold.body) ||
         ReadNative<void*>(state, 0x10) != g_push_hold.player ||
@@ -2201,6 +2325,62 @@ void __fastcall HookedPushUpdate(void* state, void*, float dt) noexcept {
     g_push_force_ticks.fetch_add(1, std::memory_order_relaxed);
 }
 
+[[nodiscard]] bool RequiemMoveSliderJointStillOwned(
+    const MoveHold& hold) noexcept {
+    if (!RequiemBodyMatches(hold.body) || hold.slider_joint == nullptr)
+        return false;
+    const int count = NativeJointCount(hold.body);
+    if (count <= 0 || count > 256) return false;
+    bool linked = false;
+    for (int index = 0; index < count; ++index) {
+        if (NativeJoint(hold.body, index) == hold.slider_joint) {
+            linked = true;
+            break;
+        }
+    }
+    return linked && ReadNative<void*>(hold.slider_joint, 0) ==
+            g_image + kSliderVtableRva &&
+        ReadNative<void*>(hold.slider_joint, 0x30) == hold.body;
+}
+
+[[nodiscard]] bool SuspendRequiemMoveSliderStickiness(MoveHold& hold) noexcept {
+    if (hold.mode != MoveMode::slider || hold.slider_joint == nullptr ||
+        ReadNative<void*>(hold.slider_joint, 0x30) != hold.body)
+        return true;
+    if (!RequiemMoveSliderJointStillOwned(hold)) return false;
+    void* const parent = ReadNative<void*>(hold.slider_joint, 0x2C);
+    if (parent != nullptr) {
+        if (!RequiemBodyMatches(parent)) return false;
+        const float mass = ReadNative<float>(parent, 0x434);
+        if (!std::isfinite(mass) || mass < 0.0F) return false;
+        if (mass > 0.0F) return true;
+    }
+    // Requiem's native slider callbacks (19F7FD/19FC1E) zero velocity
+    // inside the two sticky endpoint ranges at +E8/+EC. The held-child VR
+    // servo needs those ranges suspended until Move releases the same joint.
+    hold.slider_sticky_distances = {
+        ReadNative<float>(hold.slider_joint, 0xE8),
+        ReadNative<float>(hold.slider_joint, 0xEC)};
+    for (float value : hold.slider_sticky_distances)
+        if (!std::isfinite(value) || value < 0.0F) return false;
+    if (hold.slider_sticky_distances == std::array<float,2>{}) return true;
+    const std::array<float,2> zero{};
+    if (!StoreNative(hold.slider_joint, 0xE8, zero)) return false;
+    hold.slider_sticky_suspended = true;
+    return true;
+}
+
+void RestoreRequiemMoveSliderStickiness(const MoveHold& hold) noexcept {
+    if (!hold.slider_sticky_suspended ||
+        !RequiemMoveSliderJointStillOwned(hold)) return;
+    for (std::size_t index = 0; index < hold.slider_sticky_distances.size(); ++index) {
+        const auto offset = 0xE8 + index * sizeof(float);
+        if (ReadNative<float>(hold.slider_joint, offset) == 0.0F)
+            static_cast<void>(StoreNative(hold.slider_joint, offset,
+                hold.slider_sticky_distances[index]));
+    }
+}
+
 void __fastcall HookedMoveLeave(void* state, void*, void* next) noexcept {
     ActiveCall active_call;
     if (g_pending_move_state == state) g_pending_move_state = nullptr;
@@ -2211,6 +2391,10 @@ void __fastcall HookedMoveLeave(void* state, void*, void* next) noexcept {
         g_move_hold = {};
         PublishGameplayPalmHeldBody(HandIndex(hold.hand), nullptr);
     }
+    // Native Move::Leave may alter the body's joint links. Restore the
+    // original slider endpoint behavior while the owned joint is still linked.
+    if (owned && RequiemBodyMatches(hold.body))
+        RestoreRequiemMoveSliderStickiness(hold);
     reinterpret_cast<Transition>(g_image + kMoveTargets[2])(state, next);
     if (owned && RequiemBodyMatches(hold.body)) {
         reinterpret_cast<void(__thiscall*)(void*,float)>(
@@ -2237,7 +2421,7 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
         Vec3 tracking{};
         bool held_body_published = false;
         const int joint_count = NativeJointCount(body);
-        bool valid = player != nullptr &&
+        bool valid = g_presenting.load(std::memory_order_acquire) && player != nullptr &&
             ReadNative<int>(player, 0x2C0) == 2 &&
             ReadNative<void*>(ReadNative<void*>(player, 0x2C8),
                 2 * sizeof(void*)) == state &&
@@ -2301,6 +2485,7 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
                             previous_generation, true) &&
                     TrackingGripPosition(hold.hand, tracking);
             }
+            if (valid) valid = SuspendRequiemMoveSliderStickiness(hold);
             if (valid) {
                 hold.local_hand_contact = InverseTransformPoint(
                     palm, world_contact);
@@ -2341,6 +2526,11 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
     }
     if (g_move_hold.state != state) {
         original(state, dt);
+        return;
+    }
+    if (!g_presenting.load(std::memory_order_acquire)) {
+        reinterpret_cast<void(__thiscall*)(void*)>(
+            g_image + kMoveExitRva)(state);
         return;
     }
     if (!std::isfinite(dt) || dt <= 0.0F || dt > 0.25F) return;
@@ -3100,6 +3290,13 @@ bool RemoveRenderWorld(std::string& error) noexcept {
         error = "Requiem presentation still owns OpenGL targets";
         return false;
     }
+    // Keep every Leave hook installed until the game thread has restored its
+    // owned bodies. An in-flight Enter can still publish a pending hold.
+    if (g_active_calls.load(std::memory_order_acquire) != 0 ||
+        g_interaction_owners.load(std::memory_order_acquire) != 0) {
+        error = "Requiem game-thread interactions or callbacks are still active";
+        return false;
+    }
     if (g_refraction_copy_hook.installed() &&
         !hooks::RemoveIatHook(g_refraction_copy_hook, error)) return false;
     if (g_ray_hook.installed() &&
@@ -3167,6 +3364,10 @@ bool StartPresentation(runtime::OpenVrSession& session,
         error = "Requiem presentation is already active";
         return false;
     }
+    if (g_interaction_owners.load(std::memory_order_acquire) != 0) {
+        error = "Requiem game-thread interactions have not finished stopping";
+        return false;
+    }
     if (!session.ReadEyeConfiguration(g_eyes, error)) return false;
     for (std::size_t index = 0; index < 2; ++index) {
         if (!runtime::BuildHplInfiniteProjection(
@@ -3227,13 +3428,14 @@ bool StopPresentation(std::string& error) noexcept {
     g_destroy_requested.store(true, std::memory_order_release);
     for (unsigned elapsed = 0; elapsed < 2000; ++elapsed) {
         if (g_active_calls.load(std::memory_order_acquire) == 0 &&
+            g_interaction_owners.load(std::memory_order_acquire) == 0 &&
             g_targets_destroyed.load(std::memory_order_acquire)) {
             g_session.store(nullptr, std::memory_order_release);
             return adapters::hpl1::RemoveTrackedAudioListener(error);
         }
         Sleep(1);
     }
-    error = "Timed out waiting for Requiem eye targets to close on the GL thread";
+    error = "Timed out waiting for Requiem eye targets and game-thread interactions to stop";
     return false;
 }
 

@@ -64,13 +64,6 @@ bool CommitNativeVrSettings(const penumbra_vr::runtime::VrSettings& settings,
         g_native_menu_owned = false;
     }
     penumbra_vr::backends::requiem::ConnectGameplayInput(nullptr);
-    if (g_gameplay_bridge_owned) {
-        if (!penumbra_vr::backends::requiem::RemoveGameplayBridge(next)) {
-            error = "Gameplay bridge: " + next;
-            return false;
-        }
-        g_gameplay_bridge_owned = false;
-    }
     if (g_render_hook_installed) {
         if (!penumbra_vr::backends::requiem::StopPresentation(next)) {
             error = "Presentation: " + next;
@@ -81,6 +74,15 @@ bool CommitNativeVrSettings(const penumbra_vr::runtime::VrSettings& settings,
             return false;
         }
         g_render_hook_installed = false;
+    }
+    // The native update must remain available while presentation drains held
+    // interactions and while the palm resolver destroys its owned shapes.
+    if (g_gameplay_bridge_owned) {
+        if (!penumbra_vr::backends::requiem::RemoveGameplayBridge(next)) {
+            error = "Gameplay bridge: " + next;
+            return false;
+        }
+        g_gameplay_bridge_owned = false;
     }
     if (g_scissor_hook_installed) {
         if (!penumbra_vr::hooks::RemoveOpenGlEyeScissor(next)) {

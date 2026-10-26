@@ -133,20 +133,12 @@ namespace VRHelper {
     bool worldSpace, cVector2f* screenPos, cVector3f* rayStart,
     cVector3f* rayEnd, bool* usingLeftHand = NULL)
   {
-    cMatrixf handMatrix;
-    bool leftHand = false;
-
-    // Aim pose with grip fallback on either hand: the laser must originate
-    // where the controller naturally points, not where its grip sits.
-    if(DominantHand(game).IsPoseValid())
-      handMatrix = ControllerAimMatrix(DominantHand(game));
-    else if(OffHand(game).IsPoseValid())
-    {
-      handMatrix = ControllerAimMatrix(OffHand(game));
-      leftHand = game->vr_dominant_hand != eSteamVRHand_Left;
-    }
-    else
-      return false;
+    const eSteamVRHand pointer = cSteamVRInput::UIPointerHand(
+      game->vr_dominant_hand, game->vr_left_hand, game->vr_right_hand);
+    const bool leftHand = pointer == eSteamVRHand_Left;
+    TrackedController& hand = leftHand ? game->vr_left_hand : game->vr_right_hand;
+    if(!hand.IsPoseValid()) return false;
+    cMatrixf handMatrix = ControllerAimMatrix(hand);
 
     if(worldSpace)
       handMatrix = TrackingToWorldSpace(handMatrix, game);

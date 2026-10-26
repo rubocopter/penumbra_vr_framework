@@ -73,10 +73,15 @@ namespace hpl {
     void SetHandedness(eSteamVRHand hand);
     eSteamVRHand GetHandedness() const { return mHandedness; }
 
-    // Physical controller that produced the last interact press edge; used by
+    // Physical controller that owns the current interact; retained until release.
+    // Used by
     // grab targeting to prefer the pressing hand.
     eSteamVRHand GetInteractSourceHand() const { return mInteractSourceHand; }
     void SetInteractSourceHand(eSteamVRHand hand) { mInteractSourceHand = hand; }
+
+    // Shared with the UI ray consumer so pose and button selection cannot diverge.
+    static eSteamVRHand UIPointerHand(eSteamVRHand preferred,
+      const TrackedController& leftHand, const TrackedController& rightHand);
 
     bool TriggerHaptic(eSteamVRHand hand, float durationSeconds, float frequency, float amplitude);
 
@@ -103,6 +108,9 @@ namespace hpl {
     void SuppressAllEdges(cVRInputState& state) const;
     void ReleaseInputFocus(const cVRInputState& previousState);
     void ApplyFocusRecovery(cVRInputState& state);
+    void ReconstructReleases(cVRInputState& state, const cVRInputState& previous) const;
+    void UpdatePointerButtons(cVRInputState& state, const cVRInputState& previous,
+      eSteamVRHand hand, bool valid, bool stableContext);
     void ApplyMoveDeadZone(float& x, float& y) const;
     tString FindManifestPath() const;
     // Mirrored action sets (/actions/gameplay_left, /actions/ui_left) carry the
@@ -124,6 +132,10 @@ namespace hpl {
     bool mbLeftAimWasValid;
     bool mbRightAimWasValid;
     bool mbFocusLost;
+    bool mbPointerKnown;
+    bool mbPointerSelectBlocked;
+    bool mbPointerDragBlocked;
+    eSteamVRHand mPointerHand;
     cVRInputState mFocusBlocked;
     eSteamVRInputContext mActiveContext;
     eSteamVRHand mActiveHandedness;

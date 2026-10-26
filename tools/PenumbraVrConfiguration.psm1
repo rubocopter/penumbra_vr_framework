@@ -88,7 +88,31 @@ function Write-PvrConfiguration($Doc,[string]$Path) {
         [IO.File]::Replace($temp,$Path,$backup)
     } finally {foreach($file in @($temp,$backup)){if(Test-Path -LiteralPath $file){Remove-Item -LiteralPath $file -Force}}}
 }
-function Invoke-PvrConfiguration($Plan,[bool]$Restore,[bool]$ValidateOnly=$false,[bool]$LanguageOnly=$false) {
+function Assert-PvrConfigurationPath([string]$Path) {
+    if(-not [IO.Path]::IsPathRooted($Path)){throw 'Configuration path must be absolute.'}
+    for($cursor=[IO.Path]::GetFullPath($Path);$cursor;$cursor=Split-Path -Parent $cursor) {
+        $item=Get-Item -LiteralPath $cursor -Force -ErrorAction SilentlyContinue
+        if($item -and ($item.Attributes -band [IO.FileAttributes]::ReparsePoint)){throw 'Configuration path traverses a reparse point.'}
+    }
+    if((Test-Path -LiteralPath $Path) -and -not(Test-Path -LiteralPath $Path -PathType Leaf)){throw 'Configuration path is not a file.'}
+}
+function Get-PvrConfigurationRestoreRecords {
+    param([string]$Game,[string]$RedistRoot,[object[]]$Previous=@(),[string[]]$RemovedLanguageFiles=@())
+    $records=@(Get-PvrConfigurationRecords -Game $Game -RedistRoot $RedistRoot -Previous $Previous -ValidateOwnershipOnly)
+    $records
+    if($RemovedLanguageFiles.Count) {
+        foreach($path in @(Get-PvrConfigurationPaths -Game $Game -RedistRoot $RedistRoot)) {
+            Assert-PvrConfigurationPath $path
+            if((Test-Path -LiteralPath $path -PathType Leaf) -and -not @($records | Where-Object {$_.Path -ieq $path}).Count) {
+                [pscustomobject]@{Game=$Game;Path=$path;Changes=@()}
+            }
+        }
+    }
+}
+function Invoke-PvrConfiguration($Plan,[bool]$Restore,[bool]$ValidateOnly=$false,[bool]$LanguageOnly=$false,[string]$RedistRoot='', [string[]]$RemovedLanguageFiles=@()) {
+    Assert-PvrConfigurationPath $Plan.Path
+    # A deleted preference file is a later user edit, not a request to recreate it.
+    if($Restore -and -not(Test-Path -LiteralPath $Plan.Path -PathType Leaf)){return}
     if(-not $Restore -and $Plan.PSObject.Properties['ApplyKeys'] -and -not @($Plan.ApplyKeys).Count){return}
     $doc=Read-PvrConfig $Plan.Path
     if(-not $Restore -and (Get-FileHash -LiteralPath $Plan.Path).Hash -ine $Plan.BeforeSha256) {throw 'Configuration changed after preview; generate a new plan.'}
@@ -111,9 +135,21 @@ function Invoke-PvrConfiguration($Plan,[bool]$Restore,[bool]$ValidateOnly=$false
         } else {$node.SetAttribute($change.Attribute,[string]$change.Applied)}
         $changed=$true
     }
+    if($Restore -and $RemovedLanguageFiles.Count) {
+        if(-not $RedistRoot){throw 'Language restoration requires the owning game root.'}
+        $nodes=@($doc.SelectNodes('/PvrRoot/Game'))
+        if($nodes.Count -gt 1){throw 'Duplicate configuration section.'}
+        if($nodes.Count -eq 1 -and $nodes[0].GetAttribute('LanguageFile') -in $RemovedLanguageFiles) {
+            $directory=if($Plan.Game -eq 'requiem'){'expansion01/config'}else{'config'}
+            $fallback=if($Plan.Game -eq 'requiem'){'English_exp.lang'}else{'English.lang'}
+            if(-not(Test-Path -LiteralPath (Join-Path $RedistRoot "$directory/$fallback") -PathType Leaf)){throw 'The fallback English language file is missing.'}
+            $nodes[0].SetAttribute('LanguageFile',$fallback)
+            $changed=$true
+        }
+    }
     if($changed -and -not $ValidateOnly){Write-PvrConfiguration $doc $Plan.Path}
 }
 function Set-PvrConfiguration {param($Plan,[switch]$LanguageOnly) Invoke-PvrConfiguration $Plan $false $false ([bool]$LanguageOnly)}
-function Restore-PvrConfiguration {param($Plan) Invoke-PvrConfiguration $Plan $true}
-function Test-PvrConfigurationPlan {param($Plan,[switch]$Restore,[switch]$LanguageOnly) Invoke-PvrConfiguration $Plan ([bool]$Restore) $true ([bool]$LanguageOnly)}
-Export-ModuleMember -Function Get-PvrConfigurationPlan,Set-PvrConfiguration,Restore-PvrConfiguration,Get-PvrConfigurationPaths,Get-PvrConfigurationRecords,Test-PvrConfigurationPlan
+function Restore-PvrConfiguration {param($Plan,[string]$RedistRoot='', [string[]]$RemovedLanguageFiles=@()) Invoke-PvrConfiguration $Plan $true $false $false $RedistRoot $RemovedLanguageFiles}
+function Test-PvrConfigurationPlan {param($Plan,[switch]$Restore,[switch]$LanguageOnly,[string]$RedistRoot='', [string[]]$RemovedLanguageFiles=@()) Invoke-PvrConfiguration $Plan ([bool]$Restore) $true ([bool]$LanguageOnly) $RedistRoot $RemovedLanguageFiles}
+Export-ModuleMember -Function Get-PvrConfigurationPlan,Set-PvrConfiguration,Restore-PvrConfiguration,Get-PvrConfigurationPaths,Get-PvrConfigurationRecords,Get-PvrConfigurationRestoreRecords,Test-PvrConfigurationPlan

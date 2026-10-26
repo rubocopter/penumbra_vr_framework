@@ -3,6 +3,7 @@
 #include "../../src/backends/requiem/render_world.cpp"
 #include <iostream>
 #include <vector>
+#include <thread>
 
 namespace penumbra_vr::backends::requiem {
 namespace {
@@ -26,6 +27,12 @@ static_assert(sizeof(TestPick)==0x38);
 struct SceneHit { void* body; float distance; TestVec point; };
 std::vector<SceneHit> test_head_hits;
 std::vector<SceneHit> test_hand_hits;
+std::vector<SceneHit> test_offset_hand_hits;
+bool test_separate_hand_rays=false;
+void* test_script_area_body=nullptr;
+void* test_joint_body=nullptr;
+void* test_joint_ptr=nullptr;
+bool test_move_leave_saw_restored=false;
 unsigned test_head_rays=0, test_native_rays=0;
 TestVec test_last_from{},test_last_to{};
 
@@ -50,13 +57,30 @@ void __fastcall NativeResolve(void* value,void*) {
         pick.body=pick.area; pick.distance=pick.area_distance; pick.point=pick.area_point;
     }
 }
+int __fastcall NativeJointCountStub(void* body,void*) {
+    return body==test_joint_body && test_joint_ptr ? 1 : 0;
+}
+void __fastcall NativeMoveLeaveStub(void*,void*,void*) {
+    test_move_leave_saw_restored=test_joint_ptr!=nullptr &&
+        ReadNative<float>(test_joint_ptr,0xE8)==0.07F &&
+        ReadNative<float>(test_joint_ptr,0xEC)==0.12F;
+    test_joint_ptr=nullptr; // Simulate native Move::Leave changing the links.
+}
+void __fastcall NativeBodyFloatStub(void*,void*,float) {}
+void __fastcall NativeBodyAwakeStub(void*,void*,bool) {}
+void* __fastcall NativeJointStub(void* body,void*,int index) {
+    return body==test_joint_body && index==0 ? test_joint_ptr : nullptr;
+}
+int __fastcall NativeSliderTypeStub(void*,void*) { return 2; }
 bool __fastcall NativeBefore(void*,void*,void* body) { return body!=nullptr; }
 bool __fastcall NativeIntersect(void* value,void*,void* body,void* raw) {
     auto& pick=*static_cast<TestPick*>(value);
     const auto& hit=*static_cast<RankedRayCallback::Hit*>(raw);
     void* entity=ReadNative<void*>(body,0x414);
-    // Independently mapped native solid/area arbitration, not VR ranking.
-    if(entity && ReadNative<int>(entity,0xC0)==13) {
+    // Model native callback area routing explicitly: 13 is a verified ladder
+    // type, while a level05 ScriptArea numeric type is not mapped yet.
+    if(body==test_script_area_body ||
+        (entity && ReadNative<int>(entity,0xC0)==13)) {
         if(hit.distance<pick.area_distance) {
             pick.area=body; pick.area_distance=hit.distance; pick.area_point=hit.point;
         }
@@ -71,7 +95,11 @@ void __fastcall NativeRay(void*,void*,void* callback,const TestVec* from,
     const bool head=(*from)[1]>=1.5F;
     if(head) { ++test_head_rays; test_last_from=*from; test_last_to=*to; }
     auto* table=ReadNative<TestPick::Table*>(callback,0);
-    for(const auto& hit:head ? test_head_hits : test_hand_hits) {
+    const bool offset=std::abs((*from)[0])>0.001F ||
+        std::abs((*from)[1]-0.8F)>0.001F;
+    const auto& hits=head ? test_head_hits :
+        test_separate_hand_rays && offset ? test_offset_hand_hits : test_hand_hits;
+    for(const auto& hit:hits) {
         if(!table->before(callback,hit.body)) continue;
         RankedRayCallback::Hit native_hit{};
         native_hit.distance=hit.distance; native_hit.point=hit.point;
@@ -213,6 +241,30 @@ bool SelectionCases() {
         std::cerr<<"Repeatable Examine cue lost against physical hand target\n"; return Failed(__LINE__);
     }
     Put(entity.data(),0x38,false);
+    // A native wall on the same hand ray must occlude a physical candidate,
+    // regardless of hit order. It must not mask another unobstructed ray.
+    test_head_hits.clear();
+    Put(foreground.data(),0,g_image+kPhysicsBodyVtableRva);
+    test_hand_hits={{hand_body.data(),0.20F,{0,0.8F,-0.20F}},
+                    {foreground.data(),0.10F,{0,0.8F,-0.10F}}};
+    for(const bool reversed:{false,true}) {
+        if(reversed) std::reverse(test_hand_hits.begin(),test_hand_hits.end());
+        RefreshVrSelectionBeforeInteract(player.data());
+        if(pick.body || g_vr_selection_player) {
+            std::cerr<<"Hand selected a physical body through foreground geometry\n";
+            return Failed(__LINE__);
+        }
+    }
+    test_separate_hand_rays=true;
+    test_offset_hand_hits={{body.data(),0.30F,{0,0.8F,-0.30F}}};
+    RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=body.data()) {
+        std::cerr<<"Occluded central ray masked an unobstructed finger ray\n";
+        return Failed(__LINE__);
+    }
+    test_separate_hand_rays=false; test_offset_hand_hits.clear();
+    test_hand_hits={{hand_body.data(),0.2F,{0,0.8F,-0.2F}}};
+    test_head_hits={{body.data(),1.8F,{0,1.7F,-1.8F}}};
     RefreshVrSelectionBeforeExamine(player.data());
     if(pick.body!=body.data() || g_vr_selection_player || ReadNative<void*>(player.data(),0x280)!=&pick) {
         std::cerr<<"Examine action did not refresh its own head target\n"; return Failed(__LINE__);
@@ -221,6 +273,63 @@ bool SelectionCases() {
     test_hand_hits.clear();
     RefreshVrSelectionBeforeInteract(player.data());
     if(pick.body || g_vr_selection_player) return Failed(__LINE__);
+    // Level05 generator/hatch/door buttons are authored script areas. Model
+    // their native callback route without inventing a Requiem entity type.
+    std::array<std::uint8_t,0x500> script_area{}, script_entity{};
+    Put(script_area.data(),0,g_image+0x271000);
+    Put(script_area.data(),0x414,static_cast<void*>(script_entity.data()));
+    Put(script_entity.data(),0x14,true);
+    Put(script_entity.data(),0xC0,0);
+    Put(script_entity.data(),0x37,true);
+    Put(script_entity.data(),0xBC,2.1F);
+    Put(script_entity.data(),0x10,static_cast<void*>(init.data()));
+    test_script_area_body=script_area.data();
+    test_head_hits.clear();
+    test_hand_hits={{script_area.data(),0.18F,{0,0.8F,-0.18F}}};
+    RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=script_area.data() || g_vr_selection_player!=player.data()) {
+        std::cerr<<"Native script-area button lost during VR hand selection\n";
+        return Failed(__LINE__);
+    }
+    test_hand_hits={{script_area.data(),0.18F,{0,0.8F,-0.18F}},
+                    {foreground.data(),0.10F,{0,0.8F,-0.10F}}};
+    RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body || g_vr_selection_player) {
+        std::cerr<<"Script-area button selected through nearer solid\n";
+        return Failed(__LINE__);
+    }
+    // An area in front of a regular pickable physical body must win through
+    // the native area arbitration even when the VR body ranker sees the body.
+    test_hand_hits={{hand_body.data(),0.28F,{0,0.8F,-0.28F}},
+                    {script_area.data(),0.18F,{0,0.8F,-0.18F}}};
+    RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=script_area.data()) return Failed(__LINE__);
+    test_hand_hits={{hand_body.data(),0.10F,{0,0.8F,-0.10F}},
+                    {script_area.data(),0.18F,{0,0.8F,-0.18F}}};
+    RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=hand_body.data()) return Failed(__LINE__);
+    // The production overlap fast path also uses native area arbitration.
+    // Compare the same native area result against nearby palm contact; a
+    // physical contact in front of the area must retain priority.
+    test_hand_hits={{script_area.data(),0.18F,{0,0.8F,-0.18F}},
+                    {hand_body.data(),0.28F,{0,0.8F,-0.28F}}};
+    const auto rays=InteractionRaySegments(runtime::IdentityMatrix(),2.1F);
+    NativePickResult candidate{};
+    if(!FindNativeHandArea(reinterpret_cast<Ray>(&NativeRay),nullptr,&pick,
+            rays,1U,true,false,true,false,2.1F,candidate) ||
+        !NativeAreaPrecedesPhysicalTarget(candidate,0.28F) ||
+        NativeAreaPrecedesPhysicalTarget(candidate,0.10F)) return Failed(__LINE__);
+    test_hand_hits={{hand_body.data(),0.10F,{0,0.8F,-0.10F}},
+                    {script_area.data(),0.18F,{0,0.8F,-0.18F}}};
+    if(FindNativeHandArea(reinterpret_cast<Ray>(&NativeRay),nullptr,&pick,
+            rays,1U,true,false,true,false,2.1F,candidate)) return Failed(__LINE__);
+    NativePickResult invalid{};
+    invalid.area=script_area.data(); invalid.body=hand_body.data();
+    invalid.area_distance=0.05F;
+    if(NativeAreaPrecedesPhysicalTarget(invalid,0.28F)) return Failed(__LINE__);
+    test_script_area_body=nullptr;
+    test_hand_hits.clear();
+    test_head_hits={{body.data(),1.8F,{0,1.7F,-1.8F}}};
     // Native Examine range and HasBeenExamined semantics remain authoritative.
     // RQ ADD10..ADD24 hides an examined cue only for descriptions marked once.
     Put(entity.data(),0x38,true); Put(entity.data(),0xB4,true); update();
@@ -274,6 +383,112 @@ bool SelectionCases() {
         ReadNative<void*>(g_image+kNormalVtableRva,4)!=g_image+kNormalUpdateRva) return Failed(__LINE__);
     return true;
 }
+bool SliderStickyCases() {
+    std::array<std::uint8_t,0x500> body{},parent{},joint{},replacement{};
+    Put(body.data(),0,g_image+kPhysicsBodyVtableRva);
+    Put(parent.data(),0,g_image+kPhysicsBodyVtableRva);
+    Put(parent.data(),0x434,0.0F);
+    Put(joint.data(),0,g_image+kSliderVtableRva);
+    Put(joint.data(),0x30,static_cast<void*>(body.data()));
+    Put(joint.data(),0x2C,static_cast<void*>(parent.data()));
+    Put(joint.data(),0xB8,TestVec{1,0,0});
+    Put(joint.data(),0xC4,TestVec{0,0,0});
+    Put(joint.data(),0xE8,0.07F);
+    Put(joint.data(),0xEC,0.12F);
+    Put(g_image+kSliderVtableRva,0x14,g_image+kSliderGetTypeRva);
+    JumpTo(kSliderGetTypeRva,reinterpret_cast<void*>(&NativeSliderTypeStub));
+    JumpTo(kGetJointCountRva,reinterpret_cast<void*>(&NativeJointCountStub));
+    JumpTo(kGetBodyJointRva,reinterpret_cast<void*>(&NativeJointStub));
+    test_joint_body=body.data(); test_joint_ptr=joint.data();
+    MoveHold hold{}; hold.body=body.data();
+    if(!BindNativeJoint(hold.body,hold) || hold.mode!=MoveMode::slider ||
+        hold.slider_joint!=joint.data()) return Failed(__LINE__);
+    if(!SuspendRequiemMoveSliderStickiness(hold) ||
+        !hold.slider_sticky_suspended ||
+        !Near(ReadNative<float>(joint.data(),0xE8),0.0F) ||
+        !Near(ReadNative<float>(joint.data(),0xEC),0.0F)) return Failed(__LINE__);
+    // Scripts that rewrite a distance during Move keep their new setting.
+    Put(joint.data(),0xEC,0.03F);
+    RestoreRequiemMoveSliderStickiness(hold);
+    if(!Near(ReadNative<float>(joint.data(),0xE8),0.07F) ||
+        !Near(ReadNative<float>(joint.data(),0xEC),0.03F)) return Failed(__LINE__);
+    // Recycled/unlinked joint pointers must not receive stale restoration.
+    Put(joint.data(),0xE8,0.0F);
+    test_joint_ptr=replacement.data();
+    RestoreRequiemMoveSliderStickiness(hold);
+    if(!Near(ReadNative<float>(joint.data(),0xE8),0.0F)) return Failed(__LINE__);
+    test_joint_ptr=joint.data();
+    Put(parent.data(),0x434,3.0F);
+    Put(joint.data(),0xE8,0.07F);
+    MoveHold moving_parent{}; moving_parent.body=body.data();
+    if(!BindNativeJoint(moving_parent.body,moving_parent) ||
+        !SuspendRequiemMoveSliderStickiness(moving_parent) ||
+        moving_parent.slider_sticky_suspended ||
+        !Near(ReadNative<float>(joint.data(),0xE8),0.07F)) return Failed(__LINE__);
+    Put(parent.data(),0x434,0.0F);
+    Put(joint.data(),0x30,static_cast<void*>(parent.data()));
+    MoveHold other_child{}; other_child.body=body.data();
+    other_child.mode=MoveMode::slider; other_child.slider_joint=joint.data();
+    if(!SuspendRequiemMoveSliderStickiness(other_child) ||
+        other_child.slider_sticky_suspended ||
+        !Near(ReadNative<float>(joint.data(),0xE8),0.07F)) return Failed(__LINE__);
+    // Release must restore the original sticky ranges before the native
+    // transition removes or changes the joint association.
+    Put(joint.data(),0x30,static_cast<void*>(body.data()));
+    Put(joint.data(),0xEC,0.12F);
+    test_joint_ptr=joint.data();
+    std::array<std::uint8_t,0x100> state{};
+    MoveHold releasing{};
+    releasing.body=body.data(); releasing.mode=MoveMode::slider;
+    releasing.slider_joint=joint.data(); releasing.state=state.data();
+    if(!SuspendRequiemMoveSliderStickiness(releasing) ||
+        !releasing.slider_sticky_suspended) return Failed(__LINE__);
+    {
+        ActiveCall game_callback;
+        g_move_hold=releasing;
+    }
+    JumpTo(kMoveTargets[2],reinterpret_cast<void*>(&NativeMoveLeaveStub));
+    JumpTo(0x19CAC0,reinterpret_cast<void*>(&NativeBodyFloatStub));
+    JumpTo(0x19CAE0,reinterpret_cast<void*>(&NativeBodyFloatStub));
+    JumpTo(0x19CBB0,reinterpret_cast<void*>(&NativeBodyAwakeStub));
+    Put(g_image,kMoveSlots[2],g_image+kMoveTargets[2]);
+    std::string removal_error;
+    if(!hooks::InstallPointerHook(
+            reinterpret_cast<void**>(g_image+kMoveSlots[2]),
+            g_image+kMoveTargets[2],reinterpret_cast<void*>(&HookedMoveLeave),
+            g_move_state_hooks[2],removal_error)) return Failed(__LINE__);
+    g_presenting.store(false); g_targets_destroyed.store(true);
+    bool removed=false;
+    std::thread control([&] {removed=RemoveRenderWorld(removal_error);});
+    control.join();
+    if(removed || removal_error.empty() || !g_move_state_hooks[2].installed() ||
+        !Near(ReadNative<float>(joint.data(),0xE8),0.0F)) {
+        std::cerr<<"Control-thread removal abandoned the game-thread slider hold\n";
+        return Failed(__LINE__);
+    }
+    HookedMoveLeave(state.data(),nullptr,nullptr);
+    if(!test_move_leave_saw_restored || g_move_hold.state!=nullptr ||
+        !Near(ReadNative<float>(joint.data(),0xE8),0.07F) ||
+        !Near(ReadNative<float>(joint.data(),0xEC),0.12F)) return Failed(__LINE__);
+    // An Enter may have published its native transition before its first
+    // Update commits a hold. All three pending families must retain Leave.
+    for(void** pending:{&g_pending_grab_state,&g_pending_move_state,&g_pending_push_state}) {
+        { ActiveCall game_callback; *pending=state.data(); }
+        std::thread pending_control([&] {removed=RemoveRenderWorld(removal_error);});
+        pending_control.join();
+        if(removed || !g_move_state_hooks[2].installed()) return Failed(__LINE__);
+        { ActiveCall game_callback; *pending=nullptr; }
+    }
+    {
+        ActiveCall in_flight;
+        std::thread callback_control([&] {removed=RemoveRenderWorld(removal_error);});
+        callback_control.join();
+        if(removed || !g_move_state_hooks[2].installed()) return Failed(__LINE__);
+    }
+    if(!RemoveRenderWorld(removal_error) || RenderHooksInstalled()) return Failed(__LINE__);
+    test_joint_ptr=nullptr; test_joint_body=nullptr;
+    return true;
+}
 }
 runtime::VrControllerFrame ReadNativeControllerFrame() noexcept { return test_frame; }
 bool NativeUiActive() noexcept { return test_ui; }
@@ -308,7 +523,7 @@ int main(int argc, char** argv) {
             fixture.Reset(); fixture.InvokeExamine();
             passed=passed && native_throw_fixture::Near(fixture.impulse_delta,{13,0,0});
         }
-    } else passed=SelectionCases();
+    } else passed=SelectionCases() && SliderStickyCases();
     VirtualFree(g_image,0,MEM_RELEASE);
     return passed ? 0 : 1;
 }

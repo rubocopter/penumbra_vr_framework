@@ -191,6 +191,7 @@ std::uintptr_t g_physical_move_resume = 0;
 std::atomic<bool> g_installed{false};
 std::atomic<unsigned> g_active_callbacks{0};
 std::atomic<bool> g_crouch_reset_requested{false};
+std::atomic<bool> g_turn_reset_requested{false};
 std::atomic<bool> g_native_ui_active{false};
 std::atomic<NativeUiSurface> g_native_ui_surface{NativeUiSurface::none};
 std::atomic<bool> g_native_pointer_observed{false};
@@ -329,12 +330,16 @@ void ServiceNativeVrCrouch(void* player, bool desired) noexcept {
     }
     if (transition != NativeCrouchTransition::none &&
         (resulting_state != move_state || g_stand_blocked != was_blocked)) {
+        // Native state assignment precedes the physical capsule change.
+        const float capsule_height = Read<float>(
+            Read<void*>(player, contract.character_body_offset),
+            contract.character_size_y_offset);
         probe::WriteLog(
-            "Requiem VR crouch request=%s state=%ld->%ld stand_blocked=%u",
+            "Requiem VR crouch request=%s state=%ld->%ld stand_blocked=%u capsule_y=%.3f",
             transition == NativeCrouchTransition::enter ? "enter" : "stand",
             static_cast<long>(move_state),
             static_cast<long>(resulting_state),
-            g_stand_blocked ? 1U : 0U);
+            g_stand_blocked ? 1U : 0U, capsule_height);
     }
 }
 
@@ -570,6 +575,7 @@ void __fastcall HookedCharacterUpdate(
     if (!tracked_character_body ||
         !std::isfinite(dt) || dt <= 0.0F || dt > 0.25F) {
         original(character_body, dt);
+        ServiceGameplayPalmShutdown();
         if (tracked_character_body)
             ServiceGameplayPalmResolver(g_image, character_body);
         return;
@@ -916,6 +922,9 @@ void __fastcall HookedSideways(
 
 void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     CallbackScope callback;
+    // This native owner still runs in menus and after input disconnect clears
+    // the tracked body. Teardown must not depend on a fresh gameplay sample.
+    ServiceGameplayPalmShutdown();
     InvalidatePendingLocomotion();
     ResetThreadDirectLocomotion();
 
@@ -980,6 +989,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     AcquireSRWLockShared(&g_settings_lock);
     const auto settings = g_settings;
     ReleaseSRWLockShared(&g_settings_lock);
+    if (g_turn_reset_requested.exchange(false, std::memory_order_acq_rel))
+        g_turn = {};
     const float turn = g_turn.Update(frame.input.state.turn,
         gameplay_active, settings.turn_mode, dt,
         settings.snap_turn_angle,
@@ -1329,6 +1340,7 @@ bool InstallGameplayBridge(std::string& error) noexcept {
     g_physical_move_resume = reinterpret_cast<std::uintptr_t>(
         g_image + contract.physical_move_owner_rva +
         contract.physical_move_owner_window.size());
+    if (!StartGameplayPalmResolver(error)) return false;
     if (!hooks::InstallRel32JumpHook(
             g_image + contract.physical_move_owner_rva,
             contract.physical_move_owner_window,
@@ -1450,6 +1462,9 @@ bool RemoveGameplayBridge(std::string& error) noexcept {
     g_installed.store(false, std::memory_order_release);
     ConnectGameplayInput(nullptr);
     InvalidatePendingLocomotion();
+    // Preserve the native service owner on timeout/failure. A later tick or
+    // repeated remove can complete destruction before any hook is detached.
+    if (!ShutdownGameplayPalmResolver(error)) return false;
     const bool ok = RemoveHookSet(error);
     const auto deadline = GetTickCount64() + 1000;
     while (g_active_callbacks.load(std::memory_order_acquire) != 0 &&
@@ -1470,9 +1485,10 @@ bool RemoveGameplayBridge(std::string& error) noexcept {
 void ConnectGameplayInput(runtime::OpenVrSession* session) noexcept {
     AcquireSRWLockExclusive(&g_session_lock);
     g_session = session;
+    if (session == nullptr)
+        g_turn_reset_requested.store(true, std::memory_order_release);
     ReleaseSRWLockExclusive(&g_session_lock);
     if (session == nullptr) {
-        g_turn = {};
         g_native_ui_active.store(false, std::memory_order_release);
         g_native_ui_surface.store(NativeUiSurface::none,
             std::memory_order_release);

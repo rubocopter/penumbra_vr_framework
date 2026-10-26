@@ -128,9 +128,16 @@ GameplayPalmResolverTelemetry g_gameplay_telemetry{};
 bool g_gameplay_request_sampled = false;
 std::atomic<GameplayPalmResolverRequestSource> g_gameplay_request_source{
     GameplayPalmResolverRequestSource::disabled};
-std::atomic<bool> g_gameplay_shutdown_requested{false};
-std::atomic<bool> g_gameplay_shutdown_complete{true};
-std::atomic<bool> g_gameplay_shutdown_succeeded{true};
+// Serializes publication/creation with the control thread's stop request.
+// Native resource access still belongs exclusively to the recorded owner.
+SRWLOCK g_gameplay_lifecycle_lock = SRWLOCK_INIT;
+bool g_gameplay_stopped = false;
+bool g_gameplay_shutdown_failed = false;
+DWORD g_gameplay_owner_thread = 0;
+struct GameplayPalmScope final {
+    GameplayPalmScope() noexcept { AcquireSRWLockExclusive(&g_gameplay_lifecycle_lock); }
+    ~GameplayPalmScope() { ReleaseSRWLockExclusive(&g_gameplay_lifecycle_lock); }
+};
 
 bool ReadBytes(const void* source, void* destination, std::size_t size) noexcept {
     if (source == nullptr || destination == nullptr) return false;
@@ -248,10 +255,10 @@ struct GameplaySnapshot {
     PalmResolverValidationTelemetry* telemetry) noexcept {
     if (owned_shape.shape == nullptr) return true;
     const auto owner = owned_shape;
-    owned_shape = {};
     if (!ValidWorld(owner.image, owner.world)) {
         // A destroyed world owns and tears down its shape list. Forget a stale
         // handle instead of writing through a dead world pointer.
+        owned_shape = {};
         return true;
     }
     __try {
@@ -261,6 +268,7 @@ struct GameplaySnapshot {
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
+    owned_shape = {};
     if (telemetry != nullptr) {
         telemetry->shape_destroyed = true;
         ++telemetry->destroy_count;
@@ -566,6 +574,29 @@ void ResetGameplayPalmStates() noexcept {
     g_gameplay_resolved_tracking_generation = {};
     g_gameplay_resolved_skip_body = {};
     InvalidateGameplayPalmPoses();
+}
+
+[[nodiscard]] bool GameplayPalmShapesRetired() noexcept {
+    return g_gameplay_palm_shape.shape == nullptr &&
+        g_gameplay_interaction_shape.shape == nullptr;
+}
+
+void ServiceGameplayPalmShutdownLocked() noexcept {
+    if (!g_gameplay_stopped ||
+        g_gameplay_owner_thread != GetCurrentThreadId()) return;
+    PalmResolverValidationTelemetry lifecycle{};
+    const bool interaction_destroyed = SafeDestroyOwnedPalmShape(
+        g_gameplay_interaction_shape, &lifecycle);
+    const bool collision_destroyed = SafeDestroyOwnedPalmShape(
+        g_gameplay_palm_shape, &lifecycle);
+    g_gameplay_shutdown_failed = !interaction_destroyed || !collision_destroyed;
+    g_gameplay_shape_active.store(false, std::memory_order_release);
+    ResetGameplayPalmStates();
+    g_gameplay_resolver_yaw_epoch = 0;
+    AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+    g_gameplay_telemetry.shape_destroys += lifecycle.destroy_count;
+    if (g_gameplay_shutdown_failed) ++g_gameplay_telemetry.query_failures;
+    ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
 }
 
 [[nodiscard]] runtime::VrHandResolverFrame GameplayResolverFrame(
@@ -1021,33 +1052,15 @@ void SetGameplayInteractionTargetProvider(
 void ServiceGameplayPalmResolver(
     std::uint8_t* image,
     void* character_body) noexcept {
-    if (g_gameplay_shutdown_requested.exchange(
-            false, std::memory_order_acq_rel)) {
-        PalmResolverValidationTelemetry lifecycle{};
-        const bool interaction_destroyed = SafeDestroyOwnedPalmShape(
-            g_gameplay_interaction_shape, &lifecycle);
-        const bool collision_destroyed = SafeDestroyOwnedPalmShape(
-            g_gameplay_palm_shape, &lifecycle);
-        const bool destroyed = interaction_destroyed && collision_destroyed;
-        g_gameplay_shape_active.store(false, std::memory_order_release);
-        ResetGameplayPalmStates();
-        g_gameplay_resolver_yaw_epoch = 0;
-        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
-        g_gameplay_telemetry.enabled = false;
-        g_gameplay_telemetry.shape_destroys += lifecycle.destroy_count;
-        if (!destroyed) ++g_gameplay_telemetry.query_failures;
-        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
-        g_gameplay_request_source.store(
-            GameplayPalmResolverRequestSource::disabled,
-            std::memory_order_release);
-        g_gameplay_request_sampled = true;
-        AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
-        g_gameplay_telemetry.source = GameplayPalmResolverRequestSource::disabled;
-        ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
-        g_gameplay_shutdown_succeeded.store(destroyed, std::memory_order_release);
-        g_gameplay_shutdown_complete.store(true, std::memory_order_release);
+    GameplayPalmScope lifecycle_scope;
+    if (g_gameplay_stopped) {
+        ServiceGameplayPalmShutdownLocked();
         return;
     }
+    if (image == nullptr || character_body == nullptr) return;
+    if (g_gameplay_owner_thread == 0)
+        g_gameplay_owner_thread = GetCurrentThreadId();
+    if (g_gameplay_owner_thread != GetCurrentThreadId()) return;
 
     if (!g_gameplay_request_sampled) {
         g_gameplay_request_source.store(
@@ -1338,27 +1351,52 @@ GameplayPalmResolverTelemetry ConsumeGameplayPalmResolverTelemetry() noexcept {
     return result;
 }
 
+bool StartGameplayPalmResolver(std::string& error) noexcept {
+    error.clear();
+    GameplayPalmScope lifecycle_scope;
+    if (!GameplayPalmShapesRetired()) {
+        error = "The previous gameplay palm shapes have not been retired";
+        return false;
+    }
+    g_gameplay_stopped = false;
+    g_gameplay_shutdown_failed = false;
+    g_gameplay_owner_thread = 0;
+    g_gameplay_request_sampled = false;
+    ResetGameplayPalmStates();
+    return true;
+}
+
+void ServiceGameplayPalmShutdown() noexcept {
+    GameplayPalmScope lifecycle_scope;
+    ServiceGameplayPalmShutdownLocked();
+}
+
 bool ShutdownGameplayPalmResolver(std::string& error) noexcept {
     error.clear();
-    InvalidateGameplayPalmPoses();
-    if (!g_gameplay_shape_active.load(std::memory_order_acquire)) {
-        return true;
-    }
-    g_gameplay_shutdown_complete.store(false, std::memory_order_release);
-    g_gameplay_shutdown_succeeded.store(false, std::memory_order_release);
-    g_gameplay_shutdown_requested.store(true, std::memory_order_release);
     const std::uint64_t deadline = GetTickCount64() + 1000;
     do {
-        if (g_gameplay_shutdown_complete.load(std::memory_order_acquire)) {
-            if (g_gameplay_shutdown_succeeded.load(std::memory_order_acquire)) {
-                return true;
+        {
+            GameplayPalmScope lifecycle_scope;
+            g_gameplay_stopped = true;
+            g_gameplay_request_sampled = true;
+            g_gameplay_request_source.store(
+                GameplayPalmResolverRequestSource::disabled,
+                std::memory_order_release);
+            InvalidateGameplayPalmPoses();
+            AcquireSRWLockExclusive(&g_gameplay_telemetry_lock);
+            g_gameplay_telemetry.enabled = false;
+            g_gameplay_telemetry.source = GameplayPalmResolverRequestSource::disabled;
+            ReleaseSRWLockExclusive(&g_gameplay_telemetry_lock);
+            ServiceGameplayPalmShutdownLocked();
+            if (GameplayPalmShapesRetired()) return true;
+            if (g_gameplay_shutdown_failed) {
+                error = "The gameplay palm shape could not be destroyed on the game thread";
+                return false;
             }
-            error = "The gameplay palm shape could not be destroyed on the game thread";
-            return false;
         }
         Sleep(1);
     } while (GetTickCount64() < deadline);
-    error = "The gameplay palm shape did not reach a current player-body tick for safe destruction";
+    error = "The gameplay palm shape did not reach its native owner for safe destruction";
     return false;
 }
 
