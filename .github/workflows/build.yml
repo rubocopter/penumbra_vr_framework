@@ -30,6 +30,10 @@ jobs:
     name: Windows x86 (without OpenVR SDK)
     runs-on: windows-2022
     timeout-minutes: 20
+    env:
+      # OpenAL's imported DLL reads its CRT environment before main(). Supply
+      # the real null backend at process startup on runners without audio.
+      ALSOFT_DRIVERS: 'null'
 
     steps:
       - name: Check out sources
