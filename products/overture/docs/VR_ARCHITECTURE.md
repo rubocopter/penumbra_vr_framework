@@ -3,9 +3,9 @@
 The VR rework keeps runtime tracking, world placement, player state, and
 gameplay interaction as separate concerns. World scale is always `1.0`.
 
-This document describes the current `master` branch. Dated validation results
-and known limitations belong in the [release history](RELEASES.md); upcoming
-work belongs in the [roadmap](ROADMAP.md).
+This document describes the Overture implementation integrated into Framework.
+Dated evidence belongs in [release history](RELEASES.md); the
+[Framework roadmap](../../../docs/ROADMAP.md) owns maintenance scope.
 
 ## Coordinate spaces
 
@@ -131,7 +131,7 @@ help, while barrels, loaded crates, and other heavy or breakable bodies are kept
 gentle. The visible hand may stop at scenery while this bounded assist still lets
 the player retrieve an item from a cramped shelf. The original global
 player-state machine limits the current implementation to one active grab;
-simultaneous and two-point holds remain future work.
+simultaneous and two-point holds are outside the current maintenance scope.
 
 When that bounded raw-controller extension is used, the contact target must be
 the first solid body reached from the collision-resolved palm. The very-short

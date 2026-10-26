@@ -1,239 +1,86 @@
 # Framework release status
 
-## Published state
+## Current public release — v1.0.11
 
-Penumbra VR Framework **v1.0.0 was published on 2026-09-29**. The published
-`PenumbraVR-Setup-1.0.0.exe` is the exact artifact recorded in
-[the installer acceptance record](releases/1.0.0-installer-ui-candidate.md),
-promoted unchanged so its automated and manual acceptance evidence remains tied
-to the distributed binary.
+**v1.0.11**, dated 2026-10-26, publishes the maintenance audit corrections:
+installer recovery/uninstall, Overture essential input/recenter and Requiem
+selection/interaction/resource lifecycle. It also includes the native level05
+ScriptArea and slider-endpoint adaptations. New behavior is **host-tested**;
+live/headset acceptance remains separate. See [release notes](releases/1.0.11.md).
 
-The maintainer repeatedly exercised real install/uninstall flows with that EXE
-and successfully entered Overture, Black Plague and Requiem. Automated fixtures
-cover topology A–F, repair/recovery, component transitions, all eight bundled
-controller profiles and exact restoration. These results are sufficient for the
-initial public release while remaining distinct from an independent clean-PC or
-full hardware/headset certification matrix.
+Framework host regressions pass in Release and Debug (77 tests each); the
+autonomous Overture product passes 298 checks. Installer fixtures cover current
+and legacy recovery journals, deleted preferences, path conflicts, language
+removal, rollback, verified ALUT restoration and Setup extraction. Exact final
+artifact identities and release-build checks are recorded separately when the
+clean committed source is packaged. Older headset evidence cannot be transferred
+automatically to the new version.
 
-Compile, host, live and headset evidence remain separate. Build identity and
-validation levels remain owned by [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
+The v1.0.0 installer, published 2026-09-29, had maintainer real installation,
+removal and game-entry acceptance across the trilogy and fixture validation
+of component ownership and restoration. The exact accepted artifact is
+identified in the [installer record](releases/1.0.0-installer-ui-candidate.md).
+This is not independent clean-PC or all-headset certification.
 
-## Current release — 1.0.10
+## Open problems and evidence boundaries
 
-Framework v1.0.10 addresses the reported Requiem level03 bottle throw and
-Examine/ladder selection difficulties. Native assisted throw uses the holding
-controller's aim; independent head selection preserves native admission,
-range and occlusion. Movement/jump behavior is unchanged. See [release notes](releases/1.0.10.md)
-and [capability evidence](TRILOGY_PARITY_PLAN.md).
+- **Requiem level04 sewer water/crouch:** unresolved. The diagnostic
+  samples native capsule height; there is no confirmed recovery correction.
+- **Requiem level05 buttons and filing cabinets:** v1.0.11 ScriptArea and
+  slider-endpoint corrections have targeted host evidence only. Actual
+  Quest 3 activation/progression and script behavior are unverified.
+- **Requiem level03 throw and Examine/ladder:** the v1.0.10 host correction
+  awaits headset usability and progression feedback.
+- **Requiem intermittent startup crash:** SDL mutex failure observed, root
+  cause and correction unknown. No speculative fix is warranted.
+- **Other known limits:** minor finger/contact intersection and monolith
+  resistance, incomplete broader interaction/effects coverage, Index finger
+  mismatch and other-controller physical validation.
+- **Deployment breadth:** local PS VR2 runtime and installer fixture results
+  are not full-playthrough, independent clean-PC or new-Setup headset acceptance.
 
-Production consumer regressions exercise selection, action refresh, native
-throw ordering/mass guards, gesture release and hook restoration with host
-fixtures and the shipped Newton DLL. Level03 completion and aiming/cue
-usability remain pending headset feedback. Public distribution continues under
-the maintainer's authorization; a host pass does not establish headset support.
-The [artifact validation record](releases/1.0.10-validation.json) pins clean
-build source `d491fca45dd2c9b2a019284198731455a79cf7b2`, all 68 Framework
-tests and 298 Overture checks, exact English/Spanish Setup extraction, isolated
-topology A-F and upgrade/repair/exact restoration from 1.0.9. Root tests ran
-before a documentation-only Overture release-history correction; packaging
-records that distinction and the release tag adds only documentation.
+[TRILOGY_PARITY_PLAN.md](TRILOGY_PARITY_PLAN.md) owns capability evidence;
+[VR_HEADSET_TEST_CHECKLIST.md](VR_HEADSET_TEST_CHECKLIST.md) owns acceptance
+steps; [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md) owns executable hashes.
+[ROADMAP.md](ROADMAP.md) owns the maintenance and release decision policy.
+A build or test cannot substitute for live or headset validation.
 
-## Historical release — 1.0.9
+## Distribution and installation
 
-Framework v1.0.9 publishes the Quest 3 feedback corrections for normal trilogy
-movement/jump, tracked BP/Requiem positional audio, uphill step advance and BP
-filing cabinets. See [release notes](releases/1.0.9.md) and [capability evidence](TRILOGY_PARITY_PLAN.md).
-The maintainer explicitly authorized public distribution to collect feedback.
+The unified installer recognizes supported game files, owns Overture separately
+from the shared Black Plague/Requiem root, verifies dependencies, distributes
+eight controller profiles and optional localization/settings, and supports
+transactional update, repair and exact original-file restoration. Host fixtures
+cover topology A–F, modified-file rejection, repair and component transitions.
+See [installer design](INSTALLER_DESIGN.md),
+[dependency audit](RUNTIME_DEPENDENCIES.md) and
+[source/notices](SOURCE-AND-NOTICES.md) for the authoritative contracts.
 
-The changed runtime paths have automated host evidence: 66 Framework tests,
-298 Overture checks, independent exact-build mapping and production-consumer
-regressions. Historical headset results do not validate these new binaries.
-The reported long-jump platform, perceived audio direction, affected surfaces
-and drawers remain pending in the [acceptance checklist](VR_HEADSET_TEST_CHECKLIST.md#trilogy-feedback-candidate--independent-acceptance).
-The public installer, matching committed source, dependency sources and checksums
-are built through the existing release workflow. The [artifact record](releases/1.0.9-validation.json)
-pins clean build source `8abb554ec3724c6bbf65deec81190fe28ee7e8f7`, the final
-English/Spanish standalone extraction, topology A-F and upgrade/repair/exact
-restoration from 1.0.8. Root tests ran before documentation-only version-reference
-corrections; package-only mode records that distinction, and Overture was
-built/tested by the product packager. The release tag adds documentation only.
-Requiem's intermittent startup
-root cause, other-controller limitations and independent clean-PC/headset
-acceptance remain open.
+### Independent clean-PC acceptance (still pending)
 
-## Historical release — 1.0.8
+| Scenario | Distinct installation risk | Independent PC |
+| --- | --- | --- |
+| A | Overture only and launcher restoration | Pending |
+| B | Black Plague only and shared-root ownership | Pending |
+| C | Black Plague + Requiem, one shared redist | Pending |
+| D | Overture + Black Plague, independent roots | Pending |
+| E | Entire trilogy, selective removal and retention | Pending |
+| F | Add components later in either order, repair/restore | Pending |
 
-Framework v1.0.8 packages focused Black Plague interaction/progression and text
-readability corrections. See [release notes](releases/1.0.8.md), the
-[changelog](CHANGELOG.md) and the scoped
-[maintainer acceptance record](releases/1.0.8-headset-acceptance.json).
-The accepted cases include reported barrel/lever/bucket behavior, PC reach and
-cursor/Accept, and centered enlarged Examine text. Earlier dog/altar and arm
-puzzle completion evidence remains scoped in the capability ledger.
+The maintainer's accepted real installations and host fixtures are separate
+evidence. A new acceptance record should pin the Setup and game hashes,
+Windows/GPU/dependencies, licensed Steam/manual target, components and
+configuration, manual Steam Play launch, VR input and relevant save/load or
+progression plus restoration. Do not infer one game's acceptance from another.
 
-The standalone installer and matching committed source are built and verified
-as a new versioned artifact set. Its [artifact validation record](releases/1.0.8-validation.json) records
-60 Framework tests, 298 Overture checks, English/Spanish standalone extraction,
-topology A-F and upgrade/repair/exact-restore checks from 1.0.7. The artifacts
-come from clean source commit `aef43546c8a88b5d20da1beebf490f65fba6fa80`;
-the release tag adds documentation only, including independently updated
-maintenance policy. These checks remain separate from accepted local runtime hashes. Exact
-new-Setup headset and independent clean-PC acceptance are not implied.
+## Historical releases
 
-Equipped-light menu visibility, flashlight attachment, broader articulated
-contact and physical-only/low-obstacle/leaning correction remain focused gates.
-The included motion-attribution and step-normal changes have host evidence;
-low-obstacle traversal is not declared fixed. Requiem's intermittent startup
-cause and other-device limitations remain unchanged.
-
-## Historical release — 1.0.7
-
-Framework v1.0.7 publishes BP/Requiem release-edge recovery, transient movement
-dead-zone preservation and analog-data guards, with Windows installer/diagnostics
-CI. See [release notes](releases/1.0.7.md) and the detailed [changelog](CHANGELOG.md).
-
-The maintainer accepted the installed local trilogy checklist on 2026-10-10.
-The [acceptance record](releases/1.0.7-headset-acceptance.json) identifies the
-tested runtime hashes, accepted menus/input/obstacle/visibility cases and
-conditional cases that have no separately identified device evidence. This
-closes those focused runtime gates without claiming full-game support or
-headset acceptance of the newly versioned Setup artifact. Successful Requiem
-startup feedback does not identify or fix its intermittent crash cause.
-
-The [1.0.7 validation record](releases/1.0.7-validation.json) pins the clean
-build source and exact Setup/source/report hashes, 59 Framework tests, 298
-Overture checks, final English/Spanish Setup smoke, A-F topology and upgrade
-from 1.0.6. The tag adds only provenance/status documentation to that build
-source. These verified artifacts are published unchanged with matching source.
-Build-report pending readiness fields remain build-time data; installed-local
-headset acceptance stays scoped to its separate record.
-
-## Historical release — 1.0.6
-
-Framework v1.0.6 includes the maintainer-accepted BP/Requiem feedback fixes,
-first-level English/Spanish VR Settings across the trilogy, and the host-tested
-BP mixed stick/HMD obstacle correction. See the [release notes](releases/1.0.6.md)
-and [preceding feedback acceptance](releases/1.0.6-feedback-acceptance.json).
-The accepted preceding binaries do not validate the new shared menu extraction,
-Overture/Requiem menu routes, mixed-obstacle correction or exact new installer.
-Requiem's intermittent startup failure remains unresolved.
-
-The [v1.0.6 validation record](releases/1.0.6-validation.json) pins the clean
-build source, exact artifact/PE hashes, 59 Framework tests, 298 Overture checks,
-English/Spanish final-EXE smoke, A-F topology and update from v1.0.5. The release
-tag adds provenance documentation and concurrent README landing/video updates
-to the build source; runtime/installer source is unchanged. The tested installer
-and source archive are published without rebuilding. Build-report pending
-headset/clean-PC fields remain historical build-time readiness data, separate
-from the maintainer's publication authorization and preceding feedback acceptance.
-
-## Historical consolidated release — 1.0.5
-
-Framework v1.0.5 consolidates the controller, Overture interaction/input,
-Black Plague Push/height/contact/pacing and installer improvements introduced
-after v1.0.0. See the concise [release notes](releases/1.0.5.md).
-The v1.0.1–v1.0.4 GitHub releases are superseded by this single update;
-their tags, committed implementation and scoped validation records remain
-historical evidence, not current downloads.
-
-The maintainer accepted Overture gameplay on the preceding local changes and
-completed the Black Plague tutorial without performance problems or freeze-related
-box drops. BP's corrected hand-nudge units are host-tested; collision recoil
-remains unresolved. The chemical-use shelf launch is native tutorial scripting.
-Prior gameplay feedback does not establish exact new-installer headset acceptance.
-The external Index reporter's finger mismatch remains non-blocking and unresolved.
-
-Historical v1.0.1 installation and Overture drawer/crank acceptance remain tied
-to their original artifact hashes in [the acceptance record](releases/1.0.1-acceptance.json).
-Subsequent host evidence remains in the versioned validation records.
-
-The [v1.0.5 validation record](releases/1.0.5-validation.json) identifies the exact
-installer/source hashes, clean build source, 57 Framework tests, 298 Overture
-checks, standalone English/Spanish Setup and topology A-F. Updates from v1.0.0
-and v1.0.4 pass with exact payload/default hashes, repair and restoration. The
-release tag adds provenance documents to the build source; the tested artifacts
-are published unchanged. Build-time pending headset/clean-machine fields remain
-historical readiness data, separate from the maintainer's publication decision.
-
-## Remaining validation and release limitations
-
-- Requiem's intermittent startup crash remains unresolved and unattributed. Do
-  not claim reliable launch across all systems, hook SDL or modify gameplay
-  speculatively without new discriminating evidence.
-- The finite clean-machine matrix below remains useful post-release coverage;
-  it was not completed on an independent PC before v1.0.0 publication.
-- The installed trilogy checklist is accepted at its recorded hashes. Broader
-  progression, device-specific conditional cases and exact new-Setup headset
-  acceptance remain separate from that focused runtime result.
-- Non-Sense controller families remain bundled compatibility profiles without
-  personal hardware acceptance; their action omissions stay documented.
-
-Only reproducible crashes, inability to launch VR, installation/dependency/input
-failures, broken save/load/progression, incorrect files or blocking configuration,
-destructive repair/uninstall and undocumented machine dependencies block v1.0.
-
-## Implemented host gates
-
-The [published single-EXE acceptance record](releases/1.0.0-installer-ui-candidate.md) identifies
-the tested artifact/source commit, checksums, toolchain and passed A–F fixtures.
-
-The 1.0.0 release supplies manifest-based Steam/manual discovery, essential
-game-content/local x86 dependency checks, all-root install preflight, optional
-packs/settings, independent O and shared B/R transactions, R-layer removal,
-repair/recovery and passive final verification. Targeted settings restoration
-preserves subsequent user edits. Diagnostics are bounded and redacted.
-Release identity, pinned upstream sources/notices, a standalone Setup EXE and matching Source ZIP
-and checksum/build-report generation are implemented. The automated fixtures
-cover component transitions, tamper/conflict rejection, repair and exact restore;
-they use synthetic runtime/content fixtures and do not establish independent
-clean-machine or headset coverage. [SOURCE-AND-NOTICES.md](SOURCE-AND-NOTICES.md) distinguishes fixed-input
-archive determinism from unproven full binary reproducibility.
-
-## Known issues
-
-- Slight finger/contact intersection, resistant Requiem monolith rings and
-  accidental stacked-block displacement in observed sequences.
-- The focused Black Plague physical-contact mini-hop correction and local
-  wall/step regression are accepted. Broader collision recoil/comfort coverage
-  remains open; investigate only a new reproducible case.
-- Non-Sense hardware lacks personal validation. Vive defaults omit several
-  essential binary-backend actions; WMR defaults omit holster/skeleton outputs.
-  Exact coverage/status remains in
-  [the controller ledger](TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
-
-## Post-1.0 / optional improvements
-
-Hand/material polish, mechanism comfort, enhanced visuals, richer audio policy,
-broader effects/device coverage and general refactoring are optional follow-up
-work. They do not block v1.0 unless a concrete failure meets the definition above.
-Incomplete/unverified controller families retain honest limited status; they
-must not receive a universal essential-input support claim.
-
-## Post-release clean-install acceptance matrix
-
-Every row remains **pending on an independent clean machine**. The published EXE
-has maintainer real-install acceptance and automated topology coverage; this
-table tracks broader deployment evidence rather than publication status.
-
-| Scenario | Selected components | Detection/install/verification | Manual launch/VR/input/interaction/save-load | Repair/reinstall/uninstall |
-| --- | --- | --- | --- | --- |
-| A: Overture only | O plus required shared files | Pending | Pending | Pending |
-| B: Black Plague only | B plus required shared files | Pending | Pending | Pending |
-| C: Black Plague + Requiem | B + R layer, shared files once | Pending | Pending in both games | Pending |
-| D: Overture + Black Plague | Two independent roots | Pending | Pending in both games | Remove one, verify other |
-| E: complete trilogy | O root and B/R shared root | Pending | Pending in all games | Remove one root, verify other |
-| F: add later | O then B/R; B then R; B/R then O | Pending | Pending in new game | Preserve existing target |
-
-Use licensed, clean, recognized Steam files and fresh Windows without developer
-dependencies. Record Windows/GPU, release hash, components, executable hashes
-and dependency results. Include a non-system-drive Steam library and manual
-folder selection. Apply only documented configuration, start SteamVR, then
-**launch manually** through normal Steam Play. Reach gameplay, check stereo/
-tracking, movement, essential UI/interaction and one save/load where applicable.
-Representative deployment sanity suffices; do not repeat complete playthroughs.
-
-Include locked/interrupted writes, unknown modifications, damaged owned files,
-repeat repair/reinstall and exact restore with saves/custom settings preserved.
-Keep installation-file verification separate from headset readiness and gameplay
-results. Record the actual release tested; older headset evidence does not
-automatically validate a newer package.
+Historical changes and individual version notes are retained in
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases](releases/1.0.11.md).
+The [2026-10-10 installed-trilogy acceptance](releases/1.0.7-headset-acceptance.json)
+and [v1.0.8 BP focused acceptance](releases/1.0.8-headset-acceptance.json)
+retain their scoped hashes. Each version's validation JSON records its clean
+source and exact artifacts. v1.0.1–v1.0.4 are superseded by v1.0.5;
+their historical tags and records remain available. The
+[release preparation audit](RELEASE_PREPARATION_AUDIT.md) is a historical
+pre-v1.0.0 snapshot, not the current installer backlog.

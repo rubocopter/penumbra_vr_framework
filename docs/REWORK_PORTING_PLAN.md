@@ -396,6 +396,30 @@ BP/Requiem follow-up; the exact hashes and acceptance scope are recorded in
 `releases/1.0.7-headset-acceptance.json`. Version 1.0.7 publishes this hardening;
 synthetic invalid-data tests and other devices remain separate evidence.
 
+## Overture input consumer follow-through
+
+The v1.0.11 Overture consumer reconstructs individually inactive digital
+bindings' releases from the preceding held state, matching the shared-router
+improvement above. Rework's interaction is an OR of the two triggers; a second
+trigger previously changed the input owner while Grab retained its acquisition
+hand. The consumer now retains that hand until the logical hold ends, so pose
+loss and cancellation monitor the same owner as native interaction.
+
+Rework's `VRHelper::TraceUIPointer` can use the other tracked hand when the
+preferred hand is unavailable. Input and geometry now consume one physical-hand
+selector, including mirrored UI action sets and legacy buttons. A hand change
+ends the old pointer's hold and requires release before the new hand can press;
+focus/context suppression remains authoritative. This is an adaptation of
+Overture's OpenVR source interface, not a new shared action or binding profile.
+
+Rework's ButtonHandler recenters orientation directly even outside gameplay.
+The source integration retains that body-independent path and publishes the
+latest head pose before input when a player update is paused. It does not consume
+the motion baseline during ordinary input synchronization. Host tests compile
+the actual input, pointer and source-integration consumers and cover both hands,
+binding loss, focus recovery, bodyless/pause recenter and subsequent movement.
+New headset acceptance is still required for this candidate.
+
 ## Native menu and mixed-step adaptation
 
 Rework `23c890f` owns its VR options in source-native menu widgets. Framework

@@ -233,8 +233,9 @@ SteamVR calls to gameplay code.
 finger independently; other devices synthesize a staggered closing sequence
 from grip and trigger. A soft dead zone and exponential smoothing are applied
 before rotation-only poses are written to the rig bones. The current mesh and
-pose limits are presentation concerns tracked in the [roadmap](ROADMAP.md), not
-part of the runtime input contract.
+pose limits are presentation concerns, not an active feature commitment or
+part of the runtime input contract. See the
+[Framework maintenance policy](../../../docs/ROADMAP.md).
 
 ## Hand interaction state
 

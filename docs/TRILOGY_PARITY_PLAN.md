@@ -60,6 +60,27 @@ installed executable matches the candidate build hash. This validates the
 observed acquisition/gameplay sequence, including visibility-before-ranking;
 it does not certify every Overture mechanism or Quest 3 pointer alignment.
 
+## Input and lifecycle audit corrections — v1.0.11
+
+Overture's actual source consumers have host regressions for stable interaction
+hand ownership, individual binding releases, a shared UI pointer/button hand and
+current-pose recenter in menu/pause containers. The reference/difference contract
+is recorded in `REWORK_PORTING_PLAN.md`.
+
+Requiem's physical hand-ray ranking now retains native occlusion independently
+per ray: a foreground solid blocks its ray without discarding an unobstructed
+finger ray. Both hit orders are covered by actual-consumer tests. Control-thread
+shutdown retains the native Leave owners until pending/committed Grab, Move and
+Push interactions drain on the game thread. Palm-shape destruction likewise
+requires its native owner; timeout or destroy failure retains a retryable partial
+state and the servicing gameplay hooks. Menu/player-less update service and
+explicit reinstallation have host regressions. Turn reset is requested atomically
+and consumed only by the native update owner.
+
+These corrections ship in v1.0.11 and are implemented and host-tested. They do not transfer the
+previously installed artifacts' live/headset acceptance to this candidate or
+close the progression, water, aiming, contact or startup-crash gates below.
+
 ## Requiem progression feedback — v1.0.10 host evidence
 
 Caelus reports on Quest 3 that walking/jumping now work correctly; audio seems
@@ -92,6 +113,46 @@ the shipped Newton DLL, preserving native transition/reset/impulse ordering,
 mass profiles, CanBeThrown and off-center impulse behavior. Reaching the
 level03 trigger and perceived aiming/cue usability remain headset gates.
 Exact mappings and evidence windows are in Requiem's manifest.
+
+### Requiem level04/05 progression feedback — 2026-10-25
+
+Caelus reports that crouching in level04 sewer water can leave the player
+walking on the bottom, unable to rise by standing or jumping; level05
+generator/hatch/door script buttons have very narrow or missing interaction
+targets, even when a cue appears; filing-cabinet sliders resist opening.
+This is reported Quest 3 behavior without a pinned installed artifact/hash.
+
+The v1.0.11 Requiem adapter keeps its native `A5000` clear,
+`A5D50` solid/area resolve, original ray eligibility/occlusion and native
+action callbacks when selecting level05 script areas. The hand-ray selection
+also checks native script areas before an overlapping physical palm contact
+can short-circuit the query. Host consumer tests exercise foreground solids,
+nearer/farther areas and the overlap-priority decision. Level05 callbacks
+in the installed `level05.hps` target `genbutton`, `hatchbutton` and
+`doorbutton`. Their numeric Requiem entity subtype is still unverified;
+the synthetic fixture models callback area routing explicitly.
+
+For Requiem filing cabinets the host candidate temporarily suspends the
+native slider's `+E8/+EC` sticky endpoint distances only while a VR-owned
+`Move=2` child of a static parent is held, then restores unchanged zeroed
+values on release if the original joint is still linked. Native limits,
+constraint ownership and script overrides remain authoritative. Slider
+host tests cover ownership, dynamic parents, override, stale joints and
+restoration before native `Move::Leave` can modify its joint links.
+
+The water issue remains an **unresolved investigation**, not a fixed feature.
+Rework's liquid force depends on the submerged character-body cylinder and
+its current capsule height. Requiem's `9CBA0` move-state switch writes the
+requested state index before calling `9AE00` for the transition; checking
+the index alone does not establish that the physics capsule has expanded or
+that buoyancy is sufficient. The level04 script changes water height and
+configures `water01` through `SetupLiquidArea`. Neither a vertical VR impulse
+nor altered gravity is justified by existing evidence. Level04 rise/stand,
+level05 repeated button activation and drawer endpoints remain independent
+headset validation gates for v1.0.11. The existing native
+crouch-transition log now also samples the active capsule height (`capsule_y`,
+exact-build `character_size_y_offset`) to distinguish a changed state index
+from an actual physical resize during that focused run.
 
 ## Previous feedback corrections — v1.0.9 host evidence
 
@@ -201,7 +262,7 @@ headset acceptance remains pending. Vive/WMR
 compatibility exceptions are retained and documented. These source changes
 follow the published v1.0.2 and do not retroactively change that artifact.
 
-The unreleased offline follow-up aligns BP's native Push axis-force dispatch
+The v1.0.6 follow-up aligns BP's native Push axis-force dispatch
 with HMD-relative body intent using the projection already consumed by Requiem.
 BP-owned captured axes and callback slots are exact-image verified; actual
 dispatch, native rejection and non-Push behavior are host-tested. The representative tutorial crate received local headset acceptance; broader
@@ -687,7 +748,7 @@ result and supplied a headset image showing the beam at the housing edge.
 Earlier slight finger intersection remains a known limitation unless new
 headset evidence establishes otherwise.
 
-The unreleased feedback candidate also addresses three Requiem reports without
+The v1.0.6 feedback update also addresses three Requiem reports without
 changing its exact-build ownership boundaries. Native pointer activity now
 classifies otherwise-unidentified fullscreen UI so death/continue screens can
 use the shared tracked pointer path. Post-character-update publication refreshes

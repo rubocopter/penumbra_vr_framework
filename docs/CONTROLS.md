@@ -20,7 +20,11 @@ This is the Framework quick reference for the bundled right-handed PS VR2 Sense 
 
 Aim the dominant-hand controller at menus or inventory. R2 selects, R3 supplies the alternate/drag action, and Circle supplies back/context actions. Release a button before pressing it again to close a screen it just opened. Holster an equipped tool before using Interact to target world objects.
 
-Physical movement and crouching use headset tracking. Overture and Black Plague expose turn, handedness, height and crouch choices through their VR settings. Requiem currently uses development defaults; do not assume it has the same settings UI. See [VR configuration](VR_CONFIGURATION.md).
+Physical movement and crouching use headset tracking. All three games expose
+their applicable turn, height and crouch choices through VR Settings.
+Requiem's shared profile options and height calibration have scoped local
+headset acceptance, not general controller or current-release validation.
+See [VR configuration](VR_CONFIGURATION.md).
 
 ## Other controllers and custom bindings
 

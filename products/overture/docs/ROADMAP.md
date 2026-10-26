@@ -1,84 +1,26 @@
-# Roadmap
+# Overture — historical roadmap and maintenance boundary
 
-The rework is intentionally incremental. Every phase should leave a testable build so regressions can be attributed to a small set of changes.
+This is the Framework-owned Overture product. The historical v0.1.0
+standalone release and its experiments remain documented in
+[RELEASE-v0.1.0.md](RELEASE-v0.1.0.md),
+[VALIDATION-v0.1.0.md](VALIDATION-v0.1.0.md) and
+[RELEASES.md](RELEASES.md). Technical research stays in
+[LIGHTING.md](LIGHTING.md), [TEXTURES.md](TEXTURES.md) and
+[INPUT_ARCHITECTURE.md](INPUT_ARCHITECTURE.md).
 
-## Current focus
+## Current state
 
-- Hand-rig polish — thumb behaviour, fused ring/middle mesh, finger splay, and any remaining item-specific calibration
-- Two-hand interaction — simultaneous object ownership and optional two-point constraints for large props
-- Map-wide mechanism validation — unusual doors, wheels, levers, ladders, and constrained props beyond the opening area
-- Controller coverage — hardware testing beyond PS VR2 Sense and follow-up on early Index feedback
-- Performance — CPU/GPU profiling and sensible defaults for modern headset resolutions
-- Graphics evaluation — stable v4 and the 231-image bounded-resolution batch passed a positive grouped PS VR2 run. Preserve that baseline; full-campaign memory peaks, matched GPU timings and the asymmetric right-eye resolve remain profiling work, not reasons to add untested effects
+Overture ships inside the Penumbra VR Framework. The intended trilogy feature
+set is complete; only scoped fixes for reproducible blocking failures remain
+active. The [Framework roadmap](../../../docs/ROADMAP.md) owns current
+maintenance policy, [trilogy parity](../../../docs/TRILOGY_PARITY_PLAN.md)
+owns per-game evidence and
+[supported builds](../../../docs/SUPPORTED_BUILDS.md) owns exact releases.
 
-## Post-stable follow-up
+The older proposals for OpenXR, two-hand interactions, hand-model replacement,
+ambient effects, new audio features and universal controller certification
+are historical exploration, not planned development.
 
-`v0.1.0` freezes the positively tested visual/texture baseline. The
-[validation record](VALIDATION-v0.1.0.md) covers six distinct maps and a clean
-17-minute PS VR2 session, not an exhaustive campaign or hardware certification.
-Future changes belong under **Unreleased**; never move an existing release tag.
-
-Keep follow-up work focused:
-
-1. Preserve v4 as the visual baseline, with Enhanced visuals Off by default and
-   the original renderer/fallback intact. Do not reopen the discarded SSAO test.
-2. Do not expand the texture batch by default. Retain its budget, source credits,
-   protected VR assets and tested upgrade/texture-only rollback.
-3. When profiling, collect matched fixed-scene On/Off timings and process-memory
-   peaks across later campaign transitions. Separate GPU elapsed queries from
-   compositor timing; investigate right-eye resolve asymmetry without claiming
-   the existing logs isolate its cause.
-4. Track legacy content warnings and initial tracking/height calibration
-   separately from rendering regressions. Broaden real-device testing before
-   describing additional controller families as hardware-validated.
-
-## Next
-
-- Decide whether the current hand asset can support a convincing thumb wrap or should be replaced
-- Validate Index, Touch, Pico, WMR, and Vive profiles on real hardware
-- Refine notebook, ladder, door, and held-object interactions for tracked controllers
-- Design a two-hand state model without breaking the original single-state interaction callbacks
-- Prototype an OpenXR backend behind the existing runtime boundary and compare it with the SteamVR path
-
-## Future
-
-- Make OpenXR the default only after feature parity and regression testing
-- Replace or substantially rework the hand asset if independent ring/middle motion, thumb wrap, and finger splay cannot be achieved with the current mesh
-- Per-zone or map-driven reverb environments on top of the global mine preset
-- Custom HRTF dataset selection alongside the OpenAL Soft built-in set
-
-## Completed
-
-- SteamVR Input abstraction with device-independent actions and legacy fallback
-- PS VR2 Sense support and hardware testing — gameplay, UI, haptics, bindings
-- Room-scale VR — TrackingToWorld boundary, recenter, snap/smooth/disabled turn
-- Persistent VR settings — in-game editor under Options → VR Settings
-- Physical, button, and hybrid crouch with standing-height calibration
-- Room-anchored menus & cinematics with scalable subtitles (no letterboxing)
-- Compositor-safe black loading frames for all map transitions
-- Reversible installer — manifest-owned sync, backup/restore, Steam launch retention
-- Spanish localization for VR tutorial, menus, controller notes
-- Controller profiles for Index, Touch, Pico, WMR, Vive (bundled, unvalidated)
-- Input resilience — 500 ms dropout bridging, legacy movement from strongest axis
-- Graphics presets (Performance/Balanced/Quality) and render scale setting
-- Equipped objects in hand — geometry-calibrated grip points, radius-driven finger curl, per-item twist, with melee and throwing preserved
-- Left-handed mirror — fully mirrored action sets, equipment slots, notebook on off hand
-- Bare off-hand targeting and grabbing on PS VR2 Sense
-- Collision-constrained visible hands — swept approximate hand volume, surface sliding, bounded visual lag, and independent tracking-loss recovery
-- Interaction-aware hand contact — full-size palm collision, separate translation/rotation sweeps, refined surface sliding, bounded target contact skin, and body-side recovery for load/hinge/ceiling overlaps without crossing barriers
-- Adaptive hand nudge for physics props, inventory pickups, hinges, and sliders; stronger for small/light objects and restrained for heavy or breakable props
-- Joint-aware VR mechanisms — actual driven joint selection, circular hinge drag, slider projection, easier hatches/lockers, inserted-lever forwarding, and locked-door axis retention
-- Low-ceiling crouch constraint — full-height collider retry with automatic restoration of the physical/button/hybrid requested stance
-- Assisted hand-aim acquisition for visible inventory pickups, with distance/angle ranking, controller-plus-head occlusion, per-hand haptic feedback, and an isolated blue object-to-middle-finger world cue
-- Low-latency VR audio listener — OpenAL orientation/position built from fresh head tracking data each update instead of the previous render's camera matrix
-- Spatial-audio chain on bundled OpenAL Soft 1.25.2: binaural HRTF toggle (Auto/Headphones/Off), global mine-gallery reverb, occlusion muffling through per-source low-pass filters, and distance treble absorption
-- Startup crash hardening — legacy sound-updater thread force-disabled on upgraded installs, typed on-demand EFX filters, eye-framebuffer completeness checks with half-size retries
-- Automatic crash reporting — minidump plus exception line written by the game itself, no event-viewer archaeology needed
-- Environment fingerprinting in `hpl.log` — Windows build, RAM and free process address space, real GPU/driver, audio devices
-- Stale-binding diagnostics for dead sticks with the documented one-time SteamVR reset
-- Generated controller bindings — single declarative spec in `scripts/generate-bindings.ps1` with build-time drift enforcement
-- Unit tests for tracking space, stick dead zones, VR hand-collision policy, high-speed wall/closed-door blocking, contact rotation, and constrained recovery executed by every build
-- CI pipeline building and packaging Release Win32 on every push, PR, and tag
-- VR Settings accessibility layout — two columns keep every option and the Back button within the cursor's 800×600 selectable area
-- HPL1 lighting audit and minimal half-resolution SSAO feasibility test — depth/stencil sampling, per-eye reconstruction, ambient-only composition and GPU timing were validated; the experiment was then fully removed because its roughly 0.46 ms stereo cost produced negligible visible benefit
-- Enhanced-ambient feasibility A/B — dedicated BaseLight `RenderZ()` shaders established a hot, monitor-isolated alternative path; two headset tests found the ambient-only result too subtle, so it is now one component of the broader Enhanced visuals comparison rather than a standalone proposal
+Retain the accepted visuals/texture baseline and credits. Reopen profiling,
+rendering or input only for a concrete regression with an exact device/build
+reproduction. Host tests do not imply new headset acceptance.

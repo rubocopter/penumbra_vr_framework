@@ -145,7 +145,7 @@ preflight and out-of-range numeric values are clamped.
 
 Requiem's recommended game-level profile is versioned in
 `assets/settings/recommended.json`. The active Requiem backend consumes common
-VR input, tracking and locomotion policy. The current development probe also
+VR input, tracking and locomotion policy. The binary backend also
 loads the shared `%LOCALAPPDATA%\PenumbraVR\settings.ini` profile and consumes
 `TurnMode`, `SnapTurnAngle`, `SmoothTurnSpeed`, `TurnDeadZone`,
 `CrouchMode`, `PhysicalCrouchDepth`, `PlayMode`, `PlayerHeight` and
@@ -158,8 +158,8 @@ shared profile and refresh the gameplay/presentation snapshots live. Save
 failures roll back the edit. The maintainer accepted the new page, live edits,
 calibration and persistence on the installed local build. The profile's installer `vr` value remains `null`:
 there is still no headset-validated Requiem-specific preset to install. The
-exact current capability and headset gate are recorded in `ROADMAP.md` and
-`TRILOGY_PARITY_PLAN.md`.
+exact current capability and headset evidence are recorded in
+`TRILOGY_PARITY_PLAN.md`; focused unresolved work is in `ROADMAP.md`.
 
 ## Installer policy
 

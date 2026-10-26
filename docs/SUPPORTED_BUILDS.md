@@ -44,6 +44,14 @@ completion and new-build headset usability remain pending. The favorable Quest 3
 movement report and partial audio observation have no exact installed hash and
 do not promote unrelated capabilities or this new candidate.
 
+The **v1.0.11** Requiem adapter addresses the reported level05
+ScriptArea button selection and filing-cabinet slider endpoints at the native
+adapter boundary. Targeted consumer tests pass, but level05 headset progression
+remains unverified. The level04 sewer water/crouch case is **unresolved**:
+the shipped diagnostic records the physical capsule height for diagnosis;
+it does not implement or validate a rise/recovery fix. No supported-build
+status is inferred from publication or these pending headset checks.
+
 The 2026-10-23 trilogy feedback candidate changes normal movement/jump,
 binary-host tracked audio and ascent, and BP sticky filing-cabinet interaction.
 Its new evidence is host-only; it does not inherit historical binary acceptance

@@ -1,11 +1,39 @@
 # Trilogy headset regression checklist
 
-This is the trilogy release-regression checklist; the detailed gates below
-provide broader Black Plague coverage. The current work
-order is recorded in `ROADMAP.md`; the capability/evidence boundary is in
+This is the trilogy headset-regression checklist. The current **focused**
+Requiem level04/05 procedure is under
+[Trilogy feedback candidate](#trilogy-feedback-candidate--independent-acceptance);
+the general gates below provide broader historical regression coverage and
+are not a request to repeat them. The active maintenance cases are in
+`ROADMAP.md`; the capability/evidence boundary is in
 `TRILOGY_PARITY_PLAN.md`. Historical session chronology is intentionally
 omitted. Do not repeat a closed reverse-engineering milestone unless new
 evidence contradicts it.
+
+## v1.0.11 maintenance audit — independent acceptance
+
+These new runtime corrections have host evidence only. Record the exact
+installed executable/probe hashes and controller family before testing:
+
+- Overture: acquire a prop with either hand, press the second trigger, then
+  release or lose tracking on the acquiring hand. Ownership/cancellation must
+  follow that hand without an unintended second acquisition.
+- Overture UI: lose the preferred hand while using the other tracked pointer.
+  Confirm selection/drag use the visible pointer; changing hands ends an old
+  drag and requires a fresh press. Include focus recovery and an inactive binding.
+- Overture: recenter from the initial menu and pause after moving/turning the
+  head. Check current orientation, preserved height and ordinary movement after
+  returning to play.
+- Requiem: try a hand target behind a foreground solid and another reachable
+  target along an unobstructed finger ray. Include native level05 button/cabinet
+  cases under the focused procedure linked above.
+- Requiem: exercise tracking/input loss and normal shutdown while Grab, Move
+  and Push own an object, including a drawer at an endpoint. Native ownership
+  must restore without leaving modified sticky ranges or a hung shutdown.
+
+Do not mark level04 water recovery or the SDL startup crash fixed from these
+checks. Exact Setup transaction evidence is recorded separately from headset
+acceptance; automated install/uninstall fixtures do not constitute a live test.
 
 ## Before the headset session
 
@@ -41,15 +69,17 @@ does not close either without evidence specific to that issue.
    .\tools\Test-PenumbraVrMetadata.ps1
    ```
 
-2. Validate the target executable with `tools\Get-PenumbraBuildInfo.ps1`. Use
-   only the allowlisted Black Plague build from `SUPPORTED_BUILDS.md`.
-3. Install the current normal-Steam candidate with
-   `Install-Black-Plague-VR.cmd` / `tools\Install-BlackPlagueSteamBootstrap.ps1`.
+2. Validate each target executable with `tools\Get-PenumbraBuildInfo.ps1` and
+   compare its identity with the allowlist in `SUPPORTED_BUILDS.md`.
+3. Install the exact versioned unified Framework release with its Setup EXE,
+   or deploy an explicitly identified local development candidate only in a
+   controlled test installation. Record the installed artifact and hashes.
 4. Confirm the deploy contains the payload declared in
    `assets/deployment/manifest.json`: bootstrap/probe DLLs, `openvr_api.dll`,
    action/binding assets, Rework hand texture, Spanish localization and the
    managed HRTF configuration boundary.
-5. Start SteamVR and launch Black Plague from Steam's normal **Play** button.
+5. Start SteamVR and launch the game being tested from Steam's normal
+   **Play** button.
 
 Use focused validation helpers only when their extra telemetry is required.
 Normal gameplay validation should exercise the production path.
@@ -296,6 +326,17 @@ new throw/selection candidate.
   native admission and occlusion must still reject those cases.
 
 ## Trilogy feedback candidate — independent acceptance
+
+For the 2026-10-25 Requiem report, one focused Quest 3/Link run on the
+candidate with version/hash recorded should check: level04 sewer water at the
+orb and battery, including crouch, release/stand and jump after reaching the
+bottom; level05 generator, hatch and door buttons with several consecutive
+activations, including a nearby solid obstruction; and a filing cabinet from
+both slider endpoints, releasing and regrabbing without losing normal script
+behavior. Record whether the character capsule actually resumes full standing
+height and whether the native Interact cue corresponds to a successful press.
+Water recovery is investigative, not an accepted correction. Do not infer a
+pass for one mechanism from another or from host-only consumer tests.
 
 Run these checks on each changed game/build; record the exact candidate hashes,
 Quest 3 connection/audio route and active SteamVR bindings. Host tests do not

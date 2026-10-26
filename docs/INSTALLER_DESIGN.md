@@ -278,6 +278,21 @@ English fallback over a later valid language selection. Original absent-language
 preferences remain recorded for conditional restoration; no configuration
 folder, savegame or calibration is deleted.
 
+Uninstall skips preference files the user has deleted. A directory or reparse
+point at a recorded configuration path remains a conflict and fails preflight.
+When uninstall removes an owned translation without an original backup, it
+checks both default and personal settings, including files with no earlier
+configuration changes. A selection of that removed translation falls back to
+the game's verified bundled English file; other later selections stay intact.
+These additional settings participate in the same snapshot/rollback transaction.
+
+Discovery recognizes current 22-entry shared-redist recovery journals, including
+the final `PenumbraVR_OpenALSoft.dll` target, and the recorded legacy shapes.
+Entry order, kinds, paths, snapshots and hashes remain validated. Restore rejects
+a non-file ALUT destination and verifies the copied original's hash before
+retiring its backup. These paths have isolated filesystem fixture evidence;
+new installer/headset acceptance remains separate.
+
 Integrate GUI recovery and preview what explicit repair replaces. Preserve
 SteamVR custom bindings and expose conflicts. Log version, plan, dependencies,
 files/config, backups, failures/rollback and verification without debug spam.

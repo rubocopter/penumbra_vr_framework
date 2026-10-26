@@ -1,5 +1,16 @@
 # Release history
 
+## v1.0.11 — Input ownership, UI and recenter maintenance (2026-10-26)
+
+Interaction retains its acquiring hand across a second trigger press. Inactive
+bindings emit release edges; alternate UI pointer geometry and buttons use the
+same physical hand, with safe drag cancellation on a hand switch. Menu recenter
+works without a player body and pause recenter uses the current head pose.
+Installer restoration and extraction fixes are shared with the trilogy package.
+Actual input/pointer/source consumers and the full Release product are host-tested;
+new headset acceptance remains pending. See the
+[Framework notes](../../../docs/releases/1.0.11.md).
+
 ## v1.0.10 — Requiem maintenance and coordinated packaging (2026-10-25)
 
 Overture receives the coordinated 1.0.10 executable/package identity with no

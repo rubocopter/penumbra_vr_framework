@@ -2,7 +2,7 @@
 
 A community-made PCVR rework that brings **Penumbra: Overture** to full room-scale VR with motion-controlled hands, physical interactions, and a complete spatial-audio chain built for horror.
 
-> Framework product — current release: **v1.0.10** (Requiem maintenance update; Overture behavior unchanged). You must own **Penumbra: Overture** on Steam; the original game is not included.
+> Framework product — current release: **v1.0.11** (Overture input and trilogy maintenance fixes; new headset acceptance pending). You must own **Penumbra: Overture** on Steam; the original game is not included.
 
 This directory contains the Framework-owned Overture product derived from the accepted Rework baseline. For the current trilogy/framework state, see the root [README](../../README.md), [ROADMAP](../../docs/ROADMAP.md), [trilogy parity plan](../../docs/TRILOGY_PARITY_PLAN.md), and [supported builds](../../docs/SUPPORTED_BUILDS.md).
 
@@ -41,7 +41,7 @@ Penumbra is about what you hear coming. This rework rebuilds the entire acoustic
 The installer adds the mod to an existing retail installation. You must own
 Penumbra: Overture; the original game is not included.
 
-1. Download [PenumbraVR-Setup-1.0.10.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.10/PenumbraVR-Setup-1.0.10.exe).
+1. Download [PenumbraVR-Setup-1.0.11.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.11/PenumbraVR-Setup-1.0.11.exe).
 2. Close the games, run the installer and select **Overture**. It detects the Steam installation and backs up replaced files.
 3. Start SteamVR, then launch **Penumbra: Overture** with Steam's normal **Play** button.
 
@@ -86,7 +86,7 @@ Off retains the original renderer,
 but does not undo installed texture replacements. The release also
 contains the two-column VR settings layout, flashlight alignment fix and the
 grouped texture selection above. See the [validation record](docs/VALIDATION-v0.1.0.md)
-and [remaining work](docs/ROADMAP.md#post-stable-follow-up).
+and [historical validation and maintenance policy](docs/ROADMAP.md).
 
 ## Documentation
 
@@ -97,7 +97,7 @@ and [remaining work](docs/ROADMAP.md#post-stable-follow-up).
 - [Texture selection](docs/TEXTURES.md) — release allowlist, exclusions, memory budget and rollback
 - [Stable validation](docs/VALIDATION-v0.1.0.md) — tested installation, session timings, recoverable warnings and evidence limits
 - [Input architecture](docs/INPUT_ARCHITECTURE.md) — input flow and the engine/game boundary
-- [Roadmap](docs/ROADMAP.md) — current priorities and future work
+- [Roadmap](docs/ROADMAP.md) — historical milestones and current maintenance scope
 - [Release history](docs/RELEASES.md) — changes and known limitations by version
 
 ## About

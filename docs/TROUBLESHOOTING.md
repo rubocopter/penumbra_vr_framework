@@ -1,12 +1,12 @@
 # Troubleshooting
 
-This guide covers the public **Penumbra VR Framework v1.0.5** installer and the current main-branch support documentation. Installation steps live in the root [README](../README.md#installation); recognized build identities live in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
+This guide covers the public **Penumbra VR Framework v1.0.11** installer and current maintenance documentation. Installation steps live in the root [README](../README.md#install); recognized builds in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
-The 1.0.5 installer shows **Preparing installation / Preparando la
+The installer shows **Preparing installation / Preparando la
 instalación** while files are extracted and verified, then an animated waiting
 dialog during checks and changes. The window keeps responding while these run;
-wait for the final result before launching a game. Published 1.0.0 retains its
-older startup/Apply interface.
+wait for the final result before launching a game. Historical releases can
+have different interfaces; use a matching versioned installer for maintenance.
 
 ## Game detection and dependencies
 
@@ -23,7 +23,7 @@ If the game launches flat, check that the release installation completed for tha
 
 If controllers track but an action is missing, inspect the active SteamVR binding for that game/controller. Repair restores owned bundled defaults; saved SteamVR custom mappings remain separate. Vive/WMR layouts have documented omissions, and only Sense has physical-device evidence. See [controls](CONTROLS.md) and the [controller ledger](TRILOGY_PARITY_PLAN.md#controller-profiles-and-distribution).
 
-For Valve Index, v1.0.5 retains the corrected thumbstick paths and removes
+For Valve Index, the bundled defaults retain the v1.0.5 thumbstick correction and remove
 overlapping defaults. After
 updating, reselect the bundled default in SteamVR for each game if an older
 binding is still active. To retain a custom layout, bind **Move** and **Turn**
@@ -43,9 +43,19 @@ For performance, begin with [recommended configuration](VR_CONFIGURATION.md) and
 
 Requiem's intermittent startup crash remains unresolved. If it occurs, capture the affected build identity and available logs/dump. A successful retry does not establish that the defect is fixed.
 
+Requiem has further **unresolved progression reports**: crouching in level04
+sewer water can prevent returning to the surface; level05 generator, hatch
+and door buttons can be hard to activate, and filing cabinets can resist
+opening. v1.0.11 includes host-tested button/slider corrections, with actual
+headset progression still unverified; the water cause remains open. Record the
+level/objective, steps, version and build hash. See the
+[focused maintenance gates](ROADMAP.md#current-maintenance-gates).
+
 ## Repair, recovery and removal
 
-Close the affected games before every installer operation. Reopen the same **PenumbraVR-Setup-1.0.5.exe** used for the release installation.
+Close the affected games before every installer operation. For v1.0.11, use
+**PenumbraVR-Setup-1.0.11.exe**. For older installations, use the matching
+versioned installer or a documented supported update path.
 
 Use the **Maintenance / Mantenimiento** tab for installed roots:
 

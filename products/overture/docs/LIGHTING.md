@@ -762,7 +762,7 @@ For the office-feedback v4 revision:
   frozen for `v0.1.0`; [validation](VALIDATION-v0.1.0.md) records the actual
   coverage, 1.07% session reprojection, asymmetric resolve timings and absence
   of a matched On/Off or peak-memory benchmark. Follow-up work is tracked in
-  [ROADMAP](ROADMAP.md#post-stable-follow-up).
+  [ROADMAP](ROADMAP.md).
 
 Relevant code entry points:
 

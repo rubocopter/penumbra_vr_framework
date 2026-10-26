@@ -5,6 +5,26 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.11 — 2026-10-26
+
+- Recognize current interrupted-install journals and safely restore deleted
+  preferences; reject directory/junction conflicts and verify ALUT before
+  retiring its backup. Keep selected languages usable when uninstall removes
+  an owned translation, preserving custom preferences and rollback.
+- Keep Overture's acquiring interaction hand stable, reconstruct individual
+  binding releases, align alternate UI pointer geometry/buttons and use the
+  current head pose for body-independent menu/pause recenter.
+- Preserve native occlusion independently for Requiem hand rays; drain native
+  interaction ownership and destroy palm shapes on their owning game thread
+  before removing hooks. Reset turn state only on the native update owner.
+- Include native level05 ScriptArea arbitration and bounded suspension/restoration
+  of held drawer endpoint stickiness. Add physical capsule-height diagnostics
+  for the unresolved level04 water report; no buoyancy/gravity workaround.
+- Fix Setup extraction with trailing destination separators and the Overture
+  stale-package error. Add actual-consumer and filesystem regressions.
+- Publish all current maintenance changes with host evidence. New headset,
+  level03/05 progression, water recovery and SDL-crash acceptance remain open.
+
 ## 1.0.10 — 2026-10-25
 
 - Correct Requiem's assisted Grab throw to follow the holding controller aim,
