@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.11",
+  "validatedOn": "2026-10-26",
+  "releaseTag": "v1.0.11",
+  "buildSourceCommit": "a19afa98adb4b51aa332935121c26c790deaeb48",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.11",
+  "publicationAuthorizedByMaintainer": true,
+  "publicationPurpose": "Publish all reviewed maintenance fixes and current local changes with explicit host-only evidence; collect focused game/headset feedback",
+  "releaseTagAddsOnlyDocumentationToBuildSource": true,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "bytes": 5343,
+      "sha256": "05C21B223492C1DF2729CC763B49C1731EE5C39FAD913B731E4DF682D6044CFD"
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.11.exe",
+      "bytes": 193182872,
+      "sha256": "77E63018EC2F2A661571A6705868B8A497C50988A9719E023250B3685DDDC93F"
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.11.zip",
+      "bytes": 82148641,
+      "sha256": "91EA0C4590A5DC15F2C48767D0B160AC1B40532A57B443DE0AAFD38F8A734A83"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 276,
+      "sha256": "3FE901D3E2597CB7CF2DE00C00224DB7C1B3AABF4D3D32DF654736B8DDD19951"
+    }
+  ],
+  "pe": [
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.11",
+      "sha256": "666B835D013E60145DAC41C73A8AA773F8BE06678468ED5B6F18AFC14A948DC6",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll",
+        "USER32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.11",
+      "sha256": "22D6D5A0375F60EBEFCA8C34BADB62F2F3E25728647D89480F7F65C339AA16D1",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.11",
+      "sha256": "A47B298D26E4110264CE34A022DAB3181C8506B42D1592F4449CFE5D46AC38AE",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.Requiem.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.11",
+      "sha256": "E3D17E9AF749A2721977EDF2DD050D717F95118BB164B2D74171F379DE1A0145",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.LaaTransform.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.11",
+      "sha256": "44ECE053D4BECB16096A0B3903AB69257E7D65726F4CF09E0734E190E6001789",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "products/overture/build/bin/Release/Penumbra_vr.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.11",
+      "sha256": "F5EC48877A34ECBCFA4C32A949B175B30B08CBE36D6D82171921F19D6BE29CFF",
+      "imports": [
+        "alut.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "cg.dll",
+        "cgGL.dll",
+        "GLU32.dll",
+        "KERNEL32.dll",
+        "libvorbisfile.dll",
+        "MSVCP140.dll",
+        "Newton.dll",
+        "OpenAL32.dll",
+        "OPENGL32.dll",
+        "openvr_api.dll",
+        "SDL_image.dll",
+        "SDL_ttf.dll",
+        "SDL.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "VCRUNTIME140.dll"
+      ],
+      "delayImports": []
+    }
+  ],
+  "validation": {
+    "frameworkReleaseHostTests": {
+      "passed": 77,
+      "failed": 0,
+      "testedSourceCommit": "a19afa98adb4b51aa332935121c26c790deaeb48",
+      "mode": "Full release builder configured, built and tested root Release in the same invocation"
+    },
+    "frameworkDebugHostTests": {
+      "passed": 77,
+      "failed": 0,
+      "testedSourceCommit": "a19afa98adb4b51aa332935121c26c790deaeb48",
+      "mode": "Debug build and complete CTest suite on the same clean committed source"
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0,
+      "configuration": "Release|Win32",
+      "mode": "Product builder during release packaging; versioned executable and LAA verified"
+    },
+    "installerSourceFixtures": "Configuration, prerequisites, release identity, UI routing, bounded/redacted diagnostics passed",
+    "standaloneSetup": "Exact final EXE passed en/es embedded extraction and cleanup with shared .NET runtime lookup disabled, trailing-separator extraction and embedded GUI contract",
+    "topology": "A-F isolated install/verify/repair/component transitions/shared-root deduplication/exact restore passed",
+    "upgradeFrom1.0.10": "Overture and shared BP/Requiem payloads, eight bindings, repair, verification and exact original restoration passed in isolated roots",
+    "uninstallSafety": "20 cases passed: absent preferences, directory/junction conflicts, selected/recorded/custom/original languages, missing English, late failure rollback, ALUT destination conflict and silent-copy corruption",
+    "recovery": "Current 22-entry and legacy journals, malformed snapshots and actual interrupted install/LAA-upgrade/restore recovery passed during audit correction verification",
+    "releasePackaging": "PE identity/imports/hashes, matching committed source, pinned upstream sources/notices, outer checksums and developer/private payload exclusions passed",
+    "publicationLint": "0 failures; missing top-level README warning resolved by embedded package/source READMEs, notices and public release notes; established four-artifact layout retained",
+    "review": "Actual-consumer and filesystem regressions plus direct final diff/ownership review. Additional independent subagent review unavailable because of usage limits.",
+    "currentReleaseLiveAcceptance": "not performed",
+    "currentReleaseHeadsetAcceptance": "not performed; no acceptance transferred from historical artifacts",
+    "cleanMachineAcceptance": "pending"
+  },
+  "knownOpenGates": [
+    "Requiem level04 water/crouch rise recovery: cause unproven; capsule-height diagnostics only",
+    "Requiem level05 repeated button activation and drawer endpoints: host-tested, headset progression unverified",
+    "Requiem level03 bottle progression and throw/Examine/ladder usability: independent headset feedback pending",
+    "Requiem intermittent SDL mutex startup crash: cause and correction unresolved",
+    "Overture current input/UI/recenter changes and Requiem cleanup: fresh live/headset acceptance pending",
+    "Other controller families, broader progression and independent clean-PC coverage remain incomplete"
+  ]
+}

@@ -11,10 +11,13 @@ live/headset acceptance remains separate. See [release notes](releases/1.0.11.md
 Framework host regressions pass in Release and Debug (77 tests each); the
 autonomous Overture product passes 298 checks. Installer fixtures cover current
 and legacy recovery journals, deleted preferences, path conflicts, language
-removal, rollback, verified ALUT restoration and Setup extraction. Exact final
-artifact identities and release-build checks are recorded separately when the
-clean committed source is packaged. Older headset evidence cannot be transferred
-automatically to the new version.
+removal, rollback, verified ALUT restoration and Setup extraction. The
+[v1.0.11 validation record](releases/1.0.11-validation.json) pins the clean build
+source, all four artifacts and six shipped x86 PE identities. Exact final Setup
+checks cover English/Spanish extraction, destination separators, topologies A–F
+and upgrade/repair/exact restore from v1.0.10. The release tag adds documentation
+over that build source; the packaged source commit remains explicit. Older
+headset evidence cannot be transferred automatically to the new version.
 
 The v1.0.0 installer, published 2026-09-29, had maintainer real installation,
 removal and game-entry acceptance across the trilogy and fixture validation
