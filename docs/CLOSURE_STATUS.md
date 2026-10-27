@@ -19,6 +19,13 @@ tag adds documentation over that build source; the packaged source commit
 remains explicit. Older headset evidence cannot be transferred automatically
 to the new version.
 
+The [v1.0.12 validation record](releases/1.0.12-validation.json) identifies the
+exact published artifacts. Final Setup checks passed English/Spanish extraction,
+trailing destination separators, isolated topologies A-F and upgrade/repair/
+verification/exact restoration from v1.0.11. No installed game was modified and
+no game was launched as part of this release validation. Hosted source CI also
+passed installer, SDK-less Windows Debug/Release and Overture Release jobs.
+
 The v1.0.0 installer, published 2026-09-29, had maintainer real installation,
 removal and game-entry acceptance across the trilogy and fixture validation
 of component ownership and restoration. The exact accepted artifact is

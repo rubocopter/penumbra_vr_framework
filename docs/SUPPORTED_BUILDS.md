@@ -23,6 +23,7 @@ release.
 | Framework-owned Overture v1.0.9 | x86, LAA | `B09623DFFB7FE32926DCC99C0DBE072822A21E692908568F1265E6206806426D` | Public feedback update; 298 product checks, 66 Framework tests and exact installer topology/1.0.8 upgrade checks pass; new live/headset acceptance pending; see [artifact record](releases/1.0.9-validation.json) |
 | Framework-owned Overture v1.0.10 | x86, LAA | `418B6A4CC8E3B4BC2139582B2E452FEFF87D8A487E0832B7C55BB629D1474DD7` | Coordinated Requiem maintenance packaging; Overture gameplay unchanged from 1.0.9; see [artifact record](releases/1.0.10-validation.json) |
 | Framework-owned Overture v1.0.11 | x86, LAA | `F5EC48877A34ECBCFA4C32A949B175B30B08CBE36D6D82171921F19D6BE29CFF` | Input ownership/release, alternate UI pointer and menu/pause recenter corrections; 298 product checks and 77 Framework tests pass; current runtime/Setup headset acceptance pending; see [artifact record](releases/1.0.11-validation.json) |
+| Framework-owned Overture v1.0.12 | x86, LAA | `32DA5B1D8AC294CEEDCE37A3FC6FD69714C1DB481B625255FD6094FAC8206ABE` | Shared hinge COM correction; 298 product checks and 78 Framework tests pass in each configuration; developer has not tested this version in-game or in a headset; see [artifact record](releases/1.0.12-validation.json) |
 | Black Plague Steam canonical build | x86 PE32 | `FD316F7586737A63EBA989ECE2271280FE6A98582A1319FE2151385A3DF97BFF` | Allowlisted active backend; substantial live/headset evidence, incomplete support |
 | Black Plague verified LAA transform | x86 PE32, LAA | `DB086CC7A4C7B10864DE0FEBBE2D71A3E4EFF1EC8D067811A6A59EDC1C617196` | Exact transformed variant; installer path host-tested, no headset validation |
 | Requiem Steam canonical build | x86 PE32 | `B64232D751CEE376E1384CFE5A4A81DBD7DEDDF03983CC11D0D0A34D5825EEA2` | Active exact-build backend; representative interaction, first transition, portal refraction and final flashlight alignment headset-validated; broader regression open |
@@ -38,6 +39,12 @@ Use these states consistently:
 `planned` → `implemented` → `host-tested` → `live-tested` → `headset-validated` → `supported`
 
 Current product-level evidence:
+
+Framework **v1.0.12** publishes the current controller-throw, hinge COM and
+native-area selection corrections with host evidence only. The developer has
+not tested this version in-game or in a VR headset; actual progression and
+mechanism direction/stability remain open. Exact runtime/artifact identities
+are in [the validation record](releases/1.0.12-validation.json).
 
 The subsequent Requiem throw/selection correction is independently mapped and
 host-tested only. Native assisted throw now uses the holding controller's aim;
