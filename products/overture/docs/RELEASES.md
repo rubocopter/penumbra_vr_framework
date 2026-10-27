@@ -1,5 +1,13 @@
 # Release history
 
+## v1.0.13 — Coordinated maintenance candidate (2026-10-27)
+
+Overture receives the coordinated 1.0.13 executable/package identity without
+gameplay changes. New orb pickup and keypad GUI corrections belong to Requiem
+level08 and remain pending headset validation; level completion is not claimed.
+The developer has not tested this version in-game or in a VR headset. See the
+[Framework notes](../../../docs/releases/1.0.13.md).
+
 ## v1.0.12 — Hinge interaction maintenance (2026-10-27)
 
 Consume the proven Black Plague hinge centre-of-mass velocity correction from
