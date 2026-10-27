@@ -1,0 +1,194 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.13",
+  "validatedOn": "2026-10-27",
+  "releaseTag": "v1.0.13",
+  "buildSourceCommit": "f2e18481a1999a8830c0c7f67e05e24ba32585ba",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.13",
+  "prerelease": true,
+  "publicationAuthorizedByMaintainer": true,
+  "setupBuildSdk": {
+    "version": "9.0.317",
+    "name": "dotnet-sdk-win-x64.zip",
+    "rid": "win-x64",
+    "url": "https://builds.dotnet.microsoft.com/dotnet/Sdk/9.0.317/dotnet-sdk-9.0.317-win-x64.zip",
+    "hash": "9d2206253b14bdad493e08b5d843d5da1bd534f66d7a43ca1ac4fed31fd11721f5f7bfc8fa79cc3ba0370a705a0c4e7226c1ce214489d239a55580d864e9e43a"
+  },
+  "publicationPurpose": "Publish the consolidated maintenance candidate after final installer and package/hash checks. Both level08 corrections remain pending headset validation; level completion is not demonstrated; developer has not tested this version in-game or in a VR headset.",
+  "releaseTagAddsOnlyDocumentationToBuildSource": true,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "bytes": 5343,
+      "sha256": "8613256AB20AB09F8EA0094C8BD615F920A92C9CC99569D85610D33C9BB87412"
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.13.exe",
+      "bytes": 193195160,
+      "sha256": "D38A97CE03DD4DF0BB5F028601AC6F25BB1E36E878A257B590395B6D43FB33D7"
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.13.zip",
+      "bytes": 82185331,
+      "sha256": "56E25770C4CC2A5319ECACD4BF09F31BB04BAC5D5DDED3612E6FEC33BADA5ADF"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 276,
+      "sha256": "A81ED9CCD13E27F19DF774210F256401063245B614397BB89CF83B259CAEB336"
+    }
+  ],
+  "setupIdentity": {
+    "ProductVersion": "1.0.13+f2e18481a1999a8830c0c7f67e05e24ba32585ba",
+    "FileVersion": "1.0.13.0"
+  },
+  "pe": [
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.13",
+      "sha256": "DD1161C3AE4450335598F42A9B64BD0C51CD73DE895EC163739BEA18FF9232F5",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll",
+        "USER32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.13",
+      "sha256": "2A4E1AD7B7998648E71629828A9B68B42741195C6B6882E86DCD9798603A0C0A",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.13",
+      "sha256": "063BD148A5AB419A3A41B71B80DF0FC4C76AAF93928738A92062DA700177C9EE",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.Requiem.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.13",
+      "sha256": "470545D009EE27DB710E18E371EBFDCE5E96474D37F6E4ABAC91ECD01B6EB396",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.LaaTransform.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.13",
+      "sha256": "BE8048BDE7149E7CF845FA71A17B9D663D106793AF2999F8FC9E810E3C434B0B",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "products/overture/build/bin/Release/Penumbra_vr.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.13",
+      "sha256": "4E507E8A4E322D38DB613935AEB60B08775035D9E1DC04984AE37E28ABC76A9B",
+      "imports": [
+        "alut.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "cg.dll",
+        "cgGL.dll",
+        "GLU32.dll",
+        "KERNEL32.dll",
+        "libvorbisfile.dll",
+        "MSVCP140.dll",
+        "Newton.dll",
+        "OpenAL32.dll",
+        "OPENGL32.dll",
+        "openvr_api.dll",
+        "SDL_image.dll",
+        "SDL_ttf.dll",
+        "SDL.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "VCRUNTIME140.dll"
+      ],
+      "delayImports": []
+    }
+  ],
+  "validation": {
+    "frameworkReleaseHostTests": {
+      "passed": 79,
+      "failed": 0,
+      "testedSourceCommit": "f2e18481a1999a8830c0c7f67e05e24ba32585ba",
+      "mode": "Release builder configured, built and ran the complete root suite in this invocation"
+    },
+    "frameworkDebugHostTests": {
+      "passed": 79,
+      "failed": 0,
+      "testedSourceCommit": "c7aafadf40366d3e5b330cc69a8999bb464e10f1",
+      "mode": "Local Debug build and complete CTest suite; build source differs only by Overture README and release history. Hosted CI also tests buildSourceCommit."
+    },
+    "overtureHostChecks": {
+      "passed": 298,
+      "failed": 0,
+      "configuration": "Release|Win32",
+      "mode": "Product build/checks during release packaging; version and LAA verified"
+    },
+    "installerSourceFixtures": "Configuration, prerequisites, release identity, UI routing and bounded/redacted diagnostics passed",
+    "standaloneSetup": "Exact final EXE passed en/es embedded extraction/cleanup with shared .NET runtime lookup disabled; trailing-separator extraction and embedded GUI contract passed",
+    "topology": "A-F isolated install/verify/repair/component transitions/shared-root deduplication/exact restore passed; no installed game modified",
+    "upgradeFrom1.0.12": "Exact previous/public and new Setup payloads: Overture and shared BP/Requiem upgrade, eight bindings, repair, verification and original restoration passed in isolated roots",
+    "uninstallSafety": "20 isolated cases passed, including deleted preferences, languages, conflicts, rollback and ALUT restoration",
+    "releasePackaging": "Final EXE complete embedded manifest and six packaged PE hashes match the build report; source ZIP matches every committed file plus two pinned upstream archives; outer checksums, versions/imports, notices and payload exclusions passed",
+    "publicationLint": "0 failures; top-level README warning resolved by included package/source READMEs, notices and English public notes; habitual four-artifact layout retained",
+    "interactionReview": "Independent review completed; UI back focus-loss finding reproduced then corrected. Protected throwing/mechanism functions unchanged.",
+    "hostedCi": {
+      "url": "https://github.com/rubocopter/penumbra_vr_framework/actions/runs/40571506121",
+      "sourceCommit": "f2e18481a1999a8830c0c7f67e05e24ba32585ba",
+      "conclusion": "success",
+      "jobs": [
+        "Overture Release regression",
+        "Windows x86 (without OpenVR SDK)",
+        "Installer and diagnostics fixtures (no game binaries)"
+      ],
+      "scope": "Installer fixtures, SDK-less Windows Debug/Release and Overture Release; hosted root job excludes real-driver opengl_eye_targets, which passed locally"
+    },
+    "currentReleaseLiveAcceptance": "not performed; native consumer boundaries use characterized fixtures; no level scripts executed",
+    "currentReleaseHeadsetAcceptance": "pending for both level08 changes; developer has not tested this candidate; earlier Caelus sphere/lever feedback has no installed hash and is not transferred",
+    "cleanMachineAcceptance": "pending"
+  },
+  "knownOpenGates": [
+    "Level08 key0801 acquisition and corresponding progression: headset validation pending",
+    "Level08 keypad visibility, controller operation, validation/cancel and return to gameplay: headset validation pending",
+    "Level08 completion has not been demonstrated",
+    "Scoped earlier positive sphere/lever feedback is preserved; broader mechanism and other puzzle acceptance remain separate",
+    "Level04 water/crouch recovery and intermittent SDL startup crash have no confirmed fix",
+    "Other hardware, broader progression and independent clean-PC acceptance remain incomplete"
+  ]
+}

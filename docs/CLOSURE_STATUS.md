@@ -15,6 +15,14 @@ results do not establish actual gameplay or independent clean-PC acceptance.
 Matching committed source, dependency sources, provenance and checksums accompany
 the candidate. Previous headset evidence does not transfer to this build.
 
+The [artifact record](releases/1.0.13-validation.json) pins four final files,
+the exact clean build commit and six shipped x86 PE identities. The final Setup
+passed bilingual standalone extraction, embedded payload hashes, topology A-F,
+upgrade from v1.0.12, repair and exact restoration in isolated roots. The source
+ZIP matches every file of the build commit and its pinned upstream inputs.
+Hosted CI passed on that build source. The release tag adds only documentation.
+No installed game was modified and no game was launched during validation.
+
 The v1.0.0 installer, published 2026-09-29, had maintainer real installation,
 removal and game-entry acceptance across the trilogy and fixture validation
 of component ownership and restoration. The exact accepted artifact is
