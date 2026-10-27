@@ -82,7 +82,21 @@ namespace {
         return false;
     }
     const auto invalid = PlanSlider({1.0F, 0.0F, 0.0F}, {});
-    return !invalid.valid;
+    if (invalid.valid) return false;
+    // Z rotation by +90 degrees maps local COM (.2,.4,0) to (-.4,.2,0).
+    // A -0.5 rad/s turn requires COM velocity (.1,.2,0), while the
+    // model origin at the pivot remains stationary. Translation is excluded.
+    const std::array<float,16> pose{0,-1,0,7, 1,0,0,8, 0,0,1,9, 0,0,0,1};
+    auto offset = PlanHinge({0,-0.02F,0},{0,0,1},{7,8,9},{7.4F,8,9},{7,8,9},1);
+    if (!CorrectHingeMassCentreVelocity(pose,{0.2F,0.4F,0},offset) ||
+        !Near(offset.linear_velocity[0],0.1F) ||
+        !Near(offset.linear_velocity[1],0.2F) ||
+        !Near(offset.linear_velocity[2],0)) return false;
+    auto zero = PlanHinge({0,-0.02F,0},{0,0,-1},{7,8,9},{7.4F,8,9},{7,8,9},1);
+    if (!CorrectHingeMassCentreVelocity(pose,{},zero) || zero.linear_velocity != Vec3{} ||
+        !Near(zero.angular_velocity[2],-0.5F)) return false;
+    auto bad = offset;
+    return !CorrectHingeMassCentreVelocity(pose,{NAN,0,0},bad);
 }
 
 } // namespace

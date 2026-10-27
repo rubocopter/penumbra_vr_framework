@@ -5,6 +5,21 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.12 — 2026-10-27
+
+- Correct Requiem's native Push/free-Move assisted throws to use the current
+  holding-controller aim; preserve native launch profiles, reject stale aiming,
+  and keep cancellation/ordinary release separate from B / Examine launch.
+- Consume BP's proven hinge centre-of-mass velocity correction from shared
+  runtime in Requiem and Framework Overture, retaining native constraints.
+- Restore Requiem's dedicated native head-to-visible-palm area query and use
+  common-origin area/contact priority. Keep physical reach and puzzle guards.
+- Preserve all preceding maintenance fixes, including drawer endpoints, input,
+  ladder and throwing lifecycles. Publish with automated host evidence only:
+  the developer has not tested this version in-game or in a VR headset.
+- Water recovery, the SDL startup crash and actual progression acceptance remain
+  open. See [release notes](releases/1.0.12.md).
+
 ## 1.0.11 — 2026-10-26
 
 - Recognize current interrupted-install journals and safely restore deleted

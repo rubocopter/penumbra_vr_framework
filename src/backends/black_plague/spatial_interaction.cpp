@@ -1060,17 +1060,8 @@ void DestroyNudgeShape() noexcept {
 [[nodiscard]] bool CorrectHingeMassCentreVelocity(const Matrix& pose,
     const Vec& local_mass_centre,
     runtime::vr_mechanism_policy::VrMechanismMotionPlan& plan) noexcept {
-    if (!plan.valid || !FiniteVec(local_mass_centre)) return false;
-    Vec world_offset{};
-    for (int row=0;row<3;++row)
-        for (int column=0;column<3;++column)
-            world_offset[row]+=pose.values[row*4+column]*local_mass_centre[column];
-    // Rework computes omega x (model origin - pivot). Newton's linear velocity
-    // belongs to the centre of mass instead. Keep the proven contact/radius
-    // servo, adding only the target body's rotated local COM contribution.
-    const Vec correction=Cross(plan.angular_velocity,world_offset);
-    for (int axis=0;axis<3;++axis) plan.linear_velocity[axis]+=correction[axis];
-    return FiniteVec(plan.linear_velocity);
+    return runtime::vr_mechanism_policy::CorrectHingeMassCentreVelocity(
+        pose.values,local_mass_centre,plan);
 }
 [[nodiscard]] bool SafeNudgeQuery(void* world,Vec* corrected,void* shape,
     const Matrix* transform,void* skip_body,NudgeContactCallback* callback,

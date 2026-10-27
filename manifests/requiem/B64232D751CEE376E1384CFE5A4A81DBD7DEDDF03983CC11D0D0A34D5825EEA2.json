@@ -743,6 +743,27 @@
       }
     ]
   },
+  "vrHingeMassCentreVelocity": {
+    "status": "implemented-host-tested-no-new-live-evidence",
+    "reference": "BP 6363b6d offset-COM hinge correction; Rework 23c890f origin-based Move servo retained",
+    "method": "Independent Ghidra decoding of the existing local decoded Requiem derivative SHA256 989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B; no new game launch or installed-file modification.",
+    "getMassCentreRva": "0x19D0B0",
+    "physicsBodyVtableSlot": "0x74",
+    "physicsBodyVtableEntryRva": "0x293E4C",
+    "newtonBodyField": "0x41C",
+    "newtonGetCentreOfMassImportRva": "0x2734A8",
+    "callingConvention": "thiscall, hidden 12-byte vector return buffer, RET 4",
+    "localToWorld": "Rotate native local COM by the current body basis, exclude translation; add omega cross world COM offset to origin-based linear velocity. Joint pin/pivot, angular plan, limits and scripts unchanged.",
+    "runtimeGuard": "Verify getter entry 83 EC 0C 8B 89 1C 04 00 00 and native body vtable+74 before installing render-world hooks.",
+    "evidenceWindows": [
+      {
+        "name": "native-local-centre-of-mass-getter",
+        "rva": "0x19D0B0",
+        "length": 74,
+        "sha256": "9E85F4F20EC01D842E50696E074AB25C4B139BD02B723133E4F372479A611B30"
+      }
+    ]
+  },
   "vrMoveSliderEndpoints": {
     "status": "implemented-host-tested; live/headset drawer endpoints pending",
     "derivedOfflineImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
@@ -772,14 +793,14 @@
     ]
   },
   "vrTrackedSelectionAndThrow": {
-    "status": "implemented-host-tested; reported level03 progression and headset aiming/cues pending",
+    "status": "implemented-host-tested; reported level03/level07 progression and headset aiming/cues pending",
     "evidence": {
       "derivedOfflineImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
       "mappedImageSha256": "CE4133C5E0BAFCA2888375B47FBB355D6B9278FFE687F17A3C8B6808520558BD",
       "method": "Independent Capstone disassembly, native vtables/imports and entity asset/script inspection of the exact canonical build; actual render_world consumer tests and shipped Newton DLL. No new live/headset evidence.",
       "reference": "Rework 23c890f7dbd06b939be9951d282e6e948d9a6623 independent Examine ray and controller local -Z; BP independent head/hand selection. BP AB1F0 is Push StopInteract, not a free Grab throw."
     },
-    "ownership": "Requiem render_world owns Normal Update vtable+4, Grab Examine vtable+18 and only AA5C7 direction call; existing ray and Grab Leave owners retained. gameplay_bridge fans out action-specific Normal Examine refresh.",
+    "ownership": "Requiem render_world owns Normal Update vtable+4, Grab/Move/Push Examine vtable+18, AA5C7 and AAE1E direction calls; existing ray and Leave owners retained. gameplay_bridge fans out action-specific Normal Examine refresh.",
     "selection": {
       "normalVtableRva": "0x27E2A8",
       "normalUpdateRva": "0xADB40",
@@ -830,7 +851,23 @@
       "directionCallBytes": "E8 54 95 06 00",
       "cameraUnprojectRva": "0x113B20",
       "directionAbi": "thiscall ECX=camera; stack out Vec3*, cursor Vec2*, graphics*; EAX=out, RET 0C",
-      "aim": "Capture VR Grab owning hand before native Leave clears ownership; current aim pose, grip fallback, normalized world local -Z. Scope to AA520/camera; native-origin/invalid tracking retain native unprojection.",
+      "aim": "Capture committed or pending VR holding hand before native Leave clears ownership; current aim pose, grip fallback, normalized world local -Z. Grab and free Move use full direction; pending Move requires a recognized unparented zero-joint body. Push preserves native planar direction by normalizing its horizontal projection. Native-origin retains native behavior; an owned VR throw with invalid/stale tracking takes ordinary native release without assisted launch.",
+      "move": {
+        "examineSlotRva": "0x27E108",
+        "examineRva": "0xAADD0",
+        "directionCallRva": "0xAAE1E",
+        "directionCallBytes": "E8 FD 8C 06 00",
+        "orderAndUnits": "CanBeThrown check, camera direction, AddForce vslot+78 using min(mass,3)*500, then ChangeState/Leave. Free Move adapts only direction; jointed mechanisms retain native Examine. Not an impulse."
+      },
+      "push": {
+        "examineSlotRva": "0x27E190",
+        "examineRva": "0xAB670",
+        "stopInteractSlotRva": "0x27E18C",
+        "stopInteractRva": "0xAA4A0",
+        "forwardCaptureRva": "0xAB8AE",
+        "forwardOffset": "0x14",
+        "orderAndUnits": "AB670 transitions/Leaves, checks CanBeThrown, then AddForce vslot+78 using min(mass,40)*233 along Enter's stored planar forward. VR Examine temporarily supplies current holding-hand planar aim and restores the field afterwards. Guarded cancellation uses transition-only AA4A0; the old AB670 cancellation incorrectly launched the object. No mass, damping or speed-cap retuning."
+      },
       "nativeOrder": [
         "ChangeState calls Leave, restores original mass and enters next state",
         "CanBeThrown player+50 check",
@@ -845,8 +882,9 @@
         "maximumImpulse": 13,
         "interpolation": "linear from 13 at <=8 kg to 2 at >=30 kg; use restored mass"
       },
-      "gesture": "Fresh owner grip velocities rotated by tracking-to-world rotation only; Rework gain 1.25 and max9 m/s, angular gain0.5/max6 rad/s; focus/UI/tracking age/epoch invalid => zero. Remove unused never-fed history; no arbitrary power increase. Reject an otherwise fresh reference from before the current world-yaw epoch; B uses native fallback until its reference refreshes.",
+      "gesture": "Fresh owner grip velocities rotated by tracking-to-world rotation only; Rework gain 1.25 and max9 m/s, angular gain0.5/max6 rad/s; focus/UI/tracking age/epoch invalid => zero. No power increase. Reject a reference from before the current world-yaw epoch; owned VR B uses ordinary release until its reference refreshes.",
       "level03": "level03_ketchup_bottle.ent declares Grab and mass1.1; loader defaults CanBeThrown true. BottleInArea breakbridge callback destroys bottle, breaks bridge01_joint2 and disables collision/area; no minimum-speed check in that callback. Puzzle assets/scripts unchanged.",
+      "level07": "Installed level07_metal_ball.ent and DAE: metalball01 is Push, mass35, linear/angular damping1, speed caps10, spherical collider about0.6m radius, no joints. StopCogs stopcogs3 activates it; MetalBallAtGoal on ballgoal sets BallDone. Map DAE includes original _charcollider_box_charcoll01 blocking the drop opening. No collision/geometry/laser-script changes. The reported lip stoppage has no established cause or automatic in-game reproduction.",
       "newtonDllSha256": "69E6F1BA9D02E7FEBEFCB6DF9BFC6A5A8D8ED78FA659E86B06CA301BFAC894EE"
     },
     "hostTests": [
@@ -972,6 +1010,41 @@
         "length": 5,
         "sha256": "25B7A42875AC2934E18DCB1B8AAC581DA9FEBD5E95C0A49151ECF78FB338843F",
         "entryBytes": "E8 54 95 06 00"
+      },
+      {
+        "name": "push-examine",
+        "rva": "0xAB670",
+        "length": 151,
+        "sha256": "DD783235CF763290A6E9416BF18F48D73FCF29E7C588B74DB512D44C2580210A",
+        "entryBytes": "83 EC 18 56 8B F1 8B 86 80 00 00 00 8B 4E 10 50"
+      },
+      {
+        "name": "push-stop",
+        "rva": "0xAA4A0",
+        "length": 16,
+        "sha256": "E9932855D3FD737CB25819A2DB2370AE1D8FFE671EF3B3C6DBB3D4398F5FE710",
+        "entryBytes": "8B 81 80 00 00 00 8B 49 10 50 E8 31 2A FF FF C3"
+      },
+      {
+        "name": "push-forward-capture",
+        "rva": "0xAB8A7",
+        "length": 110,
+        "sha256": "A7500A680D0A33C2664514F89454616B24C7DE52028DC88EB6DEC1D77069C451",
+        "entryBytes": "8D 4C 24 0C 51 8B CF E8 7D 83 06 00 8B 10 89 56"
+      },
+      {
+        "name": "move-examine",
+        "rva": "0xAADD0",
+        "length": 219,
+        "sha256": "29D9E8FD6BC60F12AECB6CE27A938FF55BE1AD54F3EB50E43A2F38E1EDB622A9",
+        "entryBytes": "83 EC 24 56 8B F1 8B 46 10 8A 48 50 84 C9 0F 84"
+      },
+      {
+        "name": "move-direction-call",
+        "rva": "0xAAE1E",
+        "length": 5,
+        "sha256": "0C3AD48217A62517C314332BDBE66B3D72E343E2DA20BD0D79CB44FFD8D4766C",
+        "entryBytes": "E8 FD 8C 06 00"
       },
       {
         "name": "camera-unproject",

@@ -131,10 +131,12 @@ constexpr std::array<std::uint8_t, 5> kGrabExitEntry{
     0x8B, 0x41, 0x28, 0x8B, 0x49};
 constexpr std::array<std::uint8_t, 5> kMoveExitEntry{
     0x8B, 0x41, 0x60, 0x8B, 0x49};
-constexpr std::array<std::uintptr_t,3> kMoveSlots{
-    0x0027E0F4, 0x0027E14C, 0x0027E150};
-constexpr std::array<std::uintptr_t,3> kMoveTargets{
-    0x000AAAE0, 0x000AB0D0, 0x000AB320};
+constexpr std::array<std::uintptr_t,4> kMoveSlots{
+    0x0027E0F4, 0x0027E14C, 0x0027E150, 0x0027E108};
+constexpr std::array<std::uintptr_t,4> kMoveTargets{
+    0x000AAAE0, 0x000AB0D0, 0x000AB320, 0x000AADD0};
+constexpr std::uintptr_t kMoveThrowDirectionCallRva = 0x000AAE1E;
+constexpr std::array<std::uint8_t,5> kMoveThrowDirectionCall{0xE8,0xFD,0x8C,0x06,0};
 constexpr std::uintptr_t kGetBodyJointRva = 0x000CDA10;
 constexpr std::uintptr_t kHingeVtableRva = 0x00294098;
 constexpr std::uintptr_t kSliderVtableRva = 0x00294188;
@@ -143,20 +145,26 @@ constexpr std::uintptr_t kSliderGetTypeRva = 0x00107840;
 constexpr std::array<std::uint8_t, 15> kGetBodyJointEntry{
     0x8B, 0x81, 0x54, 0x03, 0, 0, 0x8B, 0x4C,
     0x24, 0x04, 0x8D, 0x04, 0x88, 0x8B, 0x00};
-constexpr std::array<std::array<std::uint8_t,8>,3> kMoveEntries{{
+constexpr std::array<std::array<std::uint8_t,8>,4> kMoveEntries{{
     {0x83,0xEC,0x24,0x56,0x8B,0xF1,0x8B,0x46},
     {0x83,0xEC,0x4C,0x55,0x56,0x8B,0xF1,0x8B},
-    {0x56,0x8B,0xF1,0x8B,0x4E,0x54,0x8B,0x81}}};
+    {0x56,0x8B,0xF1,0x8B,0x4E,0x54,0x8B,0x81},
+    {0x83,0xEC,0x24,0x56,0x8B,0xF1,0x8B,0x46}}};
 constexpr std::uintptr_t kPushVtableRva = 0x0027E178;
-constexpr std::array<std::uintptr_t,3> kPushSlots{
-    0x0027E17C, 0x0027E1D4, 0x0027E1D8};
-constexpr std::array<std::uintptr_t,3> kPushTargets{
-    0x000AB480, 0x000AB7F0, 0x000ABB70};
-constexpr std::array<std::array<std::uint8_t,8>,3> kPushEntries{{
+constexpr std::array<std::uintptr_t,4> kPushSlots{
+    0x0027E17C, 0x0027E1D4, 0x0027E1D8, 0x0027E190};
+constexpr std::array<std::uintptr_t,4> kPushTargets{
+    0x000AB480, 0x000AB7F0, 0x000ABB70, 0x000AB670};
+constexpr std::array<std::array<std::uint8_t,8>,4> kPushEntries{{
     {0x83,0xEC,0x68,0x53,0x55,0x56,0x57,0x8B},
     {0x81,0xEC,0x94,0x00,0x00,0x00,0x53,0x56},
-    {0x56,0x8B,0xF1,0x8B,0x46,0x50,0x8A,0x4E}}};
-constexpr std::uintptr_t kPushExitRva = 0x000AB670;
+    {0x56,0x8B,0xF1,0x8B,0x46,0x50,0x8A,0x4E},
+    {0x83,0xEC,0x18,0x56,0x8B,0xF1,0x8B,0x86}}};
+// Push StopInteract (+14) only transitions. Examine (+18) additionally launches
+// using the planar forward captured at Enter (+14..+1C), AFTER native Leave.
+constexpr std::uintptr_t kPushExitRva = 0x000AA4A0;
+constexpr std::array<std::uint8_t,16> kPushExitEntry{
+    0x8B,0x81,0x80,0,0,0,0x8B,0x49,0x10,0x50,0xE8,0x31,0x2A,0xFF,0xFF,0xC3};
 constexpr std::uintptr_t kBodyAddForceRva = 0x0019D100;
 constexpr std::array<std::uint8_t, 8> kHandsUpdateEntry{
     0x81, 0xEC, 0xA0, 0x02, 0x00, 0x00, 0x53, 0x55};
@@ -197,13 +205,14 @@ hooks::Rel32CallHook g_visibility_hook;
 hooks::Rel32CallHook g_draw_all_hook;
 hooks::Rel32CallHook g_tool_matrix_hook;
 hooks::Rel32CallHook g_throw_direction_hook;
+hooks::Rel32CallHook g_move_throw_direction_hook;
 hooks::IatHook g_hands_update_hook;
 hooks::IatHook g_normal_update_hook;
 hooks::IatHook g_refraction_copy_hook;
 hooks::IatHook g_ray_hook;
 std::array<hooks::IatHook, 4> g_grab_hooks{};
-std::array<hooks::IatHook, 3> g_move_state_hooks{};
-std::array<hooks::IatHook, 3> g_push_state_hooks{};
+std::array<hooks::IatHook, 4> g_move_state_hooks{};
+std::array<hooks::IatHook, 4> g_push_state_hooks{};
 std::atomic<RenderWorld> g_original{nullptr};
 std::atomic<UpdateRenderList> g_original_visibility{nullptr};
 std::atomic<DrawAll> g_original_draw_all{nullptr};
@@ -1508,10 +1517,18 @@ struct PalmSelectionCandidate final {
 }
 
 [[nodiscard]] bool NativeAreaPrecedesPhysicalTarget(
-    const NativePickResult& area, float physical_distance) noexcept {
+    const NativePickResult& area, const std::array<float,3>& physical_point,
+    const std::array<float,3>& common_origin) noexcept {
+    const auto distance_from_origin = [&](const std::array<float,3>& hit) {
+        return std::hypot(hit[0]-common_origin[0],hit[1]-common_origin[1],
+            hit[2]-common_origin[2]);
+    };
+    const float area_distance=distance_from_origin(area.point);
+    const float physical_distance=distance_from_origin(physical_point);
     return area.body != nullptr && area.body == area.area &&
         std::isfinite(area.area_distance) && area.area_distance >= 0.0F &&
-        area.area_distance < physical_distance;
+        std::isfinite(area_distance) && std::isfinite(physical_distance) &&
+        area_distance < physical_distance;
 }
 
 void __fastcall HookedRay(void* world, void*, void* callback,
@@ -1541,6 +1558,37 @@ void __fastcall HookedRay(void* world, void*, void* callback,
         }
         runtime::VrMatrix44 palm{};
         if (InteractionPalm(frame.interact_source, palm)) {
+            // Rework 23c890f Normal VR checks camera -> resolved hand centre
+            // for native areas BEFORE physical contacts. Keep that separate
+            // native range/occlusion path: the short palm rays below belong
+            // to physical acquisition, not script-button activation reach.
+            runtime::VrMatrix44 head{}, area_palm{};
+            if (TrackedHeadWorldPose(head) &&
+                TrackedControllerPose(frame.interact_source,false,area_palm)) {
+                runtime::VrMatrix44 resolved{};
+                if (ReadGameplayPalmPose(frame.interact_source==runtime::VrHand::left ? 0U : 1U,resolved))
+                    area_palm=resolved;
+                // Rework GetHandPalmPose includes the imported hand model's
+                // rigid local translation/rotation after collision resolution.
+                area_palm=runtime::rework_hand_profile::ApplyVisualLocalPose(area_palm);
+                const std::array<float,3> from{head.values[3],head.values[7],head.values[11]};
+                const std::array<float,3> delta{area_palm.values[3]-from[0],
+                    area_palm.values[7]-from[1],area_palm.values[11]-from[2]};
+                const float length=std::hypot(delta[0],delta[1],delta[2]);
+                if (std::isfinite(length) && length>1.0e-6F) {
+                    const PalmRaySegment segment{from,{from[0]+delta[0]*native_length/length,
+                        from[1]+delta[1]*native_length/length,from[2]+delta[2]*native_length/length}};
+                    NativePickResult area{};
+                    if (CastNativeHandArea(original,world,callback,segment,distance,
+                            normal,point,prefilter,native_length,area) &&
+                        StoreNative(callback,0,area)) {
+                        g_vr_selection_ready=true;
+                        if (g_selection_refresh_active) g_refresh_winner_distance=area.area_distance;
+                        g_ray_winners.fetch_add(1,std::memory_order_relaxed);
+                        return;
+                    }
+                }
+            }
             PalmSelectionCandidate contact{};
             if (FindPalmOverlapTarget(callback, frame.interact_source, contact)) {
                 // Native script areas may overlap the same palm as a nearby
@@ -1552,7 +1600,8 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                         g_selection_refresh_active ? rays.size() : 1U,
                         distance, normal, point, prefilter, native_length,
                         area) && NativeAreaPrecedesPhysicalTarget(
-                            area, contact.distance) &&
+                            area, contact.point,
+                            {palm.values[3],palm.values[7],palm.values[11]}) &&
                     StoreNative(callback, 0, area)) {
                     g_vr_selection_ready = true;
                     if (g_selection_refresh_active)
@@ -1616,8 +1665,9 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                 if (FindNativeHandArea(original, world, callback, rays,
                         count, distance, normal, point, prefilter,
                         native_length, best_area) &&
-                    NativeAreaPrecedesPhysicalTarget(best_area,
-                        ranked.best_body == nullptr ? INFINITY : ranked.best.distance) &&
+                    (ranked.best_body == nullptr ||
+                        NativeAreaPrecedesPhysicalTarget(best_area,ranked.best.point,
+                            {palm.values[3],palm.values[7],palm.values[11]})) &&
                     StoreNative(callback, 0, best_area)) {
                     g_vr_selection_ready = true;
                     if (g_selection_refresh_active)
@@ -1879,6 +1929,19 @@ using Vec3 = std::array<float,3>;
         runtime::vr_mechanism_policy::Length(hold.joint_pin) > 1.0e-6F;
 }
 
+// Independently decoded Requiem wrapper: body+41C -> Newton local COM,
+// 12-byte hidden return buffer, RET 4. Never reuse BP's getter RVA.
+constexpr std::uintptr_t kGetMassCentreRva = 0x19D0B0;
+constexpr std::array<std::uint8_t,9> kGetMassCentreEntry{
+    0x83,0xEC,0x0C,0x8B,0x89,0x1C,0x04,0x00,0x00};
+[[nodiscard]] bool ReadBodyMassCentre(void* body, Vec3& value) noexcept {
+    __try {
+        value = reinterpret_cast<Vec3(__thiscall*)(void*)>(
+            g_image+kGetMassCentreRva)(body);
+    } __except(EXCEPTION_EXECUTE_HANDLER) { return false; }
+    return runtime::vr_mechanism_policy::Finite(value);
+}
+
 void SetBodyVelocity(void* body, std::uintptr_t rva,
     const std::array<float,3>& velocity) noexcept {
     reinterpret_cast<void(__thiscall*)(void*, const std::array<float,3>*)>(
@@ -1966,6 +2029,24 @@ void __fastcall HookedGrabLeave(void* state, void*, void* next) noexcept {
     if (owned) g_grabs_released.fetch_add(1, std::memory_order_relaxed);
 }
 
+[[nodiscard]] bool ControllerThrowDirection(runtime::VrHand hand,
+    std::array<float,3>& direction, bool horizontal = false) noexcept {
+    AcquireSRWLockShared(&g_tracking_world_lock);
+    const auto reference_yaw_epoch = g_world_from_tracking_yaw_epoch;
+    ReleaseSRWLockShared(&g_tracking_world_lock);
+    if (reference_yaw_epoch != g_world_yaw_epoch.load(std::memory_order_acquire))
+        return false;
+    runtime::VrMatrix44 pose{};
+    if (!TrackedControllerPose(hand,true,pose) &&
+        !TrackedControllerPose(hand,false,pose)) return false;
+    direction = {-pose.values[2],horizontal ? 0.0F : -pose.values[6],-pose.values[10]};
+    const float length = std::hypot(direction[0],direction[1],direction[2]);
+    if (!runtime::vr_mechanism_policy::Finite(direction) ||
+        !std::isfinite(length) || length <= 1.0e-6F) return false;
+    for (float& component : direction) component /= length;
+    return true;
+}
+
 // AA520 exits Grab before asking the native camera for its throw direction.
 // Capture the owning controller now: Leave clears g_grab_hold. Native code
 // retains CanBeThrown, mass restoration, velocity reset and impulse ownership.
@@ -1973,29 +2054,28 @@ void __fastcall HookedGrabExamine(void* state, void*) noexcept {
     ActiveCall active_call;
     const auto previous = g_throw_aim;
     g_throw_aim = {};
-    AcquireSRWLockShared(&g_tracking_world_lock);
-    const auto reference_yaw_epoch = g_world_from_tracking_yaw_epoch;
-    ReleaseSRWLockShared(&g_tracking_world_lock);
-    const auto& hold = g_grab_hold;
-    if (reference_yaw_epoch == g_world_yaw_epoch.load(std::memory_order_acquire) &&
-        hold.state == state && hold.player != nullptr &&
+    auto hold = g_grab_hold;
+    // Input dispatch can issue Examine immediately after native Enter, before
+    // the first Grab Update commits its palm/body hold. Enter already owns hand.
+    if (g_pending_grab_state == state && hold.state != state) {
+        hold.state = state;
+        hold.player = ReadNative<void*>(state,0x10);
+        hold.body = ReadNative<void*>(state,0x20);
+        hold.hand = g_pending_grab_hand;
+    }
+    if (hold.state == state && hold.player != nullptr &&
         ReadNative<void*>(state,0x10) == hold.player &&
         ReadNative<void*>(state,0x20) == hold.body &&
         RequiemBodyMatches(hold.body) &&
         ReadNative<int>(hold.player,0x2C0) == 6 &&
         ReadNative<void*>(ReadNative<void*>(hold.player,0x2C8),6*sizeof(void*)) == state) {
-        runtime::VrMatrix44 pose{};
-        if (TrackedControllerPose(hold.hand,true,pose) ||
-            TrackedControllerPose(hold.hand,false,pose)) {
-            std::array<float,3> direction{
-                -pose.values[2],-pose.values[6],-pose.values[10]};
-            const float length = std::hypot(direction[0],direction[1],direction[2]);
-            if (runtime::vr_mechanism_policy::Finite(direction) &&
-                std::isfinite(length) && length > 1.0e-6F) {
-                for (float& component : direction) component /= length;
-                g_throw_aim = {ReadNative<void*>(hold.player,0x1E0),direction};
-            }
+        std::array<float,3> direction{};
+        if (!ControllerThrowDirection(hold.hand,direction)) {
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+kGrabExitRva)(state);
+            g_throw_aim = previous;
+            return;
         }
+        g_throw_aim = {ReadNative<void*>(hold.player,0x1E0),direction};
     }
     reinterpret_cast<void(__thiscall*)(void*)>(g_image+kGrabExamineRva)(state);
     g_throw_aim = previous;
@@ -2225,6 +2305,35 @@ void __fastcall HookedPushLeave(void* state, void*, void* next) noexcept {
     reinterpret_cast<Transition>(g_image + kPushTargets[2])(state, next);
 }
 
+void __fastcall HookedPushExamine(void* state, void*) noexcept {
+    ActiveCall active_call;
+    auto hold = g_push_hold;
+    if (g_pending_push_state == state && hold.state != state) {
+        hold.state = state;
+        hold.player = ReadNative<void*>(state,0x10);
+        hold.body = ReadNative<void*>(state,0x50);
+        hold.hand = g_pending_push_hand;
+    }
+    const bool owned = hold.state == state && hold.player != nullptr &&
+        ReadNative<void*>(state,0x10) == hold.player &&
+        ReadNative<void*>(state,0x50) == hold.body && RequiemBodyMatches(hold.body) &&
+        ReadNative<int>(hold.player,0x2C0) == 1 &&
+        ReadNative<void*>(ReadNative<void*>(hold.player,0x2C8),sizeof(void*)) == state;
+    const auto original = reinterpret_cast<void(__thiscall*)(void*)>(
+        g_image+kPushTargets[3]);
+    if (!owned) { original(state); return; }
+    std::array<float,3> direction{};
+    if (!ControllerThrowDirection(hold.hand,direction,true)) {
+        // A VR throw must never silently use an old native camera heading.
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+kPushExitRva)(state);
+        return;
+    }
+    const auto native_forward = ReadNative<std::array<float,3>>(state,0x14);
+    if (!StoreNative(state,0x14,direction)) return;
+    original(state); // Native CanBeThrown, mass cap, force and Leave ordering.
+    static_cast<void>(StoreNative(state,0x14,native_forward));
+}
+
 void __fastcall HookedPushUpdate(void* state, void*, float dt) noexcept {
     ActiveCall active_call;
     const auto original = reinterpret_cast<HandsUpdate>(
@@ -2405,6 +2514,44 @@ void __fastcall HookedMoveLeave(void* state, void*, void* next) noexcept {
             g_image + 0x19CBB0)(hold.body, true);
         g_moves_released.fetch_add(1, std::memory_order_relaxed);
     }
+}
+
+void __fastcall HookedMoveExamine(void* state, void*) noexcept {
+    ActiveCall active_call;
+    const auto previous = g_throw_aim;
+    g_throw_aim = {};
+    auto hold = g_move_hold;
+    if (g_pending_move_state == state && hold.state != state) {
+        auto* body = ReadNative<void*>(state,0x54);
+        // Pending Move has not classified its mechanism yet. Adapt only an
+        // independently recognizable free body; constrained paths remain native.
+        if (RequiemBodyMatches(body) && NativeJointCount(body) == 0 &&
+            ReadNative<void*>(body,0x330) == nullptr &&
+            ReadNative<void*>(body,0x10) == nullptr) {
+            hold.state = state;
+            hold.player = ReadNative<void*>(state,0x10);
+            hold.body = body;
+            hold.hand = g_pending_move_hand;
+            hold.mode = MoveMode::free_body;
+        }
+    }
+    if (hold.state == state && hold.mode == MoveMode::free_body &&
+        hold.player != nullptr && ReadNative<void*>(state,0x10) == hold.player &&
+        ReadNative<void*>(state,0x54) == hold.body && RequiemBodyMatches(hold.body) &&
+        ReadNative<int>(hold.player,0x2C0) == 2 &&
+        ReadNative<void*>(ReadNative<void*>(hold.player,0x2C8),2*sizeof(void*)) == state) {
+        std::array<float,3> direction{};
+        if (!ControllerThrowDirection(hold.hand,direction)) {
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+kMoveExitRva)(state);
+            g_throw_aim = previous;
+            return;
+        }
+        g_throw_aim = {ReadNative<void*>(hold.player,0x1E0),direction};
+    }
+    // AADD0 applies native mass-bounded force BEFORE its native transition.
+    // Jointed mechanisms retain their original native Examine lifecycle.
+    reinterpret_cast<void(__thiscall*)(void*)>(g_image+kMoveTargets[3])(state);
+    g_throw_aim = previous;
 }
 
 void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
@@ -2601,7 +2748,7 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
             const Vec3*,const Vec3*)>(g_image + 0x19D140)(
                 g_move_hold.body, &force, &current);
     } else {
-        const auto plan = g_move_hold.mode == MoveMode::slider
+        auto plan = g_move_hold.mode == MoveMode::slider
             ? runtime::vr_mechanism_policy::PlanSlider(
                 delta, g_move_hold.joint_pin)
             : runtime::vr_mechanism_policy::PlanHinge(
@@ -2609,6 +2756,12 @@ void __fastcall HookedMoveUpdate(void* state, void*, float dt) noexcept {
                 g_move_hold.joint_pivot, current,
                 {body_pose.values[3], body_pose.values[7],
                  body_pose.values[11]}, g_move_hold.hinge_lightness);
+        if (g_move_hold.mode == MoveMode::hinge) {
+            Vec3 local_mass_centre{};
+            if (!ReadBodyMassCentre(g_move_hold.body,local_mass_centre) ||
+                !runtime::vr_mechanism_policy::CorrectHingeMassCentreVelocity(
+                    body_pose.values,local_mass_centre,plan)) return;
+        }
         if (!plan.valid) return;
         SetBodyVelocity(g_move_hold.body, 0x19CA00,
             plan.linear_velocity);
@@ -2920,6 +3073,7 @@ bool InstallRenderWorld(std::string& error) noexcept {
         g_normal_update_hook.installed() ||
         g_refraction_copy_hook.installed() ||
         g_throw_direction_hook.installed() ||
+        g_move_throw_direction_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
@@ -2981,7 +3135,8 @@ bool InstallRenderWorld(std::string& error) noexcept {
     if (ReadNative<void*>(image,kGrabExamineSlotRva) != image+kGrabExamineRva ||
         !std::equal(kGrabExamineEntry.begin(),kGrabExamineEntry.end(),image+kGrabExamineRva) ||
         !std::equal(kCameraUnprojectEntry.begin(),kCameraUnprojectEntry.end(),image+kCameraUnprojectRva) ||
-        !std::equal(kThrowDirectionCall.begin(),kThrowDirectionCall.end(),image+kThrowDirectionCallRva)) {
+        !std::equal(kThrowDirectionCall.begin(),kThrowDirectionCall.end(),image+kThrowDirectionCallRva) ||
+        !std::equal(kMoveThrowDirectionCall.begin(),kMoveThrowDirectionCall.end(),image+kMoveThrowDirectionCallRva)) {
         error = "Requiem native throw boundary does not match the exact build";
         return false;
     }
@@ -3035,6 +3190,12 @@ bool InstallRenderWorld(std::string& error) noexcept {
         error = "Requiem native hand/tool boundary does not match the exact build";
         return false;
     }
+    if (!std::equal(kGetMassCentreEntry.begin(),kGetMassCentreEntry.end(),
+            image+kGetMassCentreRva) ||
+        ReadNative<void*>(image+kPhysicsBodyVtableRva,0x74) != image+kGetMassCentreRva) {
+        error = "Requiem body centre-of-mass getter mismatch";
+        return false;
+    }
     constexpr std::array<std::array<std::uintptr_t,2>, 7> body_methods{{
         {0x34, 0x19CA00}, {0x3C, 0x19CA20},
         {0x54, 0x19CAC0}, {0x5C, 0x19CAE0},
@@ -3080,8 +3241,8 @@ bool InstallRenderWorld(std::string& error) noexcept {
     }
     if (ReadNative<void*>(image + kPhysicsBodyVtableRva, 0x78) !=
             image + kBodyAddForceRva ||
-        image[kPushExitRva] != 0x83 ||
-        image[kPushExitRva + 1] != 0xEC ||
+        !std::equal(kPushExitEntry.begin(),kPushExitEntry.end(),image+kPushExitRva) ||
+        ReadNative<void*>(image,kPushVtableRva+0x14) != image+kPushExitRva ||
         ReadNative<void*>(image, kPushVtableRva + 0x4C) !=
             image + 0xAD190 ||
         ReadNative<void*>(image, kPushVtableRva + 0x50) !=
@@ -3197,6 +3358,16 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if(!rolled_back) error+="; rollback failed: "+rollback_error;
         return false;
     }
+    if (!hooks::InstallRel32CallHook(image+kMoveThrowDirectionCallRva,
+            kMoveThrowDirectionCall,reinterpret_cast<void*>(&HookedThrowDirection),
+            g_move_throw_direction_hook,error)) {
+        const std::string install_error=error;
+        std::string rollback_error;
+        const bool rolled_back=RemoveRenderWorld(rollback_error);
+        error=install_error;
+        if(!rolled_back) error+="; rollback failed: "+rollback_error;
+        return false;
+    }
     constexpr std::array<std::uintptr_t,4> grab_slots{
         kGrabUpdateSlotRva, kGrabEnterSlotRva, kGrabLeaveSlotRva, kGrabExamineSlotRva};
     constexpr std::array<std::uintptr_t,4> grab_targets{
@@ -3218,10 +3389,11 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if (!rolled_back) error += "; rollback failed: " + rollback_error;
         return false;
     }
-    const std::array<void*,3> move_replacements{
+    const std::array<void*,4> move_replacements{
         reinterpret_cast<void*>(&HookedMoveUpdate),
         reinterpret_cast<void*>(&HookedMoveEnter),
-        reinterpret_cast<void*>(&HookedMoveLeave)};
+        reinterpret_cast<void*>(&HookedMoveLeave),
+        reinterpret_cast<void*>(&HookedMoveExamine)};
     for (std::size_t index = 0; index < kMoveSlots.size(); ++index) {
         if (hooks::InstallPointerHook(
                 reinterpret_cast<void**>(image + kMoveSlots[index]),
@@ -3234,10 +3406,11 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if (!rolled_back) error += "; rollback failed: " + rollback_error;
         return false;
     }
-    const std::array<void*,3> push_replacements{
+    const std::array<void*,4> push_replacements{
         reinterpret_cast<void*>(&HookedPushUpdate),
         reinterpret_cast<void*>(&HookedPushEnter),
-        reinterpret_cast<void*>(&HookedPushLeave)};
+        reinterpret_cast<void*>(&HookedPushLeave),
+        reinterpret_cast<void*>(&HookedPushExamine)};
     for (std::size_t index = 0; index < kPushSlots.size(); ++index) {
         if (hooks::InstallPointerHook(
                 reinterpret_cast<void**>(image + kPushSlots[index]),
@@ -3274,6 +3447,7 @@ bool RenderHooksInstalled() noexcept {
         g_normal_update_hook.installed() ||
         g_refraction_copy_hook.installed() ||
         g_throw_direction_hook.installed() ||
+        g_move_throw_direction_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
         std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
@@ -3313,6 +3487,7 @@ bool RemoveRenderWorld(std::string& error) noexcept {
         if (hook.installed() && !hooks::RemoveIatHook(hook, error))
             return false;
     if (!hooks::RemoveRel32CallHook(g_throw_direction_hook,error)) return false;
+    if (!hooks::RemoveRel32CallHook(g_move_throw_direction_hook,error)) return false;
     if (!hooks::RemoveRel32CallHook(g_tool_matrix_hook, error)) return false;
     if (g_hands_update_hook.installed() &&
         !hooks::RemoveIatHook(g_hands_update_hook, error)) return false;
@@ -3348,6 +3523,7 @@ bool StartPresentation(runtime::OpenVrSession& session,
         !g_hands_update_hook.installed() || !g_tool_matrix_hook.installed() ||
         !g_normal_update_hook.installed() ||
         !g_ray_hook.installed() || !g_throw_direction_hook.installed() ||
+        !g_move_throw_direction_hook.installed() ||
         !std::all_of(g_grab_hooks.begin(), g_grab_hooks.end(),
             [](const auto& hook) { return hook.installed(); }) ||
         !std::all_of(g_move_state_hooks.begin(),

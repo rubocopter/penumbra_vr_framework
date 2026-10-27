@@ -90,15 +90,15 @@ Unknown or modified game builds may be rejected by the installer. Check [support
 
 ## Release and maintenance status
 
-The latest release is **[v1.0.11](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.11)** (26 October 2026). **The intended VR feature set is complete; the project is now in maintenance-only mode.** No additional features, cosmetic polish or broad hardware certification are planned. Future fixes may be considered for reproducible problems that prevent normal installation, launch, input or progression.
+The latest release is **[v1.0.12 — headset validation pending](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.12)** (27 October 2026). **The developer has not tested this version in-game or in a VR headset.** It has automated host validation only. **The intended VR feature set is complete; the project is now in maintenance-only mode.** No additional features, cosmetic polish or broad hardware certification are planned. Future fixes may be considered for reproducible problems that prevent normal installation, launch, input or progression.
 
-This update hardens interrupted-install recovery and uninstall, fixes Overture's interaction-hand ownership, release edges, alternate UI pointer and menu recenter, and corrects Requiem's hand-ray occlusion, interaction shutdown and palm-resource cleanup. It also includes the native level05 button-selection and drawer-endpoint adaptations. These corrections have automated host validation; new in-game/headset acceptance remains pending.
+This update includes all current maintenance corrections: Requiem's holding-controller assisted throws and B/cancellation handling, the shared hinge centre-of-mass correction, and native head-to-palm area selection with consistent contact priority. It retains the preceding installer, Overture input, Requiem lifecycle and drawer-endpoint fixes. Publication lets players try the corrections; it does not establish that the reported progression blockers are resolved.
 
-**Known progression reports (26 October):** In Requiem, crouching underwater in level04 can prevent returning to the surface. The sewer problem has **no confirmed fix**; this release adds capsule-height diagnostics only. Level05 button/slider corrections are included in v1.0.11 with host tests, but repeated activation and drawer endpoints still require in-game headset validation. Level03 bottle progression and throw/cue usability also remain open. See the [maintenance gates](docs/ROADMAP.md#current-maintenance-gates).
+**Known progression reports (27 October):** Requiem's level04 underwater recovery and intermittent SDL startup crash have **no confirmed fix**. Actual lever direction/stability, level03 bottle progression, level05 buttons/cabinets and level07 sphere progression remain unverified on this build. The sphere's physical stoppage at the opening also has no confirmed cause. See the [maintenance gates](docs/ROADMAP.md#current-maintenance-gates).
 
-The maintainer has accepted focused in-headset tests of the installed trilogy on the primary PS VR2 setup; this is not a claim of full playthroughs or universal headset compatibility. An intermittent Requiem startup crash remains without an identified fix, and a finger-pose mismatch has been reported on Index. Other controller families and independent clean-PC installations have not received equivalent validation.
+Historical versions have focused maintainer headset acceptance on the primary PS VR2 setup; that evidence does not transfer to v1.0.12 or establish full playthroughs or universal headset compatibility. A finger-pose mismatch has been reported on Index. Other controller families and independent clean-PC installations have not received equivalent validation.
 
-See [v1.0.11 release notes](docs/releases/1.0.11.md) for changes and [release status and validation](docs/CLOSURE_STATUS.md) for precise evidence and known limitations.
+See [v1.0.12 release notes](docs/releases/1.0.12.md) for changes and [release status and validation](docs/CLOSURE_STATUS.md) for precise evidence and known limitations.
 
 ## Help and documentation
 
@@ -107,7 +107,7 @@ See [v1.0.11 release notes](docs/releases/1.0.11.md) for changes and [release st
 | [Controls](docs/CONTROLS.md) | [Architecture](docs/ARCHITECTURE.md) |
 | [VR configuration](docs/VR_CONFIGURATION.md) | [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | [Supported builds](docs/SUPPORTED_BUILDS.md) |
-| [Release notes](docs/releases/1.0.11.md) | [Roadmap](docs/ROADMAP.md) |
+| [Release notes](docs/releases/1.0.12.md) | [Roadmap](docs/ROADMAP.md) |
 | [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
 
 If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a reproducible regression, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs. The project is not accepting new feature requests as active work.

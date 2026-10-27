@@ -26,6 +26,19 @@ Requiem's shared profile options and height calibration have scoped local
 headset acceptance, not general controller or current-release validation.
 See [VR configuration](VR_CONFIGURATION.md).
 
+## Requiem object throwing
+
+While holding a throwable object, Examine launches it along the **holding
+controller's pointing direction** (default B in the right-handed Touch layout,
+Circle on Sense). Look direction and the hand pressing Examine do not select
+the aim. Grab and free Move props use the full pointing direction; Push props,
+including the level07 metal sphere, retain the game's horizontal launch.
+Release Interact for ordinary physical release instead. If tracking is missing
+or the world reference is stale during a turn, Examine releases normally without
+an assisted launch. These maintenance corrections have host tests; the
+[trilogy ledger](TRILOGY_PARITY_PLAN.md#requiem-button-throwing-and-level07-sphere--maintenance-candidate)
+records the remaining game/headset checks.
+
 ## Other controllers and custom bindings
 
 SteamVR's controller binding interface can inspect and customize the active game profile. Both installation roots include eight default profiles; SteamVR selects one by controller type.

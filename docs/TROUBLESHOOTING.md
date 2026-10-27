@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide covers the public **Penumbra VR Framework v1.0.11** installer and current maintenance documentation. Installation steps live in the root [README](../README.md#install); recognized builds in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
+This guide covers the public **Penumbra VR Framework v1.0.12** installer and current maintenance documentation. Installation steps live in the root [README](../README.md#install); recognized builds in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
 The installer shows **Preparing installation / Preparando la
 instalación** while files are extracted and verified, then an animated waiting
@@ -46,15 +46,16 @@ Requiem's intermittent startup crash remains unresolved. If it occurs, capture t
 Requiem has further **unresolved progression reports**: crouching in level04
 sewer water can prevent returning to the surface; level05 generator, hatch
 and door buttons can be hard to activate, and filing cabinets can resist
-opening. v1.0.11 includes host-tested button/slider corrections, with actual
-headset progression still unverified; the water cause remains open. Record the
+opening. v1.0.12 includes host-tested hinge, button-selection and throwing
+corrections and retains the v1.0.11 slider correction. The developer has not
+tested this version in-game or in a VR headset; the water cause remains open. Record the
 level/objective, steps, version and build hash. See the
 [focused maintenance gates](ROADMAP.md#current-maintenance-gates).
 
 ## Repair, recovery and removal
 
-Close the affected games before every installer operation. For v1.0.11, use
-**PenumbraVR-Setup-1.0.11.exe**. For older installations, use the matching
+Close the affected games before every installer operation. For v1.0.12, use
+**PenumbraVR-Setup-1.0.12.exe**. For older installations, use the matching
 versioned installer or a documented supported update path.
 
 Use the **Maintenance / Mantenimiento** tab for installed roots:

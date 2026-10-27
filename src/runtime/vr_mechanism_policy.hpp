@@ -141,4 +141,20 @@ struct VrMechanismMotionPlan {
     return result;
 }
 
+// PlanHinge expresses velocity at the model origin. Physics engines such as
+// Newton apply linear velocity at COM: v(COM)=v(origin)+omega x R*localCOM.
+// Proven BP correction, shared after Requiem reproduced the same pivot drift.
+[[nodiscard]] inline bool CorrectHingeMassCentreVelocity(
+    const std::array<float,16>& body_pose, const Vec3& local_mass_centre,
+    VrMechanismMotionPlan& plan) noexcept {
+    if (!plan.valid || !Finite(local_mass_centre)) return false;
+    Vec3 world_offset{};
+    for (std::size_t row=0;row<3;++row)
+        for (std::size_t column=0;column<3;++column)
+            world_offset[row]+=body_pose[row*4+column]*local_mass_centre[column];
+    if (!Finite(world_offset)) return false;
+    plan.linear_velocity=Add(plan.linear_velocity,Cross(plan.angular_velocity,world_offset));
+    return Finite(plan.linear_velocity);
+}
+
 } // namespace penumbra_vr::runtime::vr_mechanism_policy

@@ -6,15 +6,16 @@
 //
 // Fixture f(test_frame, absolute_path_to_shipped_Newton_dll);
 // if (!f.Ready() || !CharacterizedNativeCases(f)) return false;
-// Future integration: f.InstallHooks(&HookedGrabExamine, &HookedThrowDirection);
+// InstallHooks installs the production Grab/Move/Push Examine owners and both
+// characterized camera direction callsites.
 // Reset(); InvokeExamine(); inspect Events(), Velocity(), Omega(), direction.
-// Or run AssistedThrowCases(f, &HookedGrabExamine, &HookedThrowDirection).
-// There is intentionally no forward declaration of those future hook names.
+// Run AssistedThrowCases(f, &HookedGrabExamine, &HookedThrowDirection).
 #include "../../products/overture/dependencies/include/Newton.h"
 #include <array>
 #include <cmath>
 #include <cstring>
 #include <iostream>
+#include <limits>
 #include <vector>
 
 namespace penumbra_vr::backends::requiem::native_throw_fixture {
@@ -66,7 +67,7 @@ struct NewtonApi final {
 enum class Event {
     change, native_leave, leave_upward_impulse, restore_linear, restore_angular,
     native_enter, commit, zero_linear, zero_angular, direction,
-    throw_central, throw_at_point
+    throw_central, throw_at_point, force
 };
 
 class Fixture final {
@@ -79,6 +80,8 @@ public:
     std::array<void*, 7> states{};
     std::array<std::uint8_t, 0x100> camera{}, graphics{};
     Vec native_direction{1, 0, 0}, impulse_delta{}, impulse_point{};
+    Vec applied_force{};
+    unsigned forces = 0;
     Vec restored_linear{}, restored_angular{};
     void* direction_return_address = nullptr;
     bool direction_arguments_match = false, direction_result_matches = false;
@@ -100,6 +103,7 @@ public:
         if(!RemoveRenderWorld(error)) std::cerr<<error<<'\n';
         if (current_ == this) {
             g_grab_hold = {}; g_pending_grab_state = nullptr;
+            g_move_hold = {}; g_push_hold = {};
             frame = saved_frame_; current_ = nullptr;
         }
         if (native_body_) newton.destroy_body(world_, native_body_);
@@ -131,6 +135,19 @@ public:
         Jump(0x19CFE0, reinterpret_cast<void*>(&SetMassStub));
         Jump(0x19D2F0, reinterpret_cast<void*>(&CentralStub));
         Jump(0x19CB30, reinterpret_cast<void*>(&PointStub));
+        Jump(0xAB670, reinterpret_cast<void*>(&NativePushThrowStub));
+        Jump(0xAA4A0, reinterpret_cast<void*>(&PlainExitStub));
+        Jump(0xAA3A0, reinterpret_cast<void*>(&PlainExitStub));
+        Jump(0xAA490, reinterpret_cast<void*>(&PlainExitStub));
+        Jump(0xABB70, reinterpret_cast<void*>(&NativeForceLeaveStub));
+        Jump(0xAB320, reinterpret_cast<void*>(&NativeForceLeaveStub));
+        Jump(0xAADD0, reinterpret_cast<void*>(&NativeMoveThrowStub));
+        Jump(0x19CBB0, reinterpret_cast<void*>(&AwakeStub));
+        Jump(kGetJointCountRva, reinterpret_cast<void*>(&NoJointCountStub));
+        Store(g_image, 0x27E190, g_image+0xAB670);
+        Store(g_image, 0x27E108, g_image+0xAADD0);
+        Store(g_image, 0x27E1D8, reinterpret_cast<void*>(&HookedPushLeave));
+        Store(g_image, 0x27E150, reinterpret_cast<void*>(&HookedMoveLeave));
         Store(g_image, 0x27E258, g_image+0xAA520);
         Store(g_image, 0x27E2A0, reinterpret_cast<void*>(&HookedGrabLeave));
         Store(g_image, kPhysicsBodyVtableRva + 0x34, g_image + 0x19CA00);
@@ -140,18 +157,17 @@ public:
         Store(g_image, kPhysicsBodyVtableRva + 0x84, g_image + 0x19D2F0);
         Store(g_image, kPhysicsBodyVtableRva + 0x88, g_image + 0x19CB30);
         Store(g_image, 0x270800 + 0x5C, reinterpret_cast<void*>(&NativeEnterStub));
-        constexpr std::array<std::uint8_t, 4> push{0xFF, 0x74, 0x24, 0x0C};
-        for (unsigned i = 0; i != 3; ++i)
-            std::memcpy(g_image + 0xAA5BB + 4 * i, push.data(), push.size());
-        auto* call = g_image + 0xAA5C7;
-        call[0] = 0xE8;
-        const auto target = static_cast<void*>(g_image + 0x113B20);
-        const auto delta = static_cast<std::int32_t>(
-            reinterpret_cast<std::intptr_t>(target) -
-            reinterpret_cast<std::intptr_t>(call + 5));
-        std::memcpy(call + 1, &delta, sizeof(delta));
-        const std::array<std::uint8_t, 3> ret{0xC2, 0x0C, 0};
-        std::memcpy(call + 5, ret.data(), ret.size());
+        for (const auto site : {0xAA5C7,0xAAE1E}) {
+            constexpr std::array<std::uint8_t, 4> push{0xFF, 0x74, 0x24, 0x0C};
+            for (unsigned i = 0; i != 3; ++i)
+                std::memcpy(g_image + site-12 + 4*i, push.data(), push.size());
+            auto* call = g_image + site;
+            call[0] = 0xE8;
+            const auto delta = static_cast<std::int32_t>((g_image+0x113B20)-(call+5));
+            std::memcpy(call+1,&delta,sizeof(delta));
+            const std::array<std::uint8_t,3> ret{0xC2,0x0C,0};
+            std::memcpy(call+5,ret.data(),ret.size());
+        }
         FlushInstructionCache(GetCurrentProcess(), g_image, 0x300000);
         if(examine) hooks_ready_=hooks::InstallPointerHook(
             reinterpret_cast<void**>(g_image+kGrabExamineSlotRva),
@@ -159,6 +175,15 @@ public:
         if(hooks_ready_ && direction_hook) hooks_ready_=hooks::InstallRel32CallHook(
             g_image+kThrowDirectionCallRva,kThrowDirectionCall,
             reinterpret_cast<void*>(direction_hook),g_throw_direction_hook,error);
+        if(hooks_ready_ && examine) hooks_ready_=hooks::InstallPointerHook(
+            reinterpret_cast<void**>(g_image+kPushSlots[3]),g_image+kPushTargets[3],
+            reinterpret_cast<void*>(&HookedPushExamine),g_push_state_hooks[3],error);
+        if(hooks_ready_ && examine) hooks_ready_=hooks::InstallPointerHook(
+            reinterpret_cast<void**>(g_image+kMoveSlots[3]),g_image+kMoveTargets[3],
+            reinterpret_cast<void*>(&HookedMoveExamine),g_move_state_hooks[3],error);
+        if(hooks_ready_ && direction_hook) hooks_ready_=hooks::InstallRel32CallHook(
+            g_image+kMoveThrowDirectionCallRva,kMoveThrowDirectionCall,
+            reinterpret_cast<void*>(direction_hook),g_move_throw_direction_hook,error);
         if(!hooks_ready_) std::cerr<<error<<'\n';
     }
 
@@ -174,6 +199,8 @@ public:
         mass_at_throw = 0; impulse_delta = impulse_point = {};
         restored_linear = restored_angular = {};
         native_direction = {1, 0, 0};
+        applied_force = {}; forces = 0;
+        g_push_hold = {}; g_move_hold = {};
         Store(body_image.data(), 0, g_image + kPhysicsBodyVtableRva);
         Store(body_image.data(), 0x34, runtime::IdentityMatrix());
         Store(body_image.data(), 0x41C, native_body_);
@@ -234,9 +261,34 @@ public:
         reinterpret_cast<void(__thiscall*)(void*)>(
             ReadNative<void*>(g_image, 0x27E258))(state_image.data());
     }
-    Vec CallDirectionOutsideExamine() {
+    void ResetForceState(int type, float mass = 35, bool owned = true) {
+        Reset(mass, false);
+        SetMassStub(body_image.data(), nullptr, mass);
+        Store(state_image.data(), 0, g_image+(type==1 ? 0x27E178 : 0x27E0F0));
+        Store(state_image.data(), 4, type);
+        Store(state_image.data(), type==1 ? 0x50 : 0x54,
+            static_cast<void*>(body_image.data()));
+        Store(state_image.data(), type==1 ? 0x80 : 0x60, 0);
+        Store(state_image.data(), 0x14, native_direction); // captured native forward
+        Store(player_image.data(), 0x2C0, type);
+        states[type] = state_image.data();
+        if (owned && type==1) {
+            g_push_hold.state=state_image.data(); g_push_hold.player=player_image.data();
+            g_push_hold.body=body_image.data(); g_push_hold.hand=runtime::VrHand::left;
+        } else if (owned) {
+            g_move_hold.state=state_image.data(); g_move_hold.player=player_image.data();
+            g_move_hold.body=body_image.data(); g_move_hold.hand=runtime::VrHand::left;
+            g_move_hold.max_linear=g_move_hold.max_angular=100;
+        }
+    }
+    void InvokeForceExamine(int type) {
+        RefreshReference();
+        reinterpret_cast<void(__thiscall*)(void*)>(ReadNative<void*>(
+            g_image,type==1 ? 0x27E190 : 0x27E108))(state_image.data());
+    }
+    Vec CallDirectionOutsideExamine(bool move = false) {
         Vec out{};
-        reinterpret_cast<Direction>(g_image + 0xAA5BB)(camera.data(), &out,
+        reinterpret_cast<Direction>(g_image + (move ? 0xAAE12 : 0xAA5BB))(camera.data(), &out,
             reinterpret_cast<const Cursor*>(player_image.data() + 0x2EC), graphics.data());
         return out;
     }
@@ -280,6 +332,33 @@ public:
         else reinterpret_cast<void(__thiscall*)(void*, const Vec*)>(
             ReadNative<void*>(table, 0x84))(body, &direction);
         f.zero_phase_ = false;
+    }
+    // Characterized exact-image Push B: transition/Leave first, then a central
+    // force min(mass,40)*233 along the forward captured by native Enter (+14).
+    // This is a force, NOT NewtonAddBodyImpulse or tracked release velocity.
+    static void __fastcall NativePushThrowStub(void* state, void*) {
+        auto* player=ReadNative<void*>(state,0x10);
+        NativeChangeStateStub(player,nullptr,ReadNative<int>(state,0x80));
+        if (!ReadNative<bool>(player,0x50)) return;
+        const float mass=ReadNative<float>(ReadNative<void*>(state,0x50),0x434);
+        auto force=ReadNative<Vec>(state,0x14);
+        for(auto& component:force) component*=std::min(mass,40.0F)*233.0F;
+        RecordForce(force);
+    }
+    static void __fastcall NativeMoveThrowStub(void* state, void*) {
+        auto* player=ReadNative<void*>(state,0x10);
+        if (ReadNative<bool>(player,0x50)) {
+            auto force=current_->CallDirectionOutsideExamine(true);
+            const float mass=ReadNative<float>(ReadNative<void*>(state,0x54),0x434);
+            for(auto& component:force) component*=std::min(mass,3.0F)*500.0F;
+            RecordForce(force);
+        }
+        NativeChangeStateStub(player,nullptr,ReadNative<int>(state,0x60));
+    }
+    static void __fastcall PlainExitStub(void* state,void*) {
+        const int type=ReadNative<int>(state,4);
+        NativeChangeStateStub(ReadNative<void*>(state,0x10),nullptr,
+            ReadNative<int>(state,type==1 ? 0x80 : type==2 ? 0x60 : 0x28));
     }
 
 private:
@@ -325,6 +404,15 @@ private:
     }
     static void __fastcall NativeEnterStub(void*, void*, void*) {
         auto& f = *current_; ++f.enters; f.events_.push_back(Event::native_enter);
+    }
+    static void __fastcall NativeForceLeaveStub(void*,void*,void*) {
+        ++current_->leaves; current_->events_.push_back(Event::native_leave);
+    }
+    static void __fastcall AwakeStub(void*,void*,bool) {}
+    static int __fastcall NoJointCountStub(void*,void*) { return 0; }
+    static void RecordForce(const Vec& force) {
+        ++current_->forces; current_->applied_force=force;
+        current_->events_.push_back(Event::force);
     }
     static Vec* __fastcall NativeUnprojectStub(void* camera, void*, Vec* out,
         const Cursor* cursor, void* graphics) {
@@ -433,6 +521,15 @@ inline bool AssistedThrowCases(Fixture& f, ExamineHook examine, DirectionHook di
         if (!Near(f.CallDirectionOutsideExamine(), f.native_direction)) return false;
         return true;
     };
+    const auto cancel = [&]() {
+        f.InvokeExamine(false);
+        if(f.throw_impulses || f.changes!=1 || f.leaves!=1 ||
+            g_grab_hold.state!=nullptr) {
+            std::cerr<<"RQ invalid VR Grab B fell back to native camera launch\n";
+            return false;
+        }
+        return true;
+    };
     f.Reset();
     f.frame.hands[1].aim.device_to_absolute.values[0] = -1;
     f.frame.hands[1].aim.device_to_absolute.values[10] = -1;
@@ -452,19 +549,16 @@ inline bool AssistedThrowCases(Fixture& f, ExamineHook examine, DirectionHook di
     f.Reset(1.1F, false);
     if (!launch({13, 0, 0}, "native-origin Examine remains native")) return false;
     f.Reset(); f.frame.hands[0].aim.pose_valid = f.frame.hands[0].grip.pose_valid = false;
-    if (!launch({13, 0, 0}, "missing owner pose retains native fallback")) return false;
+    if (!cancel()) return false;
     f.Reset();
     g_world_from_tracking_identity={1,1,2,3};
     f.frame.hands[0].aim.identity={2,2,4,3};
     f.frame.hands[0].grip.identity={2,2,4,3};
-    if (!launch({13, 0, 0}, "mismatched tracking epoch retains native fallback")) return false;
+    if (!cancel()) return false;
     g_world_from_tracking_identity={};
     f.Reset();
     AddTrackedWorldYaw(1.57079632679F);
-    f.InvokeExamine(false);
-    if(f.throw_impulses!=1 || !Near(f.impulse_delta,{13,0,0})) {
-        std::cerr<<"RQ assisted throw reused a reference from before turn\n"; return false;
-    }
+    if (!cancel()) return false;
     f.Reset(); Fixture::Store(f.player_image.data(), 0x50, false); f.InvokeExamine();
     if (f.throw_impulses || f.changes != 1 || f.leaves != 1 ||
             !Near(f.Velocity(), {0, 5, 0})) return false;
@@ -498,6 +592,220 @@ inline bool GestureReleaseCases(Fixture& f) {
         }
     }
     g_world_from_tracking_identity={};
+    return true;
+}
+
+inline bool PushThrowCases(Fixture& f) {
+    // Authored level07 metalball01: Push, 35 kg. The controller points -Z;
+    // the native Enter captured +X (or -X after a ladder/native yaw change).
+    for (float old_forward : {1.0F,-1.0F}) {
+        f.ResetForceState(1);
+        Fixture::Store(f.state_image.data(),0x14,Vec{old_forward,0,0});
+        f.InvokeForceExamine(1);
+        if(f.forces!=1 || !Near(f.applied_force,{0,0,-8155}) ||
+            f.changes!=1 || f.leaves!=1 || g_push_hold.state!=nullptr ||
+            ReadNative<int>(f.player_image.data(),0x2C0)!=0 ||
+            !Near(ReadNative<Vec>(f.state_image.data(),0x14),{old_forward,0,0}) ||
+            f.Events().back()!=Event::force) {
+            std::cerr<<"RQ Push B used captured camera forward instead of current owner aim\n";
+            return false;
+        }
+    }
+    // Losing the trigger/focus must take native StopInteract, not B's launch.
+    f.ResetForceState(1); f.frame.focused=false;
+    HookedPushUpdate(f.state_image.data(),nullptr,1.0F/60.0F);
+    if(f.forces || f.changes!=1 || f.leaves!=1 || g_push_hold.state!=nullptr) {
+        std::cerr<<"RQ Push cancellation launched the sphere\n"; return false;
+    }
+    f.ResetForceState(1); g_push_hold={};
+    g_pending_push_state=f.state_image.data(); f.frame.focused=false;
+    HookedPushUpdate(f.state_image.data(),nullptr,1.0F/60.0F);
+    if(f.forces || f.changes!=1 || f.leaves!=1 || g_pending_push_state!=nullptr) {
+        std::cerr<<"RQ rejected Push acquisition launched the sphere\n"; return false;
+    }
+    for(const auto profile:std::array<std::array<float,2>,3>{{{1.1F,256.3F},{35,8155},{50,9320}}}) {
+        f.ResetForceState(1,profile[0]); f.InvokeForceExamine(1);
+        if(f.forces!=1 || !Near(f.applied_force,{0,0,-profile[1]},0.001F) ||
+            ReadNative<float>(f.body_image.data(),0x434)!=profile[0] ||
+            !Near(f.Velocity(),{})) return false; // Force never becomes an extra impulse.
+    }
+    f.ResetForceState(1,35,false); f.InvokeForceExamine(1);
+    if(f.forces!=1 || !Near(f.applied_force,{8155,0,0})) return false;
+    f.ResetForceState(1); Fixture::Store(f.player_image.data(),0x50,false);
+    f.InvokeForceExamine(1);
+    if(f.forces || f.leaves!=1) return false;
+    // Native Push is planar: pitch does not add lift or reduce horizontal power.
+    f.ResetForceState(1);
+    f.frame.hands[0].aim.device_to_absolute.values={1,0,0,0, 0,0.6F,-0.8F,0, 0,0.8F,0.6F,0};
+    f.InvokeForceExamine(1);
+    if(f.forces!=1 || !Near(f.applied_force,{0,0,-8155})) return false;
+    return true;
+}
+
+inline bool MoveThrowCases(Fixture& f) {
+    f.ResetForceState(2);
+    f.InvokeForceExamine(2);
+    if(f.forces!=1 || !Near(f.applied_force,{0,0,-1500}) ||
+        f.changes!=1 || f.leaves!=1 || g_move_hold.state!=nullptr ||
+        f.Events().front()!=Event::force) {
+        std::cerr<<"RQ free Move B did not preserve owner aim / native force-before-Leave\n";
+        return false;
+    }
+    for(const auto profile:std::array<std::array<float,2>,3>{{{1.1F,550},{3,1500},{35,1500}}}) {
+        f.ResetForceState(2,profile[0]); f.InvokeForceExamine(2);
+        if(f.forces!=1 || !Near(f.applied_force,{0,0,-profile[1]})) return false;
+    }
+    f.ResetForceState(2,35,false); f.InvokeForceExamine(2);
+    if(f.forces!=1 || !Near(f.applied_force,{1500,0,0})) return false;
+    f.ResetForceState(2); g_move_hold.mode=MoveMode::hinge; f.InvokeForceExamine(2);
+    if(f.forces!=1 || !Near(f.applied_force,{1500,0,0})) return false;
+    f.ResetForceState(2); Fixture::Store(f.player_image.data(),0x50,false);
+    f.InvokeForceExamine(2);
+    if(f.forces || f.leaves!=1) return false;
+    return true;
+}
+
+inline runtime::VrMatrix44 CardinalYaw(unsigned quarter) {
+    constexpr std::array<float,4> c{1,0,-1,0},s{0,1,0,-1};
+    return {{c[quarter],0,s[quarter],7, 0,1,0,3, -s[quarter],0,c[quarter],-9, 0,0,0,1}};
+}
+
+inline bool OrientationAndFreshnessCases(Fixture& f) {
+    constexpr std::array<Vec,4> forwards{{{0,0,-1},{-1,0,0},{0,0,1},{1,0,0}}};
+    // Current native yaw (including ladder/script changes), current HMD yaw,
+    // and owning aim orientation are independently varied. Native camera and
+    // tracking origins are translated: neither can translate a direction.
+    for(unsigned world=0;world<4;++world) for(unsigned head=0;head<4;++head)
+        for(unsigned controller=0;controller<4;++controller) for(int type:{6,2,1})
+            for(unsigned repeat=0;repeat<2;++repeat) {
+                if(type==6) f.Reset(); else f.ResetForceState(type);
+                g_tracking_anchor_valid=true;
+                g_tracking_anchor=CollapseRigidView(runtime::IdentityMatrix());
+                g_tracking_world_yaw.store(0);
+                runtime::VrMatrix44 native_view{};
+                std::string error;
+                if(!runtime::InvertRigidTransform(CollapseRigidView(CardinalYaw(world)),
+                        native_view,error)) return false;
+                runtime::VrHmdPose hmd{};
+                hmd.device_to_absolute=CollapseRigidView(CardinalYaw(head));
+                hmd.device_connected=hmd.pose_valid=true;
+                runtime::VrMatrix44 head_view{};
+                if(!ComposeTrackedHeadView(native_view,hmd,head_view,error) ||
+                    !ComposeToolVisibilityTracking(head_view,hmd.device_to_absolute,
+                        g_world_from_tracking,error)) return false;
+                f.frame.hands[0].aim.device_to_absolute=CollapseRigidView(CardinalYaw(controller));
+                // B on the other hand and a differently oriented grip cannot select aim.
+                f.frame.hands[1].aim.device_to_absolute=CollapseRigidView(CardinalYaw((controller+2)%4));
+                const float magnitude=type==6 ? 13.0F : type==2 ? 1500.0F : 8155.0F;
+                Vec expected=forwards[(world+controller)%4];
+                for(auto& component:expected) component*=magnitude;
+                if(type==6) f.InvokeExamine(); else f.InvokeForceExamine(type);
+                const auto actual=type==6 ? f.impulse_delta : f.applied_force;
+                if(!Near(actual,expected,0.001F)) {
+                    std::cerr<<"RQ throw head/controller/native yaw regression: "
+                        <<type<<'/'<<world<<'/'<<head<<'/'<<controller<<'/'<<repeat<<'\n';
+                    return false;
+                }
+            }
+    for(int type:{6,2,1}) {
+        if(type==6) { f.Reset(); g_grab_hold.hand=runtime::VrHand::right; }
+        else {
+            f.ResetForceState(type);
+            if(type==1) g_push_hold.hand=runtime::VrHand::right;
+            else g_move_hold.hand=runtime::VrHand::right;
+        }
+        g_world_from_tracking=runtime::IdentityMatrix();
+        f.frame.hands[1].aim.device_to_absolute=CollapseRigidView(CardinalYaw(3));
+        if(type==6) f.InvokeExamine(); else f.InvokeForceExamine(type);
+        const float magnitude=type==6 ? 13.0F : type==2 ? 1500.0F : 8155.0F;
+        if(!Near(type==6 ? f.impulse_delta : f.applied_force,{magnitude,0,0},0.001F)) {
+            std::cerr<<"RQ throw ignored right holding controller\n"; return false;
+        }
+    }
+    for(int type:{6,2,1}) for(unsigned gate=0;gate<9;++gate) {
+        if(type==6) f.Reset(); else f.ResetForceState(type);
+        if(gate==0) f.frame.focused=false;
+        if(gate==1) f.frame.hands[0].aim.pose_valid=f.frame.hands[0].grip.pose_valid=false;
+        if(gate==2) g_world_from_tracking_time=GetTickCount64()-101;
+        if(gate==3) AddTrackedWorldYaw(1.57079632679F);
+        if(gate==4) {
+            g_world_from_tracking_identity={1,1,1,1};
+            f.frame.hands[0].aim.identity=f.frame.hands[0].grip.identity={2,2,2,1};
+        }
+        if(gate==5) test_ui=true;
+        if(gate==6) f.frame.hands[0].aim.device_connected=f.frame.hands[0].grip.device_connected=false;
+        if(gate==7) {
+            const float nan=std::numeric_limits<float>::quiet_NaN();
+            f.frame.hands[0].aim.device_to_absolute.values[2]=nan;
+            f.frame.hands[0].grip.device_to_absolute.values[2]=nan;
+        }
+        if(gate==8) {
+            f.frame.hands[0].aim.device_to_absolute.values[2]=0;
+            f.frame.hands[0].aim.device_to_absolute.values[6]=-1;
+            f.frame.hands[0].aim.device_to_absolute.values[10]=0;
+            if(type!=1) continue; // No planar direction; other families support pitch.
+        }
+        // Do not refresh the deliberately invalid reference at action time.
+        if(type==6) f.InvokeExamine(false);
+        else reinterpret_cast<void(__thiscall*)(void*)>(ReadNative<void*>(
+            g_image,type==1 ? 0x27E190 : 0x27E108))(f.state_image.data());
+        test_ui=false; g_world_from_tracking_identity={};
+        if(f.forces || f.throw_impulses || f.changes!=1 || f.leaves!=1) {
+            std::cerr<<"RQ invalid throw reference launched: "<<type<<'/'<<gate<<'\n'; return false;
+        }
+    }
+    return true;
+}
+
+inline bool PendingThrowCases(Fixture& f) {
+    // Interact is dispatched before Examine in the same native input update.
+    // Enter has accepted a VR body, but its first Update may not have run yet.
+    for(int type:{6,2,1}) {
+        if(type==6) {
+            f.Reset(); g_grab_hold={};
+            g_pending_grab_state=f.state_image.data();
+            g_pending_grab_hand=runtime::VrHand::left;
+        } else {
+            f.ResetForceState(type);
+            if(type==1) {
+                g_push_hold={}; g_pending_push_state=f.state_image.data();
+                g_pending_push_hand=runtime::VrHand::left;
+            } else {
+                g_move_hold={}; g_pending_move_state=f.state_image.data();
+                g_pending_move_hand=runtime::VrHand::left;
+            }
+        }
+        if(type==6) f.InvokeExamine(); else f.InvokeForceExamine(type);
+        const float magnitude=type==6 ? 13.0F : type==2 ? 1500.0F : 8155.0F;
+        if(!Near(type==6 ? f.impulse_delta : f.applied_force,{0,0,-magnitude},0.001F)) {
+            std::cerr<<"RQ same-tick VR Enter/Examine used native camera\n";
+            return false;
+        }
+    }
+    return true;
+}
+
+inline bool GestureMassAndOrientationCases(Fixture& f) {
+    constexpr std::array<Vec,4> direction{{{1,0,0},{0,0,-1},{-1,0,0},{0,0,1}}};
+    for(float mass:{1.1F,35.0F,50.0F}) for(unsigned yaw=0;yaw<4;++yaw)
+        for(unsigned wrist=0;wrist<4;++wrist) for(float speed:{0.0F,4.0F,20.0F}) {
+            f.Reset(mass);
+            g_world_from_tracking=CardinalYaw(yaw);
+            f.frame.hands[0].grip.device_to_absolute=CollapseRigidView(CardinalYaw(wrist));
+            f.frame.hands[0].grip.velocity={speed,0,0};
+            f.frame.hands[0].grip.angular_velocity={0,4,0};
+            // Last OpenVR release sample must win over previously carried speed.
+            const Vec carried{0,1,0};
+            f.newton.linear(ReadNative<const NewtonBody*>(f.body_image.data(),0x41C),carried.data());
+            reinterpret_cast<void(__thiscall*)(void*,int)>(g_image+0x9CEE0)(f.player_image.data(),0);
+            Vec expected=direction[yaw];
+            for(auto& component:expected) component*=speed==20 ? 9 : speed*1.25F;
+            if(!Near(f.Velocity(),expected) || !Near(f.Omega(),{0,2,0}) ||
+                ReadNative<float>(f.body_image.data(),0x434)!=mass || f.throw_impulses) {
+                std::cerr<<"RQ gesture mass / tracking-space velocity regression\n";
+                return false;
+            }
+        }
     return true;
 }
 } // namespace penumbra_vr::backends::requiem::native_throw_fixture

@@ -1,23 +1,23 @@
 # Framework release status
 
-## Current public release — v1.0.11
+## Current public release — v1.0.12: headset validation pending
 
-**v1.0.11**, dated 2026-10-26, publishes the maintenance audit corrections:
-installer recovery/uninstall, Overture essential input/recenter and Requiem
-selection/interaction/resource lifecycle. It also includes the native level05
-ScriptArea and slider-endpoint adaptations. New behavior is **host-tested**;
-live/headset acceptance remains separate. See [release notes](releases/1.0.11.md).
+**v1.0.12**, dated 2026-10-27, publishes all current interaction maintenance
+corrections: Requiem controller-owned assisted throws and B/cancellation handling,
+the shared hinge COM correction and native head-to-visible-palm area selection
+with common-origin contact priority. It retains preceding installer, input,
+resource-lifecycle and drawer corrections. **The developer has not tested this
+version in-game or in a VR headset.** New behavior is **host-tested only**;
+publication does not close actual progression gates. See
+[release notes](releases/1.0.12.md).
 
-Framework host regressions pass in Release and Debug (77 tests each); the
-autonomous Overture product passes 298 checks. Installer fixtures cover current
-and legacy recovery journals, deleted preferences, path conflicts, language
-removal, rollback, verified ALUT restoration and Setup extraction. The
-[v1.0.11 validation record](releases/1.0.11-validation.json) pins the clean build
-source, all four artifacts and six shipped x86 PE identities. Exact final Setup
-checks cover English/Spanish extraction, destination separators, topologies A–F
-and upgrade/repair/exact restore from v1.0.10. The release tag adds documentation
-over that build source; the packaged source commit remains explicit. Older
-headset evidence cannot be transferred automatically to the new version.
+Framework host regressions pass in Release and Debug (78 tests each); the
+autonomous Overture Release product passes 298 checks. The versioned artifact
+record pins the clean build source, four artifacts, six shipped x86 PE identities
+and the exact packaging/installer checks performed for this release. The release
+tag adds documentation over that build source; the packaged source commit
+remains explicit. Older headset evidence cannot be transferred automatically
+to the new version.
 
 The v1.0.0 installer, published 2026-09-29, had maintainer real installation,
 removal and game-entry acceptance across the trilogy and fixture validation
@@ -29,11 +29,12 @@ This is not independent clean-PC or all-headset certification.
 
 - **Requiem level04 sewer water/crouch:** unresolved. The diagnostic
   samples native capsule height; there is no confirmed recovery correction.
-- **Requiem level05 buttons and filing cabinets:** v1.0.11 ScriptArea and
-  slider-endpoint corrections have targeted host evidence only. Actual
+- **Requiem levers, level05 buttons and filing cabinets:** hinge COM, native
+  area selection and retained slider-endpoint corrections have host evidence only. Actual
   Quest 3 activation/progression and script behavior are unverified.
-- **Requiem level03 throw and Examine/ladder:** the v1.0.10 host correction
-  awaits headset usability and progression feedback.
+- **Requiem level03/07 throwing and Examine/ladder:** the current controller-aim
+  and cancellation corrections await headset usability/progression feedback.
+  The level07 sphere's physical lip stoppage has no established cause.
 - **Requiem intermittent startup crash:** SDL mutex failure observed, root
   cause and correction unknown. No speculative fix is warranted.
 - **Other known limits:** minor finger/contact intersection and monolith
@@ -79,7 +80,7 @@ progression plus restoration. Do not infer one game's acceptance from another.
 ## Historical releases
 
 Historical changes and individual version notes are retained in
-[CHANGELOG.md](CHANGELOG.md) and [docs/releases](releases/1.0.11.md).
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases](releases/1.0.12.md).
 The [2026-10-10 installed-trilogy acceptance](releases/1.0.7-headset-acceptance.json)
 and [v1.0.8 BP focused acceptance](releases/1.0.8-headset-acceptance.json)
 retain their scoped hashes. Each version's validation JSON records its clean

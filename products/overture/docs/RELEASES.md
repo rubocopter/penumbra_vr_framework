@@ -1,5 +1,13 @@
 # Release history
 
+## v1.0.12 — Hinge interaction maintenance (2026-10-27)
+
+Consume the proven Black Plague hinge centre-of-mass velocity correction from
+shared runtime, alongside Requiem. Native joint limits, controllers and script
+events retain ownership. Automated host checks pass; the developer has not
+tested this version in-game or in a VR headset. See the
+[Framework notes](../../../docs/releases/1.0.12.md).
+
 ## v1.0.11 — Input ownership, UI and recenter maintenance (2026-10-26)
 
 Interaction retains its acquiring hand across a second trigger press. Inactive

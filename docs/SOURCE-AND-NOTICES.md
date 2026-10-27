@@ -4,7 +4,7 @@ Framework v1.0.0 is the first public Framework release. Its acceptance record
 and remaining validation limits are documented in
 [CLOSURE_STATUS.md](CLOSURE_STATUS.md).
 
-The versioned release builder supplies `PenumbraVR-Source-1.0.11.zip` alongside
+The versioned release builder supplies `PenumbraVR-Source-1.0.12.zip` alongside
 the installer. It contains the exact committed Framework/Overture/HPL source,
 build scripts, dependency headers/link inputs and retained notices, plus the
 upstream source archives pinned by `assets/deployment/redistribution.json`.
@@ -53,14 +53,14 @@ The builder validates every input before creating artifacts.
 
 ```powershell
 .\tools\Build-PenumbraVrRelease.ps1 `
-  -OutputDirectory .\dist\v1.0.11-release `
+  -OutputDirectory .\dist\v1.0.12-release `
   -RuntimeDirectory 'C:\path\to\official\x86\Microsoft.VC143.CRT' `
   -SourceDirectory 'C:\path\to\pinned-source-inputs'
 ```
 
 The output directory must be new. The builder compiles/tests root Release and
 the autonomous Overture product, then exports exact committed source, upstream
-sources, notices, `PenumbraVR-Setup-1.0.11.exe`, `PenumbraVR-Source-1.0.11.zip`,
+sources, notices, `PenumbraVR-Setup-1.0.12.exe`, `PenumbraVR-Source-1.0.12.zip`,
 `build-report.json` and `SHA256SUMS.txt`. `-PackageOnly` skips repeating root
 build/tests and records that limitation; it still builds/tests Overture.
 The report records commit, toolchain, x86 PE imports/version/hash, pinned inputs

@@ -590,15 +590,31 @@ reproduce the post-Leave impulse before the correction.
 
 Rework's hinge servo computes linear velocity at the body matrix origin.
 Newton applies linear velocity at the centre of mass. Those differ for BP's
-offset-collider wall lever. The narrow BP application correction reads native
+offset-collider wall lever. The application correction reads native
 local COM, rotates it by the current body basis and adds omega cross that offset
 to the existing plan. Contact radius, angular response, lightness, native
 controllers, limits and event thresholds are preserved. This corrects an
 evidenced limitation shared with the Rework formula; it is not a transcription
 change or a new movement multiplier. A shipped-Newton offset-COM lever and
 zero-COM control cross the native 110-degree activation angle within the
--1/130-degree physical stops while preserving the pivot within 1 cm. BP-only
-host evidence does not establish Overture/Requiem consumption or headset success.
+-1/130-degree physical stops while preserving the pivot within 1 cm.
+Requiem's actual Move consumer independently reproduced the omitted correction:
+the same offset-COM fixture drifted about 19 cm at its pivot and did not activate.
+The correction now lives in `vr_mechanism_policy::CorrectHingeMassCentreVelocity`,
+consumed by BP, Requiem and Framework Overture. Each native owner supplies its
+own local COM and current body basis; RVAs remain backend-owned. Target consumer
+and Newton tests establish host evidence only. No global lever sign inversion,
+smoothing, new physics update or limit/controller change is part of this port.
+
+Requiem's ScriptArea path also retains Rework Normal VR's dedicated camera-to-
+resolved-hand-centre native query before physical selection. The independent
+Examine gaze query and short physical palm rays serve different purposes and
+cannot substitute for that area query. Native Clear/CastRay/CalculateResults,
+occlusion, range and action callbacks remain authoritative. The short-ray
+fallback compares area/contact points from one common origin; native distances
+from a rear-offset ray cannot be compared with palm-origin overlap distances.
+The existing central-ray/press-time auxiliary physical assistance is retained;
+the dedicated area query runs identically during passive and action refresh.
 
 ### Fixed computer activation and desktop cursor
 
@@ -679,6 +695,22 @@ forward and directly commits a cleared step pose; BP retains its native angular
 ray search and gradual vertical climb with collision-resolved horizontal travel.
 Those differences are not ported by supplying the missing normal, and must be
 investigated independently if the focused mattress retest remains blocked.
+
+## Requiem native button-throw adaptation
+
+Rework `23c890f` Grab/Move/Push `OnStartExamine` examines the gaze target;
+ordinary release transitions, with Grab publishing tracking-space velocities
+rotated into world space. Requiem additionally owns native Examine launches:
+Grab applies a mass-profile impulse, Move applies a mass-bounded force along
+camera/cursor unprojection, and Push applies a mass-bounded planar force along
+camera forward captured on Enter. Copying Rework Examine wholesale would remove
+that existing Requiem gameplay action. The narrow target adaptation instead
+keeps each native launch's force/impulse, mass, CanBeThrown and transition order,
+using the existing owning-controller local -Z convention for VR aiming. Push
+remains planar; constrained Move remains native. The Push cancellation boundary
+uses native StopInteract, matching Rework's transition-only release. Exact RVAs,
+native window hashes and original sphere asset facts stay in Requiem's manifest;
+candidate validation and unresolved puzzle evidence stay in the trilogy ledger.
 
 ## Validation rule
 

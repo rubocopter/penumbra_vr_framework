@@ -487,6 +487,8 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_requiem_interaction_consumer_test)
     add_test(NAME requiem_selection_consumer COMMAND pvr_requiem_interaction_consumer_test)
     add_test(NAME requiem_throw_consumer COMMAND pvr_requiem_interaction_consumer_test throw)
+    add_test(NAME requiem_mechanism_consumer COMMAND pvr_requiem_interaction_consumer_test mechanism)
+    set_tests_properties(requiem_mechanism_consumer PROPERTIES TIMEOUT 30)
     set_tests_properties(requiem_throw_consumer PROPERTIES TIMEOUT 30)
     set_tests_properties(requiem_selection_consumer PROPERTIES TIMEOUT 30)
 

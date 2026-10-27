@@ -666,12 +666,17 @@ void cPlayerState_Move_VR::OnUpdate(float afTimeStep)
       {
         // Rework's hinge servo math is shared; Overture still owns which
         // native joint is selected and the per-entity lightness profile.
-        const vr_mechanism::VrMechanismMotionPlan plan =
+        vr_mechanism::VrMechanismMotionPlan plan =
           vr_mechanism::PlanHinge(
             ToVrMechanismVector(destDiff), ToVrMechanismVector(vPinDir),
             ToVrMechanismVector(vPivot), ToVrMechanismVector(mvPickPoint),
             ToVrMechanismVector(mpPushBody->GetWorldPosition()),
             mfHingeLightnessFactor);
+        std::array<float,16> bodyPose;
+        const cMatrixf& nativePose = mpPushBody->GetWorldMatrix();
+        std::copy(nativePose.v,nativePose.v+16,bodyPose.begin());
+        if (!vr_mechanism::CorrectHingeMassCentreVelocity(bodyPose,
+              ToVrMechanismVector(mpPushBody->GetMassCentre()),plan)) return;
         const cVector3f vAngVel =
           FromVrMechanismVector(plan.angular_velocity);
 

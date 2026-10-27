@@ -114,6 +114,88 @@ mass profiles, CanBeThrown and off-center impulse behavior. Reaching the
 level03 trigger and perceived aiming/cue usability remain headset gates.
 Exact mappings and evidence windows are in Requiem's manifest.
 
+### Requiem button throwing and level07 sphere — v1.0.12 host evidence
+
+The level07 cogwheel sphere is `metalball01`, authored as native `Push=1`,
+not Grab. Its installed entity declares 35 kg, linear/angular damping 1 and
+speed caps 10; its DAE supplies a spherical collider of about 0.6 m radius.
+`StopCogs("stopcogs3")` activates it and `MetalBallAtGoal` sets `BallDone` on
+entering `ballgoal`. The original map includes a character collider across the
+drop opening. These are asset/script observations, not a live reproduction of
+the reported stoppage at the lip. The solver cause of that stoppage remains
+unknown; no level collision, sphere profile or laser-puzzle script was changed.
+
+The earlier Grab-only B correction did not cover this sphere. Independently
+decoded Requiem Push Examine uses the planar camera forward saved on native
+Enter, even after the player/controller changes orientation. Its VR owner now
+supplies the current holding controller's world-space aim projected onto the
+horizontal plane, matching native Push's planar convention. Native Leave,
+CanBeThrown and central force `min(mass,40)*233` remain native. The adapter's
+guarded Push cancellation also called that launch handler by mistake; it now
+calls native transition-only StopInteract. Ordinary release is not a B launch.
+
+Free-body `Move=2` Examine separately used camera/cursor unprojection. It now
+uses the same controller aim convention as Grab while retaining its native
+`min(mass,3)*500` force before Leave. Jointed Move retains native Examine.
+Owned VR Grab/Move/Push B with an invalid, stale or pre-turn reference releases
+normally instead of silently launching along native camera state. Native-origin
+interactions retain their original handlers. Examine immediately after a native
+VR Enter also uses that pending owner's hand, before the first hold Update;
+pending Move is adapted only when independently recognizable as a free body.
+Gesture release still rotates
+OpenVR grip velocities without translation, using Rework's existing gains and
+caps; no systematic release-strength deficit has been demonstrated.
+
+The actual render-world consumer regression covers independently varied HMD,
+native/player and controller yaw, repeated throws, changed native heading as
+after ladder/script movement, both direction callsites, mass/CanBeThrown,
+force/Leave ordering, planar Push, constrained Move exclusion, tracking/focus/UI
+cancellation, same-update Interact/Examine and hook removal. Grab impulse/gesture tests use the shipped Newton
+DLL; native state/force boundaries are characterized fixtures, not a running
+game. This candidate is **implemented and host-tested** only. Level03 bottle
+trajectory/progression and level07 sphere entry into `ballgoal`, including after
+a ladder round trip, remain separate headset gates.
+
+### Requiem interaction parity — v1.0.12 host evidence
+
+The current adapter already consumes the v1.0.11 sticky-slider correction below;
+filing cabinets need no second workaround. Native Move Enter/Leave, constraints,
+limits and script overrides retain ownership. Current host tests recheck that
+restoration contract; the reported in-game resistance remains unconfirmed.
+
+Requiem had omitted BP's offset-centre-of-mass hinge correction while consuming
+the same origin-based shared servo. Its production Move Update, exercised with
+the shipped Newton DLL and an offset-COM lever, produced about 19 cm of pivot
+drift and failed the 110-degree activation fixture before correction. Shared
+COM conversion now serves BP, Requiem and Framework Overture. Tests cover zero
+and offset COM, translated/rotated bodies, controller yaw, reversed pin,
+stationary hold, repeated solver/tracking updates, physical stops and Leave.
+Mechanisms never receive the free-body matrix-placement path in these checks.
+This establishes a rigid-body velocity defect, not a visual-only explanation
+or proof that every reported tremor has the same cause. The projected motion
+does not show a global Requiem sign inversion; individual authored mechanisms
+and perceived direction still require their own in-game confirmation.
+Installed level04 scripts already use different activation states:
+`TurnOffGenerator` responds to `-1`, while bridge `LeverActivate` responds to
+`1`. Those authored states are not universal world-space up/down directions
+and must not be replaced by a global Requiem sign rule.
+
+The earlier level05 adaptation retained ScriptAreas on short hand rays but
+omitted Rework's separate head-to-hand area query. That native occluded query
+now precedes physical selection at the original native range, during passive
+and Interact refresh alike. The short-ray fallback also compares area and
+physical hit points from one common origin. Actual-consumer regressions cover
+the previously missing area, stationary detection/action consistency, controller
+rotation, foreground obstruction, range rejection and mixed-origin priority.
+Native callbacks in these tests are characterized fixtures; the level05 scripts
+and their puzzle conditions have not been executed. Examine cue 4 remains an
+independent gaze cue and does not promise an eligible Interact action.
+
+These changes ship in v1.0.12 as implemented and host-tested only. The developer
+has not tested this version in-game or in a VR headset; there is no new live or
+headset acceptance. Existing throwing/B fixes are retained.
+Level05 progression and lever direction/contact stability remain headset gates.
+
 ### Requiem level04/05 progression feedback — 2026-10-25
 
 Caelus reports that crouching in level04 sewer water can leave the player

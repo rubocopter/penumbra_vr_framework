@@ -315,6 +315,13 @@ new throw/selection candidate.
   stick movement, turn, release/reacquire and try a nonthrowable prop. Native
   script events and CanBeThrown must remain intact. Lose focus/tracking or open
   UI while holding; there must be no unintended release momentum.
+- At level07 after the cogwheels activate `metalball01`, point the holding
+  controller horizontally toward the opening and press Examine/B. Repeat after
+  descending and returning by ladder; changing head direction alone must not
+  change the launch. Confirm entry into `ballgoal` and progression. Also release
+  Interact without B: it must not apply B's extra force. The original character
+  barrier, sphere mass/collision and laser puzzle remain unchanged; separately
+  record any remaining lip stoppage during physical pushing.
 - Look at a described object with the hand pointing elsewhere; its Examine cue
   should be easy to find and the action should examine that head target even
   while the hand is near another object. Check repeatable and once-only text,

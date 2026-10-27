@@ -29,12 +29,16 @@ std::vector<SceneHit> test_head_hits;
 std::vector<SceneHit> test_hand_hits;
 std::vector<SceneHit> test_offset_hand_hits;
 bool test_separate_hand_rays=false;
+bool test_separate_area_ray=false;
+bool test_geometric_area_ray=false;
+std::vector<SceneHit> test_area_hits;
 void* test_script_area_body=nullptr;
 void* test_joint_body=nullptr;
 void* test_joint_ptr=nullptr;
 bool test_move_leave_saw_restored=false;
 unsigned test_head_rays=0, test_native_rays=0;
 TestVec test_last_from{},test_last_to{};
+TestVec test_area_from{},test_area_to{};
 
 template<class T> void Put(void* object,std::size_t offset,const T& value) {
     std::memcpy(static_cast<std::uint8_t*>(object)+offset,&value,sizeof(value));
@@ -93,13 +97,26 @@ void __fastcall NativeRay(void*,void*,void* callback,const TestVec* from,
     const TestVec* to,bool,bool,bool,bool) {
     ++test_native_rays;
     const bool head=(*from)[1]>=1.5F;
-    if(head) { ++test_head_rays; test_last_from=*from; test_last_to=*to; }
+    const bool head_to_hand=head && std::abs((*to)[1]-(*from)[1])>0.1F;
+    if(head_to_hand) { test_area_from=*from; test_area_to=*to; }
+    else if(head) { ++test_head_rays; test_last_from=*from; test_last_to=*to; }
     auto* table=ReadNative<TestPick::Table*>(callback,0);
     const bool offset=std::abs((*from)[0])>0.001F ||
         std::abs((*from)[1]-0.8F)>0.001F;
-    const auto& hits=head ? test_head_hits :
+    const auto& hits=head_to_hand && test_separate_area_ray ? test_area_hits : head ? test_head_hits :
         test_separate_hand_rays && offset ? test_offset_hand_hits : test_hand_hits;
     for(const auto& hit:hits) {
+        if(head_to_hand && test_geometric_area_ray) {
+            // A 5 mm target must lie on this finite ray, not merely occur in
+            // the injected hit list. Pin visible-palm versus controller origin.
+            const TestVec delta{(*to)[0]-(*from)[0],(*to)[1]-(*from)[1],(*to)[2]-(*from)[2]};
+            const TestVec rel{hit.point[0]-(*from)[0],hit.point[1]-(*from)[1],hit.point[2]-(*from)[2]};
+            float dot=0,length2=0;
+            for(unsigned i=0;i<3;++i) { dot+=delta[i]*rel[i]; length2+=delta[i]*delta[i]; }
+            const float t=dot/length2;
+            if(t<0 || t>1 || std::hypot(rel[0]-t*delta[0],rel[1]-t*delta[1],rel[2]-t*delta[2])>0.005F)
+                continue;
+        }
         if(!table->before(callback,hit.body)) continue;
         RankedRayCallback::Hit native_hit{};
         native_hit.distance=hit.distance; native_hit.point=hit.point;
@@ -285,6 +302,41 @@ bool SelectionCases() {
     Put(script_entity.data(),0x10,static_cast<void*>(init.data()));
     test_script_area_body=script_area.data();
     test_head_hits.clear();
+    // Rework 23c890f uses camera -> hand-centre LOS for native areas before
+    // physical contact. A button beyond the 18 cm physical ray must retain
+    // native area range, with the same selection before and during Interact.
+    test_separate_area_ray=true;
+    test_geometric_area_ray=true;
+    test_hand_hits.clear();
+    grip.device_to_absolute.values[11]=-0.5F;
+    test_area_hits={{script_area.data(),1.51F,{0,0.35F,-0.675F}}};
+    update();
+    if(pick.body!=script_area.data()) {
+        std::cerr<<"Native button area missing from passive head-to-hand selection\n";
+        return Failed(__LINE__);
+    }
+    // head=(0,1.7,0), visible palm=(0,0.8,-0.45), native length=10.
+    if(!Near(test_area_from[1],1.7F) ||
+        !Near(test_area_to[1],1.7F-9.0F/std::sqrt(1.0125F)) ||
+        !Near(test_area_to[2],-4.5F/std::sqrt(1.0125F))) return Failed(__LINE__);
+    RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=script_area.data() || g_vr_selection_player!=player.data())
+        return Failed(__LINE__);
+    // Rotated controller +Z shifts the visible palm 5 cm along world +X.
+    // The query must follow that palm, still using the native area range.
+    grip.device_to_absolute.values={0,0,1,0, 0,1,0,0.8F, -1,0,0,-0.5F};
+    test_area_hits={{script_area.data(),1.55F,{0.075F,0.35F,-0.75F}}};
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=script_area.data()) return Failed(__LINE__);
+    test_geometric_area_ray=false;
+    test_area_hits.push_back({foreground.data(),0.4F,{0,1.3F,-0.1F}});
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) return Failed(__LINE__);
+    test_area_hits={{script_area.data(),11.0F,{0,0.8F,-11.0F}}};
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) return Failed(__LINE__);
+    test_separate_area_ray=false; test_area_hits.clear();
+    grip.device_to_absolute.values={1,0,0,0, 0,1,0,0.8F, 0,0,1,0};
     test_hand_hits={{script_area.data(),0.18F,{0,0.8F,-0.18F}}};
     RefreshVrSelectionBeforeInteract(player.data());
     if(pick.body!=script_area.data() || g_vr_selection_player!=player.data()) {
@@ -317,8 +369,8 @@ bool SelectionCases() {
     NativePickResult candidate{};
     if(!FindNativeHandArea(reinterpret_cast<Ray>(&NativeRay),nullptr,&pick,
             rays,1U,true,false,true,false,2.1F,candidate) ||
-        !NativeAreaPrecedesPhysicalTarget(candidate,0.28F) ||
-        NativeAreaPrecedesPhysicalTarget(candidate,0.10F)) return Failed(__LINE__);
+        !NativeAreaPrecedesPhysicalTarget(candidate,{0,0.8F,-0.28F},{0,0.8F,0}) ||
+        NativeAreaPrecedesPhysicalTarget(candidate,{0,0.8F,-0.10F},{0,0.8F,0})) return Failed(__LINE__);
     test_hand_hits={{hand_body.data(),0.10F,{0,0.8F,-0.10F}},
                     {script_area.data(),0.18F,{0,0.8F,-0.18F}}};
     if(FindNativeHandArea(reinterpret_cast<Ray>(&NativeRay),nullptr,&pick,
@@ -326,7 +378,13 @@ bool SelectionCases() {
     NativePickResult invalid{};
     invalid.area=script_area.data(); invalid.body=hand_body.data();
     invalid.area_distance=0.05F;
-    if(NativeAreaPrecedesPhysicalTarget(invalid,0.28F)) return Failed(__LINE__);
+    if(NativeAreaPrecedesPhysicalTarget(invalid,{0,0,-0.28F},{})) return Failed(__LINE__);
+    // Area starts 6.25 cm behind the palm. Its native ray distance must not
+    // be compared directly with a contact distance measured from the palm.
+    candidate.body=candidate.area=script_area.data();
+    candidate.point={0,0,-0.18F}; candidate.area_distance=0.2425F;
+    if(!NativeAreaPrecedesPhysicalTarget(candidate,{0,0,-0.20F},{})) return Failed(__LINE__);
+    if(NativeAreaPrecedesPhysicalTarget(candidate,{0,0,-0.10F},{})) return Failed(__LINE__);
     test_script_area_body=nullptr;
     test_hand_hits.clear();
     test_head_hits={{body.data(),1.8F,{0,1.7F,-1.8F}}};
@@ -497,17 +555,25 @@ RequiemBodyTrackingSample ReadGameplayTrackingSample() noexcept { return {}; }
 void PublishGameplayHeadTracking(const runtime::VrHmdPose&,float) noexcept {}
 }
 #include "native_throw_fixture.hpp"
+#include "native_mechanism_fixture.hpp"
 int main(int argc, char** argv) {
     using namespace penumbra_vr::backends::requiem;
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,
         MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));
     if(!g_image) return 2;
     bool passed=false;
-    if(argc>1 && std::string(argv[1])=="throw") {
+    if(argc>1 && std::string(argv[1])=="mechanism") {
+        passed=native_mechanism_fixture::Cases();
+    } else if(argc>1 && std::string(argv[1])=="throw") {
         native_throw_fixture::Fixture fixture(test_frame,PVR_TEST_NEWTON_DLL);
         passed=fixture.Ready() && native_throw_fixture::CharacterizedNativeCases(fixture) &&
             native_throw_fixture::AssistedThrowCases(fixture,&HookedGrabExamine,&HookedThrowDirection) &&
-            native_throw_fixture::GestureReleaseCases(fixture);
+            native_throw_fixture::GestureReleaseCases(fixture) &&
+            native_throw_fixture::PushThrowCases(fixture) &&
+            native_throw_fixture::MoveThrowCases(fixture) &&
+            native_throw_fixture::OrientationAndFreshnessCases(fixture) &&
+            native_throw_fixture::GestureMassAndOrientationCases(fixture) &&
+            native_throw_fixture::PendingThrowCases(fixture);
         if(passed) {
             fixture.Reset(); test_ui=true;
             HookedGrabLeave(fixture.state_image.data(),nullptr,fixture.next_image.data());
@@ -519,7 +585,10 @@ int main(int argc, char** argv) {
             std::string error;
             passed=RemoveRenderWorld(error) && !RenderHooksInstalled() &&
                 ReadNative<void*>(g_image,kGrabExamineSlotRva)==g_image+kGrabExamineRva &&
-                std::equal(kThrowDirectionCall.begin(),kThrowDirectionCall.end(),g_image+kThrowDirectionCallRva);
+                std::equal(kThrowDirectionCall.begin(),kThrowDirectionCall.end(),g_image+kThrowDirectionCallRva) &&
+                std::equal(kMoveThrowDirectionCall.begin(),kMoveThrowDirectionCall.end(),g_image+kMoveThrowDirectionCallRva) &&
+                ReadNative<void*>(g_image,kMoveSlots[3])==g_image+kMoveTargets[3] &&
+                ReadNative<void*>(g_image,kPushSlots[3])==g_image+kPushTargets[3];
             fixture.Reset(); fixture.InvokeExamine();
             passed=passed && native_throw_fixture::Near(fixture.impulse_delta,{13,0,0});
         }
