@@ -30,7 +30,7 @@
 </p>
 
 > [!IMPORTANT]
-> You need the original PC games and SteamVR. Install only the games you own. **Penumbra: Requiem is an expansion and requires Penumbra: Black Plague.**
+> **Supported game editions: Steam only.** GOG and other non-Steam releases are not supported or validated and may be rejected by the installer. You need the original Steam PC games and SteamVR. Install only the games you own. **Penumbra: Requiem is an expansion and requires Penumbra: Black Plague.**
 
 ## One framework, three games
 
@@ -82,7 +82,7 @@ The installer can also update, verify, repair or remove the Framework. Optional 
 
 ## Requirements and compatibility
 
-**Required:** Windows PC · SteamVR · PCVR headset · two tracked controllers · original supported Penumbra game files.
+**Required:** Windows PC · SteamVR · PCVR headset · two tracked controllers · supported Steam editions of the original Penumbra games. GOG editions are not supported.
 
 The Framework has been tested end-to-end primarily with **PS VR2 and Sense controllers**. Bundled profiles are also provided for Valve Index, Meta/Oculus Touch, Pico, Vive and Windows Mixed Reality controllers, but not every device/action combination has been validated on physical hardware.
 
