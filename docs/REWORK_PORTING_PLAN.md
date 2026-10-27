@@ -696,6 +696,30 @@ ray search and gradual vertical climb with collision-resolved horizontal travel.
 Those differences are not ported by supplying the missing normal, and must be
 investigated independently if the focused mattress retest remains blocked.
 
+## Requiem level08 inventory and ScreenGui boundaries
+
+Rework `23c890f` Normal VR uses inventory-only fallback after physical selection
+fails and requires independent hand/head solid sight. Requiem's native Normal
+Item class proves a matching pickup family, including `key0801`; it needs no
+VR Grab ownership. Its adapter reuses the shared ordinary 1.9 m bound, casts the
+native selection callback from the controller and validates independent head
+sight, retaining the original character-to-hit distance/MaxInteractDist guard.
+Only the independently decoded Normal subtype is admitted. Native body-list
+enumeration/bounds for a full Rework magnetic cone are not established; copying
+BP offsets or widening physical reach would be unjustified. The bounded native
+ray is the smallest proven acquisition path across the level's intentional
+character-only boundary. Solids and script/inventory lifecycle remain native.
+
+Rework's HPL cGui delivers absolute and relative SendMousePos messages to its
+focused GuiSet, followed by native widget callbacks. BP already adapts this
+interface for its terminal. Requiem independently proves the same ABI at its
+ScreenGui input branch; only its mapped call is owned by the new pointer hook.
+The existing native action-query owner supplies UI select/back press/release and
+Escape, with active ScreenGui detection before choosing the OpenVR action set.
+Requiem retains its own active-set and RVA details; shared UI projection,
+smoothing and released-input semantics supply game-neutral behavior. No keypad
+solution, widget rewrite or global input reset is introduced.
+
 ## Requiem native button-throw adaptation
 
 Rework `23c890f` Grab/Move/Push `OnStartExamine` examines the gaze target;

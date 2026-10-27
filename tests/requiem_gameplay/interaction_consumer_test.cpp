@@ -31,6 +31,8 @@ std::vector<SceneHit> test_offset_hand_hits;
 bool test_separate_hand_rays=false;
 bool test_separate_area_ray=false;
 bool test_geometric_area_ray=false;
+bool test_filter_segments=false;
+void* test_character_only=nullptr;
 std::vector<SceneHit> test_area_hits;
 void* test_script_area_body=nullptr;
 void* test_joint_body=nullptr;
@@ -81,6 +83,8 @@ bool __fastcall NativeIntersect(void* value,void*,void* body,void* raw) {
     auto& pick=*static_cast<TestPick*>(value);
     const auto& hit=*static_cast<RankedRayCallback::Hit*>(raw);
     void* entity=ReadNative<void*>(body,0x414);
+    // Native A5C5F ignores entityless character-only colliders (Collide=false).
+    if(body==test_character_only) return true;
     // Model native callback area routing explicitly: 13 is a verified ladder
     // type, while a level05 ScriptArea numeric type is not mapped yet.
     if(body==test_script_area_body ||
@@ -106,6 +110,15 @@ void __fastcall NativeRay(void*,void*,void* callback,const TestVec* from,
     const auto& hits=head_to_hand && test_separate_area_ray ? test_area_hits : head ? test_head_hits :
         test_separate_hand_rays && offset ? test_offset_hand_hits : test_hand_hits;
     for(const auto& hit:hits) {
+        if(test_filter_segments) {
+            const TestVec delta{(*to)[0]-(*from)[0],(*to)[1]-(*from)[1],(*to)[2]-(*from)[2]};
+            const TestVec rel{hit.point[0]-(*from)[0],hit.point[1]-(*from)[1],hit.point[2]-(*from)[2]};
+            float dot=0,length2=0;
+            for(unsigned i=0;i<3;++i){dot+=delta[i]*rel[i];length2+=delta[i]*delta[i];}
+            const float t=dot/length2;
+            if(t<0 || t>1 || std::hypot(rel[0]-t*delta[0],rel[1]-t*delta[1],rel[2]-t*delta[2])>0.015F)
+                continue;
+        }
         if(head_to_hand && test_geometric_area_ray) {
             // A 5 mm target must lie on this finite ray, not merely occur in
             // the injected hit list. Pin visible-palm versus controller origin.
@@ -125,6 +138,11 @@ void __fastcall NativeRay(void*,void*,void* callback,const TestVec* from,
 }
 float __fastcall NativeEntityDistance(void* entity,void*) {
     auto* player=ReadNative<void*>(ReadNative<void*>(entity,0x10),0x15C);
+    auto* pick=ReadNative<TestPick*>(player,0x280);
+    const auto body=ReadNative<TestVec>(ReadNative<void*>(player,0x278),0x48);
+    return std::hypot(pick->point[0]-body[0],pick->point[1]-body[1],pick->point[2]-body[2]);
+}
+float __fastcall NativePlayerPickDistance(void* player,void*) {
     auto* pick=ReadNative<TestPick*>(player,0x280);
     const auto body=ReadNative<TestVec>(ReadNative<void*>(player,0x278),0x48);
     return std::hypot(pick->point[0]-body[0],pick->point[1]-body[1],pick->point[2]-body[2]);
@@ -258,6 +276,94 @@ bool SelectionCases() {
         std::cerr<<"Repeatable Examine cue lost against physical hand target\n"; return Failed(__LINE__);
     }
     Put(entity.data(),0x38,false);
+    // Native normal inventory item behind a character-only barrier. Physical
+    // palm reach cannot reach it, but original native pickup range admits it.
+    std::array<std::uint8_t,0x500> orb_body{},orb_entity{},character_only{};
+    Put(orb_body.data(),0,g_image+kPhysicsBodyVtableRva);
+    Put(orb_body.data(),0x414,static_cast<void*>(orb_entity.data()));
+    Put(orb_body.data(),0x31,true); Put(orb_body.data(),0x418,true);
+    Put(orb_entity.data(),0,g_image+0x276ED0);
+    Put(orb_entity.data(),0x10,static_cast<void*>(init.data()));
+    Put(orb_entity.data(),0x14,true); Put(orb_entity.data(),0x37,true);
+    Put(orb_entity.data(),0xC0,5); Put(orb_entity.data(),0x250,0);
+    Put(orb_entity.data(),0xBC,2.0F);
+    Put(g_image+0x276ED0,0x48,reinterpret_cast<void*>(&NativeEntityDistance));
+    JumpTo(0x9C0E0,reinterpret_cast<void*>(&NativePlayerPickDistance));
+    Put(character_only.data(),0x3C8,true); Put(character_only.data(),0x418,false);
+    test_character_only=character_only.data(); test_filter_segments=true;
+    const auto saved_head=test_head_hits;
+    const auto saved_hand=test_hand_hits;
+    const TestVec orb_point{0,0.8F,-1.2F};
+    test_hand_hits={{orb_body.data(),1.2F,orb_point},{character_only.data(),0.4F,{0,0.8F,-0.4F}}};
+    test_head_hits={{orb_body.data(),1.5F,orb_point}};
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=orb_body.data() || g_vr_selection_player!=player.data()) {
+        std::cerr<<"Native inventory pickup lost beyond character-only hatch barrier\n";
+        return Failed(__LINE__);
+    }
+    const auto check_orb=[&](bool expected) {
+        g_world_from_tracking_time=GetTickCount64();
+        update(); RefreshVrSelectionBeforeInteract(player.data());
+        return (pick.body==orb_body.data())==expected;
+    };
+    // Native character-to-hit distance, not ray length, owns admission.
+    Put(character.data(),0x48,TestVec{0,0.8F,0.81F});
+    if(!check_orb(false)) return Failed(__LINE__);
+    for(const float height:{0.5F,1.0F}) { // crouched and standing
+        Put(character.data(),0x48,TestVec{0,height,0});
+        if(!check_orb(true)) return Failed(__LINE__);
+    }
+    // A true solid/closed hatch blocks the controller ray in either hit order.
+    test_hand_hits.push_back({foreground.data(),0.6F,{0,0.8F,-0.6F}});
+    for(const bool reverse:{false,true}) {
+        if(reverse) std::reverse(test_hand_hits.begin(),test_hand_hits.end());
+        if(!check_orb(false)) return Failed(__LINE__);
+    }
+    test_hand_hits={{orb_body.data(),1.2F,orb_point}};
+    // Hand is already through the obstruction, but head sight is still blocked.
+    test_head_hits.push_back({foreground.data(),0.75F,{0,1.25F,-0.6F}});
+    if(!check_orb(false)) return Failed(__LINE__);
+    test_head_hits={{orb_body.data(),1.5F,orb_point}};
+    for(const std::size_t field:{std::size_t{0x14},std::size_t{0x37}}) {
+        Put(orb_entity.data(),field,false);
+        if(!check_orb(false)) return Failed(__LINE__);
+        Put(orb_entity.data(),field,true);
+    }
+    Put(orb_entity.data(),0x35,true);
+    if(!check_orb(false)) return Failed(__LINE__);
+    Put(orb_entity.data(),0x35,false);
+    Put(orb_entity.data(),0xC0,1); // loose props must remain physical-only
+    if(!check_orb(false)) return Failed(__LINE__);
+    Put(orb_entity.data(),0xC0,5);
+    Put(orb_entity.data(),0x250,13); // uncharacterized subtype fails closed
+    if(!check_orb(false)) return Failed(__LINE__);
+    Put(orb_entity.data(),0x250,0);
+    Put(orb_entity.data(),0xBC,0.5F); // authored shorter native distance
+    if(!check_orb(false)) return Failed(__LINE__);
+    Put(orb_entity.data(),0xBC,2.0F);
+    // Shared Normal pickup assistance remains bounded at 1.9 m from the hand.
+    test_hand_hits={{orb_body.data(),1.91F,{0,0.8F,-1.91F}}};
+    test_head_hits={{orb_body.data(),2.11F,{0,0.8F,-1.91F}}};
+    if(!check_orb(false)) return Failed(__LINE__);
+    // Controller and world orientation change; no camera-yaw inversion.
+    grip.device_to_absolute.values={0,0,1,0, 0,1,0,0.8F, -1,0,0,0};
+    test_hand_hits={{orb_body.data(),1.2F,{-1.2F,0.8F,0}}};
+    test_head_hits={{orb_body.data(),1.5F,{-1.2F,0.8F,0}}};
+    if(!check_orb(true)) return Failed(__LINE__);
+    // The published pick is native inventory admission, never VR Grab/Move.
+    if(g_grab_hold.state || g_move_hold.state || g_push_hold.state ||
+        !Near(NativePlayerPickDistance(player.data(),nullptr),std::sqrt(1.48F)))
+        return Failed(__LINE__);
+    for(const unsigned guard:{0U,1U,2U}) {
+        test_ui=guard==0; test_frame.focused=guard!=1;
+        if(guard==2) g_world_from_tracking_time=GetTickCount64()-101;
+        update(); RefreshVrSelectionBeforeInteract(player.data());
+        if(g_vr_selection_player) return Failed(__LINE__);
+    }
+    test_ui=false; test_frame.focused=true; g_world_from_tracking_time=GetTickCount64();
+    grip.device_to_absolute.values={1,0,0,0, 0,1,0,0.8F, 0,0,1,0};
+    test_filter_segments=false; test_character_only=nullptr;
+    test_head_hits=saved_head; test_hand_hits=saved_hand;
     // A native wall on the same hand ray must occlude a physical candidate,
     // regardless of hit order. It must not mask another unobstructed ray.
     test_head_hits.clear();

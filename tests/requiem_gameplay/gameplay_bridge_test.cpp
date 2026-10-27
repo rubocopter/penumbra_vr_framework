@@ -44,6 +44,41 @@ bool Near(float actual, float expected) { return std::fabs(actual - expected) < 
 
 void __fastcall HandlerUpdateStub(void*, void*, float) {}
 
+bool KeypadContext(std::uint8_t* image) {
+    Branch(image,GameplayContract().button_handler_update_rva,0xE9,
+        reinterpret_cast<void*>(&HandlerUpdateStub));
+    std::array<std::uint8_t,0x80> handler{},screen{};
+    std::array<std::uint8_t,0x200> init{};
+    std::array<std::uint8_t,0x100> set{};
+    Put(handler.data(),0x2C,static_cast<void*>(init.data()));
+    Put(handler.data(),0x3C,1);
+    Put(init.data(),0x1AC,static_cast<void*>(screen.data()));
+    Put(screen.data(),0x30,static_cast<void*>(set.data()));
+    HookedUpdate(handler.data(),nullptr,1.0F/60.0F);
+    if(!NativeUiActive() || CurrentNativeUiSurface()!=NativeUiSurface::fullscreen) {
+        std::cerr<<"Active native ScreenGui still selects gameplay action context\n";
+        return false;
+    }
+    Put(screen.data(),0x30,static_cast<void*>(nullptr));
+    HookedUpdate(handler.data(),nullptr,1.0F/60.0F);
+    if(NativeUiActive() || CurrentNativeUiSurface()!=NativeUiSurface::none) return false;
+    for(unsigned repeat=0;repeat<3;++repeat) {
+        Put(screen.data(),0x30,static_cast<void*>(set.data()));
+        HookedUpdate(handler.data(),nullptr,1.0F/60.0F);
+        if(!NativeUiActive()) return false;
+        // Native Escape close clears screen+30. A subsequent pause/main-menu
+        // frame keeps UI context; resuming with no ScreenGui restores gameplay.
+        Put(screen.data(),0x30,static_cast<void*>(nullptr));
+        Put(handler.data(),0x3C,6);
+        HookedUpdate(handler.data(),nullptr,1.0F/60.0F);
+        if(!NativeUiActive()) return false;
+        Put(handler.data(),0x3C,1);
+        HookedUpdate(handler.data(),nullptr,1.0F/60.0F);
+        if(NativeUiActive()) return false;
+    }
+    return true;
+}
+
 bool TurnDisconnect(std::uint8_t* image) {
     Branch(image, GameplayContract().button_handler_update_rva, 0xE9,
         reinterpret_cast<void*>(&HandlerUpdateStub));
@@ -296,13 +331,16 @@ bool Movement(std::uint8_t* image) {
 } // namespace
 } // namespace penumbra_vr::backends::requiem
 
+#include "keypad_fixture.hpp"
 int main(int argc, char** argv) {
     using namespace penumbra_vr::backends::requiem;
     auto* image = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x300000,
         MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
     if (!image) return 2;
     g_image = image;
-    const bool result = argc > 1 && std::strcmp(argv[1], "turn") == 0
+    const bool result = argc > 1 && std::strcmp(argv[1], "keypad") == 0
+        ? KeypadContext(image) && KeypadPointerAndQueries(image)
+        : argc > 1 && std::strcmp(argv[1], "turn") == 0
         ? TurnDisconnect(image)
         : argc > 1 && std::strncmp(argv[1], "shutdown", 8) == 0
             ? BridgeShutdown(image, std::strcmp(argv[1], "shutdown-timeout") == 0,

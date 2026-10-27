@@ -5,6 +5,18 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.13 — 2026-10-27 — maintenance candidate
+
+- Restore bounded native Normal Item pickup for Requiem level08's orb, keeping
+  native reach/eligibility and independent head/controller solid visibility.
+- Route active Requiem ScreenGui through the existing VR UI context and native
+  cGui pointer/button boundaries; preserve native keypad validation and exit.
+- Release UI select/back clicks on focus/tracking loss. Preserve all preceding
+  throwing, lever, movement and native interaction corrections.
+- Publish as a pre-release with both level08 changes pending headset validation.
+  The developer has not tested this version in-game or in a VR headset; level08
+  completion is not demonstrated. See [release notes](releases/1.0.13.md).
+
 ## 1.0.12 — 2026-10-27
 
 - Correct Requiem's native Push/free-Move assisted throws to use the current

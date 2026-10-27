@@ -22,6 +22,7 @@
 #include "vr_grab_pose.hpp"
 #include "vr_interaction_policy.hpp"
 #include "vr_mechanism_policy.hpp"
+#include "vr_magnetic_pickup_policy.hpp"
 #include "vr_rework_hand_profile.hpp"
 #include "vr_settings.hpp"
 #include "log.hpp"
@@ -81,6 +82,8 @@ constexpr std::uintptr_t kPickClearRva = 0xA5000;
 constexpr std::uintptr_t kPickResolveRva = 0xA5D50;
 constexpr std::uintptr_t kLadderVtableRva = 0x277288;
 constexpr std::uintptr_t kLadderPickRva = 0x38760;
+constexpr std::uintptr_t kItemVtableRva = 0x276ED0;
+constexpr std::uintptr_t kNativePickedDistanceRva = 0x9C0E0;
 constexpr std::uintptr_t kWideNotEmptyIatRva = 0x27312C;
 constexpr std::array<std::uint8_t,27> kPickClearEntry{
     0xD9,0x41,0x0C,0x33,0xC0,0xD8,0x05,0x40,0x3A,0x67,0x00,
@@ -1477,7 +1480,7 @@ struct PalmSelectionCandidate final {
     return rays;
 }
 
-[[nodiscard]] bool CastNativeHandArea(Ray ray, void* world,
+[[nodiscard]] bool CastNativeSelection(Ray ray, void* world,
     void* callback, const PalmRaySegment& segment, bool distance,
     bool normal, bool point, bool prefilter, float maximum,
     NativePickResult& selected) noexcept {
@@ -1492,11 +1495,78 @@ struct PalmSelectionCandidate final {
     } __except(EXCEPTION_EXECUTE_HANDLER) {
         return false;
     }
+    if (candidate.body == nullptr || !std::isfinite(candidate.distance) ||
+        candidate.distance<0.0F || candidate.distance>maximum) return false;
+    selected=candidate;
+    return true;
+}
+
+[[nodiscard]] bool CastNativeHandArea(Ray ray, void* world,
+    void* callback, const PalmRaySegment& segment, bool distance,
+    bool normal, bool point, bool prefilter, float maximum,
+    NativePickResult& selected) noexcept {
+    NativePickResult candidate{};
+    if (!CastNativeSelection(ray,world,callback,segment,distance,normal,point,
+            prefilter,maximum,candidate)) return false;
     if (candidate.area == nullptr || candidate.body != candidate.area ||
         !std::isfinite(candidate.area_distance) ||
         candidate.area_distance < 0.0F ||
         candidate.area_distance > maximum) return false;
     selected = candidate;
+    return true;
+}
+
+// Exact Requiem Item constructor 35098..350CF: type 5, vtable 276ED0,
+// ItemType parser's Normal=0 at +250. No loose prop/mechanism is admitted.
+[[nodiscard]] bool FindNativeInventoryPickup(Ray ray,void* world,void* callback,
+    runtime::VrHand hand,float native_length,NativePickResult& result) noexcept {
+    using namespace runtime::vr_magnetic_pickup_policy;
+    runtime::VrMatrix44 aim{},head{};
+    if (!TrackedControllerPose(hand,true,aim) || !TrackedHeadWorldPose(head)) return false;
+    const auto profile=Profile(VrMagneticPickupClass::ordinary);
+    const float range=std::min(native_length,profile.range);
+    const std::array<float,3> from{aim.values[3],aim.values[7],aim.values[11]};
+    auto direction=runtime::vr_mechanism_policy::Normalize(
+        {-aim.values[2],-aim.values[6],-aim.values[10]});
+    if (runtime::vr_mechanism_policy::Length(direction)<=0 || range<=0) return false;
+    const PalmRaySegment segment{from,{from[0]+direction[0]*range,
+        from[1]+direction[1]*range,from[2]+direction[2]*range}};
+    NativePickResult candidate{};
+    if (!CastNativeSelection(ray,world,callback,segment,true,false,true,false,range,candidate) ||
+        !RequiemBodyMatches(candidate.body)) return false;
+    auto* entity=ReadNative<void*>(candidate.body,0x414);
+    if (!entity || ReadNative<void*>(entity,0)!=g_image+kItemVtableRva ||
+        ReadNative<int>(entity,0xC0)!=5 || ReadNative<int>(entity,0x250)!=0 ||
+        !ReadNative<bool>(entity,0x14) || !ReadNative<bool>(entity,0x37) ||
+        ReadNative<bool>(entity,0x35) ||
+        !ReadNative<bool>(candidate.body,0x31) || !ReadNative<bool>(candidate.body,0x418)) return false;
+    auto* player=ReadNative<void*>(ReadNative<void*>(entity,0x10),0x15C);
+    if (!player || ReadNative<void*>(player,0x280)!=callback) return false;
+    const float native_reach=ReadNative<float>(entity,0xBC);
+    if (!std::isfinite(native_reach) || native_reach<=0) return false;
+    // Item Pick/Interact both call this exact character-to-picked-point getter.
+    // Keep it authoritative; hand-ray distance cannot replace native admission.
+    if (!StoreNative(player,0x280,static_cast<void*>(&candidate))) return false;
+    float native_distance=INFINITY;
+    __try {
+        native_distance=reinterpret_cast<float(__thiscall*)(void*)>(g_image+kNativePickedDistanceRva)(player);
+    } __except(EXCEPTION_EXECUTE_HANDLER) {}
+    if (!StoreNative(player,0x280,callback) || !std::isfinite(native_distance) ||
+        native_distance<0 || native_distance>native_reach) return false;
+    // Rework/BP require independent head sight so a tracked hand beyond a
+    // solid wall cannot acquire inventory through it. Native callback keeps
+    // character-only barriers transparent and real solids/areas authoritative.
+    const std::array<float,3> head_from{head.values[3],head.values[7],head.values[11]};
+    const auto head_delta=runtime::vr_mechanism_policy::Subtract(candidate.point,head_from);
+    const float head_length=runtime::vr_mechanism_policy::Length(head_delta);
+    if (!std::isfinite(head_length) || head_length<=0) return false;
+    const auto head_dir=runtime::vr_mechanism_policy::Scale(head_delta,1.0F/head_length);
+    const PalmRaySegment sight{head_from,{candidate.point[0]+head_dir[0]*kSightOvershoot,
+        candidate.point[1]+head_dir[1]*kSightOvershoot,candidate.point[2]+head_dir[2]*kSightOvershoot}};
+    NativePickResult visible{};
+    if (!CastNativeSelection(ray,world,callback,sight,true,false,true,false,
+            head_length+kSightOvershoot,visible) || visible.body!=candidate.body) return false;
+    result=candidate;
     return true;
 }
 
@@ -1695,6 +1765,14 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                         g_ray_winners.fetch_add(1,
                             std::memory_order_relaxed);
                     }
+                }
+                NativePickResult inventory{};
+                if (!ranked.best_body && FindNativeInventoryPickup(original,world,callback,
+                        frame.interact_source,native_length,inventory) &&
+                    StoreNative(callback,0,inventory)) {
+                    g_vr_selection_ready=true;
+                    if (g_selection_refresh_active) g_refresh_winner_distance=inventory.distance;
+                    return;
                 }
                 if(!ranked.best_body && g_normal_gaze.valid &&
                     (g_normal_gaze.ladder || (!g_selection_refresh_active && g_normal_gaze.cue==4)))
@@ -3194,6 +3272,15 @@ bool InstallRenderWorld(std::string& error) noexcept {
             image+kGetMassCentreRva) ||
         ReadNative<void*>(image+kPhysicsBodyVtableRva,0x74) != image+kGetMassCentreRva) {
         error = "Requiem body centre-of-mass getter mismatch";
+        return false;
+    }
+    constexpr std::array<std::uint8_t,13> picked_distance_entry{
+        0x56,0x8B,0xB1,0x80,0x02,0,0,0x8B,0x89,0x78,0x02,0,0};
+    if (ReadNative<void*>(image+kItemVtableRva,0x24)!=image+0x34E50 ||
+        ReadNative<void*>(image+kItemVtableRva,0x28)!=image+0x34F90 ||
+        !std::equal(picked_distance_entry.begin(),picked_distance_entry.end(),
+            image+kNativePickedDistanceRva)) {
+        error="Requiem native inventory pickup boundary mismatch";
         return false;
     }
     constexpr std::array<std::array<std::uintptr_t,2>, 7> body_methods{{

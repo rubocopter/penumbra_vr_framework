@@ -123,6 +123,11 @@ constexpr PointerEntry kPointers[]{
     {0x4BB9, 0x948C0, 0x84},
     {0x4F3B, 0x6D030, 0xAC},
 };
+// Requiem decoded ScreenGui branch: 4559 tests init+1AC's active set (+30),
+// 46DC sends absolute/relative positions to cGui, 473A Escape closes via 34870.
+constexpr std::uintptr_t kGuiPointerSite = 0x46DC;
+constexpr std::uintptr_t kGuiSendMousePos = 0xE3120;
+hooks::Rel32CallHook g_gui_pointer_hook;
 constexpr std::uintptr_t kInventoryDoubleQuerySite = 0x4C8C;
 constexpr std::uintptr_t kInventoryDoubleQueryRva = 0xDB050;
 // Requiem 4FA6 loads the handler player, then 4FA9 tests its active byte.
@@ -884,6 +889,31 @@ void __fastcall HookedPointer(
     }
 }
 
+bool __fastcall HookedGuiPointer(void* gui, void*,
+    const std::array<float,2>* absolute,
+    const std::array<float,2>* relative) noexcept {
+    CallbackScope callback;
+    if (!absolute || !relative) return false;
+    auto point=Read<std::array<float,2>>(absolute,0);
+    auto delta=Read<std::array<float,2>>(relative,0);
+    const auto now=GetTickCount64();
+    if (std::abs(delta[0])>0.01F || std::abs(delta[1])>0.01F)
+        g_mouse_override_until=now+1500;
+    auto* const focused_set=Read<void*>(gui,0x30);
+    // Same proven BP cGui contract, independently mapped Requiem target.
+    if (g_intents && g_pointer_valid && focused_set && now>=g_mouse_override_until) {
+        const auto current=Read<std::array<float,2>>(focused_set,0xD8);
+        std::array<float,2> smoothed{};
+        if (runtime::SmoothMenuPointerUv({current[0]/800.0F,current[1]/600.0F},
+                g_pointer_uv,0.40F,smoothed)) {
+            point={smoothed[0]*800.0F,smoothed[1]*600.0F};
+            delta={point[0]-current[0],point[1]-current[1]};
+        }
+    }
+    using Pointer=bool(__thiscall*)(void*,const std::array<float,2>*,const std::array<float,2>*);
+    return reinterpret_cast<Pointer>(g_image+kGuiSendMousePos)(gui,&point,&delta);
+}
+
 void __fastcall HookedForward(
     void* player, void*, float amount, float dt) noexcept {
     CallbackScope callback;
@@ -920,6 +950,28 @@ void __fastcall HookedSideways(
     if (g_direct_locomotion) PublishDirectLocomotion(player, dt);
 }
 
+[[nodiscard]] runtime::VrInputState ScreenGuiInput(void* active_set,
+    const runtime::VrControllerFrame& frame,bool input_ready,bool pointer_valid) noexcept {
+    // The native game thread owns this state. Retain only the UI buttons needed
+    // to release ScreenGui clicks on focus/pose loss, never a gameplay hold.
+    thread_local void* previous_set=nullptr;
+    thread_local runtime::VrInputState previous{};
+    auto input=input_ready && frame.focused ? frame.input.state : runtime::VrInputState{};
+    if (active_set!=previous_set) previous={};
+    if (active_set && (!input_ready || !frame.focused || !pointer_valid)) {
+        const auto released=runtime::MakeReleasedVrInputState(previous);
+        input.ui_select=released.ui_select;
+        input.ui_back=released.ui_back;
+    }
+    previous_set=active_set;
+    previous={};
+    if (active_set) {
+        previous.ui_select=input.ui_select;
+        previous.ui_back=input.ui_back;
+    }
+    return input;
+}
+
 void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     CallbackScope callback;
     // This native owner still runs in menus and after input disconnect clears
@@ -941,8 +993,9 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         Read<bool>(Read<void*>(init, 0x164), 0x5C);
     const bool notebook_active =
         Read<bool>(Read<void*>(init, 0x178), 0x44);
+    const bool screen_gui_active=Read<void*>(Read<void*>(init,0x1AC),0x30)!=nullptr;
     const auto ui_classification = ClassifyRequiemUi(
-        in_game, inventory_active, notebook_active,
+        in_game && !screen_gui_active, inventory_active, notebook_active,
         g_native_pointer_observed.exchange(false, std::memory_order_acq_rel));
     const bool ui = ui_classification.active;
     const auto surface = ui_classification.surface == RequiemUiSurface::fullscreen
@@ -1073,8 +1126,8 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     const auto original = reinterpret_cast<Update>(
         g_image + contract.button_handler_update_rva);
     runtime::VrNativeIntents intents;
-    intents.Begin(input_ready && frame.focused ? frame.input.state
-                                               : runtime::VrInputState{},
+    intents.Begin(ScreenGuiInput(in_game ? Read<void*>(Read<void*>(init,0x1AC),0x30) : nullptr,
+            frame,input_ready,g_pointer_valid),
         ui ? runtime::VrInputContext::ui
            : runtime::VrInputContext::gameplay);
     auto* const previous_intents = g_intents;
@@ -1223,6 +1276,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         }
     }
     next.clear();
+    if (g_gui_pointer_hook.installed() &&
+        !hooks::RemoveRel32CallHook(g_gui_pointer_hook,next)) {
+        ok=false;
+        append_error(next);
+    }
+    next.clear();
     if (g_inventory_double_query_hook.installed() &&
         !hooks::RemoveRel32CallHook(g_inventory_double_query_hook, next)) {
         ok = false;
@@ -1262,7 +1321,7 @@ bool InstallGameplayBridge(std::string& error) noexcept {
         pointer_hook_installed = pointer_hook_installed || hook.installed();
     if (g_update_hook.installed() || g_character_update_hook.installed() ||
         query_hook_installed ||
-        pointer_hook_installed || g_inventory_double_query_hook.installed() ||
+        pointer_hook_installed || g_gui_pointer_hook.installed() || g_inventory_double_query_hook.installed() ||
         g_move_hooks[0].installed() ||
         g_move_hooks[1].installed() || g_physical_move_hook.installed() ||
         adapters::hpl1::NativeStepClimbAdapterInstalled()) {
@@ -1310,6 +1369,16 @@ bool InstallGameplayBridge(std::string& error) noexcept {
             error = "Requiem native menu pointer does not match the observed build";
             return false;
         }
+    }
+    constexpr std::array<std::uint8_t,11> screen_active_entry{
+        0x8B,0x51,0x30,0x33,0xC0,0x85,0xD2,0x0F,0x95,0xC0,0xC3};
+    constexpr std::array<std::uint8_t,8> gui_pointer_entry{
+        0x8B,0x49,0x30,0x83,0xEC,0x2C,0x85,0xC9};
+    if (!ImageBytesMatch(kGuiPointerSite,CallBytes(kGuiPointerSite,kGuiSendMousePos)) ||
+        !ImageBytesMatch(0x345C0,screen_active_entry) ||
+        !ImageBytesMatch(kGuiSendMousePos,gui_pointer_entry)) {
+        error="Requiem ScreenGui input boundary does not match the observed build";
+        return false;
     }
     if (!ImageBytesMatch(kInventoryDoubleQuerySite,
             CallBytes(kInventoryDoubleQuerySite, kInventoryDoubleQueryRva))) {
@@ -1395,6 +1464,11 @@ bool InstallGameplayBridge(std::string& error) noexcept {
             g_pointer_hooks[index], error);
     }
     if (ok) {
+        ok=hooks::InstallRel32CallHook(g_image+kGuiPointerSite,
+            CallBytes(kGuiPointerSite,kGuiSendMousePos),
+            reinterpret_cast<void*>(&HookedGuiPointer),g_gui_pointer_hook,error);
+    }
+    if (ok) {
         ok = hooks::InstallRel32CallHook(
             g_image + kInventoryDoubleQuerySite,
             CallBytes(kInventoryDoubleQuerySite, kInventoryDoubleQueryRva),
@@ -1450,7 +1524,7 @@ bool GameplayBridgeInstalled() noexcept {
     for (const auto& hook : g_pointer_hooks)
         pointers_installed = pointers_installed && hook.installed();
     return g_installed.load(std::memory_order_acquire) && queries_installed &&
-        pointers_installed && g_inventory_double_query_hook.installed() &&
+        pointers_installed && g_gui_pointer_hook.installed() && g_inventory_double_query_hook.installed() &&
         g_update_hook.installed() && g_character_update_hook.installed() &&
         g_move_hooks[0].installed() &&
         g_move_hooks[1].installed() && g_physical_move_hook.installed() &&

@@ -1,6 +1,6 @@
 # Troubleshooting
 
-This guide covers the public **Penumbra VR Framework v1.0.12** installer and current maintenance documentation. Installation steps live in the root [README](../README.md#install); recognized builds in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
+This guide covers the public **Penumbra VR Framework v1.0.13** maintenance candidate installer and current maintenance documentation. Installation steps live in the root [README](../README.md#install); recognized builds in [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md).
 
 The installer shows **Preparing installation / Preparando la
 instalación** while files are extracted and verified, then an animated waiting
@@ -54,8 +54,8 @@ level/objective, steps, version and build hash. See the
 
 ## Repair, recovery and removal
 
-Close the affected games before every installer operation. For v1.0.12, use
-**PenumbraVR-Setup-1.0.12.exe**. For older installations, use the matching
+Close the affected games before every installer operation. For v1.0.13, use
+**PenumbraVR-Setup-1.0.13.exe**. For older installations, use the matching
 versioned installer or a documented supported update path.
 
 Use the **Maintenance / Mantenimiento** tab for installed roots:

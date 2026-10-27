@@ -743,6 +743,111 @@
       }
     ]
   },
+  "level08ProgressionMaintenance": {
+    "status": "implemented-host-tested-no-live-or-headset-evidence",
+    "level": "expansion01/maps/level08.hps with level08.dae",
+    "reference": "Rework 23c890f inventory-only fallback, shared ordinary 1.9m range and dual head/hand visibility; BP native ScreenGui pointer adaptation",
+    "orb": {
+      "entity": "key0801",
+      "asset": "expansion01/models/general/general_key.ent",
+      "nativeFamily": "Item/Normal; vtable 0x276ED0, entity type +C0=5, ItemType +250=0",
+      "nativePickupRva": "0x34F90",
+      "nativePickRva": "0x34E50",
+      "nativePickedDistanceRva": "0x9C0E0",
+      "range": "Native character-to-hit <= entity+BC (constructor2m); controller ray additionally bounded by shared ordinary profile1.9m, no cone/enumeration port",
+      "occlusion": "Native A5C5F..A5C8D ignores entityless character-only CollideCharacter+3C8=true/Collide+418=false; real solids remain blockers. Independent controller and head rays must resolve the same item.",
+      "progression": "fbutton01..03 -> WoodStorageButtonOnMin count3 unlocks wooddoor; OpenDoorAgain destroys door. Item pickup -> global @PickLevelKey -> remove inventory item, extinguish effects, set KeyOne=8. Native hatch03/box remain unchanged.",
+      "scope": "Only verified active Normal inventory Items after native area/physical selection fails. No new free-body ownership, collision changes or script/puzzle completion."
+    },
+    "keypad": {
+      "entity": "keypad",
+      "callback": "level08.hps InteractKeyPad -> OpenScreenGui(level08_gui.gui)",
+      "resources": [
+        "expansion01/interfaces/level08_gui.gui",
+        "expansion01/interfaces/level08_gui.hps"
+      ],
+      "nativeUi": "cScreenGui IsFullScreen=false; native GUI ButtonPressed callbacks validate digits; CloseMainWindow closes; successful native validation unlocks storage02, deactivates keypad and closes; OnExit clears entry progress. No solution/data modified.",
+      "activePredicateRva": "0x345C0",
+      "activeSet": "handler+2C -> init+1AC -> screen+30 non-null",
+      "pointerCallRva": "0x46DC",
+      "sendMousePosRva": "0xE3120",
+      "focusedSet": "cGui+30; mouse coordinates GuiSet+D8/DC",
+      "mouseDownQuery": "0x4626 -> DAFB0; native cGui E3170 button1",
+      "mouseUpQuery": "0x466B -> DAF10; native cGui E31C0 button1",
+      "secondaryMouseQueries": "0x458A -> DAFB0/down E3170 button4; 0x45CF -> DAF10/up E31C0 button4 (ui_back)",
+      "escapeQuery": "0x473A -> DAFB0; absent native popup, 4777 calls cScreenGui Close34870(false), clears screen+30 and GUI focus. Escape closes this UI before normal gameplay/menu processing.",
+      "fix": "ScreenGui classified as UI on first input update; original cGui absolute/relative pointer route consumes shared UV projection/smoothing; native mouse priority/callbacks retained. Shared released-input helper releases owned UI select/back on focus/pose loss without release leakage to a replacement/closed set."
+    },
+    "analysisMethod": "Capstone x86 decoding and PE section mapping of existing decoded derivative SHA989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B. No game launch or new runtime capture.",
+    "evidenceWindows": [
+      {
+        "name": "screen-active-set",
+        "rva": "0x345c0",
+        "length": 11,
+        "sha256": "5A957194150F462ECE4828F06E55196D64751E6E2D43E89A63FE307498A5F936"
+      },
+      {
+        "name": "native-screen-pointer-call",
+        "rva": "0x46ab",
+        "length": 54,
+        "sha256": "5BB6C09903C3316F5E11A3C7F4B17DE2A4989FD582DE5ADB6F4CF3A409543962"
+      },
+      {
+        "name": "native-screen-escape-close",
+        "rva": "0x473a",
+        "length": 71,
+        "sha256": "FCFA696A765461C5719AAE7C80F060490FD51AC81D2140AFF7FDAE9BFF1E4425"
+      },
+      {
+        "name": "native-screen-close",
+        "rva": "0x34870",
+        "length": 143,
+        "sha256": "B5BB313DD5949B3BDB536528AE8B875A15420D9E4E4FDD12FB38E580A19DC762"
+      },
+      {
+        "name": "native-item-identity-range",
+        "rva": "0x35098",
+        "length": 65,
+        "sha256": "CC10F428D26A13772759F739A3389F0EF14C53DFFE7091AFAE7E64C43E5E577E"
+      },
+      {
+        "name": "native-item-pick",
+        "rva": "0x34e50",
+        "length": 51,
+        "sha256": "8DB0F9524D9A9A03771C5D3A9153E0DC8BB77FAAEC671DB5A68F52E610F78B92"
+      },
+      {
+        "name": "native-item-interact",
+        "rva": "0x34f90",
+        "length": 121,
+        "sha256": "6E080748862F5B59F682D21ED72443C57B8793334CFF43D7F0FB8339CAE9B07F"
+      },
+      {
+        "name": "native-character-pick-distance",
+        "rva": "0x9c0e0",
+        "length": 63,
+        "sha256": "B88204D14C06A4E12FA89CBDE10438181ABDAE0B641368C2159FE51A7EEE916A"
+      },
+      {
+        "name": "native-character-only-pick-filter",
+        "rva": "0xa5c5f",
+        "length": 47,
+        "sha256": "820A93F95C423B232B9D0EC388AD22911C75B8823E5DE3CF49F2B83658E52C2E"
+      },
+      {
+        "name": "native-screen-secondary-mouse",
+        "rva": "0x458a",
+        "length": 87,
+        "sha256": "47F49314EFE76BEA976DA89B2C0A768C2831E8AF08CF791D398700568D47A7AD"
+      },
+      {
+        "name": "native-gui-set-cursor-write",
+        "rva": "0xf9050",
+        "length": 28,
+        "sha256": "4F1DF505FA4B2555A2E2B00ACE49AFFED08C22505A735676BA0159DC9CA67E45"
+      }
+    ]
+  },
   "vrHingeMassCentreVelocity": {
     "status": "implemented-host-tested-no-new-live-evidence",
     "reference": "BP 6363b6d offset-COM hinge correction; Rework 23c890f origin-based Move servo retained",

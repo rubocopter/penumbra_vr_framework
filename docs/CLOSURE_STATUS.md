@@ -1,30 +1,19 @@
 # Framework release status
 
-## Current public release — v1.0.12: headset validation pending
+## Current public maintenance candidate — v1.0.13: headset validation pending
 
-**v1.0.12**, dated 2026-10-27, publishes all current interaction maintenance
-corrections: Requiem controller-owned assisted throws and B/cancellation handling,
-the shared hinge COM correction and native head-to-visible-palm area selection
-with common-origin contact priority. It retains preceding installer, input,
-resource-lifecycle and drawer corrections. **The developer has not tested this
-version in-game or in a VR headset.** New behavior is **host-tested only**;
-publication does not close actual progression gates. See
-[release notes](releases/1.0.12.md).
+**v1.0.13**, dated 2026-10-27, adds bounded native inventory pickup and ScreenGui
+controller input for Requiem level08, retaining all preceding maintenance
+corrections. **The developer has not tested this version in-game or in a VR
+headset. Both level08 changes require headset validation; completion of the
+level has not been demonstrated.** See [release notes](releases/1.0.13.md).
 
-Framework host regressions pass in Release and Debug (78 tests each); the
-autonomous Overture Release product passes 298 checks. The versioned artifact
-record pins the clean build source, four artifacts, six shipped x86 PE identities
-and the exact packaging/installer checks performed for this release. The release
-tag adds documentation over that build source; the packaged source commit
-remains explicit. Older headset evidence cannot be transferred automatically
-to the new version.
-
-The [v1.0.12 validation record](releases/1.0.12-validation.json) identifies the
-exact published artifacts. Final Setup checks passed English/Spanish extraction,
-trailing destination separators, isolated topologies A-F and upgrade/repair/
-verification/exact restoration from v1.0.11. No installed game was modified and
-no game was launched as part of this release validation. Hosted source CI also
-passed installer, SDK-less Windows Debug/Release and Overture Release jobs.
+The interaction implementation passed 79 Framework host tests in Debug and
+Release and 298 Overture Release checks. Final versioned installer/package
+verification is recorded separately in the release artifact record; these host
+results do not establish actual gameplay or independent clean-PC acceptance.
+Matching committed source, dependency sources, provenance and checksums accompany
+the candidate. Previous headset evidence does not transfer to this build.
 
 The v1.0.0 installer, published 2026-09-29, had maintainer real installation,
 removal and game-entry acceptance across the trilogy and fixture validation
@@ -36,12 +25,15 @@ This is not independent clean-PC or all-headset certification.
 
 - **Requiem level04 sewer water/crouch:** unresolved. The diagnostic
   samples native capsule height; there is no confirmed recovery correction.
-- **Requiem levers, level05 buttons and filing cabinets:** hinge COM, native
-  area selection and retained slider-endpoint corrections have host evidence only. Actual
-  Quest 3 activation/progression and script behavior are unverified.
-- **Requiem level03/07 throwing and Examine/ladder:** the current controller-aim
-  and cancellation corrections await headset usability/progression feedback.
-  The level07 sphere's physical lip stoppage has no established cause.
+- **Requiem level08 orb/keypad:** corrections are host-tested; actual acquisition,
+  GUI operation and progression remain pending in-headset confirmation.
+- **Requiem levers and sphere throwing:** Caelus reports both working perfectly
+  after the latest corrections; no installed hash was supplied. This scoped
+  feedback does not validate every mechanism or this candidate's artifacts.
+- **Requiem level05 buttons and filing cabinets:** native-area and slider fixes
+  retain host evidence; actual activation/progression remains unverified.
+- **Requiem level03/07 progression:** broader puzzle outcomes remain separate;
+  the level07 sphere's physical lip stoppage has no established cause.
 - **Requiem intermittent startup crash:** SDL mutex failure observed, root
   cause and correction unknown. No speculative fix is warranted.
 - **Other known limits:** minor finger/contact intersection and monolith
@@ -87,7 +79,7 @@ progression plus restoration. Do not infer one game's acceptance from another.
 ## Historical releases
 
 Historical changes and individual version notes are retained in
-[CHANGELOG.md](CHANGELOG.md) and [docs/releases](releases/1.0.12.md).
+[CHANGELOG.md](CHANGELOG.md) and [docs/releases](releases/1.0.13.md).
 The [2026-10-10 installed-trilogy acceptance](releases/1.0.7-headset-acceptance.json)
 and [v1.0.8 BP focused acceptance](releases/1.0.8-headset-acceptance.json)
 retain their scoped hashes. Each version's validation JSON records its clean

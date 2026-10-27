@@ -191,10 +191,78 @@ Native callbacks in these tests are characterized fixtures; the level05 scripts
 and their puzzle conditions have not been executed. Examine cue 4 remains an
 independent gaze cue and does not promise an eligible Interact action.
 
-These changes ship in v1.0.12 as implemented and host-tested only. The developer
-has not tested this version in-game or in a VR headset; there is no new live or
-headset acceptance. Existing throwing/B fixes are retained.
-Level05 progression and lever direction/contact stability remain headset gates.
+At publication these v1.0.12 changes had host evidence only; the developer has
+not tested that version in-game or in a VR headset. Subsequent scoped tester
+feedback is recorded below. Existing throwing/B fixes are retained; level05
+progression remains a separate gate.
+
+### Requiem level08 Steam — maintenance candidate and scoped feedback
+
+On 2026-10-27 Caelus reports: "Throwing the sphere and the levers work perfectly
+now." This follows the latest v1.0.12 corrections, but the report supplies no
+installed artifact hash. Earlier feedback identified Quest 3; this message does
+not independently reconfirm device/connection. It is positive user headset
+evidence for the observed sphere/lever cases, not developer acceptance, full
+progression, every mechanism or universal controller support. Those owners and
+their math remain unchanged in this candidate.
+
+The new blockers are in `expansion01/maps/level08.hps`/`level08.dae`, the
+steam-themed level. `fbutton01..03` increment `WoodStorageButtonCount`; three
+plates unlock `wooddoor`, and `OpenDoorAgain` destroys it. The glowing orb
+`key0801` uses `models/general/general_key.ent`, a native Item/Normal pickup,
+not Grab/Move. It lies below `hatch03`, with the Push box `hmetalbox01` above
+the hatch. Native Item interaction adds it to inventory; the existing global
+`@PickLevelKey` callback consumes it, extinguishes its effects and sets
+`KeyOne=8`. This is script/asset evidence, not an executed puzzle completion.
+
+The authored `_charcollider_box_1`/`_charcollider_box_2` restrict character
+entry near the opening. The native ray callback ignores entityless
+character-only collision while retaining actual shed solids, box and hatch
+occlusion. Requiem's physical 18 cm hand rays and Examine/area queries omitted
+inventory pickup at legitimate native range. The existing Normal Item class
+now has a controller-ray fallback only after area/physical selection fails,
+bounded by the shared Rework ordinary-item profile (1.9 m) and its independently
+verified native character-to-hit admission (`entity+BC`, default 2 m). Both
+controller and head native queries must resolve the same item. Only the proven
+Normal subtype is admitted; this is not a full magnetic cone/enumeration port.
+Native inventory ownership/scripts, collision and all free-body mechanisms
+remain unchanged.
+
+`keypad` calls `InteractKeyPad`, opening `interfaces/level08_gui.gui` and its
+native script. It is non-fullscreen HPL ScreenGui, with digit ButtonPressed
+callbacks, native validation and a Close button; successful validation unlocks
+`storage02`, deactivates the keypad and closes. OnExit clears entered progress.
+The input adapter omitted both active ScreenGui classification and its cGui
+absolute/relative pointer call. Consequently its native mouse-button queries
+received gameplay intents instead of UI selection. Requiem now detects the
+native active set before reading VR input and consumes BP's established cGui
+pointer semantics through its own verified ABI. Shared projection/smoothing and
+released-input policy are reused. Native GUI widgets, digit validation, popup
+focus, physical mouse priority and Close/Escape remain authoritative.
+
+The decoded native Escape branch closes ScreenGui directly through `34870`,
+clearing its active set and GUI focus (unless a native popup consumes Escape).
+This explains escape through the tester's pause control without inventing a
+generic reset; the observed native branch does not require pause/unpause to
+repair gameplay. Held VR UI select/back clicks receive one release on focus/pose loss,
+scoped to its active set; closing/replacing that set drops stale ownership.
+
+Actual-consumer host regressions cover the missing pickup route, character-only
+versus real-solid occlusion, native/shared range, crouched/standing positions,
+orientation, eligibility, stale/UI/focus rejection, ScreenGui entry/exit/re-entry,
+pointer ABI/focused sets, physical mouse priority, select/back edges, cancellation,
+focus release and hook removal. Native UI/selection boundaries are fixtures;
+the keypad script and level progression were not run. Current candidate fixes
+are **implemented and host-tested**, with no deployment, release, game launch
+or new headset evidence. Exact native windows live in Requiem's manifest.
+
+Candidate validation on 2026-10-27: `cmake --build --preset debug` and `release`
+succeeded; `ctest --preset debug` and `release` each passed **79/79**, including
+Requiem selection/throw/keypad/mechanism consumers and BP spatial/native-input
+regressions. `tools/Build-OvertureProduct.ps1 -Configuration Release` passed
+**298 checks, 0 failures**; metadata validation passed. The new pickup and GUI
+context tests failed before their fixes; the secondary GUI-button focus-release
+case also reproduced before correction. These remain host boundary tests.
 
 ### Requiem level04/05 progression feedback — 2026-10-25
 
