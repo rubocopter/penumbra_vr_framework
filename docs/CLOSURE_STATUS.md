@@ -9,6 +9,13 @@ remain headset gates; water/crouch recovery and the SDL crash remain unresolved.
 Public release status below continues to identify the preceding public artifact
 until a separate publication is verified.
 
+The exact local installer, matching source and checksums are pinned in the
+[1.0.14 artifact record](releases/1.0.14-validation.json), built from clean
+`1592ba45232541b2987dd6526c801e0527e3abac`. Both Framework configurations pass
+83/83 tests; Overture passes 298 checks. EN/ES standalone extraction, payload
+hashes, source bytes, topology A–F, 1.0.13 upgrade/repair/exact restoration and
+20 uninstall-safety cases pass in isolated roots. This remains a local candidate.
+
 ## Current public maintenance candidate — v1.0.13: headset validation pending
 
 **v1.0.13**, dated 2026-10-27, adds bounded native inventory pickup and ScreenGui

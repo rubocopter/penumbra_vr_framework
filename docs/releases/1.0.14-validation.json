@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.14",
+  "validatedOn": "2026-10-28",
+  "status": "local release candidate; not published",
+  "buildSourceCommit": "1592ba45232541b2987dd6526c801e0527e3abac",
+  "sourceCleanAtBuild": true,
+  "publicReleaseReady": false,
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "bytes": 5349,
+      "sha256": "14C624AE073C7196F2AA52EA85697B434569CED5237E05202CBE143122ED2875"
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.14.exe",
+      "bytes": 193203352,
+      "sha256": "BF89E56A4E29DD328E4811E293587C69AEF1791802ED214E5F09BA503F662BC5"
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.14.zip",
+      "bytes": 82214430,
+      "sha256": "9DC824CDE4D1AA9E876F6D189F684E9995C89DECE26F8E2D12F9A1C5B9D854CE"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 276,
+      "sha256": "8C8157423821DD76E125102D6B5637FDC32CD1A724A8870B018ED0BD6282EDB2"
+    }
+  ],
+  "pe": [
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.14",
+      "sha256": "391C5BC40557EF9673BC5AAABA344E0546A63BBC7CFDF33DA2D99C9852986775",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll",
+        "USER32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.14",
+      "sha256": "F80DE9B3008039AF6D5BE191B6E3616CAE9619BC84E6C1DC4FA76F955F13259D",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.14",
+      "sha256": "5BC01A92E16BF260B48CBC5EBB011FDB0942D9E976E309F1677F414407284383",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.Requiem.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.14",
+      "sha256": "075C8188B122A0E5B0EE408EA72890DCC0822EF2EFD51397643F69B1AC15967C",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.LaaTransform.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.14",
+      "sha256": "E9EBDAD6146BB384AEB254958403AE7A9A40A4C32B32FC206DFE40EA4C04904C",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "products/overture/build/bin/Release/Penumbra_vr.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.14",
+      "sha256": "B131E4959396EFFBEFDEBD1BD91C2B7FC74B98E44F7E10C8F22C8E4F6CDF510A",
+      "imports": [
+        "alut.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "cg.dll",
+        "cgGL.dll",
+        "GLU32.dll",
+        "KERNEL32.dll",
+        "libvorbisfile.dll",
+        "MSVCP140.dll",
+        "Newton.dll",
+        "OpenAL32.dll",
+        "OPENGL32.dll",
+        "openvr_api.dll",
+        "SDL_image.dll",
+        "SDL_ttf.dll",
+        "SDL.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "VCRUNTIME140.dll"
+      ],
+      "delayImports": []
+    }
+  ],
+  "automatedChecks": {
+    "frameworkDebug": "83/83 passed",
+    "frameworkRelease": "83/83 passed",
+    "overtureRelease": "298 checks, 0 failures",
+    "nativeBoundary": "12 recorded windows, 5 vtable methods and active-byte proof matched exact unpacked evidence",
+    "metadata": "passed",
+    "sourceArchive": "byte-for-byte build commit plus pinned dependency sources",
+    "standaloneSetup": "EN/ES smoke and extraction, embedded hashes, single-EXE path checks passed",
+    "deployment": "isolated topology A-F, 1.0.13 upgrade/repair/verification/exact restore, uninstall safety passed",
+    "publicationLint": "0 failures; 1 root README warning (instructions/notices are embedded and in source); local artifact only"
+  },
+  "review": {
+    "scriptOwnership": "independent static review: no actionable blockers",
+    "remainingCombinedDiff": "local review and automated checks; final independent review unavailable due agent usage limit"
+  },
+  "evidenceLimits": [
+    "No developer game launch or headset test",
+    "Authored cable/rope/StickArea/impact/bridge/ending scripts not executed by host fixtures",
+    "Synthetic Newton components are not every authored topology/limit",
+    "Level04 water recovery and intermittent SDL startup crash remain unresolved",
+    "No full playthrough, stable-support or independent clean-PC/device claim"
+  ],
+  "setupIdentity": {
+    "productVersion": "1.0.14+1592ba45232541b2987dd6526c801e0527e3abac",
+    "fileVersion": "1.0.14.0"
+  }
+}

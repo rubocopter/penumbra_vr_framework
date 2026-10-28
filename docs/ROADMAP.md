@@ -18,7 +18,7 @@ distinguishes its cause. Do not launch games as a routine step.
 These are **reported failures or pending acceptance**, not promises of new
 functionality or proof that the candidate already works in headset.
 
-| Report | Current evidence (2026-10-27) | Condition for closing |
+| Report | Current evidence (2026-10-28) | Condition for closing |
 | --- | --- | --- |
 | Requiem level04 sewer: crouching underwater traps player on bottom | **Unresolved.** v1.0.11 logs physical capsule height; water/crouch cause not proven. | Actual stand/jump recovery at orb and battery with cause evidence. |
 | Requiem level05 generator, hatch and door buttons | **v1.0.12, host-tested** adds the omitted Rework head-to-hand native area query and consistent-origin short-ray arbitration to v1.0.11 selection. | Repeated activations on reported level, with obstructions, in a pinned headset build. |
