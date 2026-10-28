@@ -11,6 +11,7 @@ unsigned g_native_updates = 0;
 unsigned g_native_queries = 0;
 bool g_keyboard_held = false;
 float g_collision_fraction = 1.0F;
+Vec3 g_scripted_native_travel{};
 
 template<class T> void Put(void* object, std::size_t offset, const T& value) {
     std::memcpy(static_cast<std::uint8_t*>(object) + offset, &value, sizeof(value));
@@ -38,11 +39,48 @@ void __fastcall NativeUpdateStub(void* body, void*, float) {
     position.x = before.x + (position.x - before.x) * g_collision_fraction;
     position.z = before.z + (position.z - before.z) * g_collision_fraction;
     if (native_motion.y != 0.125F || position.y != before.y) std::abort();
+    position.x+=g_scripted_native_travel.x;
+    position.y+=g_scripted_native_travel.y;
+    position.z+=g_scripted_native_travel.z;
     Put(body, GameplayContract().character_position_offset, position);
 }
 bool Near(float actual, float expected) { return std::fabs(actual - expected) < 0.0002F; }
 
 void __fastcall HandlerUpdateStub(void*, void*, float) {}
+unsigned g_crouch_transitions=0;
+void __fastcall CrouchTransitionStub(void* player,void*,int next,bool) {
+    ++g_crouch_transitions;
+    Put(player,GameplayContract().move_state_index_offset,next);
+}
+
+bool ScriptedPlayerOwnership(std::uint8_t* image) {
+    Branch(image,GameplayContract().button_handler_update_rva,0xE9,
+        reinterpret_cast<void*>(&HandlerUpdateStub));
+    Branch(image,GameplayContract().change_move_state_rva,0xE9,
+        reinterpret_cast<void*>(&CrouchTransitionStub));
+    std::array<std::uint8_t,0x500> player{},body{};
+    std::array<std::uint8_t,0x80> handler{};
+    Put(handler.data(),GameplayContract().handler_player_offset,static_cast<void*>(player.data()));
+    Put(handler.data(),0x3C,1);
+    Put(player.data(),GameplayContract().character_body_offset,static_cast<void*>(body.data()));
+    Put(player.data(),GameplayContract().move_state_index_offset,4);
+    Put(player.data(),kPlayerActiveOffset,false);
+    g_crouch_player=player.data(); g_crouch_body=body.data();
+    g_vr_crouch_owned=true; g_crouch_owner_player=player.data();
+    g_crouch_transitions=0;
+    HookedUpdate(handler.data(),nullptr,1.0F/90.0F);
+    if(g_crouch_transitions || Read<int>(player.data(),GameplayContract().move_state_index_offset)!=4) {
+        std::cerr<<"VR crouch overwrote script-owned inactive player state\n";
+        return false;
+    }
+    // Script reenables gameplay: release the previously VR-owned stance once.
+    Put(player.data(),kPlayerActiveOffset,true);
+    HookedUpdate(handler.data(),nullptr,1.0F/90.0F);
+    const bool ok=g_crouch_transitions==1 &&
+        Read<int>(player.data(),GameplayContract().move_state_index_offset)==0;
+    g_vr_crouch_owned=false; g_crouch_owner_player=nullptr;
+    return ok;
+}
 
 bool KeypadContext(std::uint8_t* image) {
     Branch(image,GameplayContract().button_handler_update_rva,0xE9,
@@ -270,6 +308,120 @@ bool JumpQueries(std::uint8_t* image) {
     return g_native_queries == 42;
 }
 
+bool CreditsQueries(std::uint8_t* image) {
+    Branch(image, GameplayContract().button_handler_update_rva, 0xE9,
+        reinterpret_cast<void*>(&HandlerUpdateStub));
+    std::array<std::uint8_t, 0x80> handler{};
+    Put(handler.data(), 0x3C, 5); // Native credits/story handler state.
+    HookedUpdate(handler.data(), nullptr, 1.0F / 60.0F);
+    if (!NativeUiActive() || CurrentNativeUiSurface() != NativeUiSurface::fullscreen)
+        return false;
+
+    Branch(image, 0xDAFB0, 0xE9, reinterpret_cast<void*>(&NativeQueryStub));
+    constexpr std::array<unsigned, 3> sites{0x3F69, 0x3F97, 0x3FC7};
+    for (const auto site : sites) {
+        image[site - 3] = 0x83; image[site - 2] = 0xEC; image[site - 1] = 28;
+        Branch(image, site, 0xE8, image + 0xDAFB0);
+        image[site + 5] = 0xC2; image[site + 6] = 28; image[site + 7] = 0;
+        // Keep an omitted production callsite native, so this fixture detects
+        // a missing mapping rather than installing the expected hook itself.
+        for (const auto& entry : kGameplayQueries) {
+            if (entry.site == site)
+                Branch(image, site, 0xE8, reinterpret_cast<void*>(&HookedQuery));
+        }
+    }
+    FlushInstructionCache(GetCurrentProcess(), image, 0x300000);
+    runtime::VrNativeIntents intents;
+    g_intents = &intents;
+    const auto query = [&](unsigned site, bool expected) {
+        const auto before = g_native_queries;
+        const bool actual = reinterpret_cast<Query>(image + site - 3)(nullptr, LegacyString{});
+        if (actual != expected || g_native_queries != before + 1) {
+            std::cerr << "Credits query RVA " << std::hex << site
+                << " got=" << actual << " expected=" << expected
+                << " native_queries=" << std::dec << g_native_queries - before << '\n';
+            return false;
+        }
+        return true;
+    };
+    // Independent native routes: Escape -> Pause/UI-close, LeftClick ->
+    // Select, RightClick -> Back. None requires an active gameplay player.
+    using Button = runtime::VrButtonState runtime::VrInputState::*;
+    constexpr std::array<Button, 4> buttons{
+        &runtime::VrInputState::ui_close, &runtime::VrInputState::pause,
+        &runtime::VrInputState::ui_select, &runtime::VrInputState::ui_back};
+    constexpr std::array<unsigned, 4> winners{0x3F69, 0x3F69, 0x3F97, 0x3FC7};
+    g_keyboard_held = false;
+    for (std::size_t index = 0; index < buttons.size(); ++index) {
+        runtime::VrInputState input{};
+        input.*buttons[index] = {true, true, true, false};
+        intents.Begin(input, runtime::VrInputContext::ui);
+        for (const auto site : sites) {
+            if (!query(site, site == winners[index]) || !query(site, false)) return false;
+        }
+        input.*buttons[index] = {true, true, false, false}; // Still held next frame.
+        intents.Begin(input, runtime::VrInputContext::ui);
+        for (const auto site : sites) if (!query(site, false)) return false;
+        input.*buttons[index] = {true, false, false, true};
+        intents.Begin(input, runtime::VrInputContext::ui);
+        for (const auto site : sites) if (!query(site, false)) return false;
+    }
+    // Closing must not consume the independent right-click/back edge.
+    runtime::VrInputState input{};
+    input.ui_close = input.ui_back = {true, true, true, false};
+    intents.Begin(input, runtime::VrInputContext::ui);
+    if (!query(0x3F69, true) || !query(0x3FC7, true) ||
+        !query(0x3F69, false) || !query(0x3FC7, false)) return false;
+    intents.Begin({}, runtime::VrInputContext::ui); // Focus/input loss.
+    for (const auto site : sites) if (!query(site, false)) return false;
+    for (const bool attached : {true, false}) {
+        g_intents = attached ? &intents : nullptr;
+        for (const bool native : {true, false}) {
+            g_keyboard_held = native;
+            for (const auto site : sites) if (!query(site, native)) return false;
+        }
+    }
+    g_intents = nullptr;
+    g_keyboard_held = false;
+    return true;
+}
+
+bool NativeCarry(std::uint8_t* image) {
+    // Exercise the real post-native body observer with travel independent of
+    // VR intent. This checks ownership/carry, not an actual platform contact.
+    Branch(image,GameplayContract().character_update_rva,0xE9,
+        reinterpret_cast<void*>(&NativeUpdateStub));
+    std::array<std::uint8_t,0x300> body{};
+    Put(body.data(),GameplayContract().character_size_y_offset,1.8F);
+    Put(body.data(),GameplayContract().character_position_offset,Vec3{0,2,0});
+    g_tracked_player_body.store(body.data());
+    g_tracking_state={}; g_tracking_state.character_body=body.data();
+    g_tracking_state.body_generation=1; g_physical_state={};
+    g_head_tracking={}; g_head_tracking.valid=true;
+    g_head_tracking.pose.pose_valid=g_head_tracking.pose.device_connected=true;
+    g_head_tracking.pose.device_to_absolute.values={1,0,0,0,0,1,0,1.7F,0,0,1,0};
+    g_collision_fraction=1;
+    for(int phase=0;phase<3;++phase) {
+        g_scripted_native_travel=phase==0 ? Vec3{} :
+            phase==1 ? Vec3{0.01F,0.02F,-0.015F} : Vec3{-0.01F,-0.02F,0.015F};
+        for(int tick=0;tick<30;++tick) {
+            g_head_tracking.sampled_at_ms=GetTickCount64();
+            const auto updates=g_native_updates;
+            HookedCharacterUpdate(body.data(),nullptr,1.0F/90.0F);
+            const auto p=Read<Vec3>(body.data(),GameplayContract().character_position_offset);
+            if(g_native_updates!=updates+1 || !g_tracking_state.room_scale_valid ||
+                !Near(g_tracking_state.head_anchor[0],p.x) ||
+                !Near(g_tracking_state.head_anchor[1],p.y-0.9F) ||
+                !Near(g_tracking_state.head_anchor[2],p.z)) {
+                std::cerr<<"Native scripted travel lost/doubled in VR head carry\n";
+                return false;
+            }
+        }
+    }
+    g_scripted_native_travel={};
+    return true;
+}
+
 bool Movement(std::uint8_t* image) {
     Branch(image, GameplayContract().character_update_rva, 0xE9,
         reinterpret_cast<void*>(&NativeUpdateStub));
@@ -345,8 +497,12 @@ int main(int argc, char** argv) {
         : argc > 1 && std::strncmp(argv[1], "shutdown", 8) == 0
             ? BridgeShutdown(image, std::strcmp(argv[1], "shutdown-timeout") == 0,
                 std::strcmp(argv[1], "shutdown-body") == 0)
+        : argc > 1 && std::strcmp(argv[1], "credits") == 0
+            ? CreditsQueries(image)
         : argc > 1 && std::strcmp(argv[1], "jump") == 0
-            ? JumpQueries(image) : Movement(image);
+            ? JumpQueries(image) : argc>1 && std::strcmp(argv[1],"native-carry")==0
+            ? NativeCarry(image) : argc>1 && std::strcmp(argv[1],"scripted-player")==0
+            ? ScriptedPlayerOwnership(image) : Movement(image);
     VirtualFree(image, 0, MEM_RELEASE);
     return result ? 0 : 1;
 }

@@ -1166,5 +1166,178 @@
         "entryBytes": "83 EC 18 56 8B F1 8B 46 10 8B 88 5C 01 00 00 8B"
       }
     ]
+  },
+  "articulatedGrab": {
+    "status": "implemented; host-tested; live/headset progression pending",
+    "reference": "Rework 23c890f PlayerState_Interact_VR.cpp Grab accepts jointed bodies; BP spatial_interaction.cpp InspectGrabAssembly/ArticulatedContactImpulse/ApplyArticulatedContactImpulse supplies the solver-preserving adaptation. Direct single-bone SetMatrix is unsafe for this chain.",
+    "assetEvidence": [
+      {
+        "path": "expansion01/models/level09/level09_contact.ent",
+        "sha256": "1F0B1581170EF553FC586C09D7E364A9EBA09F11531CE242D7827CB6226E64B2"
+      },
+      {
+        "path": "expansion01/models/level09/level09_contact.dae",
+        "sha256": "138AE54CE3CEC5D77E2811AA57BE1EFFDE17271CE4528C947BAE882EBC24B94C"
+      },
+      {
+        "path": "expansion01/maps/level09.hps",
+        "sha256": "9EEB67F42BF276C58126CD9E6223FA10AF1387B6E4221894B7257031EDD8A8B4"
+      }
+    ],
+    "nativeWindows": [
+      {
+        "name": "get-linear",
+        "rva": "0x19ce30",
+        "length": 74,
+        "sha256": "78BC9DD7120F0D39339023F55BD633010CA08853EEA506298589067003E8E562",
+        "bytes": "83ec0c8b891c0400008d04245051c744240800000000c744240c00000000c744241000000000ff15bc346700d94424088b4424188b54240cd9188b4c241089500489480883c414c20400"
+      },
+      {
+        "name": "get-angular",
+        "rva": "0x19ce80",
+        "length": 74,
+        "sha256": "A582E509D1383E2D4D751B9A14DE85015B6F6A14B0B85617C347D33928C9297D",
+        "bytes": "83ec0c8b891c0400008d04245051c744240800000000c744240c00000000c744241000000000ff15b8346700d94424088b4424188b54240cd9188b4c241089500489480883c414c20400"
+      },
+      {
+        "name": "point-impulse",
+        "rva": "0x19cb30",
+        "length": 29,
+        "sha256": "9806097F84A4817D64E679A13BFC7BCD1332D6D9DD98321289508FCA8ADA6053",
+        "bytes": "8b4424088b542404508b811c0400005250ff15e434670083c40cc20800"
+      },
+      {
+        "name": "change-state-lifecycle",
+        "rva": "0x9cee0",
+        "length": 71,
+        "sha256": "111D8CA8BD8C8470D923A64E0DEEF649BD1BCEA6DECE794431B71D3CB5F8AD20",
+        "bytes": "538bd98b8bc0020000558b6c240c3be974308b83c8020000568b348885f6578b3ca874088b06578bceff50608b17568bcfff525c8b46048947085f89abc00200005e5d5bc20400"
+      },
+      {
+        "name": "player-set-active",
+        "rva": "0x9e3d0",
+        "length": 85,
+        "sha256": "D8D32D35C87D4873FCD95F6C9F9DCE4A897BD2795804246E0809F03808F77585",
+        "bytes": "8a44240484c0538bd98883dc010000753d8b8bc002000085c974338b83c8020000568b348885f6578b3874088b06578bceff50608b17568bcfff525c8b46048947085fc783c0020000000000005e5bc20400cccccc"
+      },
+      {
+        "name": "grab-enter-admission",
+        "rva": "0xace40",
+        "length": 144,
+        "sha256": "7624EA1F7E4B55DD3B8770CA28D47DCD5CE77DC66B5E44B92BC2BB772607EF0A",
+        "bytes": "64a1000000006aff68297b6300506489250000000083ec6855568bf18b46108b80400200008b4e0c8b89540100005750e80b09feff8bf885ff74168bcfe80ea7faff84c00f84240200008bcfe85facfaff8b4e108b46248b91e0010000bf030000003bc78954240c75096a006a00e8edfcfeff8b8424840000008b400483f80574038946288b46108a48488b6e28888e"
+      }
+    ],
+    "abi": "Getters 19CE30/19CE80 return Vec3 via MSVC x86 hidden output pointer, EAX=output, RET4. Vtable293DD8 slots38/40; impulse19CB30 slot88 forwards unchanged NewtonAddBodyImpulse(deltaVelocity,worldPoint), RET8. Independently inspected unpacked exact canonical executable; not live execution.",
+    "ownership": "Requiem existing Grab Enter/Update/Leave owner; active Object +C0=1; existing verified body list14C/150 and joint parent/child2C/30. Revalidate bounded connected graph each update, omit static anchors/animation and disconnected siblings. No joint-limit, script, StickArea or collision-size edits.",
+    "behavior": "Native acceptance first, fresh resolved-palm acquisition. Live topology/mass revalidation protects rigid placement. Jointed Grab uses BP contact velocity/feedforward and connected dynamic translation; closed assemblies also consume bounded wrist drive, preserving point torque. Anchored assemblies omit wrist override and tracked release velocity. Initial separation and native momentum retained; BP previous-grip/current-world rebase preserves turn/lift. Native refusal creates no pending hold; script SetActive cancellation remains native-owned.",
+    "validation": "Actual Enter/pending/Update/Leave consumer with fresh palm generation; native detach refusal/acceptance, attachment/mass/joint changes, companion/disconnected isolation, malformed matrices, fixed/world roots, torque and wrist/feedforward, native SetActive cancellation. Shipped Newton production-adapter fixtures pull gravity-bearing 2/6/7body chains by every member and world-rooted component for180ticks: pivots<2cm, root<1cm, dynamic lift within8cm. Characterized body/physics boundary; authored puzzles not executed."
+  },
+  "remainingLevelAudit": {
+    "status": "static asset/script audit only; no live/headset progression validation",
+    "date": "2026-10-28",
+    "entityReferences": 219,
+    "uniqueDirectDefinitions": 88,
+    "breakVariants": 9,
+    "findings": "Additional required rope01 Grab chain shares cable family; existing rigid Grab/Move/Push, native StickArea, Lamp, ScriptArea and Normal Item routes cover remaining authored progression families. Level10/11 endings script-owned. Optional articulated props not independently validated.",
+    "inputs": [
+      {
+        "path": "expansion01/maps/level09.hps",
+        "sha256": "9EEB67F42BF276C58126CD9E6223FA10AF1387B6E4221894B7257031EDD8A8B4"
+      },
+      {
+        "path": "expansion01/maps/level09.dae",
+        "sha256": "EB17CD22C05C8C555DB12AF1C06F0ECDC8BA0BB98A94E0859689E4C5405E20F4"
+      },
+      {
+        "path": "expansion01/maps/level10.hps",
+        "sha256": "2A38FC5DC513D751F5A9A7321FDCCC73633309DFF8A174A9DBB773433E461780"
+      },
+      {
+        "path": "expansion01/maps/level10.dae",
+        "sha256": "A6E081DEB0E80E9AC1C71B09B8FEA05DC2AD5FF19E27E16AE4ECFCF54740DB86"
+      },
+      {
+        "path": "expansion01/maps/level11.hps",
+        "sha256": "5E27D07C38289F4D1DFEF0DB3503756E41E7CFE4EAF6E70150E8BC47A0E4323B"
+      },
+      {
+        "path": "expansion01/maps/level11.dae",
+        "sha256": "F1CD7CC44CBD1C427F51F1CA1EE0CA1F6379793C6BD7ECF5262CACFE27CE479C"
+      },
+      {
+        "path": "expansion01/models/level09/level09_rope.ent",
+        "sha256": "030AB4F531B06C3BF914B7FEC6D347E10FA6E0BAF87A4BF89EFB56B67EDC007C"
+      },
+      {
+        "path": "expansion01/models/level09/level09_rope.dae",
+        "sha256": "FA6117F83CE4E287FDCCCC3CA1EDDEA98FBB14346DFB53242A4EB971644DBA6A"
+      }
+    ]
+  },
+  "scriptedPlayerOwnership": {
+    "status": "implemented; targeted host regression passed; authored sequences not live/headset validated",
+    "reference": "Rework 23c890f ButtonHandler.cpp gates UpdateVRTurn/UpdateVRCrouch on IsActive. Existing Requiem kPlayerActiveProof at RVA4FA9 independently decodes player+1DC.",
+    "ownership": "Existing gameplay_bridge HookedUpdate; no new native hook or field. Gate VR turn/stance/tracked body ownership on native active byte while UI keeps its native classification.",
+    "regression": "Actual handler: inactive script-owned crouched player previously received unwanted stand; pre-fix failed, corrected passes; reactivation releases previous VR-owned stance once. Native body travel consumer covers stationary/up/down scripted displacement reaching head anchor once without VR intent; this passed unchanged. No live platform or liquid conclusion."
+  },
+  "remainingActivationWiring": {
+    "status": "implemented; host-tested; authored ending pending live/headset validation",
+    "reference": "BP CastTrackedHeadSelection fixed Lamp activation; Rework rejects inert Object contacts before ranking.",
+    "nativeIdentity": {
+      "lampType": 12,
+      "lampVtable": "0x2773C0",
+      "lampPick": "0x38BF0",
+      "lampInteract": "0x39C40",
+      "interactCallbackOffset": "0x204",
+      "pickCallbackOffset": "0x20C",
+      "creditsEscapeCall": "0x3F69"
+    },
+    "ownership": "Fixed Lamps only at mass0 and exactvtable; original native Pick controls authored flags/range; original Interact owns SetLit/script. Physical targets keep priority and native head-ray solids obstruct fallback. No generic remote Grab. Inert Object filter preserves manipulation flag and native Interact/Pick callbacks. Credits use existing query owner, no direct handler call.",
+    "tests": "Selection red/green: fixedLamp beyond palm, valid range/wall/dynamic/wrong identity negatives, physical priority; inertObject rejection and static callback eligibility. Credits red/green actual query mode: ui_close/Pause/Select/Back, edge consumption, held suppression, native keyboard fallback; native handler state5 remains UI.",
+    "nativeWindows": [
+      {
+        "name": "lamp-constructor-type",
+        "rva": "0x3a93d",
+        "length": 10,
+        "sha256": "07F8F7C0596CC1345BBE790A89575EF04D07D7F4E039B141965BA4901BDDF6BB",
+        "bytes": "c786c00000000c000000"
+      },
+      {
+        "name": "lamp-pick",
+        "rva": "0x38bf0",
+        "length": 224,
+        "sha256": "F2EA7E29FD4BBADED052C20518101229D5110896D227E20B1F90EF90E697D2B9",
+        "bytes": "568bf18b46108b885c01000057e8de340600d896bc000000dfe0f6c4057a7a8a8634020000ddd884c08b3d4431670074298a864402000084c074158d8e9c02000068d839670051ffd783c40884c075338a863402000084c0751f8a864502000084c074158d968002000068d839670052ffd783c40884c0750a8b860402000085c074238b46108b885c0100005fc781e8020000010000005ec3d89eb8000000dfe0f6c44174198d969800000068e43f670052ff157c31670083c40884c074218b46108b805c0100008bb8c002000033c983ff030f94c14983e10a8988e8020000"
+      },
+      {
+        "name": "lamp-interact",
+        "rva": "0x39c40",
+        "length": 144,
+        "sha256": "381F3AF38A9E11409BE54CC58A5C6B95B5A22312F97CD421CE2009DB12D19D20",
+        "bytes": "51568bf18b46108b885c010000e88e240600d89ebc000000dfe0f6c4050f8a6c0100008a86340200005332db84c0578b3d4431670074318a864402000084c0741d8d8e9c02000068d839670051ffd783c40884c074086a016a016a00eb2f8a863402000084c0752e8a864502000084c074248d968002000068d839670052ffd783c40884c0740f6a016a016a018bcee8"
+      },
+      {
+        "name": "generic-pick-callback",
+        "rva": "0x2a3ef",
+        "length": 85,
+        "sha256": "858EC0E8218A6F78CC20AC2F6DF046F35057667F57824FF673D029F43F278ABB",
+        "bytes": "8b860c02000085c074356a028d4c2408518bcee849feffff8b4e108d54240452c744243000000000e884a003008d4c2404c744242cffffffffff15d43167008b068bceff50248b4c242464890d000000008b4c2420"
+      },
+      {
+        "name": "generic-interact-callback",
+        "rva": "0x2a474",
+        "length": 96,
+        "sha256": "7F92B182B4040E3890765BD23761A5222513F8D3A0EB3A87DBEDE13C968FE744",
+        "bytes": "8b06ff5048d89ebc000000dfe0f6c4417a4a8b4e108b4928e8bf000b008b860402000085c074356a008d542408528bcee8a7fdffff8b4e108d44240450c744243000000000e8e29f03008d4c2404c744242cffffffffff15d43167008b168bce"
+      },
+      {
+        "name": "credits-escape-query",
+        "rva": "0x3f69",
+        "length": 5,
+        "sha256": "FC145F6CE3AF7F077B6BBB656A3500F0C646040F5F6AA0DE39292212B42839F7",
+        "bytes": "e842700d00"
+      }
+    ]
   }
 }

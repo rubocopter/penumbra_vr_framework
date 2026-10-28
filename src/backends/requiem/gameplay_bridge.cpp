@@ -55,6 +55,8 @@ constexpr QueryEntry kGameplayQueries[]{
     {0x3EE0, 0xDAFB0, NativeAction::pause, NativeQuery::pressed},
     {0x3F0E, 0xDAFB0, NativeAction::select, NativeQuery::pressed},
     {0x3F3E, 0xDAFB0, NativeAction::back, NativeQuery::pressed},
+    // Credits Escape: E8 42 70 0D 00; native success calls 8780.
+    {0x3F69, 0xDAFB0, NativeAction::pause, NativeQuery::pressed},
     {0x3F97, 0xDAFB0, NativeAction::select, NativeQuery::pressed},
     {0x3FC7, 0xDAFB0, NativeAction::back, NativeQuery::pressed},
     {0x4009, 0xDAFB0, NativeAction::pause, NativeQuery::pressed},
@@ -1037,8 +1039,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     }
     float head_height = 0.0F;
     const bool body_present = current_body != nullptr;
+    // Rework's ButtonHandler gates VR turn/stance on IsActive. Requiem's
+    // native 4FA9 branch proves this build's active byte; scripts and endings
+    // must retain body/state ownership while it is clear.
+    const bool native_player_active=Read<bool>(player,kPlayerActiveOffset);
     const bool gameplay_active = input_ready && frame.focused &&
-        !ui && body_present;
+        !ui && body_present && native_player_active;
     AcquireSRWLockShared(&g_settings_lock);
     const auto settings = g_settings;
     ReleaseSRWLockShared(&g_settings_lock);
@@ -1067,7 +1073,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     // physically while either panel is open. Keep the Rework stance policy
     // informed by fresh HMD height and apply its native transition on exit.
     const bool stance_tracking_active = input_ready && frame.focused &&
-        in_game && body_present;
+        in_game && body_present && native_player_active;
     const bool tracking_valid = stance_tracking_active &&
         TrackedHeadTrackingHeight(head_height);
     const auto crouch_button = ui ? runtime::VrButtonState{} :
@@ -1080,7 +1086,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         tracking_valid,
         head_height,
         g_stand_blocked));
-    if (!ui) ServiceNativeVrCrouch(
+    if (!ui && native_player_active) ServiceNativeVrCrouch(
         player, g_crouch_policy.status().desired_crouch);
     thread_local bool previous_ui = false;
     if (ui != previous_ui) {

@@ -161,6 +161,14 @@ void __fastcall NativeLadderPick(void* entity,void*) {
     if(std::hypot(origin.values[3]-body[0],origin.values[11]-body[2])<=1.4F &&
         std::abs(pick->point[1]-body[1])<1.1F) Put(player,0x2E8,9);
 }
+unsigned test_lamp_picks=0;
+void __fastcall NativeLampPick(void* entity,void*) {
+    ++test_lamp_picks;
+    auto* player=ReadNative<void*>(ReadNative<void*>(entity,0x10),0x15C);
+    // Characterized 38BF0: native range and authored on/off admission own cue 1.
+    if(NativeEntityDistance(entity,nullptr)<=ReadNative<float>(entity,0xBC) &&
+        ReadNative<bool>(entity,0x37)) Put(player,0x2E8,1);
+}
 constexpr std::uintptr_t test_ray_caller=kNormalRayCallRva+3-5-28;
 void __fastcall NativeNormalUpdate(void* state,void*,float) {
     auto* player=ReadNative<void*>(state,0x10);
@@ -379,6 +387,7 @@ bool SelectionCases() {
         }
     }
     test_separate_hand_rays=true;
+    Put(entity.data(),0x37,true); // This independent finger-ray target is usable.
     test_offset_hand_hits={{body.data(),0.30F,{0,0.8F,-0.30F}}};
     RefreshVrSelectionBeforeInteract(player.data());
     if(pick.body!=body.data()) {
@@ -386,6 +395,7 @@ bool SelectionCases() {
         return Failed(__LINE__);
     }
     test_separate_hand_rays=false; test_offset_hand_hits.clear();
+    Put(entity.data(),0x37,false); // Restore the head-only described Object.
     test_hand_hits={{hand_body.data(),0.2F,{0,0.8F,-0.2F}}};
     test_head_hits={{body.data(),1.8F,{0,1.7F,-1.8F}}};
     RefreshVrSelectionBeforeExamine(player.data());
@@ -396,6 +406,49 @@ bool SelectionCases() {
     test_hand_hits.clear();
     RefreshVrSelectionBeforeInteract(player.data());
     if(pick.body || g_vr_selection_player) return Failed(__LINE__);
+    // BP's fixed-Lamp native activation fallback is required by buttonfurn.
+    // It must not turn dynamic lights or described props into remote grabs.
+    Put(entity.data(),0,g_image+0x2773C0); Put(entity.data(),0xC0,12);
+    Put(entity.data(),0x37,true); Put(entity.data(),0xBC,2.1F);
+    Put(body.data(),0x434,0.0F);
+    Put(g_image+0x2773C0,0x48,reinterpret_cast<void*>(&NativeEntityDistance));
+    JumpTo(0x38BF0,reinterpret_cast<void*>(&NativeLampPick));
+    test_head_hits={{body.data(),1.5F,{0,1.7F,-1.5F}}}; test_hand_hits.clear();
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=body.data() || g_vr_selection_player!=player.data() || !test_lamp_picks) {
+        std::cerr<<"Fixed native Lamp lost without palm contact: body="<<pick.body
+            <<" picks="<<test_lamp_picks<<" fixed="<<g_normal_gaze.fixed_lamp
+            <<" cue="<<g_normal_gaze.cue<<" valid="<<g_normal_gaze.valid<<'\n'; return Failed(__LINE__);
+    }
+    // Physical props keep priority; the original native ray still owns walls.
+    test_hand_hits={{hand_body.data(),0.1F,{0,0.8F,-0.1F}}};
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body!=hand_body.data()) return Failed(__LINE__);
+    test_hand_hits.clear(); test_head_hits.push_back({foreground.data(),0.4F,{0,1.7F,-0.4F}});
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) return Failed(__LINE__);
+    test_head_hits={{body.data(),2.5F,{0,1.7F,-2.5F}}};
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) return Failed(__LINE__);
+    test_head_hits={{body.data(),1.5F,{0,1.7F,-1.5F}}}; Put(body.data(),0x434,1.0F);
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) return Failed(__LINE__);
+    Put(body.data(),0x434,0.0F); Put(entity.data(),0,g_image+0x270100);
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) return Failed(__LINE__);
+    Put(entity.data(),0xC0,1); Put(entity.data(),0x37,false);
+    // Inert Object housing must not win VR contact ranking. Static script
+    // buttons and Pick callbacks remain eligible without a manipulation flag.
+    test_head_hits.clear(); test_hand_hits={{body.data(),0.1F,{0,0.8F,-0.1F}}};
+    update(); RefreshVrSelectionBeforeInteract(player.data());
+    if(pick.body) { std::cerr<<"Inert Object stole physical VR selection\n"; return Failed(__LINE__); }
+    for(auto offset:{0x204U,0x20CU}) {
+        Put(entity.data(),offset,reinterpret_cast<void*>(1));
+        update(); RefreshVrSelectionBeforeInteract(player.data());
+        if(pick.body!=body.data()) return Failed(__LINE__);
+        Put(entity.data(),offset,static_cast<void*>(nullptr));
+    }
+    test_hand_hits.clear();
     // Level05 generator/hatch/door buttons are authored script areas. Model
     // their native callback route without inventing a Requiem entity type.
     std::array<std::uint8_t,0x500> script_area{}, script_entity{};
@@ -662,13 +715,16 @@ void PublishGameplayHeadTracking(const runtime::VrHmdPose&,float) noexcept {}
 }
 #include "native_throw_fixture.hpp"
 #include "native_mechanism_fixture.hpp"
+#include "articulated_grab_fixture.hpp"
 int main(int argc, char** argv) {
     using namespace penumbra_vr::backends::requiem;
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,
         MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));
     if(!g_image) return 2;
     bool passed=false;
-    if(argc>1 && std::string(argv[1])=="mechanism") {
+    if(argc>1 && std::string(argv[1])=="articulated") {
+        passed=articulated_grab_fixture::Cases();
+    } else if(argc>1 && std::string(argv[1])=="mechanism") {
         passed=native_mechanism_fixture::Cases();
     } else if(argc>1 && std::string(argv[1])=="throw") {
         native_throw_fixture::Fixture fixture(test_frame,PVR_TEST_NEWTON_DLL);

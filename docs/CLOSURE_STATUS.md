@@ -1,5 +1,14 @@
 # Framework release status
 
+## Local progression candidate — v1.0.14
+
+The 2026-10-28 candidate adds the Requiem remaining-level interaction wiring
+described in [the notes](releases/1.0.14.md). It is not a stable/full-playthrough
+acceptance claim. Actual authored cable/rope/connection and ending completion
+remain headset gates; water/crouch recovery and the SDL crash remain unresolved.
+Public release status below continues to identify the preceding public artifact
+until a separate publication is verified.
+
 ## Current public maintenance candidate — v1.0.13: headset validation pending
 
 **v1.0.13**, dated 2026-10-27, adds bounded native inventory pickup and ScreenGui

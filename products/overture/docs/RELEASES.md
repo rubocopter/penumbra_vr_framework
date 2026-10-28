@@ -1,5 +1,11 @@
 # Release history
 
+## v1.0.14 — Coordinated progression candidate (2026-10-28)
+
+Overture receives the coordinated executable/package identity. Gameplay remains
+unchanged; the new progression corrections belong to Requiem. Current-candidate
+headset validation remains pending; see the [Framework notes](../../../docs/releases/1.0.14.md).
+
 ## v1.0.13 — Coordinated maintenance candidate (2026-10-27)
 
 Overture receives the coordinated 1.0.13 executable/package identity without

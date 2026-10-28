@@ -358,6 +358,120 @@ The new runtime candidate does not inherit support or headset acceptance from
 v1.0.8; the reported long platform jump, ascent comfort and cabinet gesture
 remain live/headset gates.
 
+### Requiem level09 power cable — 2026-10-28
+
+Caelus reports that the preceding corrections work perfectly but the next
+level's power cable shows an interaction icon and remains on the floor. The
+maintainer identifies this as the level following level08; installed level09
+assets contain the matching cable. No installed artifact hash or new log is
+supplied, so the positive feedback is scoped and does not establish complete
+level08 acceptance.
+
+`level09_contact.ent` is a native Object/Grab with seven physical bodies:
+1 kg connectors `joint1`/`joint7` and five 0.3 kg links. Its authored joints
+must remain under Newton ownership. `AttachCable0` accepts
+`contact01_joint1`, `AttachCable1` accepts `contact01_joint7`; native StickAreas
+own alignment, attachment and detachment. `PressTunnelButton` requires two
+connected ends plus completed circuits, then locks attachment and starts the
+bridges. These are asset/script facts, not an executed puzzle completion.
+
+Requiem's VR Grab explicitly required zero native joints and otherwise exited
+the state after native acceptance. Rework accepts jointed Grab, but its direct
+single-body matrix placement is unsafe for the demonstrated chain. The existing
+BP graph/contact correction is adapted instead: validate the live connected
+component, apply bounded point-velocity correction to the selected body and
+the same translation delta to connected dynamic siblings, preserving their
+velocities, gravity, static roots, joint limits and scripts. Disconnected bodies
+and animation companions remain untouched. Initial separation is retained;
+release restores native flags/caps without replacing chain momentum. BP's
+previous-tracking-pose rebase preserves physical lifting while turning.
+Single rigid Grab, Move and Push keep their prior routes.
+
+The actual-consumer regression initially reproduced a matrix write with no
+chain impulse. It now covers both ends and an interior link, stationary offset,
+connected versus disconnected bodies, static endpoint, foreign links, stalled
+ticks, release momentum and simultaneous turn/lift. Native getter/impulse ABI
+and asset hashes are recorded in the Requiem manifest's `articulatedGrab`.
+These are host tests with characterized native boundaries; authored cable
+stability, attachment callbacks and level completion remain live/headset gates.
+No game was launched or installed payload changed during this investigation.
+Full Framework Debug and Release builds succeeded, with 80/80 tests passing
+in each configuration. The final fixed-end fixture extension also passes the
+six Requiem consumers in both configurations. Metadata validation and whitespace
+checks pass; independent static review has no remaining actionable blockers.
+
+### Remaining Requiem levels — static progression audit
+
+The 2026-10-28 audit resolves 219 authored entity references across level09–11
+to 88 distinct definitions plus nine break variants, including model joints
+and script callbacks. This is a static compatibility review, not full-game
+acceptance. It identifies the following reusable routes and remaining gates:
+
+| Area | Existing route / finding | Live acceptance still required |
+| --- | --- | --- |
+| Level09 `rope01`, barrel/oil explosion | Seven-body, six-ball-joint Grab chain: the same confirmed zero-joint rejection as the power cable. The new connected-body route covers both; no asset-name exception. | Oil contact, correct rope/barrel attachment, ignition and original explosion callbacks. |
+| Level09 fuse, six circuit cards, nitro barrel | Single-body Grab and native StickArea alignment/attachment. | Detach, relocate, reattach, script locking and save/reload. |
+| Level09 doors, lever, drawers, Push junk and grilles | Existing native hinge/slider/Push/rigid Grab; preserve COM and sticky-endpoint corrections. Static callback buttons and script-controlled fire door retain native ownership. | Authored activation, `junk3` unlocking its door, low vent traversal. |
+| Level09 lanterns and padlock | Existing loose-prop/native break and damage lifecycle; the lock is Static rather than a missing Grab target. | Real impact break, gate unlock and oil ignition. |
+| Level09 water, moving bridges, keys/portal | Native liquids and scripted travel; ordinary keys consume existing Normal Item selection. | Water recovery remains unresolved; bridge riding, three key pickups and portal progression need live coverage. |
+| Level09 `madrass01`; level11 bucket, pillow and hanging lamp | Internal/constrained articulated Grab family was also excluded in the baseline. The live-graph route can admit compatible topology without copying asset values. No demonstrated progression requirement. | Native body census, actual acquisition and solver behavior. |
+| Level10 and level11 endings | Scripted endings lead to credits. No additional required wheel, ladder, keypad or inventory-combination family was found. Level09 furnace Lamp and `mrdoor01area` select the branches through existing native callbacks. | Both branch transitions, scripts/timers and credits input. |
+
+Cable and rope need particular attention with the opposite end already fixed:
+the static endpoint must receive no correction, while native detach permission
+remains authoritative. Host tests cover both fixed-end directions and isolated
+dynamic siblings. No new movement, water, damage or script algorithm is inferred
+from the remaining live unknowns. Exact map/script identities and the additional
+rope asset identity are recorded in the Requiem manifest.
+
+The follow-up wiring review reproduces another concrete ownership defect:
+`HookedUpdate` could issue a VR-owned stand transition while an authored
+sequence had disabled the native player. Rework gates turn/stance on player
+activity; Requiem already independently maps its active byte at `+1DC`
+(`4FA9` proof). That native condition now also gates VR turn, stance tracking,
+stance application and tracked-body movement eligibility. UI retains its own
+classification. A real-handler consumer fails before the correction and passes
+afterwards: inactive scripts receive no stance write, and native reactivation
+permits exactly one release of the previous VR-owned crouch. This protects
+level09 scares and level10/11 scripted control; it does not execute those scenes.
+
+An additional actual-character-update consumer checks stationary, upward and
+downward native travel with no VR motion request: body travel reaches the head
+anchor once, including native Y after physics. It passes without a movement
+change. This establishes the carry boundary with a native stub, not actual
+moving-bridge contacts or water recovery.
+
+The completed follow-up also connects fixed Lamps through BP's occluded native
+head activation fallback, including level09 `buttonfurn`. Requiem's independently
+verified type 12/vtable `2773C0` and native Pick `38BF0` retain range and authored
+on/off admission; Interact `39C40` still owns SetLit and the script. Dynamic
+lamps remain physical targets. Consumer tests reproduce the omission and cover
+walls, range, exact identity, dynamic exclusion and physical-target priority.
+Inert Object shells are excluded before palm/ray ranking using this build's
+verified manipulation/Interact/Pick eligibility; native ScriptArea and static
+Object callbacks remain available. The credits Escape query `3F69 -> DAFB0`
+now consumes existing Pause/UI-close intents, with edge/held/keyboard regressions.
+
+Fresh native Enter-to-Update tests now exercise palm generation and locked
+StickArea refusal before ownership. Live joint/mass changes cannot fall through
+to rigid SetMatrix, and native script deactivation clears pending/held ownership.
+Closed dynamic assemblies consume BP's bounded wrist correction and tracked
+velocity feedforward; anchored assemblies omit wrist overrides. Point-generated
+torque is retained. Every connected matrix is validated before driving.
+Shipped-Newton tests drive actual adapter code with gravity-bearing 2/6/7-body
+components, selecting every member, and a world-rooted component for 180 ticks:
+pivot separation stays below 2 cm, root error below 1 cm, and dynamic lift within
+8 cm of its target. These fixtures do not prove authored limits or puzzles.
+
+The full combined review after these extensions was unavailable due to an agent
+usage limit. The inactive-player correction has an independent static review
+without blockers; the rest received local review and automated verification.
+Candidate 1.0.14 keeps all new progression evidence at host-tested until an
+actual pinned run exercises its authored callbacks and scenes.
+Its versioned source passes full Debug/Release builds and 83/83 tests in each;
+native windows, metadata and whitespace checks also pass. Installer identity,
+upgrade and artifact checks remain a separate release gate.
+
 ## Controller profiles and distribution
 
 All three products consume the same 42 logical actions and six action sets,

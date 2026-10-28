@@ -372,6 +372,37 @@ close these checks.
   backward. Check both travel stops, obstruction/recovery, release/focus loss
   and reopening. Native limits and puzzle/script behavior must remain intact.
 
+## Requiem level09 cable acceptance
+
+Pin the Framework DLL hash and canonical Requiem build. Load the original
+level09 save; do not edit the map or script to bypass progression.
+
+- Acquire each connector (`contact01_joint1` and `contact01_joint7`) and an
+  interior link. Lift, drag, release and regrab; repeat with both hands, walking
+  and turning while lifting. The chain must retain its joints without an
+  acquisition jump or release launch.
+- Attach the ends through the native `cablehole` areas, detach/regrab while
+  permitted, and repeat with one end fixed. Check native alignment and sound.
+- Complete the circuits and use `button01`: the original power/bridge callback
+  must run and the cable must become non-detachable as authored. Save/reload
+  before and after attachment; check menu/focus cancellation while holding.
+
+Host graph/ABI tests do not close this progression gate.
+
+Also exercise level09 `rope01` through the original oil/barrel puzzle, including
+each end, one end already attached, native detach permission, ignition and
+explosion. Continue with fuse/card snapping, the padlock, moving bridge carry,
+keys/portal and both level09 ending choices through level10/11 and credits.
+The static audit found existing routes for these families; it did not execute
+their progression callbacks.
+
+For candidate 1.0.14, activate `buttonfurn` through its native fixed-Lamp range,
+including a wall-obstructed attempt and a nearby physical target. Confirm no
+activation through walls or dynamic-light pickup at a distance. Check both
+ending branches: native player deactivation must prevent VR turn/posture/body
+writes, and reactivation must restore ordinary input. At credits, test VR
+Pause/UI-close and Back, plus keyboard Escape, respecting native timing.
+
 ## What to retain after a run
 
 Keep durable evidence small:

@@ -5,6 +5,17 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.14 — 2026-10-28 — local progression candidate
+
+- Connect Requiem jointed Grab to BP's constrained/connected-body behavior for
+  the level09 cable/rope and compatible remaining props, preserving native
+  attachment, constraint and release ownership.
+- Add fixed-Lamp native activation, inert-Object contact eligibility, credits
+  Escape dispatch and script-disabled player protection with consumer tests.
+- Audit levels09–11 actual native callback wiring. No authored puzzle completion
+  or new headset acceptance is claimed; water recovery and SDL crash remain
+  unresolved. See [candidate notes](releases/1.0.14.md).
+
 ## 1.0.13 — 2026-10-27 — maintenance candidate
 
 - Restore bounded native Normal Item pickup for Requiem level08's orb, keeping

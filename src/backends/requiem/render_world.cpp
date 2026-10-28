@@ -313,6 +313,7 @@ struct GazeSelection {
     bool queried = false;
     bool valid = false;
     bool ladder = false;
+    bool fixed_lamp = false;
 };
 thread_local GazeSelection g_normal_gaze{};
 thread_local std::uint32_t g_refresh_entity_hits = 0;
@@ -331,6 +332,10 @@ struct GrabHold final {
     float max_linear = 0.0F;
     float max_angular = 0.0F;
     bool collide_character = true;
+    bool articulated = false;
+    bool native_momentum = false;
+    std::array<float,3> local_contact{};
+    runtime::VrMatrix34 previous_tracking_pose{};
 };
 thread_local void* g_pending_grab_state = nullptr;
 thread_local runtime::VrHand g_pending_grab_hand = runtime::VrHand::right;
@@ -1259,11 +1264,12 @@ template <typename T>
     if(!StoreNative(gaze.player,0x280,static_cast<void*>(&gaze.result))) return 10;
     int cue=10;
     __try {
-        if(gaze.ladder) {
-            // The native Ladder callback alone owns its horizontal/vertical
-            // admission and cue 9. No reach/height offset is invented here.
+        if(gaze.ladder || (gaze.fixed_lamp && !g_examine_selection_active)) {
+            // Native Ladder/Lamp Pick owns range, authored interaction flags
+            // and cues. No reach/height offset or script callback is invented.
             static_cast<void>(StoreNative(gaze.player,0x2E8,10));
-            reinterpret_cast<void(__thiscall*)(void*)>(g_image+kLadderPickRva)(gaze.entity);
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+
+                (gaze.ladder ? kLadderPickRva : 0x38BF0))(gaze.entity);
             cue=ReadNative<int>(gaze.player,0x2E8);
         } else {
             // Rework requests noInteract for its independent Examine query.
@@ -1311,6 +1317,11 @@ template <typename T>
     // RQ Ladder type 13. Distant described Objects remain Examine-only.
     gaze.ladder=ReadNative<int>(gaze.entity,0xC0)==13 &&
         ReadNative<void*>(gaze.entity,0)==g_image+kLadderVtableRva;
+    // Independently decoded RQ Lamp constructor 3A93D and vtable2773C0.
+    // BP admits fixed native Lamps at native range; dynamic lamps stay physical.
+    gaze.fixed_lamp=ReadNative<int>(gaze.entity,0xC0)==12 &&
+        ReadNative<void*>(gaze.entity,0)==g_image+0x2773C0 &&
+        ReadNative<float>(gaze.result.body,0x434)==0.0F;
     gaze.cue=NativeGazeCue(native_callback,gaze);
     gaze.valid=gaze.player!=nullptr;
     // Resolve has already arbitrated the area's point. Outer Normal::Update
@@ -1340,6 +1351,15 @@ void __fastcall HookedNormalUpdate(void* state,void*,float dt) noexcept {
 
 // Black Plague's ranked ray adapter preserves the native eligibility callback
 // while gathering all hits from the palm centre and four adjacent fingers.
+[[nodiscard]] bool PalmAcquisitionEntity(void* entity) noexcept {
+    if (!entity || !ReadNative<bool>(entity,0x14)) return false;
+    if (ReadNative<int>(entity,0xC0)!=1) return true;
+    // RQ 29A80/2A450/2A3C0 independently prove manipulation, Interact and
+    // Pick admission. BP uses this filter before ranking inert Object shells.
+    return ReadNative<bool>(entity,0x37) || ReadNative<void*>(entity,0x204) ||
+        ReadNative<void*>(entity,0x20C);
+}
+
 struct RankedRayCallback final {
     struct VTable {
         bool (__thiscall* before)(void*, void*);
@@ -1385,7 +1405,7 @@ struct RankedRayCallback final {
             &proxy->native_result, body, params);
         if (!RequiemBodyMatches(body)) return keep_casting;
         void* const entity = ReadNative<void*>(body, 0x414);
-        if (entity == nullptr || !ReadNative<bool>(entity, 0x14))
+        if (!PalmAcquisitionEntity(entity))
             return keep_casting;
         if (g_selection_refresh_active) ++g_refresh_entity_hits;
         const float score = hit.distance +
@@ -1440,7 +1460,7 @@ struct PalmSelectionCandidate final {
             !RequiemBodyMatches(hit.body) ||
             !SafeNativeRayBefore(callback, hit.body)) continue;
         void* const entity = ReadNative<void*>(hit.body, 0x414);
-        if (entity == nullptr || !ReadNative<bool>(entity, 0x14)) continue;
+        if (!PalmAcquisitionEntity(entity)) continue;
         std::array<float,3> point{};
         for (std::size_t axis = 0; axis < point.size(); ++axis) {
             point[axis] = hit.contact_sum[axis] /
@@ -1775,8 +1795,14 @@ void __fastcall HookedRay(void* world, void*, void* callback,
                     return;
                 }
                 if(!ranked.best_body && g_normal_gaze.valid &&
-                    (g_normal_gaze.ladder || (!g_selection_refresh_active && g_normal_gaze.cue==4)))
-                    static_cast<void>(StoreNative(callback,0,g_normal_gaze.result));
+                    (g_normal_gaze.ladder || (g_normal_gaze.fixed_lamp && g_normal_gaze.cue==1) ||
+                        (!g_selection_refresh_active && g_normal_gaze.cue==4))) {
+                    if (StoreNative(callback,0,g_normal_gaze.result) &&
+                        g_normal_gaze.fixed_lamp && g_normal_gaze.cue==1) {
+                        g_vr_selection_ready=true;
+                        g_refresh_winner_distance=g_normal_gaze.result.distance;
+                    }
+                }
                 return;
             }
         }
@@ -2026,6 +2052,281 @@ void SetBodyVelocity(void* body, std::uintptr_t rva,
         g_image + rva)(body, &velocity);
 }
 
+struct GrabComponent {
+    std::array<void*,32> bodies{};
+    std::size_t count=0;
+    bool anchored=false;
+};
+[[nodiscard]] bool ValidGrabMatrix(const runtime::VrMatrix44& matrix) noexcept {
+    if (matrix.values[12]!=0 || matrix.values[13]!=0 ||
+        matrix.values[14]!=0 || matrix.values[15]!=1) return false;
+    runtime::VrMatrix34 rigid{};
+    std::copy_n(matrix.values.begin(),12,rigid.values.begin());
+    runtime::VrMatrix44 inverse{};
+    std::string error;
+    return runtime::InvertRigidTransform(rigid,inverse,error);
+}
+[[nodiscard]] bool InspectGrabAssembly(void* body, bool allow_anchors,
+    bool* articulated, GrabComponent* component) noexcept {
+    if (articulated) *articulated=false;
+    if (component) *component={};
+    void* const entity=ReadNative<void*>(body,0x414);
+    if (!entity || !ReadNative<bool>(entity,0x14) ||
+        ReadNative<int>(entity,0xC0)!=1) return false;
+    auto** const begin=ReadNative<void**>(entity,0x14C);
+    auto** const end=ReadNative<void**>(entity,0x150);
+    const auto first=reinterpret_cast<std::uintptr_t>(begin);
+    const auto last=reinterpret_cast<std::uintptr_t>(end);
+    if (!begin || last<=first || (last-first)%sizeof(void*)!=0) return false;
+    const auto count=(last-first)/sizeof(void*);
+    // Bound entity enumeration separately from the dynamic graph below;
+    // companions must not consume the graph's 32 available physical entries.
+    if (count<1 || count>64) return false;
+    std::array<void*,32> parts{};
+    std::array<void*,64> anchors{};
+    std::size_t anchor_count=0;
+    std::size_t part_count=0;
+    bool contains_selected=false;
+    for (std::size_t index=0;index<count;++index) {
+        void* part=nullptr;
+        if ((part=ReadNative<void*>(begin,index*sizeof(void*)))==nullptr || !RequiemBodyMatches(part) ||
+            ReadNative<void*>(part,0x414)!=entity ||
+            ReadNative<void*>(part,0x330) || ReadNative<void*>(part,0x10)) return false;
+        const float mass=ReadNative<float>(part,0x434);
+        if (!std::isfinite(mass) || mass<0) return false;
+        if (!ValidGrabMatrix(ReadNative<runtime::VrMatrix44>(part,0x34))) return false;
+        if (mass==0) {
+            const bool collide_character=ReadNative<bool>(part,0x3C8);
+            const int joints=NativeJointCount(part);
+            if (part==body || joints<0 || joints>32)
+                return false;
+            if (!collide_character && joints==0) continue; // Animation companion.
+            if (!allow_anchors) return false;
+            anchors[anchor_count++]=part;
+            continue;
+        }
+        if (part_count==parts.size()) return false;
+        parts[part_count++]=part;
+        contains_selected=contains_selected || part==body;
+    }
+    if (!contains_selected || part_count<1) return false;
+    const auto contains=[&](void* part) {
+        for (std::size_t index=0;index<part_count;++index)
+            if (parts[index]==part) return true;
+        return false;
+    };
+    const auto is_anchor=[&](void* part) {
+        if (!part) return allow_anchors; // Native world endpoint.
+        for (std::size_t index=0;index<anchor_count;++index)
+            if (anchors[index]==part) return true;
+        return false;
+    };
+    std::array<bool,32> anchored{};
+    for (std::size_t index=0;index<part_count;++index) {
+        const int joints=NativeJointCount(parts[index]);
+        if (joints<0 || joints>32)
+            return false;
+        for (int joint_index=0;joint_index<joints;++joint_index) {
+            void* const joint=NativeJoint(parts[index],joint_index);
+            if (!joint) return false;
+            void* const parent=ReadNative<void*>(joint,0x2C);
+            void* const child=ReadNative<void*>(joint,0x30);
+            if (parent==child || (!contains(parent) && !is_anchor(parent)) ||
+                (!contains(child) && !is_anchor(child)) ||
+                (parent!=parts[index] && child!=parts[index])) return false;
+            anchored[index]=anchored[index] || is_anchor(parent) || is_anchor(child);
+        }
+    }
+    if (articulated || component) {
+        // Any connected dynamic assembly must retain its native solve, even
+        // the two-body bucket: placing its handle alone separates the hinge.
+        // No joint-type or asset-name assumption: ball joints use the same
+        // verified native parent/child endpoints as hinges and sliders.
+        std::array<bool,32> visited{};
+        for (std::size_t index=0;index<part_count;++index)
+            if (parts[index]==body) visited[index]=true;
+        std::size_t reached=1;
+        bool progressed=true;
+        while (progressed && reached<part_count) {
+            progressed=false;
+            for (std::size_t index=0;index<part_count;++index) {
+                if (!visited[index]) continue;
+                const int joints=NativeJointCount(parts[index]);
+                for (int joint_index=0;joint_index<joints;++joint_index) {
+                    void* const joint=NativeJoint(parts[index],joint_index);
+                    void* const parent=ReadNative<void*>(joint,0x2C);
+                    void* const child=ReadNative<void*>(joint,0x30);
+                    void* const neighbor=parent==parts[index] ? child : parent;
+                    for (std::size_t other=0;other<part_count;++other) {
+                        if (parts[other]!=neighbor || visited[other]) continue;
+                        visited[other]=true;
+                        ++reached;
+                        progressed=true;
+                    }
+                }
+            }
+        }
+        if (articulated) *articulated=reached>=2;
+        if (component)
+            for (std::size_t index=0;index<part_count;++index)
+                if (visited[index]) {
+                    component->bodies[component->count++]=parts[index];
+                    component->anchored=component->anchored || anchored[index];
+                }
+    }
+    return true;
+}
+
+[[nodiscard]] bool ArticulatedContactImpulse(const runtime::VrMatrix44& body_pose,
+    const runtime::VrMatrix44& destination,const Vec3& contact,const Vec3& tracked_velocity,
+    const Vec3& linear,const Vec3& angular,float dt,Vec3& impulse,
+    Vec3& world_contact) noexcept {
+    impulse={};
+    world_contact={};
+    // A stalled update must not integrate a stale positional error into a
+    // large impulse. Short/normal ticks use a per-second acceleration budget.
+    if (!std::isfinite(dt) || dt<=0 || dt>0.10F ||
+        !runtime::vr_mechanism_policy::Finite(contact) || !runtime::vr_mechanism_policy::Finite(tracked_velocity) ||
+        !runtime::vr_mechanism_policy::Finite(linear) || !runtime::vr_mechanism_policy::Finite(angular)) return false;
+    world_contact=TransformPoint(body_pose,contact);
+    const Vec3 desired_contact=TransformPoint(destination,contact);
+    const Vec3 centre{body_pose.values[3],body_pose.values[7],body_pose.values[11]};
+    if (!runtime::vr_mechanism_policy::Finite(world_contact) || !runtime::vr_mechanism_policy::Finite(desired_contact) ||
+        !runtime::vr_mechanism_policy::Finite(centre)) return false;
+    const Vec3 radius{world_contact[0]-centre[0],world_contact[1]-centre[1],
+        world_contact[2]-centre[2]};
+    const Vec3 tangent=runtime::vr_mechanism_policy::Cross(angular,radius);
+    const Vec3 hand_speed=runtime::LimitTrackedVelocity(tracked_velocity,1,3);
+    Vec3 requested{};
+    for (int axis=0;axis<3;++axis)
+        requested[axis]=hand_speed[axis]+(desired_contact[axis]-world_contact[axis])*9;
+    requested=runtime::LimitTrackedVelocity(requested,1,3);
+    for (int axis=0;axis<3;++axis)
+        impulse[axis]=requested[axis]-linear[axis]-tangent[axis];
+    impulse=runtime::LimitTrackedVelocity(impulse,1,
+        std::min(2.3F,dt*145.0F));
+    return runtime::vr_mechanism_policy::Finite(impulse);
+}
+
+// Closed dynamic Grab wrist drive copied from BP; anchored graphs omit it.
+[[nodiscard]] bool ArticulatedAngularDrive(const runtime::VrMatrix44& body_pose,
+    const runtime::VrMatrix44& destination,const Vec3& hand_angular,const Vec3& current,
+    float dt,Vec3& corrected) noexcept {
+    corrected={};
+    if (!std::isfinite(dt) || dt<=0 || dt>0.10F ||
+        !runtime::vr_mechanism_policy::Finite(hand_angular) || !runtime::vr_mechanism_policy::Finite(current)) return false;
+    Vec3 angular_error{};
+    for (int axis=0;axis<3;++axis) {
+        const Vec3 from{body_pose.values[axis],body_pose.values[axis+4],
+            body_pose.values[axis+8]};
+        const Vec3 to{destination.values[axis],destination.values[axis+4],
+            destination.values[axis+8]};
+        if (!runtime::vr_mechanism_policy::Finite(from) || !runtime::vr_mechanism_policy::Finite(to)) return false;
+        const Vec3 difference=runtime::vr_mechanism_policy::Cross(from,to);
+        for (int component=0;component<3;++component)
+            angular_error[component]+=difference[component]*0.5F;
+    }
+    // The cross products above encode axis*sin(angle), which vanishes at a
+    // half-turn. Recover the shortest axis-angle error, including that case.
+    std::array<float,9> relative{};
+    for (int row=0;row<3;++row)
+        for (int col=0;col<3;++col)
+            for (int axis=0;axis<3;++axis)
+                relative[row*3+col]+=destination.values[row*4+axis]*
+                    body_pose.values[col*4+axis];
+    const float cosine=std::clamp(
+        (relative[0]+relative[4]+relative[8]-1.0F)*0.5F,-1.0F,1.0F);
+    const float angle=std::acos(cosine);
+    const float sine=std::hypot(angular_error[0],angular_error[1],angular_error[2]);
+    if (cosine<0 && sine<0.001F) {
+        // At pi choose the best-conditioned diagonal. The symmetric terms
+        // recover the other components; the skew picks the side near pi.
+        int largest=0;
+        for (int axis=1;axis<3;++axis)
+            if (relative[axis*3+axis]>relative[largest*3+largest]) largest=axis;
+        Vec3 rotation_axis{};
+        rotation_axis[largest]=std::sqrt(std::max(0.0F,
+            (relative[largest*3+largest]+1.0F)*0.5F));
+        if (rotation_axis[largest]<0.001F) return false;
+        for (int axis=0;axis<3;++axis)
+            if (axis!=largest)
+                rotation_axis[axis]=(relative[largest*3+axis]+
+                    relative[axis*3+largest])/(4.0F*rotation_axis[largest]);
+        const float direction=runtime::vr_mechanism_policy::Dot(rotation_axis,angular_error)<0 ? -1.0F : 1.0F;
+        for (int axis=0;axis<3;++axis)
+            angular_error[axis]=rotation_axis[axis]*angle*direction;
+    } else if (sine>1.0e-6F) {
+        for (float& component:angular_error) component*=angle/sine;
+    }
+    Vec3 requested{};
+    for (int axis=0;axis<3;++axis)
+        requested[axis]=hand_angular[axis]*0.5F+angular_error[axis]*4;
+    requested=runtime::LimitTrackedVelocity(requested,1,3);
+    Vec3 step{};
+    for (int axis=0;axis<3;++axis)
+        step[axis]=requested[axis]-current[axis];
+    step=runtime::LimitTrackedVelocity(step,1,std::min(0.20F,dt*12.5F));
+    for (int axis=0;axis<3;++axis)
+        corrected[axis]=current[axis]+step[axis];
+    return runtime::vr_mechanism_policy::Finite(corrected);
+}
+
+// Requiem's independently decoded getters return a 12-byte vector via the
+// MSVC x86 hidden result pointer (19CE30/19CE80, RET 4).
+[[nodiscard]] Vec3 GrabBodyVelocity(void* body, std::uintptr_t rva) noexcept {
+    return reinterpret_cast<Vec3(__thiscall*)(void*)>(g_image+rva)(body);
+}
+[[nodiscard]] bool DriveGrabAssembly(const GrabHold& hold,
+    const runtime::VrMatrix44& destination, float dt) noexcept {
+    GrabComponent graph{};
+    if (!ValidGrabMatrix(destination) ||
+        !InspectGrabAssembly(hold.body,true,nullptr,&graph)) return false;
+    const auto current=ReadNative<runtime::VrMatrix44>(hold.body,0x34);
+    const auto linear=GrabBodyVelocity(hold.body,0x19CE30);
+    const auto angular=GrabBodyVelocity(hold.body,0x19CE80);
+    const auto frame=ReadNativeControllerFrame();
+    const auto& grip=frame.hands[HandIndex(hold.hand)].grip;
+    if (!runtime::vr_mechanism_policy::Finite(grip.velocity) ||
+        !runtime::vr_mechanism_policy::Finite(grip.angular_velocity)) return false;
+    runtime::VrMatrix44 world{};
+    AcquireSRWLockShared(&g_tracking_world_lock);
+    world=g_world_from_tracking;
+    ReleaseSRWLockShared(&g_tracking_world_lock);
+    if (!ValidGrabMatrix(world)) return false;
+    Vec3 tracked{},tracked_angular{};
+    for (std::size_t row=0;row<3;++row)
+        for (std::size_t col=0;col<3;++col) {
+            tracked[row]+=world.values[row*4+col]*grip.velocity[col];
+            tracked_angular[row]+=world.values[row*4+col]*grip.angular_velocity[col];
+        }
+    Vec3 impulse{},contact{};
+    Vec3 driven_angular{};
+    if (!ArticulatedContactImpulse(current,destination,hold.local_contact,tracked,
+            linear,angular,dt,impulse,contact)) return false;
+    if (!graph.anchored && !ArticulatedAngularDrive(current,destination,
+            tracked_angular,angular,dt,driven_angular)) return false;
+    std::array<Vec3,32> velocities{};
+    for (std::size_t i=0;i<graph.count;++i) {
+        velocities[i]=GrabBodyVelocity(graph.bodies[i],0x19CE30);
+        for (int axis=0;axis<3;++axis) velocities[i][axis]+=impulse[axis];
+        if (!runtime::vr_mechanism_policy::Finite(velocities[i])) return false;
+    }
+    // Preserve joints, gravity and angular solve. Never SetMatrix on one bone.
+    reinterpret_cast<void(__thiscall*)(void*,const Vec3*,const Vec3*)>(
+        g_image+0x19CB30)(hold.body,&impulse,&contact);
+    for (std::size_t i=0;i<graph.count;++i) {
+        if (graph.bodies[i]==hold.body) continue;
+        reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19CB50)(graph.bodies[i],true);
+        SetBodyVelocity(graph.bodies[i],0x19CA00,velocities[i]);
+    }
+    // The point impulse produces torque. BP applies the bounded wrist delta
+    // to the resulting omega, preserving that native contact contribution.
+    if (!graph.anchored && ArticulatedAngularDrive(current,destination,
+            tracked_angular,GrabBodyVelocity(hold.body,0x19CE80),dt,driven_angular))
+        SetBodyVelocity(hold.body,0x19CA20,driven_angular);
+    return true;
+}
+
 void RestoreGrab(const GrabHold& hold) noexcept {
     if (!RequiemBodyMatches(hold.body)) return;
     if (!StoreNativeBool(hold.body, 0x3C8,
@@ -2034,6 +2335,9 @@ void RestoreGrab(const GrabHold& hold) noexcept {
         g_image + 0x19CAC0)(hold.body, hold.max_linear);
     reinterpret_cast<void(__thiscall*)(void*, float)>(
         g_image + 0x19CAE0)(hold.body, hold.max_angular);
+    // The solver owns chain momentum and any newly attached endpoint.
+    if (hold.articulated || hold.native_momentum || NativeJointCount(hold.body)!=0 ||
+        ReadNative<float>(hold.body,0x434)<=0) return;
     const auto frame = ReadNativeControllerFrame();
     const auto& grip = frame.hands[hold.hand == runtime::VrHand::left
         ? 0U : 1U].grip;
@@ -2085,7 +2389,14 @@ void __fastcall HookedGrabEnter(void* state, void*, void* previous) noexcept {
     g_vr_selection_player = nullptr;
     reinterpret_cast<Transition>(g_image + kGrabEnterRva)(state, previous);
     g_native_grab_enters.fetch_add(1, std::memory_order_relaxed);
-    if (vr_origin && g_presenting.load(std::memory_order_acquire)) {
+    // ACE40 can refuse a locked StickArea before assigning state+20. 9CEE0
+    // commits player+2C0 AFTER Enter returns, so it cannot prove acceptance
+    // here. Require the accepted body published by ACE40 from player+240.
+    auto* const accepted_body=ReadNative<void*>(state,0x20);
+    if (vr_origin && g_presenting.load(std::memory_order_acquire) &&
+        RequiemBodyMatches(accepted_body) &&
+        accepted_body==ReadNative<void*>(player,0x240) &&
+        ReadNative<float>(accepted_body,0x434)>0) {
         g_grab_enters.fetch_add(1, std::memory_order_relaxed);
         g_pending_grab_state = state;
         g_pending_grab_hand = frame.interact_source;
@@ -2099,6 +2410,11 @@ void __fastcall HookedGrabLeave(void* state, void*, void* next) noexcept {
     GrabHold hold{};
     if (owned) {
         hold = g_grab_hold;
+        // Capture before AA920 restores the selected body's original mass:
+        // a StickArea may have made it static or added a joint this tick.
+        const float mass=ReadNative<float>(hold.body,0x434);
+        hold.native_momentum=NativeJointCount(hold.body)!=0 ||
+            !std::isfinite(mass) || mass<=0;
         g_grab_hold = {};
         PublishGameplayPalmHeldBody(HandIndex(hold.hand), nullptr);
     }
@@ -2183,6 +2499,9 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
         runtime::VrMatrix44 palm{};
         std::array<float,3> tracked{};
         bool held_body_published = false;
+        GrabComponent graph{};
+        const int joints=NativeJointCount(body);
+        const bool articulated=joints>0;
         bool valid = g_presenting.load(std::memory_order_acquire) && player != nullptr &&
             ReadNative<int>(player, 0x2C0) == 6 &&
             ReadNative<void*>(ReadNative<void*>(player, 0x2C8),
@@ -2190,7 +2509,8 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
             RequiemBodyMatches(body) &&
             ReadNative<void*>(body, 0x330) == nullptr &&
             ReadNative<void*>(body, 0x10) == nullptr &&
-            NativeJointCount(body) == 0 &&
+            joints >= 0 && (!articulated ||
+                InspectGrabAssembly(body,true,nullptr,&graph)) &&
             frame.focused && frame.input.state.interact.pressed &&
             frame.interact_source == g_pending_grab_hand;
         if (valid) {
@@ -2235,7 +2555,9 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
                 std::isfinite(mass) && mass > 0.0F &&
                 hold.pose.Begin(palm, body_pose,
                     surface_contact ? local_contact : std::array<float,3>{},
-                    true, error)) {
+                    !articulated, error)) {
+                hold.articulated = articulated;
+                hold.local_contact = local_contact;
                 hold.state = state;
                 hold.player = player;
                 hold.body = body;
@@ -2243,6 +2565,7 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
                 hold.previous_palm = {
                     palm.values[3], palm.values[7], palm.values[11]};
                 hold.previous_tracking = tracked;
+                hold.previous_tracking_pose = frame.hands[HandIndex(hold.hand)].grip.device_to_absolute;
                 hold.yaw_epoch = GameplayPalmYawEpoch();
                 hold.max_linear = max_linear;
                 hold.max_angular = max_angular;
@@ -2258,9 +2581,9 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
                 probe::WriteLog("Requiem VR grab acquired mass=%.3f surface=%u",
                     mass, surface_contact ? 1U : 0U);
                 reinterpret_cast<void(__thiscall*)(void*, float)>(
-                    g_image + 0x19CAC0)(body, 20.0F);
+                    g_image + 0x19CAC0)(body, articulated ? 4.0F : 20.0F);
                 reinterpret_cast<void(__thiscall*)(void*, float)>(
-                    g_image + 0x19CAE0)(body, 30.0F);
+                    g_image + 0x19CAE0)(body, articulated ? 6.0F : 30.0F);
             }
         }
         g_pending_grab_state = nullptr;
@@ -2296,6 +2619,17 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
             g_image + kGrabExitRva)(state);
         return;
     }
+    // StickAreas/scripts can change mass, parenting and joints after Enter.
+    // A cached rigid classification must never bypass the live joint solve.
+    const int live_joints=NativeJointCount(g_grab_hold.body);
+    const float live_mass=ReadNative<float>(g_grab_hold.body,0x434);
+    if (live_joints<0 || (!g_grab_hold.articulated && live_joints!=0) ||
+        !std::isfinite(live_mass) || live_mass<=0 ||
+        ReadNative<void*>(g_grab_hold.body,0x330)!=nullptr ||
+        ReadNative<void*>(g_grab_hold.body,0x10)!=nullptr) {
+        reinterpret_cast<void(__thiscall*)(void*)>(g_image+kGrabExitRva)(state);
+        return;
+    }
     runtime::VrMatrix44 palm{}, destination{};
     std::array<float,3> tracking{};
     std::string error;
@@ -2318,7 +2652,37 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
     g_grab_hold.previous_tracking = tracking;
     g_grab_hold.previous_palm = {
         palm.values[3], palm.values[7], palm.values[11]};
+    if (g_grab_hold.articulated && yaw_epoch != g_grab_hold.yaw_epoch) {
+        // BP's rebase maps the previous physical grip through the CURRENT
+        // world basis. Keep this tick's physical lift/pull even during smooth turn.
+        runtime::VrMatrix44 world{};
+        AcquireSRWLockShared(&g_tracking_world_lock);
+        world=g_world_from_tracking;
+        ReleaseSRWLockShared(&g_tracking_world_lock);
+        const auto current_world=runtime::Multiply(world,runtime::ExpandMatrix(
+            frame.hands[HandIndex(g_grab_hold.hand)].grip.device_to_absolute));
+        const auto previous_world=runtime::Multiply(world,runtime::ExpandMatrix(
+            g_grab_hold.previous_tracking_pose));
+        runtime::VrMatrix34 rigid{};
+        std::copy_n(current_world.values.begin(),12,rigid.values.begin());
+        runtime::VrMatrix44 inverse{};
+        if (!runtime::InvertRigidTransform(rigid,inverse,error)) return;
+        const auto previous_palm=runtime::Multiply(previous_world,runtime::Multiply(inverse,palm));
+        if (!g_grab_hold.pose.Begin(previous_palm,ReadNative<runtime::VrMatrix44>(
+                g_grab_hold.body,0x34),g_grab_hold.local_contact,false,error) ||
+            !g_grab_hold.pose.Update(palm,destination,error)) return;
+    }
+    g_grab_hold.previous_tracking_pose=frame.hands[HandIndex(g_grab_hold.hand)].grip.device_to_absolute;
     g_grab_hold.yaw_epoch = yaw_epoch;
+    if (g_grab_hold.articulated) {
+        if (dt>0.10F) return;
+        reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19CB50)(g_grab_hold.body,true);
+        reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19CBB0)(g_grab_hold.body,false);
+        if (!StoreNativeBool(g_grab_hold.body,0x31,true)) return;
+        if (!DriveGrabAssembly(g_grab_hold,destination,dt))
+            reinterpret_cast<void(__thiscall*)(void*)>(g_image+kGrabExitRva)(state);
+        return;
+    }
     // Native state retains pickup/release ownership. Rework's shared rigid
     // grab pose owns only the free body's hand-relative transform.
     reinterpret_cast<void(__thiscall*)(void*, bool)>(
@@ -3283,8 +3647,14 @@ bool InstallRenderWorld(std::string& error) noexcept {
         error="Requiem native inventory pickup boundary mismatch";
         return false;
     }
-    constexpr std::array<std::array<std::uintptr_t,2>, 7> body_methods{{
+    if (ReadNative<void*>(image+0x2773C0,0x24)!=image+0x38BF0 ||
+        ReadNative<void*>(image+0x2773C0,0x28)!=image+0x39C40) {
+        error="Requiem fixed Lamp native lifecycle mismatch";
+        return false;
+    }
+    constexpr std::array<std::array<std::uintptr_t,2>, 10> body_methods{{
         {0x34, 0x19CA00}, {0x3C, 0x19CA20},
+        {0x38, 0x19CE30}, {0x40, 0x19CE80}, {0x88, 0x19CB30},
         {0x54, 0x19CAC0}, {0x5C, 0x19CAE0},
         {0x8C, 0x19CB50}, {0x94, 0x19CBB0},
         {0xBC, 0x19CCF0}}};
