@@ -50,6 +50,7 @@ CMakeUserPresets.json
 /captures/
 /work/
 /local-test/
+/*-neural.log
 *.dmp
 
 # Editor and OS metadata

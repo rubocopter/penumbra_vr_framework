@@ -141,12 +141,17 @@ function Invoke-LoggedInstaller([string]$operation, [string]$game,
     if($Plan){
         if($operation -eq 'recover'){throw 'Recovery uses the verified durable journal; it cannot be planned as an install.'}
         if(-not $payloadPlan){$payloadPlan=& $installer @installerArgs -Preflight}
+        if($operation -eq 'restore' -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1'))){& (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1') -GamePath $targetPath -Restore -Plan | Out-Null}
         [pscustomobject]@{Version=$release.version;Operation=$operation;Game=$game;Path=$targetPath;Arguments=$installerArgs;Payload=$payloadPlan;Checks=$maintenanceChecks;PreflightPassed=$true}
         return
     }
     Write-InstallerEvent $operation $game $targetPath 'started'
     try {
         if($operation -ne 'recover'){& $installer @installerArgs -Preflight | Out-Null}
+        if($operation -eq 'restore' -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1'))){
+            & (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1') -GamePath $targetPath -Restore -Plan | Out-Null
+            & (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1') -GamePath $targetPath -Restore | Out-Null
+        }
         & $installer @installerArgs
         if($operation -in @('install','repair')){
             $id=switch($game){'Overture'{'overture'} 'Black Plague'{'black_plague'} 'Requiem'{'requiem'}}
@@ -380,6 +385,7 @@ foreach($selected in $selectedEntries){
         if($failed.Count){throw "Preflight failed; no selected root was changed: $(($failed | ForEach-Object {"$($_.Name): $($_.Status). $($_.Remediation)"}) -join '; ')"}
     }
     $payloadPlan=& $installer @args -Preflight
+    if($operation -eq 'restore' -and (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1'))){& (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1') -GamePath $target -Restore -Plan | Out-Null}
     $transactions+=[pscustomobject]@{Version=$release.version;Operation=$operation;Game=$label;Path=$target;Installer=$installer;Arguments=$args;Payload=$payloadPlan;Checks=$checks;PreflightPassed=$true}
 }
 if($Plan){$transactions;return}

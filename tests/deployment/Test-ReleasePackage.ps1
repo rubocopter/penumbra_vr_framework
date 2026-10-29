@@ -15,7 +15,7 @@ foreach($line in Get-Content (Join-Path $dir 'SHA256SUMS.txt')){
 }
 if($seen.Count -ne 3 -or @([IO.Path]::GetFileName($setup),[IO.Path]::GetFileName($source),'build-report.json' | Where-Object {-not $seen.ContainsKey($_)}).Count){throw 'Incomplete outer checksums'}
 $report=Get-Content (Join-Path $dir 'build-report.json') -Raw | ConvertFrom-Json
-if($report.version -ne $release.version -or $report.sourceCommit -notmatch '^[a-f0-9]{40}$' -or -not $report.sourceClean -or $report.publicReleaseReady -or @($report.pe).Count -ne 6){throw 'Invalid candidate build report'}
+if($report.version -ne $release.version -or $report.sourceCommit -notmatch '^[a-f0-9]{40}$' -or -not $report.sourceClean -or $report.publicReleaseReady -or @($report.pe).Count -ne 8){throw 'Invalid candidate build report'}
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $payload=Join-Path ([IO.Path]::GetTempPath()) ('PvrReleaseVerify-'+[guid]::NewGuid().ToString('N'))
 try{
@@ -23,6 +23,8 @@ try{
     if($LASTEXITCODE -ne 0){throw 'Setup payload extraction failed.'}
     $names=@(Get-ChildItem -LiteralPath $payload -Recurse -File | ForEach-Object {$_.FullName.Substring($payload.Length+1).Replace('\','/')})
     foreach($required in @('release.json','SOURCE-AND-NOTICES.md','assets/deployment/manifest.json','tools/Instalar-Penumbra-VR.vbs','tools/Test-PenumbraVrInstallation.ps1','tools/Collect-PenumbraVrDiagnostics.ps1','licenses/OpenALSoft-LICENSE-pffft.txt','sources/openal-soft-1.25.2.tar.bz2')){if($required -notin $names){throw "Required release entry missing: $required"}}
+    foreach($required in @('tools/Install-PenumbraNeural.ps1','neural/PenumbraNeuralHost.exe','neural/nvngx.dll_nr_bridge.dll','neural/DirectNR-LICENSE.txt','neural/NVIDIA-SDK-LICENSE.txt')){if($required -notin $names){throw "Experimental Neural package entry missing: $required"}}
+    if(@($names | Where-Object {$_ -match '(^|/)nvngx_dlssnr\.dll$'}).Count){throw 'User-supplied NVIDIA model must not be redistributed.'}
     if(@($names | Where-Object {$_ -match '(\.pdb|\.dmp|\.obj|fltkdll\.dll|msvcr80\.dll)$|(^|/)(work|logs|captures|\.git)/'}).Count){throw 'Developer/private payload included'}
 }finally{if(Test-Path -LiteralPath $payload){Remove-Item -LiteralPath $payload -Recurse -Force}}
 $zip=[IO.Compression.ZipFile]::OpenRead($source)

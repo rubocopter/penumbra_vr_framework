@@ -7,6 +7,20 @@ on:
   workflow_dispatch:
 
 jobs:
+  neural-companion:
+    name: Experimental Neural x64 companion (no model)
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build companion and DirectNR forwarder without NVIDIA model
+        shell: pwsh
+        run: |
+          cmake -S tools/neural_post -B build-neural -A x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build-neural --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
   installer-fixtures:
     name: Installer and diagnostics fixtures (no game binaries)
     runs-on: windows-2022
@@ -25,6 +39,7 @@ jobs:
           ./tests/deployment/Test-ReleaseIdentity.ps1
           ./tests/deployment/Test-InstallerUi.ps1
           ./tests/deployment/Test-ReleaseDiagnostics.ps1
+          ./tests/deployment/Test-NeuralInstallation.ps1
 
   windows-x86:
     name: Windows x86 (without OpenVR SDK)
@@ -58,14 +73,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           # The real-driver WGL/FBO pixel test is validated locally, separately
           # from this SDK-less CI job. Do not imply it ran on the hosted runner.
-          ctest --preset debug --output-on-failure -E '^opengl_eye_targets$'
+          ctest --preset debug --output-on-failure -E '^(opengl_eye_targets|requiem_render_scale_consumer)$'
 
       - name: Build and test Release
         shell: pwsh
         run: |
           cmake --build --preset release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          ctest --preset release --output-on-failure -E '^opengl_eye_targets$'
+          ctest --preset release --output-on-failure -E '^(opengl_eye_targets|requiem_render_scale_consumer)$'
 
   overture-regression:
     name: Overture Release regression

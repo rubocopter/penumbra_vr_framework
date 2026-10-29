@@ -40,6 +40,18 @@ try {
                         'Test-PenumbraVrInstallation.ps1','Collect-PenumbraVrDiagnostics.ps1')) {
         Copy-Item -LiteralPath (Join-Path $PSScriptRoot $name) -Destination $toolsRoot
     }
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1') -Destination $toolsRoot
+    & cmake -S (Join-Path $repoRoot 'tools/neural_post') -B (Join-Path $repoRoot 'build/neural-host') -A x64
+    if($LASTEXITCODE -ne 0){throw 'Neural companion configure failed.'}
+    & cmake --build (Join-Path $repoRoot 'build/neural-host') --config Release
+    if($LASTEXITCODE -ne 0){throw 'Neural companion build failed.'}
+    $neuralRoot=Join-Path $stage 'neural';New-Item -ItemType Directory -Path $neuralRoot | Out-Null
+    foreach($name in @('PenumbraNeuralHost.exe','nvngx.dll_nr_bridge.dll')){
+        Copy-Item -LiteralPath (Join-Path $repoRoot ('build/neural-host/Release/'+$name)) -Destination $neuralRoot
+    }
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/neural_post/README.md') -Destination (Join-Path $neuralRoot 'README.md')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/neural_post/vendor/nr-bridge/LICENSE') -Destination (Join-Path $neuralRoot 'DirectNR-LICENSE.txt')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/neural_post/NVIDIA-SDK-LICENSE.txt') -Destination $neuralRoot
     Copy-Item -LiteralPath (Join-Path $repoRoot 'release.json') -Destination $stage
     New-Item -ItemType Directory -Path (Join-Path $stage 'assets/banner') -Force | Out-Null
     Copy-Item -LiteralPath (Join-Path $repoRoot 'assets/banner/penumbra-vr-framework.png') -Destination (Join-Path $stage 'assets/banner')
@@ -112,6 +124,17 @@ Repair/removal/recovery do not require SteamVR to be running or registered.
 Installation-file verification does not demonstrate headset/gameplay readiness.
 Maintainers retain the matching Source ZIP, build report and outer SHA256SUMS
 alongside the public Setup EXE. The EXE needs no adjacent repository files.
+
+EXPERIMENTAL NEURAL: Setup includes the x64 companion/DirectNR forwarder, not
+NVIDIA's model. After installing VR, select installed games in Maintenance and
+choose "Import Neural (experimental)". Select your local nvngx_dlssnr.dll;
+requirements/source guidance: https://github.com/lowpoplabs/nr-bridge#prerequisites
+CLI: tools\Install-PenumbraNeural.ps1 -GamePath <game> -ModelPath <model DLL>.
+Enable in VR Settings > Neural. Values are independent per game and apply live.
+Missing/unsupported Neural retains the original stereo image. Visual quality,
+stereo consistency and performance are experimental and may be worse. Removal
+is available in Maintenance; full game-root uninstall removes owned Neural too.
+The game render multiplier requires restart, separately from live Neural tuning.
 '@.Replace('@VERSION@',$release.version) | Set-Content -LiteralPath (Join-Path $stage 'PACKAGE-README.md') -Encoding UTF8
 
     $checksums = @(

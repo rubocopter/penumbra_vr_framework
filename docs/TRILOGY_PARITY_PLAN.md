@@ -21,6 +21,14 @@ Extraction alone is not parity. Validation uses the common ladder:
 
 ## Capability ledger
 
+Experimental Neural Post is implemented in all three source consumers with
+native VR menu controls and live settings publication. Shared settings,
+persistence and menu fixtures provide host evidence; synthetic OpenGL/NGX stereo
+tests do not establish per-game live/headset operation. The x64 helper requires
+a locally supplied NVIDIA model. Setup bundles the helper/forwarder and an
+optional model import; it never distributes NVIDIA model bytes. See
+`ARCHITECTURE.md` and `tools/neural_post/README.md` for the contract.
+
 The maintainer accepted the requested BP/Requiem feedback retest on 2026-10-08.
 The [scoped acceptance record](releases/1.0.6-feedback-acceptance.json) pins the
 preceding installed binaries: BP vice/locker acquisition, first-level settings
@@ -40,6 +48,7 @@ conditional and have no separately identified evidence in that confirmation.
 | Capability family | Shared/framework state | Black Plague | Requiem | Remaining evidence/work |
 | --- | --- | --- | --- | --- |
 | Stereo/compositor/tracking | Shared OpenVR session, view and tracking policy | Consumed; substantial headset evidence | Consumed; boot/menu/gameplay stereo and head tracking exercised | Current-release presentation/focus/transition regression per game |
+| SteamVR eye resolution / RenderScale | SteamVR recommended size is the base; optional multiplier changes actual world color/depth targets, independently of projection; restart applies the multiplier in all games | Existing adaptive source-target consumer confirmed by code audit | Source allocation/draw integration host-tested; active pair remains fixed until presentation teardown after reported distortion on live resize | New Requiem startup multipliers, allocation fallback and visual quality require headset validation |
 | Locomotion/body/crouch | Shared metric locomotion, accepted-motion, play-mode and crouch policy | Consumed through native body boundary | Consumed through Requiem-owned body/input boundary | BP comfort regression; Requiem representative progression/pacing |
 | Recenter/turn/yaw | Shared yaw/settings/input policy and yaw epoch | Consumed; held-turn continuity accepted on local checklist | Consumed; held Grab body remained attached through one headset snap turn | Broader transitions/tracking-loss regression |
 | Controller actions/bindings | 42 actions, 6 sets, 8 graphs; all three consumers and package/install/repair distribution host-verified | Consumed; freshness/release guards host-tested; input/focus recovery accepted | Shared release/dead-zone hardening consumed; recovery accepted | Other-device hardware regression; Vive compatibility and WMR holster omissions remain |
@@ -59,6 +68,53 @@ drawer, repeated crank/mechanism interactions and accepted the result. The
 installed executable matches the candidate build hash. This validates the
 observed acquisition/gameplay sequence, including visibility-before-ranking;
 it does not certify every Overture mechanism or Quest 3 pointer alignment.
+
+## SteamVR eye resolution and RenderScale
+
+The base eye dimensions come from the active HMD's SteamVR recommendation;
+there is no fixed PSVR2 or other visor resolution. Per-eye raw tangents and
+eye-to-head transforms remain independent of target dimensions. RenderScale
+multiplies both dimensions, rather than enlarging only the submitted image.
+
+The exact Rework `23c890f` reference is
+`Renderer3D::CreateVREyeTextures`: query recommended dimensions, multiply by
+RenderScale and allocate source eye framebuffers, with allocation fallback.
+Framework Overture already retains this behavior; `Scene.cpp` uses those
+dimensions for its world viewport and queries each eye's own projection.
+BP already consumes `BuildRenderTargetCandidates` at presentation startup:
+`CreateAdaptiveEyeTargets` requests persistent source targets, and the native
+world draw binds them through `BeginPersistentEyeTarget`. The optional enhanced
+scene has the same dimensions. This audit required no renderer change in either
+backend; their multiplier remains restart-applied.
+
+Requiem previously passed the unscaled recommendation to both world and menu
+allocators and omitted the menu row. Both existing render owners now call the
+same backend-local allocator using shared render-target candidates. Accepted
+settings changes persist, but now apply only at the next presentation start,
+matching Overture/BP. The initial live-resize implementation was rejected by
+maintainer headset feedback: 1.00 -> 1.05/1.10 caused severe distortion. The
+active source pair now stays unchanged until teardown, including during menu
+edits; startup allocation still uses the shared fallback policy. Failed
+persistence restores the prior setting. The fixed 800x600 native UI capture is
+separate from these world targets. Neural tuning remains independently live.
+
+`requiem_render_scale_consumer` includes the actual Requiem render source and
+uses real hidden-window WGL targets. It failed before this correction and passes
+with recommendations 2804x2860 and 2016x1120, default/0.5x/1.25x scale and scale
+restoration across presentation restarts. It also checks that editing the saved
+multiplier cannot change active texture names/dimensions. It checks both actual color/depth allocations, native world-draw
+viewports, different asymmetric eye projections, unchanged native camera FOV/
+aspect and time arguments, restored camera/viewport state and failed-allocation
+pair retention. The native menu fixtures cover multiplier edits, persistence
+failure rollback and per-backend restart labels. These are host tests; this
+startup-only correction needs new live/headset evidence. The submitted texture
+size transition is the suspected presentation boundary, not a proven FOV error.
+
+The seated-reach correction freezes the shared seated height baseline while
+the HMD moves down and back. It is host-tested in tracking-space, Overture,
+BP camera placement and Requiem's native-capsule height consumer. The reported
+world push is not accepted as fixed in headset yet; standing calibration and
+native collision ownership remain separate and unchanged.
 
 ## Input and lifecycle audit corrections — v1.0.11
 
@@ -413,6 +469,35 @@ ownership remain separate. Both existing actual-consumer solver regressions
 pass after extraction. Current installed-build verification and a fresh cable
 playthrough remain distinct gates.
 
+On 2026-10-29 the maintainer reports that the power cable works with the local
+Neural-menu candidate. The installed Requiem probe for that play session was
+SHA-256 `1C0CC9699CA943D72A50DAAA54FFF2B981245A158106A141BF8E5E0F9C3461DE`.
+This is scoped positive gameplay feedback, not a claim of level09 completion.
+In the same level the rope beside the burning oil oscillated and could not be
+brought into the oil to ignite. Its stability/ignition gate remains **failed**.
+The session distinguishes acquired free seven-member and anchored six-member
+components; this does not by itself prove the instability's cause. Preserve the
+working cable route while reproducing the anchored rope with its actual authored
+constraints. The preceding Newton fixtures covered free multi-body chains and
+a single rooted body, omitting the full hanging chain and off-center contact.
+
+The anchored-rope correction is now host-tested against the shipped Newton
+solver with the authored seven collider dimensions/masses and six ball-joint
+limits, native selected-body gravity/caps, floor contacts and a static endpoint.
+Broadcasting contact correction to every dynamic sibling competed with the
+fixed endpoint's joint response; the counterfactual reproduced up to 0.55 m of
+stationary excursion and missed the synthetic target volume. Anchored graphs
+now use only the existing selected-body point impulse, allowing Newton to carry
+the pull through the joints. Free graph translation/wrist policy is unchanged;
+no gains, native addresses or physics caps were retuned. Sixteen rope/cable
+cases at 60/90 Hz cover both static ends, endpoint/interior contact, target-volume
+overlap and release momentum/gravity/caps. This does not execute the actual oil
+ignition, attachment or explosion callbacks: that headset progression gate stays
+open and the earlier cable acceptance remains scoped to its installed build.
+The maintainer subsequently reports that the rope is fixed on the locally
+installed correction. This accepts the reported stability/reach symptom;
+complete oil/barrel progression is not inferred from that short feedback.
+
 ### Remaining Requiem levels — static progression audit
 
 The 2026-10-28 audit resolves 219 authored entity references across level09–11
@@ -422,7 +507,7 @@ acceptance. It identifies the following reusable routes and remaining gates:
 
 | Area | Existing route / finding | Live acceptance still required |
 | --- | --- | --- |
-| Level09 `rope01`, barrel/oil explosion | Seven-body, six-ball-joint Grab chain: the same confirmed zero-joint rejection as the power cable. The new connected-body route covers both; no asset-name exception. | Oil contact, correct rope/barrel attachment, ignition and original explosion callbacks. |
+| Level09 `rope01`, barrel/oil explosion | Acquisition implemented. **2026-10-29 maintainer retest failed:** rope beside burning oil oscillates and cannot be brought to the oil for ignition. | Reproduce/fix authored anchored-chain stability, then oil contact, attachment, ignition and native explosion callbacks. |
 | Level09 fuse, six circuit cards, nitro barrel | Single-body Grab and native StickArea alignment/attachment. | Detach, relocate, reattach, script locking and save/reload. |
 | Level09 doors, lever, drawers, Push junk and grilles | Existing native hinge/slider/Push/rigid Grab; preserve COM and sticky-endpoint corrections. Static callback buttons and script-controlled fire door retain native ownership. | Authored activation, `junk3` unlocking its door, low vent traversal. |
 | Level09 lanterns and padlock | Existing loose-prop/native break and damage lifecycle; the lock is Static rather than a missing Grab target. | Real impact break, gate unlock and oil ignition. |
@@ -510,6 +595,35 @@ pointer projection, live edits and normalization after correction. Synthetic
 x86 tests execute all six native message callsites and hook restoration in
 both games. These are host tests; Requiem message legibility and current-build
 computer usability still require a pinned headset run.
+
+The subsequent transient-text correction also consumes this adapter in both
+binary hosts: script `AddSubTitleTrans` messages (including Requiem level09's
+"It's dead.") bypass GameMessage. Three independently mapped ordinary subtitle
+calls per game now use its centered readability behavior. Both x86 consumer
+tests pass in Release/Debug; the exact-image verifier passes for each game.
+Producer/caller evidence belongs to each manifest's `transientSubtitleReadability`
+and the migration rationale to `REWORK_PORTING_PLAN.md`. This adds host evidence;
+transient subtitle headset readability remains pending independently in BP/RQ.
+
+The subsequent pre-credits narration report identifies a different producer:
+Radio was excluded from that transient fix. BP/RQ now center/enlarge Radio's
+current/previous text and shadows at four exact WordWrap callers each, plus its
+separate ScreenGui native wrapping and two GUI-font callers. Radio remains
+eligible while a native UI/video owns the panel; GameMessage/transient eligibility
+is unchanged. Native sound completion, text, fades, callbacks, material and depth
+remain authoritative. Each manifest's `narrativeSubtitleReadability` owns the
+independent exact-image maps and producer-script hashes; the migration document
+records both Requiem ending routes. Level09's furnace narration reaches Radio;
+level10 and alternate level11 timed scenes converge on `StartCredits`, with no
+text producer in level11 itself. Scrolling credits retain their native owner.
+The separate cEnding narrative body helper (BP final email, Requiem introduction)
+now has its own verified adapter, preserving the reveal state and fitting long
+pages inside the centered HUD. Overture source consumers now apply centered 2x
+layout to GameMessage, Radio, IntroStory and world transient subtitles through
+one source helper while preserving subtitle scaling and transforms. Actual x86
+native consumers and Overture draw-method host fixtures pass; offline image/
+producer checks pass for each binary host. Final-cinematic, long-page and
+ScreenGui headset acceptance remain pending independently in all three games.
 
 The computer cursor already consumes the corresponding native ScreenGui route
 since 1.0.13: Requiem `46DC -> E3120` sends absolute/relative mouse positions

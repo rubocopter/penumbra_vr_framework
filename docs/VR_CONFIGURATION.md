@@ -166,3 +166,24 @@ exact current capability and headset evidence are recorded in
 The unified installer treats recommended settings as an optional, reversible
 preset. It backs up existing files, preserves unrelated preferences and keeps
 existing personal calibration unless the user requests replacement.
+
+## Experimental Neural (all three games)
+
+After installing VR, select installed games in Setup's Maintenance page and
+choose **Import Neural (experimental)**. Select your local `nvngx_dlssnr.dll`.
+The helper/forwarder are bundled; the NVIDIA model is not. Model requirements
+and source guidance: https://github.com/lowpoplabs/nr-bridge#prerequisites.
+
+Enable it in **VR Settings → Neural**. All nine controls apply live, are stored
+separately per game and have trigger-operated minus/plus buttons. Start modestly:
+height 896, scale 50%, intensity 25%, one pass, style0, center100%, outerOff.
+Neural is disabled by default, approximates rotation motion/constant depth and
+can worsen image quality, stereo consistency, performance or latency. It does
+not change the SteamVR eye recommendation. Game RenderScale requires restart
+in all three games; it is separate from Neural's inference proxy resolution.
+
+Missing/unsupported Neural keeps original stereo and shows Unavailable. A late
+frame can Recover; an actual fault/stall bypasses until retried. Disable to
+restore originals. Remove Neural in Maintenance restores the previous INI.
+Full game-root uninstall removes owned optional Neural too; Requiem-only removal
+keeps it for Black Plague. Modified owned files are not silently removed.

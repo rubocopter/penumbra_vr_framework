@@ -308,6 +308,92 @@ dimensions and size limits before copying the complete eye. It carries no game
 RVAs and never changes bindings; experimental multisample rendering remains
 outside the validated BP copy boundary.
 
+### Experimental DirectNR stereo postprocessing
+
+`src/graphics/neural_post_bridge.*` is an opt-in research path between the
+completed OpenGL stereo render and the OpenVR compositor submission. Overture's
+source adapter and the Black Plague/Requiem `OpenVrSession` adapter supply the
+two final color textures, the same-frame OpenVR HMD sample, and per-eye
+projection/eye-to-head transforms. The shared bridge owns only the OpenGL
+capture/upload, IPC, timeout and original-pair fallback. It does not own game
+render hooks, change tracking state or wait for a second pose.
+An unsuccessful compositor pose wait invalidates the cached sample before any
+later submission. Automatic internal width preserves the source eye aspect
+ratio even when the protocol's 1280-pixel width limit requires reducing height.
+The companion converts OpenVR projection tangents to the FOV angles in radians
+required by DirectNR before synthesizing rotation-based motion vectors.
+
+The x86 game sends both eyes through a process-scoped shared-memory protocol
+(`neural_post_protocol.hpp`) to a separate x64 D3D11 DirectNR companion. The
+companion uses a **locally supplied** NVIDIA NGX Neural Rendering runtime; no
+NVIDIA binary is part of the Framework build or installer. Only one compositor
+thread owns the bridge per game process. Initial model warmup is asynchronous;
+later pairs are accepted only when both eyes complete for the same request ID
+before the configured deadline. A missed frame deadline keeps original stereo
+visible and reports Recovering. The render owner polls the outstanding request
+without blocking or modifying its input, discards its late output and resumes
+with a fresh pair and reset history. A worker fault or a request still pending
+after two seconds disables the session and signals companion shutdown.
+The render owner polls exit without blocking before
+releasing IPC or reusing its process-scoped names. A settings revision retires
+the previous worker and warms its replacement asynchronously; old revision
+output cannot be submitted. GL transfer errors retain the original stereo pair.
+HPL may leave GL errors pending after normal rendering; Neural clears that
+inherited error boundary before checking its own transfers rather than treating
+an unrelated renderer error as a permanent neural failure. Per-process startup,
+activation and bypass reasons are logged under `PenumbraVR/logs/neural-game-*.log`
+in local app data.
+
+The transport stage is only an inference proxy. The final OpenGL resolve keeps
+the original full-resolution eye and adds the difference between processed and
+input proxies, following DirectNR's `CS_Resolve` residual behavior. DirectNR
+explicitly selects UNORM views even for incoming sRGB resources, so the GL
+resolve subtracts/filters/composes in the same encoded color space. An sRGB
+original texture is encoded back after automatic sampling decode; the proxy
+bytes must not receive another gamma conversion. Source alpha is preserved.
+Capture explicitly saves/disables/restores framebuffer sRGB conversion so the
+transport remains encoded bytes regardless of the game's inherited GL state.
+An identity model must leave even one-pixel source detail unchanged when the
+inference proxy is much smaller; enlarging the proxy as the final eye loses that
+detail and is not a valid resolve.
+
+All three native VR menus expose a separate Neural page with nine controls:
+enabled, internal height (automatic eye aspect), processing scale, intensity,
+passes, style, central-region size, peripheral enabled and peripheral scale.
+Accepted changes persist and publish a normalized settings revision to the
+render owner; UI callbacks never own GL/NGX resources. The status row reflects
+actual startup/warmup/processing/bypass, independently of the saved enabled flag.
+Overture stores its preferences in its own VR config. BP/Requiem retain existing
+shared settings ownership but isolate Neural keys under `Neural.BlackPlague`
+and `Neural.Requiem` sections. Existing gameplay settings remain in `VR`.
+Neural defaults to disabled. `NeuralPost.ini` (beside the executable or selected
+by `PVR_NEURAL_POST_INI`) supplies local `HostPath`, `RuntimeDirectory` and
+`TimeoutMs`; missing dependencies remain unavailable. Standalone GPU probes may
+still use INI tuning when no game settings snapshot has been published.
+The current DirectNR data uses head rotation to estimate motion and a constant
+depth; object motion vectors and real scene depth are unavailable. External
+frame generation, if used, follows this postprocess and does not re-enter it.
+Game adapters invalidate neural history on artificial yaw, recenter and scene
+discontinuities without changing existing gameplay/tracking owners.
+
+The x86 OpenGL -> x64 DirectNR -> OpenGL roundtrip is host-tested with synthetic
+stereo frames, including neural output, identity, invalid-pose and delayed-
+companion fallback. A wide-eye synthetic case (448x256) additionally verifies
+the capped automatic 1280x731 stage. Low-resolution identity and edited-proxy
+cases verify fine source edges, alpha, sRGB input/conversion state and GL viewport/color-mask
+restoration. This evidence does **not** establish game-live performance,
+headset comfort, image quality or public support. The reproducible x64 companion
+build lives in `tools/neural_post`, with pinned DirectNR source/license and a
+hash-verified NVIDIA definitions header. `tests/neural_post` owns the explicit
+GPU probe, including live revision changes and worker retirement. No ignored
+research checkout is a build input. Setup now bundles the x64 helper/forwarder
+and an optional local-model import/removal action. NVIDIA model bytes are never
+part of the public package. `Install-PenumbraNeural.ps1` uses a separate
+checksum-checked receipt and preserves the prior INI; full root removal removes
+owned Neural support, while Requiem-only removal keeps the shared root.
+Missing helper/model or unsupported initialization reports Unavailable and
+retains original stereo. See `tools/neural_post/README.md`.
+
 ## Deployment direction
 
 The final product should expose one safe installer while retaining the different

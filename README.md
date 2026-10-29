@@ -90,15 +90,13 @@ Unknown or modified game builds may be rejected by the installer. Check [support
 
 ## Release and maintenance status
 
-The latest maintenance candidate is **[v1.0.13 — headset validation pending](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.13)** (27 October 2026). **The developer has not tested this version in-game or in a VR headset.** It has automated host validation only. **The intended VR feature set is complete; the project is now in maintenance-only mode.** No additional features, cosmetic polish or broad hardware certification are planned. Future fixes may be considered for reproducible problems that prevent normal installation, launch, input or progression.
+The latest pre-release is **[v1.0.15 — trilogy fixes and experimental Neural](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15)** (29 October 2026). It includes the preceding unreleased 1.0.14 work, centered narrative text and bidirectional VR settings controls across the trilogy, Requiem's accepted cable/rope correction and a shared seated-height fix. Render scale uses SteamVR's recommendation and requires restart in all three games; Neural settings apply live and are saved independently per game.
 
-This candidate adds bounded orb pickup and native keypad GUI/controller input for Requiem's Steam-themed level08. **Both corrections are pending headset validation; completion of level08 has not been demonstrated.** It retains all preceding maintenance corrections, including sphere throwing with B, lever constraints, native button selection, installer, input and drawer fixes.
+**Neural is experimental, optional and disabled by default.** Setup includes the x64 helper/DirectNR forwarder. After installing VR, select installed games in **Maintenance → Import Neural (experimental)** and select your local `nvngx_dlssnr.dll`. The NVIDIA model is not included/downloaded; [DirectNR's prerequisites and model guidance](https://github.com/lowpoplabs/nr-bridge#prerequisites) explain the separate requirement. Missing or unsupported Neural preserves the original image and reports Unavailable. Quality, stereo consistency, latency and performance may be worse. This is not an official NVIDIA integration or a promise of visual improvement.
 
-**Known progression reports (27 October):** Requiem's level04 underwater recovery and intermittent SDL startup crash have **no confirmed fix**. Caelus reports sphere throwing and levers working after the preceding corrections, without a pinned installed hash. That scoped feedback does not validate this package or broader progression. Level03 bottle, level05 buttons/cabinets and level08 orb/keypad progression remain separate acceptance gates. See the [maintenance gates](docs/ROADMAP.md#current-maintenance-gates).
+Core VR remains a maintenance project; Neural is a separate opt-in research path. Automated checks and scoped maintainer feedback do not establish full playthroughs, comfort, universal headset support or independent clean-PC readiness. The maintainer accepted cable/rope stability on local builds; new seated reach, render-scale startup and narrative readability retests remain. Requiem level04 water recovery and the intermittent SDL startup crash are unresolved. Other progression gates remain in the [roadmap](docs/ROADMAP.md#current-maintenance-gates).
 
-Historical versions have focused maintainer headset acceptance on the primary PS VR2 setup; that evidence does not transfer to v1.0.13 or establish full playthroughs or universal headset compatibility. A finger-pose mismatch has been reported on Index. Other controller families and independent clean-PC installations have not received equivalent validation.
-
-See [v1.0.13 release notes](docs/releases/1.0.13.md) for changes and [release status and validation](docs/CLOSURE_STATUS.md) for precise evidence and known limitations.
+See [v1.0.15 notes](docs/releases/1.0.15.md), [precise validation status](docs/CLOSURE_STATUS.md) and [VR/Neural configuration](docs/VR_CONFIGURATION.md).
 
 ## Help and documentation
 
@@ -107,7 +105,7 @@ See [v1.0.13 release notes](docs/releases/1.0.13.md) for changes and [release st
 | [Controls](docs/CONTROLS.md) | [Architecture](docs/ARCHITECTURE.md) |
 | [VR configuration](docs/VR_CONFIGURATION.md) | [Trilogy capabilities](docs/TRILOGY_PARITY_PLAN.md) |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | [Supported builds](docs/SUPPORTED_BUILDS.md) |
-| [Release notes](docs/releases/1.0.13.md) | [Roadmap](docs/ROADMAP.md) |
+| [Release notes](docs/releases/1.0.15.md) | [Roadmap](docs/ROADMAP.md) |
 | [Known issues / validation](docs/CLOSURE_STATUS.md) | [Build and source notes](docs/SOURCE-AND-NOTICES.md) |
 
 If something breaks, check [Troubleshooting](docs/TROUBLESHOOTING.md) first. For a reproducible regression, [open a GitHub issue](https://github.com/rubocopter/penumbra_vr_framework/issues) and include the game, Framework version, headset/controllers, steps to reproduce and relevant logs. The project is not accepting new feature requests as active work.

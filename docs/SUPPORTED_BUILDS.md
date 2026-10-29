@@ -42,6 +42,14 @@ Use these states consistently:
 
 Current product-level evidence:
 
+The current 1.0.15 candidate combines the earlier 1.0.14 local work with optional
+experimental Neural, narrative presentation, seated-reach and startup-only
+render multiplier corrections. Exact binaries/source/package hashes belong to
+`releases/1.0.15-validation.json`. Earlier local cable/rope feedback is scoped;
+new candidate headset comfort, quality and clean-PC acceptance remain pending.
+The following records are historical and do not promote this new build.
+
+
 Framework **v1.0.13** is a maintenance pre-release adding Requiem level08
 inventory-pickup and native ScreenGui input corrections. Both changes remain
 host-tested and pending headset validation; level completion is not demonstrated.

@@ -4,7 +4,7 @@ Framework v1.0.0 is the first public Framework release. Its acceptance record
 and remaining validation limits are documented in
 [CLOSURE_STATUS.md](CLOSURE_STATUS.md).
 
-The versioned release builder supplies `PenumbraVR-Source-1.0.13.zip` alongside
+The versioned release builder supplies `PenumbraVR-Source-1.0.15.zip` alongside
 the installer. It contains the exact committed Framework/Overture/HPL source,
 build scripts, dependency headers/link inputs and retained notices, plus the
 upstream source archives pinned by `assets/deployment/redistribution.json`.
@@ -53,18 +53,31 @@ The builder validates every input before creating artifacts.
 
 ```powershell
 .\tools\Build-PenumbraVrRelease.ps1 `
-  -OutputDirectory .\dist\v1.0.13-release `
+  -OutputDirectory .\dist\v1.0.15-release `
   -RuntimeDirectory 'C:\path\to\official\x86\Microsoft.VC143.CRT' `
   -SourceDirectory 'C:\path\to\pinned-source-inputs'
 ```
 
 The output directory must be new. The builder compiles/tests root Release and
 the autonomous Overture product, then exports exact committed source, upstream
-sources, notices, `PenumbraVR-Setup-1.0.13.exe`, `PenumbraVR-Source-1.0.13.zip`,
+sources, notices, `PenumbraVR-Setup-1.0.15.exe`, `PenumbraVR-Source-1.0.15.zip`,
 `build-report.json` and `SHA256SUMS.txt`. `-PackageOnly` skips repeating root
 build/tests and records that limitation; it still builds/tests Overture.
-The report records commit, toolchain, x86 PE imports/version/hash, pinned inputs
+The report records commit, toolchain, x86 game and x64 Neural PE imports/version/hash, pinned inputs
 and acceptance gates. Archive timestamps and ordering are fixed; equality
 requires identical file bytes. This does not claim deterministic compiler
 output from different machines or reconstructed historical static-library flags.
 The builder does not tag, upload, publish or launch games.
+
+## Experimental Neural distribution
+
+The package includes the x64 companion and MIT DirectNR forwarder, with matching
+source and license notices. DirectNR and forwarder are pinned to LowPopLabs
+revision `0bb6bf86e13ac19a85d7693062c1f74cfcd5f77f`. NGX definitions are fetched
+from the hash-verified NVIDIA commit recorded in `tools/neural_post/CMakeLists.txt`.
+The NVIDIA SDK license is retained; this software contains source code provided
+by NVIDIA Corporation. The model `nvngx_dlssnr.dll` is user-supplied, never in
+the Setup or Source ZIP. The installer imports a selected local copy only.
+No local game files, model bytes, private logs or machine-specific INIs are
+release/source inputs. The helper/forwarder use a static CRT and need no separate
+x64 Visual C++ runtime install. Core game processes remain x86.

@@ -94,6 +94,13 @@ $troubleActions=[Windows.Forms.FlowLayoutPanel]::new();$troubleActions.AutoSize=
 $diagnosticsButton=Button '' 215;$recoverButton=Button '' 240;$logButton=Button '' 115
 foreach($b in @($diagnosticsButton,$recoverButton,$logButton)){$troubleActions.Controls.Add($b)};$maintenanceBody.Controls.Add($troubleActions)
 $recoveryHelp=Label '';$recoveryHelp.MaximumSize=[Drawing.Size]::new(750,0);$recoveryHelp.ForeColor=[Drawing.Color]::DimGray;$maintenanceBody.Controls.Add($recoveryHelp)
+$neuralHelp=Label '';$neuralHelp.MaximumSize=[Drawing.Size]::new(750,0);$neuralHelp.Margin=[Windows.Forms.Padding]::new(0,14,0,5);$maintenanceBody.Controls.Add($neuralHelp)
+$neuralActions=[Windows.Forms.FlowLayoutPanel]::new();$neuralActions.AutoSize=$true;$neuralActions.WrapContents=$true
+$neuralImportButton=Button '' 240;$neuralRemoveButton=Button '' 170
+$neuralActions.Controls.Add($neuralImportButton);$neuralActions.Controls.Add($neuralRemoveButton);$maintenanceBody.Controls.Add($neuralActions)
+$neuralLink=[Windows.Forms.LinkLabel]::new();$neuralLink.AutoSize=$true;$neuralLink.Margin=[Windows.Forms.Padding]::new(0,5,0,5)
+$neuralLink.Add_LinkClicked({Start-Process 'https://github.com/lowpoplabs/nr-bridge#prerequisites'})
+$maintenanceBody.Controls.Add($neuralLink)
 $footer=[Windows.Forms.TableLayoutPanel]::new();$footer.Dock='Fill';$footer.ColumnCount=2;$footer.Padding=[Windows.Forms.Padding]::new(22,12,22,8);$footer.Margin=[Windows.Forms.Padding]::new(0)
 [void]$footer.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::Percent,100));[void]$footer.ColumnStyles.Add([Windows.Forms.ColumnStyle]::new([Windows.Forms.SizeType]::AutoSize))
 $leftActions=[Windows.Forms.FlowLayoutPanel]::new();$leftActions.AutoSize=$true;$leftActions.WrapContents=$false
@@ -181,6 +188,10 @@ function Draw-Cards {
 }
 function Set-UiLanguage([bool]$selectTranslations=$false){
     Sync-Cards;$script:Language=if($languageBox.SelectedIndex -eq 1){'es'}else{'en'}
+    $neuralHelp.Text=T 'Experimental Neural: optional local NVIDIA model. Missing/unsupported Neural keeps the original image. May reduce quality or performance.' 'Neural experimental: modelo NVIDIA local opcional. Si falta o no es compatible, se conserva la imagen original. Puede empeorar calidad o rendimiento.'
+    $neuralImportButton.Text=T 'Import Neural (experimental)' 'Importar Neural (experimental)'
+    $neuralRemoveButton.Text=T 'Remove Neural' 'Quitar Neural'
+    $neuralLink.Text=T 'Where to get the model / requirements' 'Dónde conseguir el modelo / requisitos'
     if($selectTranslations -and $script:Language -eq 'es'){foreach($c in $script:cards | Where-Object {$_.StatusKey -notin @('NeedsRepair','RecoveryRequired','Unsupported','Incomplete')}){$c.SpanishBase=$true;if($c.RequiemAvailable){$c.SpanishRequiem=$true}}}
     $languageLabel.Text=T 'Language:' 'Idioma:';$installPage.Text=T 'Install' 'Instalar';$maintenancePage.Text=T 'Maintenance' 'Mantenimiento'
     $detectedHeading.Text=T 'Detected games and installation status' 'Juegos detectados y estado de instalación'
@@ -343,6 +354,28 @@ function Invoke-Operation([string]$operation){
     }finally{$script:busy=$false;$shell.Enabled=$true;$form.UseWaitCursor=$false;$form.Text='Penumbra VR Framework';Update-Actions}
 }
 $languageBox.Add_SelectedIndexChanged({Set-UiLanguage $true})
+function Invoke-NeuralImport([bool]$remove){
+    if($script:busy -or $PreviewDataPath){return}
+    Sync-Cards
+    $cards=@(Maintenance-Cards 'Repair')
+    if(-not $cards.Count){[void](Show-Text 'Neural' (T 'Select an installed game in Maintenance first.' 'Selecciona antes un juego instalado en Mantenimiento.'));return}
+    $model=$null
+    if(-not $remove){
+        $picker=[Windows.Forms.OpenFileDialog]::new();$picker.Filter='NVIDIA Neural model (nvngx_dlssnr.dll)|nvngx_dlssnr.dll';$picker.Title=T 'Select your local NVIDIA Neural model' 'Selecciona tu modelo NVIDIA Neural local'
+        try{if($picker.ShowDialog($form) -ne 'OK'){return};$model=$picker.FileName}finally{$picker.Dispose()}
+    }
+    $script:busy=$true;$shell.Enabled=$false
+    try{
+        $data=@{Script=(Join-Path $PSScriptRoot 'Install-PenumbraNeural.ps1');Roots=@($cards.Path);Model=$model;Remove=$remove;Package=$packageRoot}
+        $result=Invoke-PvrUiBackground -Owner $form -Title 'Neural (experimental)' -Message (T 'Configuring optional Neural support…' 'Configurando el soporte opcional Neural…') -Data $data -Work {
+            param($d)
+            foreach($root in $d.Roots){& $d.Script -GamePath $root -ModelPath $d.Model -PackageRoot $d.Package -Restore:$d.Remove -Plan | Out-Null}
+            foreach($root in $d.Roots){& $d.Script -GamePath $root -ModelPath $d.Model -PackageRoot $d.Package -Restore:$d.Remove}
+        }
+        [void](Show-Text 'Neural (experimental)' (($result | Out-String)+(T "`r`nEnable it in each game's VR Settings > Neural. Values are saved separately." "`r`nActívalo en Ajustes VR > Neural de cada juego. Los valores se guardan por separado.")))
+    }catch{[void](Show-Text 'Neural (experimental)' $_.Exception.Message)}finally{$script:busy=$false;$shell.Enabled=$true;Update-Actions}
+}
+$neuralImportButton.Add_Click({Invoke-NeuralImport $false});$neuralRemoveButton.Add_Click({Invoke-NeuralImport $true})
 $languageBox.SelectedIndex=if($Language -eq 'es'){1}else{0}
 $advancedButton.Add_Click({$advancedPanel.Visible=-not $advancedPanel.Visible;$advancedButton.Text=(T 'Advanced options' 'Opciones avanzadas')+$(if($advancedPanel.Visible){' ▴'}else{' ▾'})})
 $settingsOption.Add_CheckedChanged({Update-Actions});$tabs.Add_SelectedIndexChanged({Update-Actions});$form.Add_Resize({Resize-Content})
@@ -366,7 +399,7 @@ try{
         $form.StartPosition='Manual';$form.Location=[Drawing.Point]::new(-32000,-32000);$form.Show();[Windows.Forms.Application]::DoEvents();Resize-Content;Update-Actions;[Windows.Forms.Application]::DoEvents()
     }
     if($UiContract){
-        [pscustomobject]@{language=$script:Language;installText=$installButton.Text;spanishOverture=($script:Language -eq 'es');spanishBlackPlague=($script:Language -eq 'es');spanishRequiem=($script:Language -eq 'es');translationsEditable=$true;bannerPresent=($null -ne $banner.Image);bannerFullWidth=($banner.Width -eq $form.ClientSize.Width);recommendedSettings=$settingsOption.Checked;tabs=@($installPage.Text,$maintenancePage.Text);primaryActions=1;primaryVisible=$installButton.Visible;cards=@($script:cards | Select-Object Game,StatusKey,SpanishBase,SpanishRequiem,Textures,RequiemAvailable,RequiemSelected);maintenanceOperations=@($verifyButton.Text,$repairButton.Text,$uninstallButton.Text,$recoverButton.Text)} | ConvertTo-Json -Depth 5 -Compress
+        [pscustomobject]@{language=$script:Language;installText=$installButton.Text;spanishOverture=($script:Language -eq 'es');spanishBlackPlague=($script:Language -eq 'es');spanishRequiem=($script:Language -eq 'es');translationsEditable=$true;bannerPresent=($null -ne $banner.Image);bannerFullWidth=($banner.Width -eq $form.ClientSize.Width);recommendedSettings=$settingsOption.Checked;tabs=@($installPage.Text,$maintenancePage.Text);primaryActions=1;primaryVisible=$installButton.Visible;cards=@($script:cards | Select-Object Game,StatusKey,SpanishBase,SpanishRequiem,Textures,RequiemAvailable,RequiemSelected);experimentalNeural=@{importText=$neuralImportButton.Text;removeText=$neuralRemoveButton.Text;modelLink='https://github.com/lowpoplabs/nr-bridge#prerequisites';modelBundled=$false};maintenanceOperations=@($verifyButton.Text,$repairButton.Text,$uninstallButton.Text,$recoverButton.Text)} | ConvertTo-Json -Depth 5 -Compress
     }elseif($RenderPath){
         $bitmap=[Drawing.Bitmap]::new($form.Width,$form.Height);try{$form.DrawToBitmap($bitmap,[Drawing.Rectangle]::new(0,0,$form.Width,$form.Height));$bitmap.Save([IO.Path]::GetFullPath($RenderPath),[Drawing.Imaging.ImageFormat]::Png)}finally{$bitmap.Dispose()}
     }elseif($SmokeTest){$script:cards | ForEach-Object {if($_.Game -eq 'BlackPlague' -and $_.RequiemAvailable){'Black Plague + Requiem'}elseif($_.Game -eq 'Overture'){'Overture'}else{$_.Title}}}

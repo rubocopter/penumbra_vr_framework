@@ -9,9 +9,9 @@ $release=Get-Content -LiteralPath (Join-Path $repo 'release.json') -Raw | Conver
 if($release.schemaVersion -ne 1 -or $release.version -notmatch '^\d+\.\d+\.\d+$' -or $release.channel -ne 'release-candidate'){throw 'Release identity is not a versioned candidate.'}
 $output=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $output){throw 'Use a new output directory; existing artifacts are never overwritten.'}
-$dirty=@(& git -C $repo status --porcelain)
+$dirty=@(& git -c "safe.directory=$repo" -C $repo status --porcelain)
 if($LASTEXITCODE -ne 0 -or $dirty.Count){throw 'Commit the intended release source before building; source archives must describe the binaries.'}
-$commit=(& git -C $repo rev-parse HEAD).Trim()
+$commit=(& git -c "safe.directory=$repo" -C $repo rev-parse HEAD).Trim()
 $sources=(Get-Content -LiteralPath (Join-Path $repo 'assets/deployment/redistribution.json') -Raw | ConvertFrom-Json).sources
 foreach($source in $sources){$path=Join-Path $SourceDirectory $source.filename;if(-not(Test-Path -LiteralPath $path -PathType Leaf) -or (Get-FileHash -LiteralPath $path).Hash -ine $source.sha256){throw "Required pinned source input is missing or changed: $($source.filename). Download from $($source.url)"}}
 $crt=Get-Content -LiteralPath (Join-Path $repo 'products/overture/runtime-dependencies.json') -Raw | ConvertFrom-Json
@@ -37,7 +37,7 @@ try{
     & (Join-Path $PSScriptRoot 'Package-PenumbraVrSetup.ps1') -OutputPath $setup -PayloadPath $payload | Out-Host
     & (Join-Path $repo 'tests/deployment/Test-ReleaseIdentity.ps1') -Built
     $baseSource=Join-Path $temp 'committed-source.zip'
-    & git -C $repo archive --format=zip "--output=$baseSource" HEAD
+    & git -c "safe.directory=$repo" -C $repo archive --format=zip "--output=$baseSource" HEAD
     if($LASTEXITCODE -ne 0){throw 'Committed source export failed.'}
     $sourceStage=Join-Path $temp 'source'
     Expand-Archive -LiteralPath $baseSource -DestinationPath $sourceStage
@@ -46,9 +46,10 @@ try{
     $sourceZip=Join-Path $temp "PenumbraVR-Source-$($release.version).zip"
     Write-PvrArchive -Root $sourceStage -OutputPath $sourceZip
     $pe=@()
-    foreach($relative in @('build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll','build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll','build/bin/Release/PenumbraVR.BlackPlague.Probe.dll','build/bin/Release/PenumbraVR.Requiem.Probe.dll','build/bin/Release/PenumbraVR.LaaTransform.exe','products/overture/build/bin/Release/Penumbra_vr.exe')){
+    foreach($relative in @('build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll','build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll','build/bin/Release/PenumbraVR.BlackPlague.Probe.dll','build/bin/Release/PenumbraVR.Requiem.Probe.dll','build/bin/Release/PenumbraVR.LaaTransform.exe','products/overture/build/bin/Release/Penumbra_vr.exe','build/neural-host/Release/PenumbraNeuralHost.exe','build/neural-host/Release/nvngx.dll_nr_bridge.dll')){
         $path=Join-Path $repo $relative;$info=Get-PvrPeInfo $path;$versionInfo=(Get-Item -LiteralPath $path).VersionInfo
-        if($info.Architecture -ne 'x86' -or $versionInfo.ProductVersion -ne $release.version){throw "Shipped PE identity mismatch: $relative"}
+        $expectedArchitecture=if($relative.StartsWith('build/neural-host/')){'x64'}else{'x86'}
+        if($info.Architecture -ne $expectedArchitecture -or $versionInfo.ProductVersion -ne $release.version){throw "Shipped PE identity mismatch: $relative"}
         $pe+=[pscustomobject]@{file=$relative;architecture=$info.Architecture;productVersion=$versionInfo.ProductVersion;sha256=(Get-FileHash -LiteralPath $path).Hash;imports=$info.Imports;delayImports=$info.DelayImports}
     }
     $vswhere=Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'

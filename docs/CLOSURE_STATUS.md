@@ -1,13 +1,26 @@
 # Framework release status
 
-## Local progression candidate — v1.0.14
+## Current candidate — v1.0.15
+
+[Version 1.0.15](releases/1.0.15.md) combines the previously local 1.0.14 work,
+experimental Neural and the current trilogy maintenance fixes. Setup includes
+the x64 companion and DirectNR forwarder with local-model import/removal; NVIDIA
+model bytes are not distributed. Neural defaults off and may worsen quality or
+performance. Missing/unsupported initialization keeps the original image.
+
+The maintainer accepted the locally installed cable/rope stability correction.
+New seated-reach, startup render multiplier and narrative/ending presentation
+remain host-tested with headset retests pending. No full authored playthrough,
+independent clean-PC acceptance or universal headset validation is inferred.
+The release artifact record pins exact hashes and publication evidence once built.
+
+## Historical local progression candidate — v1.0.14
 
 The 2026-10-28 candidate, revised 2026-10-29, adds the Requiem remaining-level interaction wiring
 described in [the notes](releases/1.0.14.md). It is not a stable/full-playthrough
 acceptance claim. Actual authored cable/rope/connection and ending completion
 remain headset gates; water/crouch recovery and the SDL crash remain unresolved.
-Public release status below continues to identify the preceding public artifact
-until a separate publication is verified.
+This historical record describes the local 1.0.14 artifact before the 1.0.15 release.
 
 The exact local installer, matching source and checksums are pinned in the
 [1.0.14 artifact record](releases/1.0.14-validation.json), built from clean
@@ -18,7 +31,7 @@ hashes, source bytes, topology A–F, 1.0.13 upgrade/repair/exact restoration an
 shared-root deployment matches the exact package, preserving personal settings
 and game executable hashes; no game was launched. This remains a local candidate.
 
-## Current public maintenance candidate — v1.0.13: headset validation pending
+## Historical public maintenance candidate — v1.0.13
 
 **v1.0.13**, dated 2026-10-27, adds bounded native inventory pickup and ScreenGui
 controller input for Requiem level08, retaining all preceding maintenance

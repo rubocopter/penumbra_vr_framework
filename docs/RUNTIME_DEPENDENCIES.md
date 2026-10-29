@@ -108,3 +108,14 @@ every binary redistribution obligation.
 Framework's GPL does not relicense legacy DLLs, game assets, translations or
 enhancement textures. Optional permissions remain separately attributed;
 the core release must not require community packs.
+
+## Optional experimental Neural
+
+Setup includes an x64 `PenumbraNeuralHost.exe` and MIT DirectNR forwarder; both
+use the static Microsoft CRT and run outside the x86 game. Import a locally
+supplied `nvngx_dlssnr.dll` through Maintenance; the NVIDIA model is not part of
+Setup or the source archive. Requirements/model guidance:
+https://github.com/lowpoplabs/nr-bridge#prerequisites. Missing dependencies or
+unsupported initialization preserve original stereo and report Unavailable.
+No separate model download is attempted by the installer. Inference success
+does not guarantee image quality, headset comfort or hardware compatibility.

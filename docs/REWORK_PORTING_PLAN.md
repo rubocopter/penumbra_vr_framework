@@ -225,6 +225,20 @@ height after an inventory/body reset. No automatic native-camera calibration
 or guessed offset remains; the maintainer accepted intro height and physical/
 button crouch on the feedback candidate.
 
+The later seated-reach report contradicts Rework's automatic downward seated
+baseline adjustment (`23c890f` ButtonHandler's `headHeight < baseline - 0.10`).
+Framework had faithfully extracted that ratchet into `VrPlayModePolicy`, used
+by all three games. Lowering the HMD changed the compensation instead of only
+lowering the head; repeated reaching therefore raised the world reference.
+The shared policy now retains the seated baseline through downward reach and
+return. Standing/mode reset still permits recalibration. Tracking-space and
+all three actual height consumers reproduce the old failure and pass after
+the change, including a low sample below the initial calibration range and
+native physical crouch without duplicate Y compensation. BP also preserves
+the seated baseline on unrelated settings edits instead of resetting it on
+every publication. This is an evidence-backed safety correction beyond Rework;
+no body collider, world scale, collision owner or crouch depth is retuned.
+
 BP's vice exposes native `cGameWheel::OnPlayerInteract` through vtable
 `0x2793E8+0x28`, targeting `0x3B8E0`, which commits native `Move=2` at
 `0x3B9D4`. Palm targeting alone was insufficient: the committed hinge adapter
@@ -431,6 +445,19 @@ while each backend keeps exact addresses/layouts and its consumed setting set.
 This is an evidenced second consumer, not a universal binary HPL contract.
 Requiem observes its existing input-update owner for initial menu injection;
 it does not add a second hook to a claimed callsite.
+
+Controller setting direction is a bounded maintenance adaptation beyond Rework.
+At `23c890f`, `ButtonHandler.cpp` sends UI Select as left mouse, UI Back exits
+the menu, and `cMainMenuWidget_VRSetting` decrements only on right mouse.
+Framework's native VR/Neural rows inherited that mouse-only decrement route;
+bounded values cannot wrap back down using repeated trigger selection.
+All three menus now expose separate `-` and `+` buttons operated by the ordinary
+controller trigger. Those buttons delegate to the existing bounded edit/save
+owner, preserving availability, rollback and native Back/pause semantics instead
+of remapping Back. Row spacing accounts for native hit rectangles and keeps
+controls inside the 800x600 pointer surface. This delta is host-tested through
+the actual Overture widget/page implementations and both binary menu consumers;
+live/headset validation remains pending.
 
 Rework Player.cpp performs physical motion with `vr_stepstaticonly=true`, then
 clears that flag for its separate joystick body update. BP must retain one
@@ -665,6 +692,91 @@ Native fade, duration, color, shadow pixel offsets, depth and text payload remai
 unchanged. This is an explicit BP readability preference beyond the baseline;
 Radio subtitles, menu callers and shared settings defaults are outside it.
 Actual x86 callsite tests establish host evidence, not headset readability.
+
+### Transient subtitle readability (BP and Requiem)
+
+**REWORK:** `23c890f` `EffectHandler.cpp` gives `cEffect_SubTitle` its own
+center-aligned world-space text path, separate from GameMessage and Radio.
+`GameScripts.cpp::AddSubTitleTrans` feeds that timed subtitle lifecycle.
+**FRAMEWORK / DIFFERENCE:** the binary adapters centered only GameMessage;
+ordinary transient subtitles still used native `(25,500)`, 15 px, left alignment.
+**CAUSE:** Requiem `level09.hps::ComputerOn` emits `EventComputer` ("It's dead.")
+through `AddSubTitleTrans`, bypassing all six GameMessage hooks. Both initialized
+images independently connect that script registration/wrapper to subtitle Add
+and the EffectHandler subtitle draw owner: BP `CF90`, Requiem `D0F0`.
+**SOLUTION:** reuse the existing native-font 2x size/spacing and whole-block
+centering at only the three ordinary subtitle calls: BP `D2A6/D2F6/D346`, Requiem
+`D406/D456/D4A6`. The closed hosts' 2D queue boundary requires this adaptation
+instead of copying Rework's source-owned world transforms. Native text, duration,
+fade, shadow offsets and distinct per-game depth stay authoritative. Alternate
+GUI/black-text branches and Radio/menu font calls remain native.
+
+Each manifest's `transientSubtitleReadability` owns exact image/window hashes,
+unique signature, producer chain and excluded callers. The offline
+`tools/verify_transient_message_map.py` checks both maps without game execution.
+Both existing message consumer tests reproduce the unadapted subtitle failure
+and pass after correction in x86 Release/Debug, covering all new callers,
+reflow, payload/depth/shadows, eligibility, invalid strings, preflight rejection,
+restoration and actual unpatched Radio/menu calls. This is host evidence only;
+BP and Requiem headset readability remain independently pending.
+
+### Radio narration and final cinematics (BP and Requiem)
+
+**REWORK:** `23c890f` `RadioHandler::{Update,OnDraw}` owns sound-driven queue
+advancement, current/previous text crossfade and subtitle enablement separately
+from `cEffect_SubTitle`. It draws left-aligned scaled text on its current panel;
+`IntroStory::OnDraw` also retains left-aligned cinematic subtitles. Neither is
+evidence that Overture already has the requested centered, double-size layout.
+The trilogy correction now also adapts Overture's source-owned Radio,
+IntroStory, GameMessage and world-space transient subtitle draw methods through
+`NarrativeTextPresentation.h`. Existing panel/world transforms, native wrapping,
+fades, shadow offsets and SubtitleScale remain authoritative. Its actual draw
+methods are host-tested at several subtitle scales; ordinary menus and credits
+retain their layout. Overture has no equivalent native cEnding typewriter owner.
+**FRAMEWORK / DIFFERENCE:** the preceding GameMessage/transient adaptation
+explicitly excluded Radio. BP/RQ ordinary Radio draws therefore stayed small and
+left aligned; ScreenGui narration additionally used a distinct native row helper
+and never reached those WordWrap calls. Gameplay-only UI eligibility would also
+exclude that route. BP's slideshow/video-chat scripts demonstrate the producer;
+Requiem's final furnace narration uses the same Radio lifecycle.
+**CAUSE:** Requiem `level09::StartRedEndSek` queues `red.09.02.01`, then a
+sound-only Radio message, stops Radio with the authored fade, and changes to
+level10. Its timed `IntroEvents(nextlevel)` calls `StartCredits`. The alternate
+`level09::AlternateEnding` changes to level11, whose `EndEvent(end4)` calls
+`StartCredits` after the authored 45-second camera sequence. Level11 has no
+active subtitle/Radio producer. Native `StartEnding1/2` email/typewriter paths
+are separate: level00 invokes the former at the beginning, neither final script
+does. The scrolling Credits owner is not the missing narration renderer.
+**SOLUTION:** reuse the established centered 2x presentation at four Radio
+WordWrap callers per game, including both current/previous text and shadows.
+For ScreenGui only, retain native `GetWordWrapRows` allocation/wrapping/destruction,
+request wrapping at 2x, and adapt the two Radio-owned `GuiSet::DrawFont` callers
+using the resulting native row count. Borrowed native strings, sound/text timing,
+alpha, native GUI/font/material, depth and shadow deltas remain authoritative.
+Radio eligibility includes active native UI; other text eligibility and panel
+`SubtitleScale` consumption remain unchanged. No global font interception or
+menu/inventory/notebook/Credits change is involved.
+
+Both exact initialized images independently establish the callers, native
+positions, script registration/Add chain, row-vector layout and stack ABI in
+`narrativeSubtitleReadability`. `tools/verify_narrative_subtitle_map.py` checks
+those windows and optionally the installed producer-script hashes offline.
+Both x86 consumers failed before the correction and pass in Release/Debug,
+including ScreenGui wrapping/layout, current/previous payload forwarding,
+VR/disabled fallback, preflight rejection and restoration. This is host evidence;
+final-cinematic and ScreenGui headset readability remain pending in each game.
+
+BP's `StartEnding1` body text uses a separate cEnding typewriter helper, also
+present in Requiem's introduction. Its independently verified owning call is
+adapted per backend (BP `DA82 -> D5B0`, Requiem `DB92 -> D6C0`). The adapter
+borrows native rows and the character counter to reconstruct the same visible
+prefix without changing reveal/timing state. It centers the block at up to 2x,
+fitting a long complete page within the 540-pixel HUD height before reveal so
+its baseline stays stable. Native shade/alpha/depth and non-VR fallback remain.
+`endingNarrativeReadability` records these fields, callers and script producers;
+the narrative verifier checks its exact-image windows too. Actual x86 tests
+cover partial/full reveal, row reflow, long-page fit, native state preservation,
+invalid-data fallback and hook preflight/restoration. This remains host evidence.
 
 ## Physical-only collision carry
 

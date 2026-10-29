@@ -5,6 +5,21 @@ chronology. Intermediate implementation history remains available in Git.
 Product-specific Overture release history is retained under
 `products/overture/docs/RELEASES.md`.
 
+## 1.0.15 — 2026-10-29 — experimental Neural and trilogy maintenance
+
+- Include the preceding local 1.0.14 progression and interaction corrections.
+- Center/enlarge trilogy narrative channels, video/Radio/ScreenGui and native
+  ending body text; preserve native payload/timing and fit long ending pages.
+- Add trigger-clickable minus/plus VR settings and independent live Neural profiles.
+- Preserve the accepted Requiem cable/anchored-rope correction and native release.
+- Keep seated calibration fixed during downward reach; apply render multipliers
+  on restart in all games after Requiem live-resize distortion feedback.
+- Bundle the x64 experimental Neural helper/forwarder and optional local-model
+  import/removal UI/CLI. NVIDIA model bytes are not distributed. Missing/unsupported
+  Neural retains originals; late frames recover without stale stereo reuse.
+- Default Neural off; quality/performance/headset acceptance remain experimental.
+  See [release notes](releases/1.0.15.md) for requirements and validation limits.
+
 ## 1.0.14 — 2026-10-28 — local progression candidate
 
 - Connect Requiem jointed Grab to BP's constrained/connected-body behavior for

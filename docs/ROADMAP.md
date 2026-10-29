@@ -1,12 +1,11 @@
 # Roadmap — maintenance
 
-As of 2026-10-26, the intended Penumbra trilogy VR feature set is complete.
-This is a **maintenance-only** project. There is no active feature backlog,
-controller-family expansion, visual-polish programme or universal certification
-commitment. The latest public maintenance candidate is [v1.0.13](releases/1.0.13.md)
-(2026-10-27), with automated host evidence; scoped earlier
-tester feedback is tracked below. The developer has not tested
-this version in-game or in a VR headset.
+Core trilogy VR is maintained for reproducible installation, input and progression
+failures. The current candidate is [v1.0.15](releases/1.0.15.md), dated 2026-10-29,
+including the previously local 1.0.14 work. Neural is an explicitly requested,
+optional experimental research path, not a core visual-quality/support promise.
+Automated evidence and scoped maintainer reports are recorded separately;
+new seated/render-scale/narrative headset acceptance remains open.
 
 Consider changes for reproducible failures of installation, launch, essential
 input, saving/loading or progression, or destructive repair/uninstall.
@@ -27,7 +26,8 @@ functionality or proof that the candidate already works in headset.
 | Requiem level03 bottle throw and Examine/ladder cues | Published in v1.0.10 with host regressions. | Observed puzzle completion and cue/aiming usability; further code changes are not implied. |
 | Requiem level07 cogwheel sphere / B aiming | **Scoped positive Caelus feedback, 2026-10-27:** sphere throwing now works perfectly; no installed hash supplied. | Preserve working launch; no separate evidence establishing the cause of physical lip stoppage. |
 | Requiem level08 Steam: orb beyond shack hatch and unusable keypad | **v1.0.13 candidate, host-tested:** bounded native Normal Item pickup with dual visibility; ScreenGui active context and native cGui controller pointer, release/cancel ownership. | Collect `key0801` through the original puzzle route; operate/cancel keypad and return to gameplay without pausing. |
-| Requiem level09 power cable | **2026-10-28:** the maintainer's failed session loaded probe 1.0.11/bootstrap 1.0.10, with native Grab acceptance but no VR acquisition. The local 1.0.14 articulated correction was not installed. BP/RQ now consume shared contact/wrist calculations. | Verify the installed candidate hash, lift both cable ends, attach/detach through native StickAreas and complete the power/bridge sequence in a pinned headset build. |
+| Requiem level09 cable and rope | **2026-10-29:** power cable and corrected rope stability/reach have scoped maintainer acceptance. Anchored topology and release remain covered by real-Newton tests. | Actual oil ignition and remaining progression; preserve working cable/rope. |
+| Seated reach and render multiplier consistency | **2026-10-29:** seated height baseline ratchet reproduced in all three consumers and corrected in shared policy. Requiem live render resizing rejected by headset feedback; multiplier now restart-applied like Overture/BP. | Headset seated reach without world push; startup multipliers without distortion. |
 | Requiem BP message/computer parity | **Revised local 1.0.14:** shared GameMessage centering/enlargement, configurable HUD geometry and actual render/pointer consumers; native VR page exposes subtitle/UI scale and distance. Host regressions and independently mapped font ABI pass. | Pinned headset readability, terminal reach, focused GUI cursor/Accept and live setting edits. |
 | Remaining Requiem progression wiring | **Local 1.0.14 candidate:** cable/rope and compatible articulated props, fixed-Lamp activation, inert contact eligibility, script-disabled player ownership and credits Escape are connected with consumer/real-Newton tests. Static callback/StickArea routes traced for levels09–11. | Pinned headset completion of the rope/oil/barrel route, connections, moving bridges and both endings. Water recovery remains independent and unresolved. |
 | Requiem intermittent startup crash | Captured SDL mutex failures but no identified cause or fix. | New discriminating evidence, verified correction and scoped live validation. |
@@ -45,14 +45,11 @@ specific reproducible blocker on its merits.
 ## Release condition and documentation ownership
 
 A maintenance release requires bounded demonstrated fixes and clean versioned
-source/installer verification. The maintainer authorized v1.0.13 candidate publication after final installer
-and package/hash verification, with both level08 corrections explicitly pending
-headset validation and no claim that level08 can be completed. The developer has
-not tested this version in-game or in a VR headset. New
-game/device acceptance remains open and must be stated in the notes; publication
-does not imply it. Preserve validation states separately: planned, implemented,
-host-tested, live-tested, headset-validated, supported. The water and SDL-crash
-investigations remain unresolved.
+source/installer verification. The maintainer authorized v1.0.15 publication
+with the current fixes and experimental Neural included in Setup. Publication
+does not close headset, full-progression or clean-PC gates. Keep implemented,
+host-tested, live-tested, headset-validated and supported states distinct.
+Water and SDL-crash investigations remain unresolved.
 
 [TRILOGY_PARITY_PLAN.md](TRILOGY_PARITY_PLAN.md) owns per-game capabilities and
 evidence; [SUPPORTED_BUILDS.md](SUPPORTED_BUILDS.md) owns exact builds;
@@ -66,7 +63,7 @@ steps; [CLOSURE_STATUS.md](CLOSURE_STATUS.md) owns released-artifact status;
 The Framework-owned Overture product, shared OpenVR/runtime/input policy, two
 binary backends, controller profiles, settings, localization and three-game
 transactional installer have shipped. For provenance use
-[CHANGELOG.md](CHANGELOG.md), [versioned release notes](releases/1.0.13.md),
+[CHANGELOG.md](CHANGELOG.md), [versioned release notes](releases/1.0.15.md),
 the [original installer acceptance](releases/1.0.0-installer-ui-candidate.md)
 and the [Rework porting contract](REWORK_PORTING_PLAN.md).
 Old work checklists remain in Git history and are not active milestones.
