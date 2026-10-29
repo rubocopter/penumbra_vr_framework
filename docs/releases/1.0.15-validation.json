@@ -1,0 +1,192 @@
+{
+  "schemaVersion": 1,
+  "version": "1.0.15",
+  "validatedOn": "2026-10-29",
+  "status": "public release candidate; experimental Neural is optional and disabled by default",
+  "releaseUrl": "https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15",
+  "buildSourceCommit": "aaf02a8b9eb92ea584f48bed2d49b70257f941f2",
+  "sourceCleanAtBuild": true,
+  "publicReleaseReady": false,
+  "sourceArchiveScope": "Exact git archive export at buildSourceCommit with declared checkout line endings, plus two pinned upstream source archives; release tag additionally includes documentation and this validation record.",
+  "artifacts": [
+    {
+      "name": "build-report.json",
+      "bytes": 6068,
+      "sha256": "103FD30C07FBF4B0ADCE4B818DA833E2D68ED13E6134CFC70F63D98E2B482777"
+    },
+    {
+      "name": "PenumbraVR-Setup-1.0.15.exe",
+      "bytes": 193498264,
+      "sha256": "B9C035897FAF6E6C9B3EBBA811A0C760CC23C713FBE127EB2E9B0B02EF1BC8ED"
+    },
+    {
+      "name": "PenumbraVR-Source-1.0.15.zip",
+      "bytes": 82383931,
+      "sha256": "6305C457668407F33F474BC0EC60675910A08222537E00F7FC8D8CFF6C73B12E"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 276,
+      "sha256": "8B3C3B0A3966D92C982EA2FF4BC7FC8F350EB0523A41F9245B2CD3FB49353B30"
+    }
+  ],
+  "pe": [
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Bootstrap.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.15",
+      "sha256": "F35EBC82C2B62665EEC287A65A40266A29A454FCF9958C1E9AFF43B8C9F4FC3C",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll",
+        "USER32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.OpenALProxy.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.15",
+      "sha256": "BF3C5CDD27B04B32AED8AEE61BD1436562651D2B093BEC8683AA894CC7342A48",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.BlackPlague.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.15",
+      "sha256": "710D56A249AE7B994EB8081DA6503ECE6F7EDC0BD803D9AE5C2089EBE8B50F82",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.Requiem.Probe.dll",
+      "architecture": "x86",
+      "productVersion": "1.0.15",
+      "sha256": "2AA318482413FA81E07AD33E45DA9454BE9E016E23A657870D9B9644B254FFC3",
+      "imports": [
+        "bcrypt.dll",
+        "gdiplus.dll",
+        "KERNEL32.dll",
+        "OPENGL32.dll",
+        "SHELL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/bin/Release/PenumbraVR.LaaTransform.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.15",
+      "sha256": "54CEDF08ADB01A6C7D8106B02B691154D1BEF7808FEC191B1ABC3559D9F817E9",
+      "imports": [
+        "bcrypt.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "products/overture/build/bin/Release/Penumbra_vr.exe",
+      "architecture": "x86",
+      "productVersion": "1.0.15",
+      "sha256": "7DE519E502EAE2ED68C1B214AB32FFEAE32B85E53447D8DDCDD063B28E0DD120",
+      "imports": [
+        "alut.dll",
+        "api-ms-win-crt-convert-l1-1-0.dll",
+        "api-ms-win-crt-filesystem-l1-1-0.dll",
+        "api-ms-win-crt-heap-l1-1-0.dll",
+        "api-ms-win-crt-locale-l1-1-0.dll",
+        "api-ms-win-crt-math-l1-1-0.dll",
+        "api-ms-win-crt-runtime-l1-1-0.dll",
+        "api-ms-win-crt-stdio-l1-1-0.dll",
+        "api-ms-win-crt-string-l1-1-0.dll",
+        "api-ms-win-crt-time-l1-1-0.dll",
+        "api-ms-win-crt-utility-l1-1-0.dll",
+        "cg.dll",
+        "cgGL.dll",
+        "GLU32.dll",
+        "KERNEL32.dll",
+        "libvorbisfile.dll",
+        "MSVCP140.dll",
+        "Newton.dll",
+        "OpenAL32.dll",
+        "OPENGL32.dll",
+        "openvr_api.dll",
+        "SDL_image.dll",
+        "SDL_ttf.dll",
+        "SDL.dll",
+        "SHELL32.dll",
+        "USER32.dll",
+        "VCRUNTIME140.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/neural-host/Release/PenumbraNeuralHost.exe",
+      "architecture": "x64",
+      "productVersion": "1.0.15",
+      "sha256": "B41E42AFE2420C34E19B191FA97F93F0DC02070A4543EDF3021FC0703498496C",
+      "imports": [
+        "ADVAPI32.dll",
+        "d3d11.dll",
+        "d3d12.dll",
+        "D3DCOMPILER_47.dll",
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    },
+    {
+      "file": "build/neural-host/Release/nvngx.dll_nr_bridge.dll",
+      "architecture": "x64",
+      "productVersion": "1.0.15",
+      "sha256": "DDD05F837291458D4C5920501722860B0022E4FDAEBBEEC6EA41D1800C3CB95D",
+      "imports": [
+        "KERNEL32.dll"
+      ],
+      "delayImports": []
+    }
+  ],
+  "validation": {
+    "frameworkRelease": "89/89 CTest cases passed locally with real OpenGL driver, including Requiem render-scale consumer",
+    "overtureRelease": "298 checks, 0 failures",
+    "neuralGpu": "15/15 real Win32 OpenGL/shared stereo/x64 DirectNR cases passed using the versioned helper; missing helper/model retain original pairs and settle at Unavailable; late-pair isolation/recovery, worker exit, watchdog, sRGB residual/detail, disable/reconfigure and model evaluation passed",
+    "neuralImport": "PowerShell 7 and Windows PowerShell 5.1: import/update/read-only plan/exact INI restoration/default-off/invalid x86 and missing model/ownership conflicts passed",
+    "packagedNeural": "Final Setup extracted; no NVIDIA model bundled. Optional model import with never-executed PE fixture, exact helper copy, removal plan, full Overture and BP/Requiem root removal, original INI/user-file/source-model preservation passed. Requiem-only removal preserves shared Neural receipt.",
+    "standaloneSetup": "EN/ES startup, embedded payload/banner, integrity, extraction, cleanup and trailing-separator extraction passed with shared .NET runtime lookup disabled",
+    "topology": "A-F isolated install/verify/repair/shared-root deduplication/component transitions/exact restore passed; no game launched",
+    "upgradeFrom1_0_13": "Exact old/public and new Setup: Overture and shared BP/Requiem upgrade, all eight default bindings, repair, verification and exact original restoration passed",
+    "uninstallSafety": "20 isolated cases passed, including language/settings conflicts, deleted preferences, ALUT conflicts and rollback",
+    "sourceArchive": "1735 source entries byte-identical to clean git archive export at buildSourceCommit; both pinned upstream source hashes match; no NVIDIA model",
+    "releasePackaging": "Eight packaged PE identities/hashes, source/notices, outer checksums, complete embedded manifest and private-payload exclusions passed",
+    "publicationLint": "0 failures; 1 top-level README warning from the established four-artifact layout. Install steps, requirements and credits are included in the embedded payload and Source ZIP.",
+    "hostedCi": {
+      "url": "https://github.com/rubocopter/penumbra_vr_framework/actions/runs/40863553763",
+      "sourceCommit": "aaf02a8b9eb92ea584f48bed2d49b70257f941f2",
+      "conclusion": "success",
+      "jobs": [
+        "Overture Release regression",
+        "Windows x86 (without OpenVR SDK)",
+        "Installer and diagnostics fixtures (no game binaries)",
+        "Experimental Neural x64 companion (no model)"
+      ],
+      "scope": "SDK-less Debug/Release excludes real-driver opengl_eye_targets and requiem_render_scale_consumer; both passed in the local full Release suite."
+    },
+    "currentReleaseLiveAcceptance": "No game launched for this release verification. Earlier maintainer cable/rope acceptance is scoped to the installed local correction, not transferred to all puzzle progression.",
+    "currentReleaseHeadsetAcceptance": "Pending for new seated reach, startup render multiplier, narrative/ending readability and experimental Neural quality/latency/stereo consistency",
+    "cleanMachineAcceptance": "pending"
+  },
+  "knownOpenGates": [
+    "Neural is experimental: compatible NVIDIA runtime/model required; may worsen image quality, stereo consistency, latency or performance; no visual improvement guarantee",
+    "New seated reach, startup multipliers and centered narrative/ending text require pinned-build headset retests",
+    "Rope/cable stability accepted by maintainer on local build; oil ignition and complete level09 puzzle route remain separate",
+    "Requiem level04 water/crouch recovery and intermittent SDL startup crash remain unresolved",
+    "Broader trilogy progression, other hardware and independent clean-PC acceptance remain incomplete"
+  ]
+}

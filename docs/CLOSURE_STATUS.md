@@ -1,6 +1,6 @@
 # Framework release status
 
-## Current candidate — v1.0.15
+## Current public candidate — v1.0.15
 
 [Version 1.0.15](releases/1.0.15.md) combines the previously local 1.0.14 work,
 experimental Neural and the current trilogy maintenance fixes. Setup includes
@@ -12,7 +12,19 @@ The maintainer accepted the locally installed cable/rope stability correction.
 New seated-reach, startup render multiplier and narrative/ending presentation
 remain host-tested with headset retests pending. No full authored playthrough,
 independent clean-PC acceptance or universal headset validation is inferred.
-The release artifact record pins exact hashes and publication evidence once built.
+The [1.0.15 artifact record](releases/1.0.15-validation.json) pins the four public
+files and eight shipped PE hashes, built from clean
+`aaf02a8b9eb92ea584f48bed2d49b70257f941f2`. Release passes 89 Framework tests,
+298 Overture checks and 15 real-GPU stereo cases, including absent helper/model,
+late output, worker exit and watchdog fallback. The final Setup passes EN/ES
+standalone extraction, topology A–F and 1.0.13 upgrade/repair/exact restoration.
+Packaged optional Neural import/removal preserves the previous INI and source
+model; full root removal cleans owned Neural, while Requiem-only removal keeps
+the shared component. These installation checks use isolated roots, not live
+gameplay. All four hosted CI jobs pass at the build-source commit.
+
+The release tag additionally includes documentation and this artifact record;
+the matching Source ZIP identifies the exact clean commit used for the binaries.
 
 ## Historical local progression candidate — v1.0.14
 
