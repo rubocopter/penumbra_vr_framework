@@ -47,6 +47,21 @@ void __fastcall NativeUpdateStub(void* body, void*, float) {
 bool Near(float actual, float expected) { return std::fabs(actual - expected) < 0.0002F; }
 
 void __fastcall HandlerUpdateStub(void*, void*, float) {}
+struct TrackingOwnerFixture final {
+    std::array<std::uint8_t, 0x80> handler{};
+    std::array<std::uint8_t, 0x200> init{};
+    void Bind(void* player, void* body) {
+        Put(handler.data(), 0x2C, static_cast<void*>(init.data()));
+        Put(handler.data(), 0x38, player);
+        Put(handler.data(), 0x3C, 1);
+        Put(init.data(), 0x15C, player);
+        Put(player, GameplayContract().character_body_offset, body);
+        Put(player, kPlayerActiveOffset, true);
+        Branch(g_image, GameplayContract().button_handler_update_rva, 0xE9,
+            reinterpret_cast<void*>(&HandlerUpdateStub));
+        HookedUpdate(handler.data(), nullptr, 1.0F / 90.0F);
+    }
+};
 unsigned g_crouch_transitions=0;
 void __fastcall CrouchTransitionStub(void* player,void*,int next,bool) {
     ++g_crouch_transitions;
@@ -392,6 +407,9 @@ bool NativeCarry(std::uint8_t* image) {
     Branch(image,GameplayContract().character_update_rva,0xE9,
         reinterpret_cast<void*>(&NativeUpdateStub));
     std::array<std::uint8_t,0x300> body{};
+    std::array<std::uint8_t,0x500> player{};
+    TrackingOwnerFixture owner;
+    owner.Bind(player.data(), body.data());
     Put(body.data(),GameplayContract().character_size_y_offset,1.8F);
     Put(body.data(),GameplayContract().character_position_offset,Vec3{0,2,0});
     g_tracked_player_body.store(body.data());
@@ -426,6 +444,8 @@ bool Movement(std::uint8_t* image) {
     Branch(image, GameplayContract().character_update_rva, 0xE9,
         reinterpret_cast<void*>(&NativeUpdateStub));
     std::array<std::uint8_t, 0x300> player{}, body{};
+    TrackingOwnerFixture owner;
+    owner.Bind(player.data(), body.data());
     Put(player.data(), GameplayContract().character_body_offset, static_cast<void*>(body.data()));
     Put(body.data(), GameplayContract().character_size_y_offset, 1.8F);
     g_tracked_player_body.store(body.data());
@@ -484,13 +504,23 @@ bool Movement(std::uint8_t* image) {
 } // namespace penumbra_vr::backends::requiem
 
 #include "keypad_fixture.hpp"
+#include "computer_fixture.hpp"
+#include "body_parity_fixture.hpp"
 int main(int argc, char** argv) {
     using namespace penumbra_vr::backends::requiem;
     auto* image = static_cast<std::uint8_t*>(VirtualAlloc(nullptr, 0x300000,
         MEM_RESERVE | MEM_COMMIT, PAGE_EXECUTE_READWRITE));
     if (!image) return 2;
     g_image = image;
-    const bool result = argc > 1 && std::strcmp(argv[1], "keypad") == 0
+    const bool result = argc > 1 && std::strcmp(argv[1], "body-carry") == 0
+        ? BodyCollisionCarry(image)
+        : argc > 1 && std::strcmp(argv[1], "body-ownership") == 0
+        ? BodyPostUpdateOwnership(image)
+        : argc > 1 && std::strncmp(argv[1], "computer", 8) == 0
+        ? KeypadContext(image) && ComputerPointerAndAccept(image,
+            std::strcmp(argv[1], "computer-no-pointer") != 0,
+            std::strcmp(argv[1], "computer-no-release") != 0)
+        : argc > 1 && std::strcmp(argv[1], "keypad") == 0
         ? KeypadContext(image) && KeypadPointerAndQueries(image)
         : argc > 1 && std::strcmp(argv[1], "turn") == 0
         ? TurnDisconnect(image)

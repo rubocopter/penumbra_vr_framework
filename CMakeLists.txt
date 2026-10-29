@@ -317,6 +317,7 @@ add_library(pvr_requiem_backend STATIC
     src/backends/requiem/gameplay_bridge.cpp
     src/backends/requiem/gameplay_contract.cpp
     src/backends/requiem/hand_contact_probe.cpp
+    src/backends/requiem/message_presentation.cpp
     src/backends/requiem/native_vr_settings_menu.cpp
     src/backends/requiem/render_world.cpp
 )
@@ -468,6 +469,8 @@ if(BUILD_TESTING)
     add_test(NAME requiem_jump_queries COMMAND pvr_requiem_gameplay_bridge_test jump)
     add_test(NAME requiem_locomotion_consumer COMMAND pvr_requiem_gameplay_bridge_test movement)
     add_test(NAME requiem_native_travel_consumer COMMAND pvr_requiem_gameplay_bridge_test native-carry)
+    add_test(NAME requiem_body_collision_carry COMMAND pvr_requiem_gameplay_bridge_test body-carry)
+    add_test(NAME requiem_body_post_update_ownership COMMAND pvr_requiem_gameplay_bridge_test body-ownership)
     add_test(NAME requiem_scripted_player_consumer COMMAND pvr_requiem_gameplay_bridge_test scripted-player)
     add_test(NAME requiem_credits_consumer COMMAND pvr_requiem_gameplay_bridge_test credits)
     add_test(NAME requiem_turn_disconnect COMMAND pvr_requiem_gameplay_bridge_test turn)
@@ -489,9 +492,11 @@ if(BUILD_TESTING)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/requiem_interaction")
     pvr_enable_warnings(pvr_requiem_interaction_consumer_test)
     add_test(NAME requiem_selection_consumer COMMAND pvr_requiem_interaction_consumer_test)
+    add_test(NAME requiem_ui_geometry_consumer COMMAND pvr_requiem_interaction_consumer_test ui-geometry)
     add_test(NAME requiem_articulated_grab_consumer COMMAND pvr_requiem_interaction_consumer_test articulated)
     add_test(NAME requiem_throw_consumer COMMAND pvr_requiem_interaction_consumer_test throw)
     add_test(NAME requiem_keypad_consumer COMMAND pvr_requiem_gameplay_bridge_test keypad)
+    add_test(NAME requiem_computer_consumer COMMAND pvr_requiem_gameplay_bridge_test computer)
     add_test(NAME requiem_mechanism_consumer COMMAND pvr_requiem_interaction_consumer_test mechanism)
     set_tests_properties(requiem_mechanism_consumer PROPERTIES TIMEOUT 30)
     set_tests_properties(requiem_throw_consumer PROPERTIES TIMEOUT 30)
@@ -609,6 +614,14 @@ if(BUILD_TESTING)
     target_link_libraries(pvr_black_plague_message_presentation_test PRIVATE pvr_rel32_call_hook)
     pvr_enable_warnings(pvr_black_plague_message_presentation_test)
     add_test(NAME black_plague_message_presentation COMMAND pvr_black_plague_message_presentation_test)
+
+    add_executable(pvr_requiem_message_presentation_test
+        tests/requiem_frame_presentation/message_presentation_test.cpp)
+    target_include_directories(pvr_requiem_message_presentation_test PRIVATE
+        src/hooks src/runtime src/adapters/hpl1)
+    target_link_libraries(pvr_requiem_message_presentation_test PRIVATE pvr_rel32_call_hook)
+    pvr_enable_warnings(pvr_requiem_message_presentation_test)
+    add_test(NAME requiem_message_presentation COMMAND pvr_requiem_message_presentation_test)
 
     add_executable(pvr_black_plague_audio_environment_test
         tests/black_plague_audio/audio_environment_policy_test.cpp)

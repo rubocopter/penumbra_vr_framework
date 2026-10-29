@@ -400,6 +400,19 @@ in each configuration. The final fixed-end fixture extension also passes the
 six Requiem consumers in both configurations. Metadata validation and whitespace
 checks pass; independent static review has no remaining actionable blockers.
 
+The maintainer's subsequent 2026-10-28 session supplies direct failure evidence
+for the **older installed 1.0.11 probe**, SHA-256
+`71A83DF2E510AB6691BD6CF70EAF64C49349CFBBD5FD53D146374EDBB823635A`.
+Its native Grab entries repeatedly accept the cable's 1 kg connectors and
+0.3 kg links, while VR acquisition remains zero. The accompanying bootstrap is
+1.0.10. The local 1.0.14 candidate was not deployed in that Steam installation;
+this session therefore does not test or reject the new articulated route.
+The identical BP and Requiem contact/wrist calculations now have one shared
+runtime owner, `vr_articulated_grab_policy.hpp`; native graph and lifecycle
+ownership remain separate. Both existing actual-consumer solver regressions
+pass after extraction. Current installed-build verification and a fresh cable
+playthrough remain distinct gates.
+
 ### Remaining Requiem levels — static progression audit
 
 The 2026-10-28 audit resolves 219 authored entity references across level09–11
@@ -471,6 +484,65 @@ actual pinned run exercises its authored callbacks and scenes.
 Its versioned source passes full Debug/Release builds and 83/83 tests in each;
 native windows, metadata and whitespace checks also pass. Installer identity,
 upgrade and artifact checks remain a separate release gate.
+
+### Requiem BP message and UI consumption — 2026-10-28
+
+The maintainer reports difficult-to-read Requiem subtitles and requests the
+already-corrected BP computer/message behavior. Requiem omitted BP's accepted
+GameMessage caller adapter and used a hard-coded HUD plane, ignoring persisted
+subtitle/UI size and distance. Both binary backends now consume the same
+`native_message_presentation.inl` adapter; each retains independently mapped
+font callers, measurement entry and native string ABI. Requiem's six callers
+belong to `cGameMessage::Draw 3F500`, targeting `DrawWordWrap EBB00` and native
+glyph measurement `EB490`. Exact native windows and the offline verifier are
+recorded in its manifest's `gameMessageReadability`.
+
+The adapter preserves BP's centered, double-size font/spacing and Rework line
+counting, retaining the original text, shadow offsets, depth, color and fade.
+Radio/menu font callers are not hooked. Shared runtime owns the captured
+800x600 HUD geometry and the proven inventory/notebook/fullscreen dimensions.
+Requiem consumes normalized `SubtitleScale`, `UiScale` and `UiDistance` live;
+fullscreen drawing and controller projection use one geometry sample. The
+native VR page exposes the three consumed settings, with save failure rollback
+and English/Spanish widget tests. Actual render-consumer tests reproduce the
+ignored scale before correction and cover independent HUD/panel scaling,
+pointer projection, live edits and normalization after correction. Synthetic
+x86 tests execute all six native message callsites and hook restoration in
+both games. These are host tests; Requiem message legibility and current-build
+computer usability still require a pinned headset run.
+
+The computer cursor already consumes the corresponding native ScreenGui route
+since 1.0.13: Requiem `46DC -> E3120` sends absolute/relative mouse positions
+to the focused `cGui +30` set; `4626`/`466B` retain native left-down/up
+queries and `4633 -> E3170` / `4678 -> E31C0` dispatch button 1.
+New actual-adapter tests exercise focused-set cursor movement, popup Accept
+once on release, physical mouse priority, tracking loss, input-context isolation
+and teardown. Removing either the pointer or release hook makes that fixture
+fail. No replacement cursor or Schmup-state hook is introduced. Fixed terminal
+reach consumes the fixed-Lamp native-range fallback already added to 1.0.14.
+
+The broader BP comparison also identifies two missing Requiem body protections.
+Its existing `D7CB2 -> D5190` initial horizontal collision call now has one
+observer owned by the gameplay bridge. For pure physical motion it excludes
+the initial solver's lateral/backward correction from head-anchor carry, while
+retaining later native travel. Mixed requests, pre-injection native motion and
+the demonstrated native step flag retain combined attribution; native Y stays
+owned by physics. The adapter rechecks handler/player/body/generation and live
+gameplay eligibility after native Update before servicing palms or reading the
+old body. The same matching-owner cancellation also runs before native Update
+if eligibility ends after input queued a move, preventing stale injection while
+retaining unrelated characters' updates and the player's valid pending state.
+Requiem's independently mapped death helper (`player +290`, native
+`9C0D0`) also cancels this authorization. Consumer tests cover replacement,
+deactivation, UI/death transition, disconnect and changed generation, including
+exactly one native physics update. These are host protections, not a newly
+demonstrated movement or progression failure.
+
+The revised source passes 88/88 Framework tests in both Debug and Release in
+an isolated checkout, excluding unrelated concurrent development. Independent
+reviews cover shared grab/message/UI wiring and the native body observer;
+the latter's pre-update cancellation finding has a failing-then-passing
+regression. Current-candidate headset validation remains pending.
 
 ## Controller profiles and distribution
 

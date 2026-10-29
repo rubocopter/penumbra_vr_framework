@@ -12,6 +12,12 @@ Product-specific Overture release history is retained under
   attachment, constraint and release ownership.
 - Add fixed-Lamp native activation, inert-Object contact eligibility, credits
   Escape dispatch and script-disabled player protection with consumer tests.
+- Share BP/Requiem articulated-grab calculations, GameMessage font adaptation
+  and HUD/panel geometry. Connect Requiem's message centering/enlargement and
+  live subtitle/UI size and distance controls to its actual render/pointer owners.
+- Preserve native computer popup cursor/Accept and port BP's physical-only
+  collision attribution and pre/post-physics owner cancellation, including
+  death, UI, disconnect and player/body generation changes.
 - Audit levels09–11 actual native callback wiring. No authored puzzle completion
   or new headset acceptance is claimed; water recovery and SDL crash remain
   unresolved. See [candidate notes](releases/1.0.14.md).

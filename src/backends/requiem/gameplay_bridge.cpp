@@ -138,6 +138,13 @@ constexpr std::uintptr_t kPlayerActiveOffset = 0x1DC;
 constexpr std::uintptr_t kPlayerActiveProofRva = 0x4FA9;
 constexpr std::array<std::uint8_t,6> kPlayerActiveProof{
     0x8A,0x88,0xDC,0x01,0x00,0x00};
+// RQ 9C0D0 reads this helper's active byte; health<=0 at 9AAC9 calls
+// its native start A8C00, and A7370 updates the death presentation. This
+// build's member is +290, independently mapped rather than copied from BP.
+constexpr std::uintptr_t kPlayerDeathHelperOffset = 0x290;
+constexpr std::uintptr_t kPlayerDeathProofRva = 0x9C0D0;
+constexpr std::array<std::uint8_t,9> kPlayerDeathProof{
+    0x8B,0x81,0x90,0x02,0x00,0x00,0x8A,0x00,0xC3};
 // Independently decoded Requiem success block, D826F..D8289. The native
 // stack exposes dt at +5F4, ray reference height at +40 and distances at +5C+EBX*4.
 // Shape construction has already reused the old +58 height local as a pointer.
@@ -184,6 +191,8 @@ struct PhysicalTick final { // The same thread enters the native update and D7C2
     std::array<float, 3> physical_request{};
     std::array<float, 3> direct_request{};
     bool injected = false;
+    std::array<float, 3> collision_position{};
+    bool collision_valid = false;
 };
 
 std::uint8_t* g_image = nullptr;
@@ -193,6 +202,7 @@ std::array<hooks::Rel32CallHook, std::size(kGameplayQueries)> g_query_hooks{};
 std::array<hooks::Rel32CallHook, std::size(kPointers)> g_pointer_hooks{};
 hooks::Rel32CallHook g_inventory_double_query_hook;
 hooks::Rel32CallHook g_character_update_hook;
+hooks::Rel32CallHook g_horizontal_collision_hook;
 hooks::Rel32JumpHook g_physical_move_hook;
 std::uintptr_t g_physical_move_resume = 0;
 std::atomic<bool> g_installed{false};
@@ -222,6 +232,7 @@ SRWLOCK g_tracking_state_lock = SRWLOCK_INIT;
 RequiemBodyTrackingSample g_tracking_state;
 std::uint64_t g_tracking_body_generation = 0;
 std::atomic<void*> g_tracked_player_body{nullptr};
+std::atomic<void*> g_tracked_body_handler{nullptr};
 SRWLOCK g_head_tracking_lock = SRWLOCK_INIT;
 HeadTrackingInput g_head_tracking;
 PhysicalState g_physical_state;
@@ -572,19 +583,108 @@ void InvalidateRoomScaleSample(void* character_body) noexcept {
     ReleaseSRWLockExclusive(&g_tracking_state_lock);
 }
 
+// Requiem D7CB2 -> D5190 is the initial horizontal solver, immediately after
+// the D7C21 injection owner. Its thiscall arguments are independently decoded
+// and already consumed by Requiem's palm adapter. Observe only this callsite;
+// later force/step/attachment movement must retain its native attribution.
+bool __fastcall HookedHorizontalCollision(void* world, void*, Vec3* resolved,
+    void* shape, const runtime::VrMatrix44* transform, void* skip_body,
+    bool skip_static, bool is_character, void* callback,
+    bool collide_character, bool debug) noexcept {
+    CallbackScope scope;
+    using Collision = bool(__thiscall*)(void*, Vec3*, void*,
+        const runtime::VrMatrix44*, void*, bool, bool, void*, bool, bool);
+    const bool collided = reinterpret_cast<Collision>(
+        g_image + GameplayContract().collision_rva)(world, resolved, shape,
+            transform, skip_body, skip_static, is_character, callback,
+            collide_character, debug);
+    if (g_physical_tick.body && g_physical_tick.injected && resolved) {
+        const auto position = Read<Vec3>(resolved, 0);
+        if (std::isfinite(position.x) && std::isfinite(position.y) &&
+            std::isfinite(position.z)) {
+            g_physical_tick.collision_position = {position.x, position.y, position.z};
+            g_physical_tick.collision_valid = true;
+        }
+    }
+    return collided;
+}
+
+bool InstallHorizontalCollisionObserver(std::string& error) noexcept {
+    const auto& contract = GameplayContract();
+    return hooks::InstallRel32CallHook(g_image + contract.collision_callsite_rva,
+        CallBytes(contract.collision_callsite_rva, contract.collision_rva),
+        reinterpret_cast<void*>(&HookedHorizontalCollision),
+        g_horizontal_collision_hook, error);
+}
+
+[[nodiscard]] bool GameplayBodyOwnerMatches(
+    void* handler, void* player, void* character_body) noexcept {
+    // RQ's own handler accesses init at +2C, player at +38 and gameplay state
+    // at +3C. 4F94 and the native entity Pick paths independently read the
+    // current player from init+15C; 4FA9 proves player+1DC's active gate.
+    // Read both owners again after Update, before touching the old body.
+    if (!handler || !player || !character_body ||
+        g_tracked_body_handler.load(std::memory_order_acquire) != handler ||
+        g_tracked_player_body.load(std::memory_order_acquire) != character_body ||
+        Read<void*>(handler, GameplayContract().handler_player_offset) != player ||
+        Read<std::int32_t>(handler, 0x3C) != 1) return false;
+    auto* const init = Read<void*>(handler, 0x2C);
+    return init && Read<void*>(init, 0x15C) == player &&
+        Read<void*>(player, GameplayContract().character_body_offset) == character_body &&
+        Read<bool>(player, kPlayerActiveOffset) &&
+        !Read<bool>(Read<void*>(player, kPlayerDeathHelperOffset), 0) && !NativeUiActive() &&
+        !Read<bool>(Read<void*>(init, 0x164), 0x5C) &&
+        !Read<bool>(Read<void*>(init, 0x178), 0x44) &&
+        Read<void*>(Read<void*>(init, 0x1AC), 0x30) == nullptr;
+}
+
 void __fastcall HookedCharacterUpdate(
     void* character_body, void*, float dt) noexcept {
     CallbackScope callback;
     const auto original = reinterpret_cast<CharacterUpdate>(
         g_image + GameplayContract().character_update_rva);
-    const bool tracked_character_body = character_body != nullptr &&
-        g_tracked_player_body.load(std::memory_order_acquire) == character_body;
+    void* const handler = g_tracked_body_handler.load(std::memory_order_acquire);
+    void* const player = Read<void*>(handler, GameplayContract().handler_player_offset);
+    const bool tracked_character_body = GameplayBodyOwnerMatches(handler, player, character_body);
+    const auto body_sample = ReadGameplayTrackingSample();
+    const auto cancel_owned_body_services = [&]() noexcept {
+        if (g_physical_state.body==character_body) g_physical_state={};
+        if (g_physical_tick.body==character_body) g_physical_tick={};
+        InvalidateRoomScaleSample(character_body);
+        AcquireSRWLockExclusive(&g_pending_lock);
+        if (g_pending.character_body==character_body) g_pending={};
+        ReleaseSRWLockExclusive(&g_pending_lock);
+    };
+    const bool stale_body_generation=g_physical_state.initialized &&
+        g_physical_state.body==character_body &&
+        (body_sample.character_body!=character_body ||
+         body_sample.body_generation!=g_physical_state.generation);
+    if (!tracked_character_body || stale_body_generation) {
+        // Input may have queued motion before death, UI, deactivation or a
+        // native owner replacement. Cancel it before the injection boundary.
+        // An unrelated character update must not erase the player's state.
+        cancel_owned_body_services();
+        original(character_body,dt);
+        ServiceGameplayPalmShutdown();
+        return;
+    }
+    const auto update_native = [&]() noexcept {
+        original(character_body, dt); // Exactly one native update on every path.
+        ServiceGameplayPalmShutdown();
+        if (!tracked_character_body) return false;
+        const auto current_sample = ReadGameplayTrackingSample();
+        if (!GameplayBodyOwnerMatches(handler, player, character_body) ||
+            current_sample.character_body != character_body ||
+            current_sample.body_generation != body_sample.body_generation) {
+            cancel_owned_body_services();
+            return false;
+        }
+        ServiceGameplayPalmResolver(g_image, character_body);
+        return true;
+    };
     if (!tracked_character_body ||
         !std::isfinite(dt) || dt <= 0.0F || dt > 0.25F) {
-        original(character_body, dt);
-        ServiceGameplayPalmShutdown();
-        if (tracked_character_body)
-            ServiceGameplayPalmResolver(g_image, character_body);
+        static_cast<void>(update_native());
         return;
     }
 
@@ -592,7 +692,6 @@ void __fastcall HookedCharacterUpdate(
         character_body, GameplayContract().character_position_offset);
     const std::array<float, 3> body_before{before.x, before.y, before.z};
     HeadTrackingInput tracking;
-    const auto body_sample = ReadGameplayTrackingSample();
     if (g_recenter_body_requested.exchange(false, std::memory_order_acq_rel))
         g_physical_state = {};
     if (!FreshHeadTracking(tracking) ||
@@ -601,8 +700,7 @@ void __fastcall HookedCharacterUpdate(
         !std::isfinite(before.z)) {
         g_physical_state = {};
         InvalidateRoomScaleSample(character_body);
-        original(character_body, dt);
-        ServiceGameplayPalmResolver(g_image, character_body);
+        static_cast<void>(update_native());
         return;
     }
 
@@ -614,8 +712,7 @@ void __fastcall HookedCharacterUpdate(
         !std::isfinite(tracking_position[2])) {
         g_physical_state = {};
         InvalidateRoomScaleSample(character_body);
-        original(character_body, dt);
-        ServiceGameplayPalmResolver(g_image, character_body);
+        static_cast<void>(update_native());
         return;
     }
 
@@ -652,8 +749,7 @@ void __fastcall HookedCharacterUpdate(
     if (!plan.valid) {
         g_physical_state = {};
         InvalidateRoomScaleSample(character_body);
-        original(character_body, dt);
-        ServiceGameplayPalmResolver(g_image, character_body);
+        static_cast<void>(update_native());
         return;
     }
 
@@ -674,8 +770,7 @@ void __fastcall HookedCharacterUpdate(
     }
     ReleaseSRWLockExclusive(&g_pending_lock);
 
-    original(character_body, dt); // Native physics owns exactly one update.
-    ServiceGameplayPalmResolver(g_image, character_body);
+    if (!update_native()) return;
     const Vec3 after = Read<Vec3>(
         character_body, GameplayContract().character_position_offset);
     const std::array<float, 3> body_after{after.x, after.y, after.z};
@@ -688,11 +783,25 @@ void __fastcall HookedCharacterUpdate(
         return;
     }
     std::array<float, 3> physical_accepted{};
+    // BP's proven attribution: only an observed, pure physical initial solve
+    // can separate HMD collision correction from native travel. A completed
+    // native step, mixed stick request, or native movement before injection
+    // retains the original combined attribution. RQ D826F sets body+238.
+    const bool physical_only_solve = g_physical_tick.injected &&
+        g_physical_tick.collision_valid &&
+        std::hypot(g_physical_tick.physical_request[0],
+            g_physical_tick.physical_request[2]) > 0.000001F &&
+        std::hypot(g_physical_tick.direct_request[0],
+            g_physical_tick.direct_request[2]) <= 0.000001F &&
+        !Read<bool>(character_body, 0x238) &&
+        std::hypot(g_physical_tick.position_before_injection[0] - body_before[0],
+            g_physical_tick.position_before_injection[2] - body_before[2]) <= 0.000001F;
     if (g_physical_tick.injected) {
         runtime::VrAcceptedBodyMotion injected_motion;
         if (!runtime::ObserveAcceptedBodyMotion(
                 g_physical_tick.position_before_injection,
-                body_after, injected_motion)) {
+                physical_only_solve ? g_physical_tick.collision_position : body_after,
+                injected_motion)) {
             g_physical_state = {};
             InvalidateRoomScaleSample(character_body);
             g_physical_tick = {};
@@ -718,9 +827,13 @@ void __fastcall HookedCharacterUpdate(
         return;
     }
     auto locomotion_motion = native_motion;
-    locomotion_motion.accepted_displacement[0] -= physical_accepted[0];
+    locomotion_motion.accepted_displacement[0] -= physical_only_solve
+        ? g_physical_tick.collision_position[0] - g_physical_tick.position_before_injection[0]
+        : physical_accepted[0];
     locomotion_motion.accepted_displacement[1] = 0.0F;
-    locomotion_motion.accepted_displacement[2] -= physical_accepted[2];
+    locomotion_motion.accepted_displacement[2] -= physical_only_solve
+        ? g_physical_tick.collision_position[2] - g_physical_tick.position_before_injection[2]
+        : physical_accepted[2];
     locomotion_motion.body_after = {
         body_before[0] + locomotion_motion.accepted_displacement[0],
         body_before[1],
@@ -985,6 +1098,7 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
     const auto& contract = GameplayContract();
     void* const player = Read<void*>(handler, contract.handler_player_offset);
     void* const init = Read<void*>(handler, 0x2C);
+    g_tracked_body_handler.store(handler, std::memory_order_release);
     ObserveNativeVrSettingsMenu(Read<void*>(init, 0x1B8));
     runtime::VrControllerFrame frame;
     bool input_ready = false;
@@ -1294,6 +1408,12 @@ void __fastcall HookedUpdate(void* handler, void*, float dt) noexcept {
         append_error(next);
     }
     next.clear();
+    if (g_horizontal_collision_hook.installed() &&
+        !hooks::RemoveRel32CallHook(g_horizontal_collision_hook, next)) {
+        ok = false;
+        append_error(next);
+    }
+    next.clear();
     if (g_character_update_hook.installed() &&
         !hooks::RemoveRel32CallHook(g_character_update_hook, next)) {
         ok = false;
@@ -1326,6 +1446,7 @@ bool InstallGameplayBridge(std::string& error) noexcept {
     for (const auto& hook : g_pointer_hooks)
         pointer_hook_installed = pointer_hook_installed || hook.installed();
     if (g_update_hook.installed() || g_character_update_hook.installed() ||
+        g_horizontal_collision_hook.installed() ||
         query_hook_installed ||
         pointer_hook_installed || g_gui_pointer_hook.installed() || g_inventory_double_query_hook.installed() ||
         g_move_hooks[0].installed() ||
@@ -1362,6 +1483,10 @@ bool InstallGameplayBridge(std::string& error) noexcept {
         error = "Requiem native player active test does not match the observed build";
         return false;
     }
+    if (!ImageBytesMatch(kPlayerDeathProofRva, kPlayerDeathProof)) {
+        error = "Requiem native player death gate does not match the observed build";
+        return false;
+    }
     for (const auto& entry : kGameplayQueries) {
         if (!ImageBytesMatch(entry.site,
                 CallBytes(entry.site, entry.target))) {
@@ -1395,6 +1520,11 @@ bool InstallGameplayBridge(std::string& error) noexcept {
             CallBytes(contract.character_update_callsite_rva,
                 contract.character_update_rva))) {
         error = "Requiem native body-update callsite does not match the observed build";
+        return false;
+    }
+    if (!ImageBytesMatch(contract.collision_callsite_rva,
+            CallBytes(contract.collision_callsite_rva, contract.collision_rva))) {
+        error = "Requiem initial horizontal collision callsite does not match the observed build";
         return false;
     }
     if (!ImageBytesMatch(
@@ -1452,6 +1582,7 @@ bool InstallGameplayBridge(std::string& error) noexcept {
         reinterpret_cast<void*>(&HookedForward),
         reinterpret_cast<void*>(&HookedSideways)};
     bool ok = true;
+    ok = InstallHorizontalCollisionObserver(error);
     for (std::size_t index = 0;
         ok && index < std::size(kGameplayQueries); ++index) {
         const auto& entry = kGameplayQueries[index];
@@ -1532,6 +1663,7 @@ bool GameplayBridgeInstalled() noexcept {
     return g_installed.load(std::memory_order_acquire) && queries_installed &&
         pointers_installed && g_gui_pointer_hook.installed() && g_inventory_double_query_hook.installed() &&
         g_update_hook.installed() && g_character_update_hook.installed() &&
+        g_horizontal_collision_hook.installed() &&
         g_move_hooks[0].installed() &&
         g_move_hooks[1].installed() && g_physical_move_hook.installed() &&
         adapters::hpl1::NativeStepClimbAdapterMatchesLive();
@@ -1581,6 +1713,7 @@ void ConnectGameplayInput(runtime::OpenVrSession* session) noexcept {
         g_tracking_state = {};
         ++g_tracking_body_generation;
         g_tracked_player_body.store(nullptr, std::memory_order_release);
+        g_tracked_body_handler.store(nullptr, std::memory_order_release);
         ReleaseSRWLockExclusive(&g_tracking_state_lock);
         AcquireSRWLockExclusive(&g_head_tracking_lock);
         g_head_tracking = {};

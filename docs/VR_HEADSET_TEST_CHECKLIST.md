@@ -403,6 +403,21 @@ ending branches: native player deactivation must prevent VR turn/posture/body
 writes, and reactivation must restore ordinary input. At credits, test VR
 Pause/UI-close and Back, plus keyboard Escape, respecting native timing.
 
+For the revised 1.0.14 local candidate, first verify the installed probe hash
+matches the packaged DLL. The 2026-10-28 failed cable session loaded probe
+1.0.11 and bootstrap 1.0.10, rather than the new candidate.
+
+- Examine objects with one-line and wrapped messages. Check centered,
+  approximately double-size text, all shadow/fade passes and both eyes. Compare
+  radio subtitles separately; their native layout remains unchanged.
+- Change Subtitle size, UI scale and UI distance in VR Settings and verify live
+  application. Check inventory, notebook and fullscreen pointer alignment at
+  both small and large UI sizes; subtitle size must not rescale the inventory.
+- Activate a fixed computer across its desk within the authored range; walls
+  and out-of-range attempts must still reject. Use the controller cursor on
+  native ScreenGui, including focused popups and Accept on release; test
+  physical-mouse takeover and cancellation on focus/tracking loss.
+
 ## What to retain after a run
 
 Keep durable evidence small:

@@ -215,6 +215,11 @@ contact route using that bounded dynamic-component correction. Static roots,
 animation companions and disconnected components receive no writes. Newton
 retains joint limits and script ownership; constrained holds receive neither a
 wrist angular-velocity override nor tracked throwing velocity on release.
+Black Plague and Requiem consume one runtime implementation of the bounded
+contact-velocity and wrist calculations in `vr_articulated_grab_policy.hpp`.
+Their native graph discovery, accepted-state lifecycle, solver calls and body
+layouts remain backend-owned. The extraction preserves the existing BP
+algorithm and its Requiem consumer rather than introducing another grab model.
 VR Push release consumes Rework's transition-only behavior through the native
 state owner; it omits BP's subsequent camera-directed release impulse, including
 guarded cancellation. Native-origin Push retains its original release handler.
@@ -253,14 +258,19 @@ native.
 The native 800x600 draw queue is captured once into a transparent surface and
 composited into both eyes. During gameplay it carries HUD/messages on the
 head-relative plane with configurable `SubtitleScale`; this scales the whole
-captured queue. BP's GameMessage-only font-call adapter additionally centers
+captured queue. The shared GameMessage-only font-call adapter additionally centers
 the complete message block and doubles its native font/spacing, using Rework
-wrapping with native glyph metrics. Radio/menu callers retain their native
+wrapping with native glyph metrics. BP and Requiem supply their independently
+verified callers and font/string ABI to
+`src/adapters/hpl1/native_message_presentation.inl`. Radio/menu callers retain their native
 layout; fade and shadow state stay game-owned. Inventory keeps the stereo world visible and places
 that queue on a world-anchored panel at Rework's 1.1 m / 1:750 geometry.
 Notebook follows the off hand at Rework's 1:1450 geometry. Full-screen menus
 retain their separate captured-panel route. Panel projection and pointer use
-the same world transform. The maintainer accepted inventory/notebook, context
+the same world transform. BP and Requiem consume shared runtime panel/HUD
+geometry; Requiem now applies live `SubtitleScale`, `UiScale` and `UiDistance`
+through its render owner and exposes those consumed settings in its native VR
+page. The maintainer accepted inventory/notebook, context
 actions and UseItem in the installed trilogy checklist. Subtitle scaling and
 broader layout/hardware coverage remain separate validation gates.
 

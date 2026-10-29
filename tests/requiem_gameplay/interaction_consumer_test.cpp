@@ -716,13 +716,66 @@ void PublishGameplayHeadTracking(const runtime::VrHmdPose&,float) noexcept {}
 #include "native_throw_fixture.hpp"
 #include "native_mechanism_fixture.hpp"
 #include "articulated_grab_fixture.hpp"
+namespace penumbra_vr::backends::requiem {
+bool PresentationSettingsCases() {
+    runtime::VrSettings settings;
+    settings.ui_scale=1.5F;
+    settings.ui_distance=2.25F;
+    settings.subtitle_scale=1.8F;
+    ConfigurePresentationSettings(settings);
+    const auto inventory=PanelGeometry(NativeUiSurface::inventory);
+    const auto notebook=PanelGeometry(NativeUiSurface::notebook);
+    if (!Near(inventory.width,800.0F/750.0F*1.5F) ||
+        !Near(inventory.center_y,-100.0F/750.0F*1.5F) ||
+        !Near(notebook.width,800.0F/1450.0F*1.5F)) {
+        std::cerr<<"Requiem render/pointer panel geometry ignored live UiScale\n";
+        return false;
+    }
+    const auto overlay=GameplayOverlayGeometry();
+    const auto fullscreen=FullscreenPanelGeometry();
+    if (!Near(overlay.right,400.0F/750.0F*1.8F) ||
+        !Near(overlay.left,-overlay.right) || !Near(overlay.top,0.4F*1.8F) ||
+        !Near(overlay.bottom,-overlay.top) || !Near(overlay.distance,2.25F) ||
+        !Near(fullscreen.width,3.6F) || !Near(fullscreen.distance,2.25F))
+        return Failed(__LINE__);
+    auto anchor=runtime::VrMatrix34{};
+    const auto identity=runtime::IdentityMatrix();
+    std::copy_n(identity.values.begin(),12,anchor.values.begin());
+    PublishFullscreenMenuPointer(anchor,4.0F/3.0F,fullscreen);
+    runtime::VrHmdPose aim;
+    aim.device_connected=true; aim.pose_valid=true;
+    aim.device_to_absolute=anchor;
+    aim.device_to_absolute.values[3]=0.6F;
+    std::array<float,2> uv{};
+    if (!TrackedMenuPointer(aim,uv) || !Near(uv[0],2.0F/3.0F) ||
+        !Near(uv[1],0.5F)) return Failed(__LINE__);
+    // Live edits use normalized settings, and HUD scaling never changes the
+    // inventory/notebook or the matching fullscreen pointer plane.
+    settings.ui_scale=0.9F; settings.subtitle_scale=0.8F;
+    settings.ui_distance=1.25F;
+    ConfigurePresentationSettings(settings);
+    if (!Near(PanelGeometry(NativeUiSurface::inventory).width,0.96F) ||
+        !Near(FullscreenPanelGeometry().width,2.16F) ||
+        !Near(GameplayOverlayGeometry().right,400.0F/750.0F*0.8F) ||
+        !Near(GameplayOverlayGeometry().distance,1.25F)) return Failed(__LINE__);
+    settings.ui_scale=10; settings.ui_distance=10; settings.subtitle_scale=0;
+    ConfigurePresentationSettings(settings);
+    if (!Near(FullscreenPanelGeometry().width,4.8F) ||
+        !Near(GameplayOverlayGeometry().distance,3) ||
+        !Near(GameplayOverlayGeometry().right,0.4F)) return Failed(__LINE__);
+    ConfigurePresentationSettings(runtime::VrSettings{});
+    return true;
+}
+}
 int main(int argc, char** argv) {
     using namespace penumbra_vr::backends::requiem;
     g_image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,
         MEM_RESERVE|MEM_COMMIT,PAGE_EXECUTE_READWRITE));
     if(!g_image) return 2;
     bool passed=false;
-    if(argc>1 && std::string(argv[1])=="articulated") {
+    if(argc>1 && std::string(argv[1])=="ui-geometry") {
+        passed=PresentationSettingsCases();
+    } else if(argc>1 && std::string(argv[1])=="articulated") {
         passed=articulated_grab_fixture::Cases();
     } else if(argc>1 && std::string(argv[1])=="mechanism") {
         passed=native_mechanism_fixture::Cases();

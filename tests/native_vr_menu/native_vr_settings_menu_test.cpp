@@ -157,6 +157,12 @@ int main() {
     const auto caps = NativeVrSettingCapabilities();
     for (const auto id : NativeVrMenuSettings())
         Check(caps.supported[static_cast<std::size_t>(id)], "only consumed rows");
+#ifndef PVR_TEST_BLACK_PLAGUE_MENU
+    for (const auto id:{runtime::VrSettingId::subtitle_scale,
+            runtime::VrSettingId::ui_scale,runtime::VrSettingId::ui_distance})
+        Check(caps.supported[static_cast<std::size_t>(id)],
+            "Requiem exposes its consumed subtitle/UI setting");
+#endif
     auto* native = Allocate(kButtonObjectSize);
     Write<void*>(native, kWidgetInitOffset, init.data());
     AddWidget(menu.data(), nullptr, kStartState, native);
@@ -192,6 +198,46 @@ int main() {
     tracked_height = 1.75F;
     Click(g_calibrate_height);
     Check(settings.player_height == tracked_height && commits == 3, "calibration saves fresh height");
+#ifndef PVR_TEST_BLACK_PLAGUE_MENU
+    struct UiSettingCase {
+        runtime::VrSettingId id;
+        float runtime::VrSettings::* field;
+        const wchar_t* english;
+        const wchar_t* spanish;
+    };
+    const UiSettingCase ui_settings[]{
+        {runtime::VrSettingId::subtitle_scale,&runtime::VrSettings::subtitle_scale,
+            L"Subtitle size",L"Tama\u00f1o de subt\u00edtulos"},
+        {runtime::VrSettingId::ui_scale,&runtime::VrSettings::ui_scale,
+            L"UI scale",L"Escala de interfaz"},
+        {runtime::VrSettingId::ui_distance,&runtime::VrSettings::ui_distance,
+            L"UI distance",L"Distancia de interfaz"},
+    };
+    settings.subtitle_scale=1.55F;
+    for (const auto& test:ui_settings) {
+        std::size_t row=0;
+        while (row<NativeVrMenuSettings().size() && NativeVrMenuSettings()[row]!=test.id)
+            ++row;
+        Check(row<g_rows.size(), "Requiem consumed subtitle/UI widget exists");
+        if (row>=g_rows.size()) continue;
+        RefreshLocalizedText(MenuLanguage::spanish);
+        Check(Text(g_rows[row]).find(test.spanish)!=std::wstring::npos,
+            "Spanish subtitle/UI setting label");
+        RefreshLocalizedText(MenuLanguage::english);
+        Check(Text(g_rows[row]).find(test.english)!=std::wstring::npos,
+            "English subtitle/UI setting label");
+        const auto previous_value=settings.*test.field;
+        const auto previous_commits=commits;
+        save_ok=false;
+        Click(g_rows[row]);
+        Check(settings.*test.field==previous_value && commits==previous_commits+1,
+            "subtitle/UI setting failed save preserves previous value");
+        save_ok=true;
+        Click(g_rows[row]);
+        Check(settings.*test.field>previous_value && commits==previous_commits+2,
+            "subtitle/UI setting edit persists through native widget callback");
+    }
+#endif
     Click(g_bindings);
     Check(Text(g_bindings) == L"Open bindings from SteamVR", "binding failure leaves usable page");
     Click(g_back);

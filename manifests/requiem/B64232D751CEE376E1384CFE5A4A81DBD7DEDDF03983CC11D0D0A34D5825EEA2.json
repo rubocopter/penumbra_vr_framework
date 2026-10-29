@@ -472,7 +472,7 @@
       "english": "English_exp.lang",
       "spanish": "Espanol_exp.lang"
     },
-    "supportedSettingRows": 9
+    "supportedSettingRows": 12
   },
   "vrStepClimb": {
     "status": "implemented-host-tested; live/headset validation pending",
@@ -1339,5 +1339,78 @@
         "bytes": "e842700d00"
       }
     ]
+  },
+  "gameMessageReadability": {
+    "verified": true,
+    "validation": "offline exact-image only",
+    "unpackedSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "windows": {
+      "gameMessageDraw": {
+        "rva": "0x3f500",
+        "size": 525,
+        "sha256": "4CE5E42CE888AD23F487B09455873641B0E2D9B92DA8F8C8F68F717A4B373BC1"
+      },
+      "drawWordWrap": {
+        "rva": "0xebb00",
+        "size": 1084,
+        "sha256": "3AB0E727156B43B193A43140DE04D2B151CADD97434A2A4113318FC01C231FC5"
+      },
+      "getLength": {
+        "rva": "0xeb490",
+        "size": 87,
+        "sha256": "3039D0964E6346E9A7AE8F8BEC5B5F5925DD250348EAFEC0277CC6BCD2DAE433"
+      }
+    },
+    "gameMessageFontCalls": [
+      "0x3f568",
+      "0x3f5d2",
+      "0x3f61d",
+      "0x3f668",
+      "0x3f6b3",
+      "0x3f6fe"
+    ],
+    "nativeMeasurementCalls": [
+      "0xebbbe",
+      "0xebcd6"
+    ],
+    "legacyWideString": {
+      "data": 4,
+      "length": 20,
+      "capacity": 24,
+      "inlineCapacityBelow": 8
+    },
+    "source": "independently decoded Requiem initialized/unpacked exact Steam image",
+    "sharedAdapter": "src/adapters/hpl1/native_message_presentation.inl",
+    "reference": "Black Plague accepted GameMessage layout; Rework 23c890f word-wrap line counting",
+    "nativeSemantics": "native 14px font/16px spacing, 30/300 origin; six black/text/shadow callers only; retain radio/menu, fade, shadow/depth and borrowed VC7 wide string ownership",
+    "vrSemantics": "center alignment, 2x native font/spacing and whole-block vertical centering; gameplay HUD uses shared GameplayMessageOverlay with normalized SubtitleScale/UiDistance",
+    "status": "implemented; exact-image and synthetic x86 native-call host tests; Requiem headset acceptance pending"
+  },
+  "bodyObserverParity": {
+    "reference": "BP initial physical-only collision residual attribution and post-native-update current-owner revalidation",
+    "nativeOwner": "gameplay_bridge owns D7CB2 -> D5190 once; initial solve only, after D7C21 request injection",
+    "nativeWindows": {
+      "deathHelper": {
+        "rva": "0x9c0d0",
+        "length": 9,
+        "sha256": "93BE202848764D086B7932D515E164404213D6CBA625E067D1C4E178596E66A1",
+        "bytes": "8b81900200008a00c3"
+      },
+      "initialHorizontalSolve": {
+        "rva": "0xd7c80",
+        "length": 85,
+        "sha256": "8221D95C082CB2968EDBCC86573366080EA3669788A61778A8EFD942AB9BDAAE",
+        "bytes": "8b4f088d9424fc0000008964247c52894808e81987ffff8b8e3c02000083c41050e84a57ffff8b8e40020000508d44244c50e8d9d4ffffd944242cd907dae9dfe0f6c4447a2fd9442434d94650dae9dfe0f6c4447a"
+      },
+      "stepSuccess": {
+        "rva": "0xd826f",
+        "length": 26,
+        "sha256": "114569F64C32753AB0DDB7B6EC76324B709AB5C758D6A84AA1F8535A57EDFD1B",
+        "bytes": "d98424f4050000c6863802000001d88e2c020000d8464cd95e4c"
+      }
+    },
+    "deathHelper": "player+290 -> helper active byte+0; independent Requiem 9C0D0 getter",
+    "semantics": "separate initial physical-only residual from later native travel; preserve mixed intent, native steps, pre-injection movement, post-solve platform/force travel and native Y; recheck player/body/generation/UI/active/death after exactly one native Update before old-body services",
+    "validation": "exact-image and actual adapter synthetic native-call consumers; live/headset acceptance pending"
   }
 }

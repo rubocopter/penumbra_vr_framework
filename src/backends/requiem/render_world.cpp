@@ -6,6 +6,7 @@
 #include "frame_presentation_gate.hpp"
 #include "gameplay_contract.hpp"
 #include "gameplay_bridge.hpp"
+#include "message_presentation.hpp"
 #include "hand_contact_probe.hpp"
 #include "iat_hook.hpp"
 #include "refraction_copy_gate.hpp"
@@ -19,7 +20,10 @@
 #include "tool_visibility_tracking.hpp"
 #include "vr_math.hpp"
 #include "vr_panel_policy.hpp"
+#include "vr_message_overlay.hpp"
+#include "vr_ui_presentation_policy.hpp"
 #include "vr_grab_pose.hpp"
+#include "vr_articulated_grab_policy.hpp"
 #include "vr_interaction_policy.hpp"
 #include "vr_mechanism_policy.hpp"
 #include "vr_magnetic_pickup_policy.hpp"
@@ -178,7 +182,6 @@ constexpr std::array<std::uint8_t, 8> kEntitySetMatrixEntry{
 constexpr float kVisibilityAngularGuardRadians = 0.087266463F;
 constexpr ULONGLONG kMaximumVisibilityPoseAgeMs = 250;
 constexpr float kMenuDistance = 1.75F;
-constexpr float kGameplayOverlayDistance = 2.5F;
 constexpr float kMenuWidth = 2.4F;
 constexpr float kMenuCenterY = 0.0F;
 constexpr auto kCameraLayout = kGameplayCameraLayout;
@@ -906,19 +909,42 @@ private:
     return applied && camera_restored && eye_restored;
 }
 
-struct WorldPanelGeometry final {
-    float distance = 0.0F;
-    float width = 0.0F;
-    float center_y = 0.0F;
-};
+using WorldPanelGeometry = runtime::vr_ui_presentation_policy::PanelGeometry;
 
-[[nodiscard]] constexpr WorldPanelGeometry PanelGeometry(
+[[nodiscard]] runtime::VrSettings PresentationSettings() noexcept {
+    AcquireSRWLockShared(&g_height_settings_lock);
+    const auto settings=g_height_settings;
+    ReleaseSRWLockShared(&g_height_settings_lock);
+    return settings;
+}
+
+[[nodiscard]] WorldPanelGeometry PanelGeometry(
     NativeUiSurface surface) noexcept {
-    // Rework 23c890f / BP's 800x600 native inventory and notebook planes.
+    const auto settings=PresentationSettings();
     return surface == NativeUiSurface::notebook
-        ? WorldPanelGeometry{0.02F, 800.0F / 1450.0F, 0.0F}
-        : WorldPanelGeometry{1.1F, 800.0F / 750.0F,
-            -100.0F / 750.0F};
+        ? runtime::vr_ui_presentation_policy::NotebookPanel(settings.ui_scale)
+        : runtime::vr_ui_presentation_policy::InventoryPanel(settings.ui_scale);
+}
+[[nodiscard]] WorldPanelGeometry FullscreenPanelGeometry() noexcept {
+    const auto settings=PresentationSettings();
+    return runtime::vr_ui_presentation_policy::FullscreenPanel(
+        settings.ui_scale,settings.ui_distance);
+}
+[[nodiscard]] runtime::VrMessageOverlayGeometry GameplayOverlayGeometry() noexcept {
+    const auto settings=PresentationSettings();
+    return runtime::GameplayMessageOverlay(settings.subtitle_scale,settings.ui_distance);
+}
+
+void PublishFullscreenMenuPointer(const runtime::VrMatrix34& anchor,
+    float aspect,const WorldPanelGeometry& panel) noexcept {
+    AcquireSRWLockExclusive(&g_menu_pointer_lock);
+    g_menu_pointer_anchor=anchor;
+    g_menu_pointer_world_panel=false;
+    g_menu_pointer_aspect=aspect;
+    g_menu_pointer_distance=panel.distance;
+    g_menu_pointer_width=panel.width;
+    g_menu_pointer_center_y=panel.center_y;
+    ReleaseSRWLockExclusive(&g_menu_pointer_lock);
 }
 
 [[nodiscard]] bool RenderStereo(RenderWorld original,
@@ -1097,7 +1123,7 @@ struct WorldPanelGeometry final {
                 pitch.values[10] = 0.0F;
                 runtime::VrMatrix44 offset = runtime::IdentityMatrix();
                 offset.values[3] = (off_hand == 0U ? 175.0F :
-                    -175.0F) / 1450.0F;
+                    -175.0F) / 1450.0F * PresentationSettings().ui_scale;
                 g_world_panel_pose = runtime::Multiply(
                     runtime::Multiply(world_from_tracking,
                         runtime::Multiply(runtime::ExpandMatrix(
@@ -2177,99 +2203,8 @@ struct GrabComponent {
     return true;
 }
 
-[[nodiscard]] bool ArticulatedContactImpulse(const runtime::VrMatrix44& body_pose,
-    const runtime::VrMatrix44& destination,const Vec3& contact,const Vec3& tracked_velocity,
-    const Vec3& linear,const Vec3& angular,float dt,Vec3& impulse,
-    Vec3& world_contact) noexcept {
-    impulse={};
-    world_contact={};
-    // A stalled update must not integrate a stale positional error into a
-    // large impulse. Short/normal ticks use a per-second acceleration budget.
-    if (!std::isfinite(dt) || dt<=0 || dt>0.10F ||
-        !runtime::vr_mechanism_policy::Finite(contact) || !runtime::vr_mechanism_policy::Finite(tracked_velocity) ||
-        !runtime::vr_mechanism_policy::Finite(linear) || !runtime::vr_mechanism_policy::Finite(angular)) return false;
-    world_contact=TransformPoint(body_pose,contact);
-    const Vec3 desired_contact=TransformPoint(destination,contact);
-    const Vec3 centre{body_pose.values[3],body_pose.values[7],body_pose.values[11]};
-    if (!runtime::vr_mechanism_policy::Finite(world_contact) || !runtime::vr_mechanism_policy::Finite(desired_contact) ||
-        !runtime::vr_mechanism_policy::Finite(centre)) return false;
-    const Vec3 radius{world_contact[0]-centre[0],world_contact[1]-centre[1],
-        world_contact[2]-centre[2]};
-    const Vec3 tangent=runtime::vr_mechanism_policy::Cross(angular,radius);
-    const Vec3 hand_speed=runtime::LimitTrackedVelocity(tracked_velocity,1,3);
-    Vec3 requested{};
-    for (int axis=0;axis<3;++axis)
-        requested[axis]=hand_speed[axis]+(desired_contact[axis]-world_contact[axis])*9;
-    requested=runtime::LimitTrackedVelocity(requested,1,3);
-    for (int axis=0;axis<3;++axis)
-        impulse[axis]=requested[axis]-linear[axis]-tangent[axis];
-    impulse=runtime::LimitTrackedVelocity(impulse,1,
-        std::min(2.3F,dt*145.0F));
-    return runtime::vr_mechanism_policy::Finite(impulse);
-}
-
-// Closed dynamic Grab wrist drive copied from BP; anchored graphs omit it.
-[[nodiscard]] bool ArticulatedAngularDrive(const runtime::VrMatrix44& body_pose,
-    const runtime::VrMatrix44& destination,const Vec3& hand_angular,const Vec3& current,
-    float dt,Vec3& corrected) noexcept {
-    corrected={};
-    if (!std::isfinite(dt) || dt<=0 || dt>0.10F ||
-        !runtime::vr_mechanism_policy::Finite(hand_angular) || !runtime::vr_mechanism_policy::Finite(current)) return false;
-    Vec3 angular_error{};
-    for (int axis=0;axis<3;++axis) {
-        const Vec3 from{body_pose.values[axis],body_pose.values[axis+4],
-            body_pose.values[axis+8]};
-        const Vec3 to{destination.values[axis],destination.values[axis+4],
-            destination.values[axis+8]};
-        if (!runtime::vr_mechanism_policy::Finite(from) || !runtime::vr_mechanism_policy::Finite(to)) return false;
-        const Vec3 difference=runtime::vr_mechanism_policy::Cross(from,to);
-        for (int component=0;component<3;++component)
-            angular_error[component]+=difference[component]*0.5F;
-    }
-    // The cross products above encode axis*sin(angle), which vanishes at a
-    // half-turn. Recover the shortest axis-angle error, including that case.
-    std::array<float,9> relative{};
-    for (int row=0;row<3;++row)
-        for (int col=0;col<3;++col)
-            for (int axis=0;axis<3;++axis)
-                relative[row*3+col]+=destination.values[row*4+axis]*
-                    body_pose.values[col*4+axis];
-    const float cosine=std::clamp(
-        (relative[0]+relative[4]+relative[8]-1.0F)*0.5F,-1.0F,1.0F);
-    const float angle=std::acos(cosine);
-    const float sine=std::hypot(angular_error[0],angular_error[1],angular_error[2]);
-    if (cosine<0 && sine<0.001F) {
-        // At pi choose the best-conditioned diagonal. The symmetric terms
-        // recover the other components; the skew picks the side near pi.
-        int largest=0;
-        for (int axis=1;axis<3;++axis)
-            if (relative[axis*3+axis]>relative[largest*3+largest]) largest=axis;
-        Vec3 rotation_axis{};
-        rotation_axis[largest]=std::sqrt(std::max(0.0F,
-            (relative[largest*3+largest]+1.0F)*0.5F));
-        if (rotation_axis[largest]<0.001F) return false;
-        for (int axis=0;axis<3;++axis)
-            if (axis!=largest)
-                rotation_axis[axis]=(relative[largest*3+axis]+
-                    relative[axis*3+largest])/(4.0F*rotation_axis[largest]);
-        const float direction=runtime::vr_mechanism_policy::Dot(rotation_axis,angular_error)<0 ? -1.0F : 1.0F;
-        for (int axis=0;axis<3;++axis)
-            angular_error[axis]=rotation_axis[axis]*angle*direction;
-    } else if (sine>1.0e-6F) {
-        for (float& component:angular_error) component*=angle/sine;
-    }
-    Vec3 requested{};
-    for (int axis=0;axis<3;++axis)
-        requested[axis]=hand_angular[axis]*0.5F+angular_error[axis]*4;
-    requested=runtime::LimitTrackedVelocity(requested,1,3);
-    Vec3 step{};
-    for (int axis=0;axis<3;++axis)
-        step[axis]=requested[axis]-current[axis];
-    step=runtime::LimitTrackedVelocity(step,1,std::min(0.20F,dt*12.5F));
-    for (int axis=0;axis<3;++axis)
-        corrected[axis]=current[axis]+step[axis];
-    return runtime::vr_mechanism_policy::Finite(corrected);
-}
+using runtime::vr_articulated_grab_policy::ArticulatedContactImpulse;
+using runtime::vr_articulated_grab_policy::ArticulatedAngularDrive;
 
 // Requiem's independently decoded getters return a 12-byte vector via the
 // MSVC x86 hidden result pointer (19CE30/19CE80, RET 4).
@@ -2578,8 +2513,10 @@ void __fastcall HookedGrabUpdate(void* state, void*, float dt) noexcept {
                 }
                 g_grab_hold = hold;
                 g_grabs_acquired.fetch_add(1, std::memory_order_relaxed);
-                probe::WriteLog("Requiem VR grab acquired mass=%.3f surface=%u",
-                    mass, surface_contact ? 1U : 0U);
+                probe::WriteLog("Requiem VR grab acquired mass=%.3f surface=%u articulated=%u members=%zu anchored=%u",
+                    mass, surface_contact ? 1U : 0U, articulated ? 1U : 0U,
+                    articulated ? graph.count : 1U,
+                    graph.anchored ? 1U : 0U);
                 reinterpret_cast<void(__thiscall*)(void*, float)>(
                     g_image + 0x19CAC0)(body, articulated ? 4.0F : 20.0F);
                 reinterpret_cast<void(__thiscall*)(void*, float)>(
@@ -3421,16 +3358,11 @@ void __fastcall HookedDrawAll(void* drawer, void*) noexcept {
             const auto model_view = runtime::Multiply(eye_view,
                 g_overlay_world_panel ? g_overlay_panel_pose : head_pose);
             const auto panel = PanelGeometry(g_overlay_surface);
-            // Rework scales text inside its 800x600 message plane. Requiem
-            // captures text and diary animation together, so scaling the
-            // entire plane by 3.375 at 1.75 m made both fill the headset.
-            // Use the proven 1/750 m pixel pitch with a 2.5 scale at 2.5 m:
-            // the full plane is ~44 degrees high and remains in view.
-            constexpr float subtitle_scale = 2.5F;
+            const auto overlay = GameplayOverlayGeometry();
             const float half_width = g_overlay_world_panel
-                ? panel.width * 0.5F : 400.0F / 750.0F * subtitle_scale;
+                ? panel.width * 0.5F : overlay.right;
             const float half_height = g_overlay_world_panel
-                ? panel.width * 0.375F : 300.0F / 750.0F * subtitle_scale;
+                ? panel.width * 0.375F : overlay.top;
             const float center_y = g_overlay_world_panel
                 ? panel.center_y : 0.0F;
             captured = graphics::DrawTransparentOverlay(
@@ -3439,7 +3371,7 @@ void __fastcall HookedDrawAll(void* drawer, void*) noexcept {
                 -half_width, half_width,
                 center_y - half_height, center_y + half_height,
                 g_overlay_world_panel ? panel.distance :
-                    kGameplayOverlayDistance,
+                    overlay.distance,
                 error);
             std::string restore_error;
             if (!g_targets.EndEye(eye_binding, restore_error)) {
@@ -3510,17 +3442,7 @@ void __fastcall HookedRenderWorld(void* renderer, void*,
 
 bool InstallRenderWorld(std::string& error) noexcept {
     error.clear();
-    if (g_hook.installed() || g_visibility_hook.installed() ||
-        g_draw_all_hook.installed() || g_hands_update_hook.installed() ||
-        g_normal_update_hook.installed() ||
-        g_refraction_copy_hook.installed() ||
-        g_throw_direction_hook.installed() ||
-        g_move_throw_direction_hook.installed() ||
-        g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
-        std::any_of(g_grab_hooks.begin(), g_grab_hooks.end(),
-            [](const auto& hook) { return hook.installed(); }) ||
-        std::any_of(g_move_state_hooks.begin(), g_move_state_hooks.end(),
-            [](const auto& hook) { return hook.installed(); })) {
+    if (RenderHooksInstalled()) {
         error = "Requiem render hooks are already installed";
         return false;
     }
@@ -3895,6 +3817,14 @@ bool InstallRenderWorld(std::string& error) noexcept {
         if (!rolled_back) error += "; rollback failed: " + rollback_error;
         return false;
     }
+    if (!InstallMessagePresentation(error)) {
+        const std::string install_error = error;
+        std::string rollback_error;
+        const bool rolled_back = RemoveRenderWorld(rollback_error);
+        error = install_error;
+        if (!rolled_back) error += "; message/render rollback failed: " + rollback_error;
+        return false;
+    }
     return true;
 }
 
@@ -3902,7 +3832,7 @@ bool RenderHooksInstalled() noexcept {
     return g_hook.installed() || g_visibility_hook.installed() ||
         g_draw_all_hook.installed() || g_hands_update_hook.installed() ||
         g_normal_update_hook.installed() ||
-        g_refraction_copy_hook.installed() ||
+        g_refraction_copy_hook.installed() || MessagePresentationHooksPresent() ||
         g_throw_direction_hook.installed() ||
         g_move_throw_direction_hook.installed() ||
         g_tool_matrix_hook.installed() || g_ray_hook.installed() ||
@@ -3928,6 +3858,7 @@ bool RemoveRenderWorld(std::string& error) noexcept {
         error = "Requiem game-thread interactions or callbacks are still active";
         return false;
     }
+    if (!RemoveMessagePresentation(error)) return false;
     if (g_refraction_copy_hook.installed() &&
         !hooks::RemoveIatHook(g_refraction_copy_hook, error)) return false;
     if (g_ray_hook.installed() &&
@@ -3971,11 +3902,16 @@ void ConfigurePresentationSettings(runtime::VrSettings settings) noexcept {
     ReleaseSRWLockExclusive(&g_height_settings_lock);
 }
 
+bool TrackedStereoPresentationActive() noexcept {
+    return g_presenting.load(std::memory_order_acquire);
+}
+
 bool StartPresentation(runtime::OpenVrSession& session,
     std::string& error) noexcept {
     error.clear();
     if (!g_hook.installed() || !g_visibility_hook.installed() ||
         !g_draw_all_hook.installed() ||
+        !MessagePresentationReady() ||
         !g_refraction_copy_hook.installed() ||
         !g_hands_update_hook.installed() || !g_tool_matrix_hook.installed() ||
         !g_normal_update_hook.installed() ||
@@ -4232,18 +4168,13 @@ void OnSdlSwap(std::uint64_t) noexcept {
         g_menu_anchor = pose.device_to_absolute;
     }
     g_menu_anchor_valid = anchor_plan.anchor_valid_after;
+    const auto fullscreen_panel = FullscreenPanelGeometry();
     std::array<GLint, 4> desktop_viewport{};
     glGetIntegerv(GL_VIEWPORT, desktop_viewport.data());
-    AcquireSRWLockExclusive(&g_menu_pointer_lock);
-    g_menu_pointer_anchor = g_menu_anchor;
-    g_menu_pointer_world_panel = false;
-    g_menu_pointer_aspect = desktop_viewport[3] > 0
+    const float pointer_aspect = desktop_viewport[3] > 0
         ? static_cast<float>(desktop_viewport[2]) /
             static_cast<float>(desktop_viewport[3]) : 0.0F;
-    g_menu_pointer_distance = kMenuDistance;
-    g_menu_pointer_width = kMenuWidth;
-    g_menu_pointer_center_y = kMenuCenterY;
-    ReleaseSRWLockExclusive(&g_menu_pointer_lock);
+    PublishFullscreenMenuPointer(g_menu_anchor,pointer_aspect,fullscreen_panel);
 
     const auto size = session->recommended_render_target_size();
     if (!g_targets.CreateOrResize(size.width, size.height, error)) {
@@ -4279,7 +4210,8 @@ void OnSdlSwap(std::uint64_t) noexcept {
         }
         if (success) {
             success = menu.Draw(eye_view, g_projections[index],
-                kMenuDistance, kMenuWidth, kMenuCenterY, error);
+                fullscreen_panel.distance, fullscreen_panel.width,
+                fullscreen_panel.center_y, error);
         }
         if (binding.active) {
             std::string restore_error;
