@@ -1,4 +1,4 @@
-// Execute the actual six native font-call hooks, including x86 by-value vector
+// Execute the mapped native message/subtitle hooks, including x86 by-value vector
 // arguments. The fake font measures deterministic glyph widths; it never owns
 // the borrowed legacy wstring or changes native fade/color/shadow state.
 #include "../../src/backends/requiem/message_presentation.cpp"
@@ -26,6 +26,7 @@ void TestJump(std::uint8_t* source,void* target) {
     std::memcpy(source+1,&delta,4);
 }
 }
+#include "../native_narrative_presentation_test.inl"
 int RunMessageTest() {
     // The two backend consumers must use the same mapping, including a saved
     // non-default value. Requiem keeps ownership of its HUD distance/panels.
@@ -40,8 +41,9 @@ int RunMessageTest() {
 
     auto* image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     if (!image) return 1;
-    constexpr std::array<std::uintptr_t,8> fixture_calls{
-        0x3F568,0x3F5D2,0x3F61D,0x3F668,0x3F6B3,0x3F6FE,0x7B50A,0xB22BB};
+    constexpr std::array<std::uintptr_t,14> fixture_calls{
+        0x3F568,0x3F5D2,0x3F61D,0x3F668,0x3F6B3,0x3F6FE,
+        0xD406,0xD456,0xD4A6,0x7B50A,0xB22BB,0xB2300,0xB239E,0xB240E};
     for (const auto site:fixture_calls) {
         auto* caller=image+site-33;
         const std::array<std::uint8_t,3> enter{0x55,0x8B,0xEC};
@@ -56,6 +58,10 @@ int RunMessageTest() {
     }
     constexpr std::array<std::uint8_t,10> signature{0x8B,0x54,0x24,0x08,0xD9,0x05,0xC0,0x39,0x67,0};
     std::memcpy(image+kFontLengthRva,signature.data(),signature.size());
+    constexpr std::array<std::uintptr_t,4> radio_calls{0xB22BB,0xB2300,0xB239E,0xB240E};
+    constexpr std::uintptr_t radio_rows=0xB2003;
+    constexpr std::array<std::uintptr_t,2> radio_gui{0xB20B9,0xB2121};
+    PrepareNarrativeGuiFixture(image,radio_rows,radio_gui);
     std::string error;
     // A mismatched last caller must reject installation before any writes.
     image[kMessageFontCalls.back()]=0x90;
@@ -64,6 +70,15 @@ int RunMessageTest() {
     image[kFontLengthRva]=0x90;
     if (InstallMessagePresentationAt(image,error) || MessagePresentationHooksPresent()) return 16;
     image[kFontLengthRva]=signature[0];
+    for (const auto site:{0xD406U,0xD456U,0xD4A6U}) {
+        image[site]=0x90;
+        if (InstallMessagePresentationAt(image,error) || MessagePresentationHooksPresent()) return 23;
+        for (const auto message:kMessageFontCalls) {
+            if (std::memcmp(image+message,MessageCallBytes(message).data(),5)!=0) return 24;
+        }
+        image[site]=0xE8;
+    }
+    if (!NarrativePreflightRejects(image,radio_calls,radio_rows,radio_gui)) return 41;
     if (!InstallMessagePresentationAt(image,error)) { std::cerr<<error; return 2; }
     if (!MessagePresentationHooksPresent() || !MessagePresentationReady()) return 12;
     g_message_enabled=false;
@@ -114,21 +129,70 @@ int RunMessageTest() {
     if (test_position!=TextPosition{30,300,152} || test_size!=TextSize{14,14} ||
         test_alignment!=0 || test_line!=16 || test_text!=legacy.data()) return 17;
     legacy=original_legacy;
-    // Independently mapped font callers outside GameMessage remain unpatched.
+    // Actual cEffect_SubTitle ordinary draw consumers. The level09 computer
+    // script emits AddSubTitleTrans, which never reaches cGameMessage::Draw.
+    constexpr std::array<std::uintptr_t,3> subtitle_calls{0xD406,0xD456,0xD4A6};
+    const wchar_t* dead=L"It's dead.";
+    const std::uint32_t dead_length=10;
+    std::array<std::uint8_t,28> subtitle{};
+    std::memcpy(subtitle.data()+4,&dead,sizeof(dead));
+    std::memcpy(subtitle.data()+20,&dead_length,4);
+    std::memcpy(subtitle.data()+24,&dead_length,4);
+    const auto borrowed_subtitle=subtitle;
+    for (std::size_t i=0;i<subtitle_calls.size();++i) {
+        const auto draw=reinterpret_cast<WordWrap>(image+subtitle_calls[i]-33);
+        const float offset=i==1?1.0F:i==2?-1.0F:0.0F;
+        const float depth=i==0?157.0F:156.0F;
+        if (draw(nullptr,{25+offset,500+offset,depth},750,16,{15,15},
+                color.data(),0,subtitle.data())!=13) return 19;
+        if (test_position!=TextPosition{400+offset,285+offset,depth} ||
+            test_size!=TextSize{30,30} || test_line!=32 || test_alignment!=2 ||
+            test_width!=750 || test_color!=color.data() ||
+            test_text!=subtitle.data() || subtitle!=borrowed_subtitle) {
+            std::cerr<<"Transient subtitle is not centered/readable with native payload preserved\n";
+            return 20;
+        }
+        // Reflow at enlarged size, retaining native SSO contents and shadows.
+        draw(nullptr,{25+offset,500+offset,depth},60,16,{15,15},color.data(),0,legacy.data());
+        if (test_position!=TextPosition{400+offset,269+offset,depth} ||
+            legacy!=original_legacy) return 21;
+        auto multiline=subtitle;
+        std::memcpy(multiline.data()+4,&text,sizeof(text));
+        std::memcpy(multiline.data()+20,&count,4);
+        std::memcpy(multiline.data()+24,&count,4);
+        draw(nullptr,{25+offset,500+offset,depth},750,16,{15,15},color.data(),0,multiline.data());
+        if (test_position!=TextPosition{400+offset,253+offset,depth}) return 25;
+        std::memcpy(multiline.data()+20,&invalid_length,4);
+        draw(nullptr,{25,500,depth},750,16,{15,15},color.data(),0,multiline.data());
+        if (test_position!=TextPosition{25,500,depth} || test_size!=TextSize{15,15} ||
+            test_line!=16 || test_alignment!=0 || test_text!=multiline.data()) return 26;
+        for (unsigned mode=0;mode<3;++mode) {
+            test_message_vr=mode!=0; test_message_ui=mode==1;
+            g_message_enabled=mode!=2;
+            draw(nullptr,{25,500,157},750,16,{15,15},color.data(),0,subtitle.data());
+            if (test_position!=TextPosition{25,500,157} || test_size!=TextSize{15,15} ||
+                test_alignment!=0 || test_line!=16) return 22;
+        }
+        g_message_enabled=true; test_message_vr=true; test_message_ui=false;
+    }
+    // Independently mapped menu callers remain unpatched.
     // Exercise their native call instructions, not only the target function.
-    for (const auto site:{0x7B50AU,0xB22BBU}) {
+    for (const auto site:{0x7B50AU}) {
         reinterpret_cast<WordWrap>(image+site-33)(nullptr,{40,470,47},720,16,
             {14,14},color.data(),0,legacy.data());
         if (test_position!=TextPosition{40,470,47} || test_size!=TextSize{14,14} ||
             test_alignment!=0 || test_line!=16 ||
             std::memcmp(image+site,MessageCallBytes(site).data(),5)!=0) return 10;
     }
+    if (const int narrative=CheckNarrativePresentation(image,radio_calls,radio_rows,radio_gui)) return narrative;
+    if (const int ending=CheckEndingPresentation(image,radio_rows)) return ending;
     // Partial hook state is visible to teardown but never qualifies for start.
     if (!hooks::RemoveRel32CallHook(g_message_hooks.back(),error) ||
         !MessagePresentationHooksPresent() || MessagePresentationReady()) return 18;
     if (!RemoveMessagePresentation(error)) return 7;
+    if (!NarrativeGuiRestored(image,radio_rows,radio_gui)) return 39;
     if (MessagePresentationHooksPresent() || MessagePresentationReady()) return 14;
-    for (const auto site:kMessageFontCalls) {
+    for (const auto site:fixture_calls) {
         if (std::memcmp(image+site,MessageCallBytes(site).data(),5)!=0) return 8;
     }
     VirtualFree(image,0,MEM_RELEASE); return 0;

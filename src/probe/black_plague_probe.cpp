@@ -18,12 +18,18 @@
 #include "vr_math.hpp"
 #include "openal_soft_config.hpp"
 #include "vr_settings_store.hpp"
+#include "../graphics/neural_post_bridge.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
 #include <string>
 #include <vector>
+
+namespace penumbra_vr::backends::black_plague {
+// Private menu fan-out; the probe retains the existing SDL callback owner.
+void RefreshNativeVrSettingsMenuStatus() noexcept;
+}
 
 namespace {
 
@@ -309,7 +315,7 @@ bool CommitNativeVrSettings(
         penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
     if (settings_path.empty() ||
         !penumbra_vr::launcher::SaveVrSettings(
-            settings_path, settings, settings_error)) {
+            settings_path, settings, settings_error, L"Neural.BlackPlague")) {
         error = WideToUtf8(settings_error);
         penumbra_vr::probe::WriteLog(
             "Native VR settings save failed: %s", error.c_str());
@@ -331,6 +337,7 @@ bool CommitNativeVrSettings(
 
     penumbra_vr::backends::black_plague::ConfigureNativeInputBridge(settings);
     penumbra_vr::backends::black_plague::ConfigureTrackedPresentation(settings);
+    penumbra_vr::neural_post::Configure(settings.neural);
     penumbra_vr::probe::WriteLog(
         "Native VR settings persisted; live input/presentation refreshed handedness=%.*s turn=%.*s "
         "move_speed=%.2f render_scale=%.2f enhanced_visuals=%u hrtf=%.*s",
@@ -357,6 +364,9 @@ void OnFrame(std::uint64_t frame_number) noexcept {
                     &g_capabilities, 0, 0)));
         }
         return;
+    }
+    if (HasCapability(penumbra_vr::BlackPlagueProbeCapability::vr_settings_menu)) {
+        penumbra_vr::backends::black_plague::RefreshNativeVrSettingsMenuStatus();
     }
     if (frame_number%300==0) {
         if (HasCapability(penumbra_vr::BlackPlagueProbeCapability::audio_environment)) {
@@ -1387,13 +1397,14 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) {
     const auto settings_path =
         penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
     if (settings_path.empty() || !penumbra_vr::launcher::LoadVrSettings(
-            settings_path, g_vr_settings, settings_error)) {
+            settings_path, g_vr_settings, settings_error, L"Neural.BlackPlague")) {
         penumbra_vr::probe::WriteLog("VR input settings fallback to defaults: %s",
             WideToUtf8(settings_error).c_str());
         g_vr_settings = {};
     }
     penumbra_vr::backends::black_plague::ConfigureNativeInputBridge(g_vr_settings);
     penumbra_vr::backends::black_plague::ConfigureTrackedPresentation(g_vr_settings);
+    penumbra_vr::neural_post::Configure(g_vr_settings.neural);
     penumbra_vr::backends::black_plague::ConfigureNativeVrSettingsMenu(
         &g_vr_settings, &CommitNativeVrSettings);
     penumbra_vr::probe::WriteLog(

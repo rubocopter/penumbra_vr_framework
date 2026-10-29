@@ -11,7 +11,13 @@ inline int edge_count=6;
 inline unsigned writes=0, impulses=0, exits=0;
 struct PhysicsApi : native_mechanism_fixture::NewtonApi {
 #define PVR_GRAB_EXPORTS(X) X(NewtonAddBodyImpulse) X(NewtonConstraintCreateBall) \
-    X(NewtonBodySetForce) X(NewtonBodyGetMassMatrix) X(NewtonBodySetForceAndTorqueCallback)
+    X(NewtonBodySetForce) X(NewtonBodyGetMassMatrix) X(NewtonBodySetForceAndTorqueCallback) \
+    X(NewtonCreateCylinder) X(NewtonBallSetConeLimits) X(NewtonJointSetCollisionState) \
+    X(NewtonConvexCollisionCalculateInertialMatrix) X(NewtonBodySetLinearDamping) \
+    X(NewtonBodySetAngularDamping) X(NewtonBodySetContinuousCollisionMode) \
+    X(NewtonCollisionCollide) X(NewtonMaterialCreateGroupID) \
+    X(NewtonBodySetMaterialGroupID) X(NewtonMaterialSetDefaultFriction) \
+    X(NewtonMaterialSetDefaultElasticity)
 #define PVR_GRAB_LOAD(name) decltype(&::name) name=module ? reinterpret_cast<decltype(&::name)>(GetProcAddress(module,#name)) : nullptr;
     PVR_GRAB_EXPORTS(PVR_GRAB_LOAD)
 #undef PVR_GRAB_LOAD
@@ -143,7 +149,8 @@ inline bool SeededCases() {
         auto destination=runtime::IdentityMatrix(); destination.values[7]=0.1F;
         const auto before_writes=writes;
         ok=ok && DriveGrabAssembly(h,destination,1.0F/90.0F) &&
-            velocities[fixed]==Vec{} && velocities[3][1]>0.1F && writes==before_writes;
+            velocities[fixed]==Vec{} && velocities[3]==Vec{} &&
+            velocities[fixed==0 ? 6 : 0][1]>0.1F && writes==before_writes;
     }
     // Foreign entities and inconsistent links must never receive writes.
     Put(joints[0].data(),0x2C,static_cast<void*>(character.data()));
@@ -167,6 +174,7 @@ inline bool stuck=false, can_detach=true, leave_saw_cleared=false;
 inline void* selected=nullptr;
 inline void* last_skip=nullptr;
 inline float detached_mass=1;
+inline bool use_normal_mass=false;
 inline void __fastcall Enter(void* state,void*,void*) {
     ++enters;
     if(stuck && !can_detach) { Put(player.data(),0x2C0,1); return; }
@@ -175,7 +183,8 @@ inline void __fastcall Enter(void* state,void*,void*) {
     Put(state,0xD4,ReadNative<bool>(selected,0x428));
     Put(state,0xE0,ReadNative<bool>(selected,0x3C4));
     Put(state,0xDC,ReadNative<float>(selected,0x434));
-    Put(selected,0x434,ReadNative<float>(selected,0x434)/5.0F);
+    Put(selected,0x434,ReadNative<float>(selected,0x434)/(use_normal_mass ? 1.0F : 5.0F));
+    Put(selected,0x428,false);
 }
 inline void __fastcall Leave(void* state,void*,void*) {
     ++leaves; leave_saw_cleared=g_grab_hold.state==nullptr;
@@ -216,7 +225,7 @@ inline void Tracking(float height=0,float yaw=0,float x=0) {
 inline void Configure(int count,bool companions=false,bool rooted=false) {
     bodies={}; joints={}; velocities={}; omegas={}; point_torque={}; object={}; native_state={};
     parts={}; states={}; enters=leaves=detaches=writes=impulses=exits=0;
-    stuck=false; can_detach=true; leave_saw_cleared=false;
+    stuck=false; can_detach=true; leave_saw_cleared=false; use_normal_mass=false;
     edge_count=count-1;
     Put(object.data(),0x14,true); Put(object.data(),0xC0,1);
     const int total=count+(companions ? count : 0)+1;
@@ -350,6 +359,7 @@ inline bool NewtonCases() {
     }
     physics=nullptr; return ok;
 }
+#include "anchored_rope_fixture.hpp"
 inline bool LifecycleCases() {
     // Exact Requiem 9CEE0..9CF26: Leave -> Enter -> state commit. Only virtual
     // calls and local branches; safe to execute in the fixture image.
@@ -410,7 +420,8 @@ inline bool LifecycleCases() {
         Configure(7); if(!Acquire(fixed==0 ? 6 : 0)) return false;
         Put(parts[fixed],0x434,0.0F); stuck=true;
         Tracking(0.1F); HookedGrabUpdate(native_state.data(),nullptr,1.0F/90.0F);
-        check(velocities[fixed]==Vec{} && velocities[3][1]>0.1F && writes==0 && exits==0,
+        check(velocities[fixed]==Vec{} && velocities[3]==Vec{} &&
+            velocities[fixed==0 ? 6 : 0][1]>0.1F && writes==0 && exits==0,
             "native attached endpoint received a correction");
         Put(parts[fixed],0x434,1.0F); stuck=false;
         Tracking(0.2F); HookedGrabUpdate(native_state.data(),nullptr,1.0F/90.0F);
@@ -482,6 +493,8 @@ inline bool LifecycleCases() {
             "native script deactivation failed to cancel pending/held Grab");
     }
     check(NewtonCases(),"real Newton component regression");
+    check(AnchoredRopeCases(),"authored anchored rope Newton regression");
+    check(AnchoredRopeCases(true),"authored anchored cable preservation");
     std::string error; check(ShutdownGameplayPalmResolver(error),"palm fixture teardown failed");
     g_presenting.store(false); return ok;
 }

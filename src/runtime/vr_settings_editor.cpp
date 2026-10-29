@@ -26,6 +26,15 @@ constexpr std::array<VrSettingDescriptor, kVrSettingCount> kDescriptors{{
     {VrSettingId::enhanced_visuals, "VREnhancedVisuals"},
     {VrSettingId::hrtf, "VRHRTF"},
     {VrSettingId::subtitle_scale, "VRSubtitleScale"},
+    {VrSettingId::neural_enabled, "VRNeuralEnabled"},
+    {VrSettingId::neural_internal_height, "VRNeuralInternalHeight"},
+    {VrSettingId::neural_scale, "VRNeuralScale"},
+    {VrSettingId::neural_intensity, "VRNeuralIntensity"},
+    {VrSettingId::neural_passes, "VRNeuralPasses"},
+    {VrSettingId::neural_style, "VRNeuralStyle"},
+    {VrSettingId::neural_fovea, "VRNeuralFovea"},
+    {VrSettingId::neural_outer_enabled, "VRNeuralOuterEnabled"},
+    {VrSettingId::neural_outer_scale, "VRNeuralOuterScale"},
 }};
 
 [[nodiscard]] std::size_t Index(VrSettingId id) noexcept {
@@ -155,6 +164,33 @@ bool AdjustVrSetting(
     case VrSettingId::subtitle_scale:
         settings.subtitle_scale += 0.10F * direction;
         break;
+    case VrSettingId::neural_enabled:
+        settings.neural.enabled = !settings.neural.enabled;
+        break;
+    case VrSettingId::neural_internal_height:
+        settings.neural.internal_height += 64 * direction;
+        break;
+    case VrSettingId::neural_scale:
+        settings.neural.scale_percent += 5 * direction;
+        break;
+    case VrSettingId::neural_intensity:
+        settings.neural.intensity_percent += 5 * direction;
+        break;
+    case VrSettingId::neural_passes:
+        settings.neural.passes += direction;
+        break;
+    case VrSettingId::neural_style:
+        settings.neural.style = (settings.neural.style + direction + 3) % 3;
+        break;
+    case VrSettingId::neural_fovea:
+        settings.neural.fovea_percent += 5 * direction;
+        break;
+    case VrSettingId::neural_outer_enabled:
+        settings.neural.outer_enabled = !settings.neural.outer_enabled;
+        break;
+    case VrSettingId::neural_outer_scale:
+        settings.neural.outer_scale_percent += 5 * direction;
+        break;
     case VrSettingId::count:
         return false;
     }
@@ -194,6 +230,15 @@ void ResetVrSettings(
             break;
         case VrSettingId::hrtf: settings.hrtf_mode = defaults.hrtf_mode; break;
         case VrSettingId::subtitle_scale: settings.subtitle_scale = defaults.subtitle_scale; break;
+        case VrSettingId::neural_enabled: settings.neural.enabled = defaults.neural.enabled; break;
+        case VrSettingId::neural_internal_height: settings.neural.internal_height = defaults.neural.internal_height; break;
+        case VrSettingId::neural_scale: settings.neural.scale_percent = defaults.neural.scale_percent; break;
+        case VrSettingId::neural_intensity: settings.neural.intensity_percent = defaults.neural.intensity_percent; break;
+        case VrSettingId::neural_passes: settings.neural.passes = defaults.neural.passes; break;
+        case VrSettingId::neural_style: settings.neural.style = defaults.neural.style; break;
+        case VrSettingId::neural_fovea: settings.neural.fovea_percent = defaults.neural.fovea_percent; break;
+        case VrSettingId::neural_outer_enabled: settings.neural.outer_enabled = defaults.neural.outer_enabled; break;
+        case VrSettingId::neural_outer_scale: settings.neural.outer_scale_percent = defaults.neural.outer_scale_percent; break;
         case VrSettingId::count: break;
         }
     }
@@ -240,6 +285,24 @@ std::string FormatVrSettingValue(
         return std::string(ToConfigValue(settings.hrtf_mode));
     case VrSettingId::subtitle_scale:
         return Format("%.0f%%", settings.subtitle_scale * 100.0F);
+    case VrSettingId::neural_enabled:
+        return settings.neural.enabled ? "On" : "Off";
+    case VrSettingId::neural_internal_height:
+        return Format("%d px", settings.neural.internal_height);
+    case VrSettingId::neural_scale:
+        return Format("%d%%", settings.neural.scale_percent);
+    case VrSettingId::neural_intensity:
+        return Format("%d%%", settings.neural.intensity_percent);
+    case VrSettingId::neural_passes:
+        return Format("%d", settings.neural.passes);
+    case VrSettingId::neural_style:
+        return Format("%d", settings.neural.style);
+    case VrSettingId::neural_fovea:
+        return Format("%d%%", settings.neural.fovea_percent);
+    case VrSettingId::neural_outer_enabled:
+        return settings.neural.outer_enabled ? "On" : "Off";
+    case VrSettingId::neural_outer_scale:
+        return Format("%d%%", settings.neural.outer_scale_percent);
     case VrSettingId::count:
         return {};
     }

@@ -6,6 +6,7 @@
 
 #include "camera_matrix_override.hpp"
 #include "tracked_audio_listener.hpp"
+#include "../../graphics/neural_post_bridge.hpp"
 #include "opengl_eye_scissor.hpp"
 #include "opengl_menu_frame.hpp"
 #include "opengl_tracked_hands.hpp"
@@ -43,6 +44,23 @@
 
 namespace penumbra_vr::backends::black_plague {
 namespace {
+
+void ResetNeuralHistory() noexcept {
+#if PVR_HAS_OPENVR
+    neural_post::ResetHistory();
+#endif
+}
+
+// Render-thread identity only; the bridge owns the temporal resources.
+void UpdateNeuralScene(const void* world, const void* camera) noexcept {
+    static const void* previous_world = nullptr;
+    static const void* previous_camera = nullptr;
+    if (world != previous_world || camera != previous_camera) {
+        ResetNeuralHistory();
+        previous_world = world;
+        previous_camera = camera;
+    }
+}
 
 using PerformanceClock = std::chrono::steady_clock;
 
@@ -357,6 +375,7 @@ void ResetCalibrationTracking() noexcept {
 }
 
 void ResetTrackedWorldYawForRecenter() noexcept {
+    ResetNeuralHistory();
     AcquireSRWLockExclusive(&g_tracking_yaw_lock);
     g_tracking_yaw_space.SetWorldYaw(0.0F);
     g_native_tracking_yaw = 0.0F;
@@ -418,6 +437,7 @@ void ResetTrackedWorldYawForRecenter() noexcept {
         g_presentation_yaw_epoch.load(std::memory_order_acquire);
     ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
 
+    if (native_rebased) ResetNeuralHistory();
     if (!runtime::RotateTrackingPoseYaw(
             g_stereo_tracking_anchor,
             -tracking_world_yaw,
@@ -1366,6 +1386,7 @@ void __fastcall HookedUpdateRenderList(
         g_world_ui_panel_valid=false;
         return result;
     }
+    UpdateNeuralScene(world, camera);
     StereoMatrixState state = g_stereo_state.load(std::memory_order_acquire);
     if (state == StereoMatrixState::pending) {
         StereoMatrixState expected = StereoMatrixState::pending;
@@ -2672,15 +2693,18 @@ void ConfigureTrackedPresentation(const runtime::VrSettings& source) noexcept {
         settings.height_offset, std::memory_order_release);
     g_tracking_crouch_depth.store(
         settings.physical_crouch_depth, std::memory_order_release);
-    g_tracking_play_mode.store(settings.play_mode, std::memory_order_release);
+    const bool mode_changed = g_tracking_play_mode.exchange(
+        settings.play_mode, std::memory_order_acq_rel) != settings.play_mode;
     // Black Plague has no validated pre-tone lighting preparation yet. Its
     // Rework final pass alone makes live scenes too dark and saturated.
     ConfigurePersistentEyeEnhancedVisuals(false);
     g_tracking_player_height.store(
         settings.player_height, std::memory_order_release);
-    AcquireSRWLockExclusive(&g_play_mode_lock);
-    g_play_mode_policy.Reset();
-    ReleaseSRWLockExclusive(&g_play_mode_lock);
+    if (mode_changed) {
+        AcquireSRWLockExclusive(&g_play_mode_lock);
+        g_play_mode_policy.Reset();
+        ReleaseSRWLockExclusive(&g_play_mode_lock);
+    }
 }
 
 void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
@@ -2717,6 +2741,7 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
         }
         return;
     }
+    UpdateNeuralScene(nullptr, nullptr);
     InvalidateWorldTracking();
     auto* session = g_stereo_session.load(std::memory_order_acquire);
     if (!session) return;
@@ -2731,6 +2756,7 @@ void PresentTrackedMenuOnRenderThread(bool world_rendered) noexcept {
     }
     const bool recenter_requested =
         g_recenter_requested.exchange(false, std::memory_order_acq_rel);
+    if (recenter_requested) ResetNeuralHistory();
     const auto anchor_plan = runtime::PlanStablePanelAnchor(
         true, recenter_requested, g_menu_anchor_valid);
     if (anchor_plan.capture_current_pose) {
@@ -2828,6 +2854,7 @@ void AddTrackedWorldYaw(float radians) noexcept {
         g_presentation_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
     }
     ReleaseSRWLockExclusive(&g_tracking_yaw_lock);
+    if (std::abs(applied) > kNativeYawRebaseEpsilonRadians) ResetNeuralHistory();
 }
 
 bool TrackedMovementYaw(float& yaw) noexcept {

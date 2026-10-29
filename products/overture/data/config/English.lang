@@ -376,6 +376,17 @@
     <Entry Name="SureQuit">Sure you want to quit?</Entry>
     <Entry Name="VRTutorial">VR Tutorial</Entry>
     <Entry Name="VRSettings">VR Settings</Entry>
+    <Entry Name="VRNeuralSettings">Neural</Entry>
+    <Entry Name="VRNeuralEnabled">Enabled:</Entry>
+    <Entry Name="VRNeuralInternalHeight">Internal height (auto width):</Entry>
+    <Entry Name="VRNeuralScalePercent">Processing scale:</Entry>
+    <Entry Name="VRNeuralIntensityPercent">Intensity:</Entry>
+    <Entry Name="VRNeuralPasses">Passes:</Entry>
+    <Entry Name="VRNeuralStyle">Style (0-2):</Entry>
+    <Entry Name="VRNeuralFoveaPercent">Central treatment:</Entry>
+    <Entry Name="VRNeuralOuterEnabled">Peripheral treatment:</Entry>
+    <Entry Name="VRNeuralOuterScalePercent">Peripheral scale:</Entry>
+    <Entry Name="VRNeuralStatus">Status:</Entry>
     <Entry Name="VR Settings">VR Settings</Entry>
     <Entry Name="VRTrackpadMovement">Trackpad Movement:</Entry>
     <Entry Name="VRRenderToMonitor">Render to Monitor:</Entry>

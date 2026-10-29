@@ -25,12 +25,14 @@ namespace penumbra_vr::launcher {
 [[nodiscard]] bool LoadVrSettings(
     const std::filesystem::path& path,
     runtime::VrSettings& settings,
-    std::wstring& error);
+    std::wstring& error,
+    const wchar_t* neural_section = L"VR");
 
 [[nodiscard]] bool SaveVrSettings(
     const std::filesystem::path& path,
     const runtime::VrSettings& settings,
-    std::wstring& error);
+    std::wstring& error,
+    const wchar_t* neural_section = L"VR");
 
 // Compatibility alias retained for existing binary-backend callers while the
 // shared settings editor migrates them to the complete schema.

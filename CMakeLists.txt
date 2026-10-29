@@ -234,6 +234,8 @@ else()
     target_compile_definitions(pvr_openvr_session PUBLIC PVR_HAS_OPENVR=0)
 endif()
 pvr_enable_warnings(pvr_openvr_session)
+target_sources(pvr_openvr_session PRIVATE src/graphics/neural_post_bridge.cpp)
+target_link_libraries(pvr_openvr_session PRIVATE opengl32)
 target_link_libraries(pvr_openvr_session PUBLIC pvr_vr_action_input)
 
 add_library(pvr_black_plague_body_adapter STATIC
@@ -337,6 +339,7 @@ target_link_libraries(pvr_requiem_backend PUBLIC
     pvr_openvr_session
     pvr_vr_native_intents
     pvr_stereo_render_policy
+    pvr_render_target_policy
     pvr_vr_settings
     shell32
     opengl32)
@@ -493,6 +496,17 @@ if(BUILD_TESTING)
     pvr_enable_warnings(pvr_requiem_interaction_consumer_test)
     add_test(NAME requiem_selection_consumer COMMAND pvr_requiem_interaction_consumer_test)
     add_test(NAME requiem_ui_geometry_consumer COMMAND pvr_requiem_interaction_consumer_test ui-geometry)
+
+    add_executable(pvr_requiem_render_scale_consumer_test
+        tests/requiem_frame_presentation/render_scale_consumer_test.cpp)
+    target_include_directories(pvr_requiem_render_scale_consumer_test PRIVATE
+        src/hooks src/probe src/adapters/hpl1)
+    target_link_libraries(pvr_requiem_render_scale_consumer_test PRIVATE
+        pvr_requiem_backend gdi32)
+    set_target_properties(pvr_requiem_render_scale_consumer_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/requiem_render_scale")
+    pvr_enable_warnings(pvr_requiem_render_scale_consumer_test)
+    add_test(NAME requiem_render_scale_consumer COMMAND pvr_requiem_render_scale_consumer_test)
     add_test(NAME requiem_articulated_grab_consumer COMMAND pvr_requiem_interaction_consumer_test articulated)
     add_test(NAME requiem_throw_consumer COMMAND pvr_requiem_interaction_consumer_test throw)
     add_test(NAME requiem_keypad_consumer COMMAND pvr_requiem_gameplay_bridge_test keypad)
@@ -743,10 +757,23 @@ if(BUILD_TESTING)
     add_executable(pvr_openvr_session_test
         tests/openvr_session/openvr_session_test.cpp
     )
+    # The telemetry fixture places a partial OPENGL32.dll in the common bin.
+    # Neural Post imports the real Win32 OpenGL entry points, even in this test.
+    set_target_properties(pvr_openvr_session_test PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/openvr_session")
     target_link_libraries(pvr_openvr_session_test PRIVATE pvr_openvr_session)
     pvr_enable_warnings(pvr_openvr_session_test)
 
     add_test(NAME openvr_session COMMAND pvr_openvr_session_test)
+
+    if(PENUMBRA_VR_OPENVR_SDK)
+        # Explicit GPU/companion probe; invoked with a local INI and mode.
+        # Not an unconditional CTest: requires an x64 helper and local NGX.
+        add_executable(pvr_neural_post_roundtrip tests/neural_post/neural_post_roundtrip.cpp)
+        target_link_libraries(pvr_neural_post_roundtrip PRIVATE pvr_openvr_session)
+        set_target_properties(pvr_neural_post_roundtrip PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin/neural_post")
+    endif()
 
     add_executable(pvr_vr_math_test
         tests/vr_math/vr_math_test.cpp

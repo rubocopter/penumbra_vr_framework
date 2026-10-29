@@ -20,6 +20,7 @@
 #include "GameMessageHandler.h"
 
 #include "Init.h"
+#include "NarrativeTextPresentation.h"
 #include "Player.h"
 #include "EffectHandler.h"
 #include "Inventory.h"
@@ -108,21 +109,21 @@ void cGameMessage::Draw(iFontData *apFont)
 	const float fFontSize = 14.0f * fTextScale;
 	if(mpMessHandler->mbBlackText)
 	{
-		apFont->DrawWordWrap(cVector3f(fSide, 300,152),800 - fSide*2,fLineHeight,fFontSize,cColor(0,mfFade),
-			eFontAlign_Left,msText);
+		DrawVrNarrativeWordWrap(apFont,cVector3f(fSide, 300,152),800 - fSide*2,fLineHeight,fFontSize,cColor(0,mfFade),
+			msText,mpMessHandler->mpInit->mbHasHaptics,cVector2f(40,300));
 	}
 	else
 	{
-		apFont->DrawWordWrap(cVector3f(fSide, 300,152),800 - fSide*2,fLineHeight,fFontSize,cColor(1,1,1,mfFade),
-							eFontAlign_Left,msText);
-		apFont->DrawWordWrap(cVector3f(fSide, 300,151) + cVector3f(1,1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
-							eFontAlign_Left,msText);
-		apFont->DrawWordWrap(cVector3f(fSide, 300,151) + cVector3f(-1,-1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
-							eFontAlign_Left,msText);
-		apFont->DrawWordWrap(cVector3f(fSide, 300,151) + cVector3f(1,-1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
-							eFontAlign_Left,msText);
-		apFont->DrawWordWrap(cVector3f(fSide, 300,151) + cVector3f(-1,1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
-							eFontAlign_Left,msText);
+		DrawVrNarrativeWordWrap(apFont,cVector3f(fSide, 300,152),800 - fSide*2,fLineHeight,fFontSize,cColor(1,1,1,mfFade),
+							msText,mpMessHandler->mpInit->mbHasHaptics,cVector2f(40,300));
+		DrawVrNarrativeWordWrap(apFont,cVector3f(fSide, 300,151) + cVector3f(1,1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
+							msText,mpMessHandler->mpInit->mbHasHaptics,cVector2f(40,300));
+		DrawVrNarrativeWordWrap(apFont,cVector3f(fSide, 300,151) + cVector3f(-1,-1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
+							msText,mpMessHandler->mpInit->mbHasHaptics,cVector2f(40,300));
+		DrawVrNarrativeWordWrap(apFont,cVector3f(fSide, 300,151) + cVector3f(1,-1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
+							msText,mpMessHandler->mpInit->mbHasHaptics,cVector2f(40,300));
+		DrawVrNarrativeWordWrap(apFont,cVector3f(fSide, 300,151) + cVector3f(-1,1,-1),800 - fSide*2,fLineHeight,fFontSize,cColor(0,0,0,mfFade),
+							msText,mpMessHandler->mpInit->mbHasHaptics,cVector2f(40,300));
 	}
 }
 
@@ -176,7 +177,7 @@ void cGameMessageHandler::AnchorMessageToRoom()
   cMatrixf transMat = cMatrixf::Identity;
 
   // Translate to center of vision
-  auto centerTranslationMat = cMath::MatrixTranslate(cVector3f(-400.0f, -200.0f, 0.0f));
+  auto centerTranslationMat = cMath::MatrixTranslate(cVector3f(-400.0f, -300.0f, 0.0f));
   transMat = cMath::MatrixMul(centerTranslationMat, transMat);
 
   // Scale it down

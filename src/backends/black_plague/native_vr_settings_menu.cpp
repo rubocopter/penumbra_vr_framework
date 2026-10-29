@@ -1,6 +1,7 @@
 #include "native_vr_settings_menu.hpp"
 #include "native_input_bridge.hpp"
 #include "render_world_probe.hpp"
+#include "../../graphics/neural_post_bridge.hpp"
 
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
@@ -65,6 +66,7 @@ constexpr int kCalibrateHeightSentinel = 0x70000400;
 
 constexpr std::size_t kNativeVrMenuSettingCount = kBlackPlagueVrMenuSettingCount;
 constexpr std::size_t kNativeVrMenuRowsPerColumn = 9;
+constexpr bool kNativeRenderScaleRequiresRestart = true;
 constexpr const wchar_t* kNativeSettingsDirectory = L"Black Plague";
 constexpr const char* kNativeSpanishLanguageSetting = "languagefile=\"espanol.lang\"";
 const auto& NativeVrMenuSettings() noexcept { return BlackPlagueVrMenuSettings(); }

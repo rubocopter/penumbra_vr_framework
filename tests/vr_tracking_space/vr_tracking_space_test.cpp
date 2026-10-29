@@ -149,9 +149,14 @@ using penumbra_vr::runtime::VrTrackingSpace;
     if (!status.baseline_known || !Near(status.baseline_height, 1.0F) ||
         !Near(status.seated_offset, 0.848F, 1.0e-3F)) return false;
     status = play_mode.Update(VrPlayMode::seated, 0.85F, 1.70F);
-    if (!Near(status.baseline_height, 0.85F) ||
-        !Near(status.seated_offset, 1.00775F, 1.0e-3F)) return false;
-    status = play_mode.Update(VrPlayMode::seated, 1.31F, 1.70F);
+    if (!Near(status.baseline_height, 1.0F) ||
+        !Near(status.seated_offset, 0.848F, 1.0e-3F)) return false;
+    for (const float height : {0.70F,0.50F,0.85F,1.0F}) {
+        status=play_mode.Update(VrPlayMode::seated,height,1.70F);
+        if (!Near(status.baseline_height,1.0F) || !Near(status.seated_offset,0.848F,1.0e-3F))
+            return false;
+    }
+    status = play_mode.Update(VrPlayMode::seated, 1.60F, 1.70F);
     if (status.baseline_known || status.seated_offset != 0.0F) return false;
     status = play_mode.Update(VrPlayMode::standing, 1.0F, 1.70F);
     if (status.baseline_known || status.seated_offset != 0.0F) return false;

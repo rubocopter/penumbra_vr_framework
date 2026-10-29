@@ -13,10 +13,28 @@
 #include "StdAfx.h"
 #include "resources/ConfigFile.h"
 
+#include <cerrno>
+#include <climits>
+#include <cstdlib>
+
 using namespace hpl;
 
 namespace
 {
+	// HPL GetInt uses atoi, accepting partial values and silently turning
+	// malformed input into zero. Keep Neural defaults for malformed integers.
+	int ReadNeuralInt(cConfigFile *apConfig, const char *asKey, int alDefault)
+	{
+		const tString sValue = apConfig->GetString("VR", asKey, "");
+		if(sValue.empty()) return alDefault;
+		char *pEnd = NULL;
+		errno = 0;
+		const long lValue = std::strtol(sValue.c_str(), &pEnd, 10);
+		if(errno == ERANGE || pEnd == sValue.c_str() || *pEnd != '\0' ||
+			lValue < INT_MIN || lValue > INT_MAX) return alDefault;
+		return static_cast<int>(lValue);
+	}
+
 	const float kDefaultMoveSpeed = 1.0f;
 	const float kDefaultMoveDeadZone = 0.15f;
 	const float kDefaultHeightOffset = 0.0f;
@@ -157,6 +175,18 @@ void cVRSettings::Load(cConfigFile *apConfig)
 	else if(sHRTF == "off") mHRTFMode = eVRHRTFMode_Off;
 	else mHRTFMode = eVRHRTFMode_Auto;
 
+	penumbra_vr::runtime::NeuralPostSettings neural;
+	neural.enabled = apConfig->GetBool("VR", "NeuralEnabled", neural.enabled);
+	neural.internal_height = ReadNeuralInt(apConfig, "NeuralInternalHeight", neural.internal_height);
+	neural.scale_percent = ReadNeuralInt(apConfig, "NeuralScalePercent", neural.scale_percent);
+	neural.intensity_percent = ReadNeuralInt(apConfig, "NeuralIntensityPercent", neural.intensity_percent);
+	neural.passes = ReadNeuralInt(apConfig, "NeuralPasses", neural.passes);
+	neural.style = ReadNeuralInt(apConfig, "NeuralStyle", neural.style);
+	neural.fovea_percent = ReadNeuralInt(apConfig, "NeuralFoveaPercent", neural.fovea_percent);
+	neural.outer_enabled = apConfig->GetBool("VR", "NeuralOuterEnabled", neural.outer_enabled);
+	neural.outer_scale_percent = ReadNeuralInt(apConfig, "NeuralOuterScalePercent", neural.outer_scale_percent);
+	SetNeuralSettings(neural);
+
 	Log(" VR settings: move speed %.2f, dead zone %.2f, height offset %.2f m; "
 		"turn %s, snap %.0f deg, smooth %.0f deg/s, turn dead zone %.2f; "
 		"UI distance %.2f m, scale %.2f; render scale %.2f; enhanced visuals %s; crouch %s, depth %.2f m; subtitle scale %.2f; "
@@ -191,6 +221,21 @@ void cVRSettings::Save(cConfigFile *apConfig) const
 	apConfig->SetFloat("VR", "PlayerHeight", mfPlayerHeight);
 	apConfig->SetString("VR", "HRTF", HRTFModeName(mHRTFMode));
 	apConfig->SetInt("VR", "SettingsVersion", 1);
+	apConfig->SetBool("VR", "NeuralEnabled", mNeuralSettings.enabled);
+	apConfig->SetInt("VR", "NeuralInternalHeight", mNeuralSettings.internal_height);
+	apConfig->SetInt("VR", "NeuralScalePercent", mNeuralSettings.scale_percent);
+	apConfig->SetInt("VR", "NeuralIntensityPercent", mNeuralSettings.intensity_percent);
+	apConfig->SetInt("VR", "NeuralPasses", mNeuralSettings.passes);
+	apConfig->SetInt("VR", "NeuralStyle", mNeuralSettings.style);
+	apConfig->SetInt("VR", "NeuralFoveaPercent", mNeuralSettings.fovea_percent);
+	apConfig->SetBool("VR", "NeuralOuterEnabled", mNeuralSettings.outer_enabled);
+	apConfig->SetInt("VR", "NeuralOuterScalePercent", mNeuralSettings.outer_scale_percent);
+}
+
+void cVRSettings::SetNeuralSettings(const penumbra_vr::runtime::NeuralPostSettings& aSettings)
+{
+	mNeuralSettings = aSettings;
+	penumbra_vr::runtime::NormalizeNeuralPostSettings(mNeuralSettings);
 }
 
 float cVRSettings::Clamp(float afValue, float afMinimum, float afMaximum)

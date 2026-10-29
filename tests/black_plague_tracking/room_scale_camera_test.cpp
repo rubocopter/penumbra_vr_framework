@@ -31,6 +31,14 @@ int main() {
     };
     if (!resolve({2, 110, 1, 1}) || !available) return 1;
     const auto baseline = anchor;
+    for (const float height : {1.05F,0.90F,0.55F,1.2F}) {
+        physical.values[7]=height;
+        if (!resolve({2,110,1,1}) || !available ||
+            std::abs(anchor[1]-(baseline[1]+(height-1.2F)*1.065F))>0.0001F) {
+            std::cerr<<"Seated reach was cancelled by BP recalibration\n";
+            return 12;
+        }
+    }
     if (std::abs(baseline[1] - 1.45F) > 0.00001F) return 8;
     // Smooth turn changes the yaw epoch every update before the next body tick.
     // It must suppress stale horizontal prediction without reverting eye height

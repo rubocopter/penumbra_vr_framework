@@ -17,6 +17,7 @@
  * along with Penumbra Overture.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "MainMenu.h"
+#include "../../../src/graphics/neural_post_bridge.hpp"
 
 #include "Init.h"
 #include "GraphicsHelper.h"
@@ -63,6 +64,7 @@ static eMainMenuState gvMenuBackStates[] = {
 		eMainMenuState_OptionsControls,//eMainMenuState_OptionsKeySetupMisc,
 
 		eMainMenuState_Start,//eMainMenuState_OptionsVRSettings,
+		eMainMenuState_OptionsVRSettings,//eMainMenuState_OptionsVRNeural,
 		eMainMenuState_Options,//eMainMenuState_GraphicsRestart,
 
 		eMainMenuState_Start,	//eMainMenuState_FirstStart,
@@ -1025,6 +1027,15 @@ enum eVRMenuSetting
 	eVRMenuSetting_EnhancedVisuals,
 	eVRMenuSetting_HRTF,
 	eVRMenuSetting_SubtitleScale,
+	eVRMenuSetting_NeuralEnabled,
+	eVRMenuSetting_NeuralInternalHeight,
+	eVRMenuSetting_NeuralScalePercent,
+	eVRMenuSetting_NeuralIntensityPercent,
+	eVRMenuSetting_NeuralPasses,
+	eVRMenuSetting_NeuralStyle,
+	eVRMenuSetting_NeuralFoveaPercent,
+	eVRMenuSetting_NeuralOuterEnabled,
+	eVRMenuSetting_NeuralOuterScalePercent,
 	eVRMenuSetting_LastEnum
 };
 
@@ -1057,6 +1068,15 @@ static const char *VRSettingsTextName(eVRMenuSetting aSetting)
 	case eVRMenuSetting_EnhancedVisuals: return "VREnhancedVisuals";
 	case eVRMenuSetting_HRTF: return "VRHRTF";
 	case eVRMenuSetting_SubtitleScale: return "VRSubtitleScale";
+	case eVRMenuSetting_NeuralEnabled: return "VRNeuralEnabled";
+	case eVRMenuSetting_NeuralInternalHeight: return "VRNeuralInternalHeight";
+	case eVRMenuSetting_NeuralScalePercent: return "VRNeuralScalePercent";
+	case eVRMenuSetting_NeuralIntensityPercent: return "VRNeuralIntensityPercent";
+	case eVRMenuSetting_NeuralPasses: return "VRNeuralPasses";
+	case eVRMenuSetting_NeuralStyle: return "VRNeuralStyle";
+	case eVRMenuSetting_NeuralFoveaPercent: return "VRNeuralFoveaPercent";
+	case eVRMenuSetting_NeuralOuterEnabled: return "VRNeuralOuterEnabled";
+	case eVRMenuSetting_NeuralOuterScalePercent: return "VRNeuralOuterScalePercent";
 	default: return "";
 	}
 }
@@ -1065,6 +1085,7 @@ static tWString GetVRSettingText(cInit *mpInit, eVRMenuSetting aSetting)
 {
 	char sValue[64];
 	const cVRSettings& settings = mpInit->mVRSettings;
+	const penumbra_vr::runtime::NeuralPostSettings& neural = settings.GetNeuralSettings();
 
 switch(aSetting)
 	{
@@ -1140,6 +1161,31 @@ switch(aSetting)
 	case eVRMenuSetting_SubtitleScale:
 		sprintf_s(sValue, sizeof(sValue), "%.0f%%", settings.GetSubtitleScale() * 100.0f);
 		break;
+	case eVRMenuSetting_NeuralEnabled:
+		return neural.enabled ? kTranslate("MainMenu", "On") : kTranslate("MainMenu", "Off");
+	case eVRMenuSetting_NeuralInternalHeight:
+		sprintf_s(sValue, sizeof(sValue), "%d px", neural.internal_height);
+		break;
+	case eVRMenuSetting_NeuralScalePercent:
+		sprintf_s(sValue, sizeof(sValue), "%d%%", neural.scale_percent);
+		break;
+	case eVRMenuSetting_NeuralIntensityPercent:
+		sprintf_s(sValue, sizeof(sValue), "%d%%", neural.intensity_percent);
+		break;
+	case eVRMenuSetting_NeuralPasses:
+		sprintf_s(sValue, sizeof(sValue), "%d", neural.passes);
+		break;
+	case eVRMenuSetting_NeuralStyle:
+		sprintf_s(sValue, sizeof(sValue), "%d", neural.style);
+		break;
+	case eVRMenuSetting_NeuralFoveaPercent:
+		sprintf_s(sValue, sizeof(sValue), "%d%%", neural.fovea_percent);
+		break;
+	case eVRMenuSetting_NeuralOuterEnabled:
+		return neural.outer_enabled ? kTranslate("MainMenu", "On") : kTranslate("MainMenu", "Off");
+	case eVRMenuSetting_NeuralOuterScalePercent:
+		sprintf_s(sValue, sizeof(sValue), "%d%%", neural.outer_scale_percent);
+		break;
 	default:
 		sValue[0] = '\0';
 		break;
@@ -1170,6 +1216,7 @@ cMainMenuWidget_VRSetting(cInit *apInit, const cVector3f &avPos, const tWString&
 		if(direction == 0) return;
 
 cVRSettings& settings = mpInit->mVRSettings;
+		penumbra_vr::runtime::NeuralPostSettings neural = settings.GetNeuralSettings();
 		switch(mSetting)
 		{
 		case eVRMenuSetting_Handedness:
@@ -1251,10 +1298,39 @@ cVRSettings& settings = mpInit->mVRSettings;
 		case eVRMenuSetting_SubtitleScale:
 			settings.SetSubtitleScale(settings.GetSubtitleScale() + 0.10f * direction);
 			break;
+		case eVRMenuSetting_NeuralEnabled:
+			neural.enabled = !neural.enabled;
+			break;
+		case eVRMenuSetting_NeuralInternalHeight:
+			neural.internal_height += 64 * direction;
+			break;
+		case eVRMenuSetting_NeuralScalePercent:
+			neural.scale_percent += 5 * direction;
+			break;
+		case eVRMenuSetting_NeuralIntensityPercent:
+			neural.intensity_percent += 5 * direction;
+			break;
+		case eVRMenuSetting_NeuralPasses:
+			neural.passes += direction;
+			break;
+		case eVRMenuSetting_NeuralStyle:
+			neural.style = (neural.style + direction + 3) % 3;
+			break;
+		case eVRMenuSetting_NeuralFoveaPercent:
+			neural.fovea_percent += 5 * direction;
+			break;
+		case eVRMenuSetting_NeuralOuterEnabled:
+			neural.outer_enabled = !neural.outer_enabled;
+			break;
+		case eVRMenuSetting_NeuralOuterScalePercent:
+			neural.outer_scale_percent += 5 * direction;
+			break;
 		default:
 			return;
 		}
 
+		if(mSetting >= eVRMenuSetting_NeuralEnabled)
+			settings.SetNeuralSettings(neural);
 gpVRSettingTexts[mSetting]->msText = GetVRSettingText(mpInit, mSetting);
 		mpInit->ApplyVRSettings(true);
 		RefreshVRSettingAvailability(mpInit);
@@ -1287,6 +1363,51 @@ gpVRSettingTexts[mSetting]->msText = GetVRSettingText(mpInit, mSetting);
 private:
 	eVRMenuSetting mSetting;
 	bool mbEnabled;
+};
+
+// Keep the existing setting owner responsible for bounds, availability and
+// persistence. Both explicit directions use the controller's ordinary select.
+class cMainMenuWidget_VRSettingStep : public cMainMenuWidget_Button
+{
+public:
+	cMainMenuWidget_VRSettingStep(cInit *apInit, const cVector3f &avPos,
+		cMainMenuWidget_VRSetting *apSetting, bool abIncrement)
+		: cMainMenuWidget_Button(apInit, avPos, abIncrement ? _W("+") : _W("-"),
+			eMainMenuState_LastEnum, 14, eFontAlign_Center),
+		  mpSetting(apSetting), mbIncrement(abIncrement) {}
+
+	void OnMouseDown(eMButton aButton)
+	{
+		if(aButton == eMButton_Left && IsActive())
+			mpSetting->OnMouseDown(mbIncrement ? eMButton_Left : eMButton_Right);
+	}
+
+	void OnDraw()
+	{
+		if(mpSetting->IsEnabled()) cMainMenuWidget_Button::OnDraw();
+		else mpFont->Draw(mvPositon, mvFontSize, cColor(0.45f, 0.9f), mAlignment, msText.c_str());
+	}
+
+private:
+	cMainMenuWidget_VRSetting *mpSetting;
+	bool mbIncrement;
+};
+
+// Status belongs to the render bridge, independently of the saved Enabled flag.
+class cMainMenuWidget_NeuralStatus : public cMainMenuWidget_Text
+{
+public:
+	cMainMenuWidget_NeuralStatus(cInit *apInit, const cVector3f &avPos)
+		: cMainMenuWidget_Text(apInit, avPos, _W(""), 14, eFontAlign_Center)
+	{
+		OnUpdate(0);
+	}
+
+	void OnUpdate(float afTimeStep)
+	{
+		msText = kTranslate("MainMenu", "VRNeuralStatus") + _W(" ") +
+			cString::To16Char(penumbra_vr::neural_post::StatusText());
+	}
 };
 
 //-----------------------------------------------------------------------
@@ -3682,6 +3803,7 @@ void cMainMenu::CreateWidgets()
   // VR Settings
   ///////////////////////////////////
   vPos = vTextStart;//cVector3f(400, 260, 40);
+  vPos.y = 80; // Space for two non-overlapping native hit rectangles per row.
 
   AddWidgetToState(eMainMenuState_OptionsVRSettings, hplNew(cMainMenuWidget_Text,
     (mpInit, cVector3f(400, vPos.y, vPos.z), kTranslate("MainMenu", "VR Settings"), 25, eFontAlign_Center)));
@@ -3759,6 +3881,11 @@ void cMainMenu::CreateWidgets()
       gpVRSettingTexts[setting] = hplNew(cMainMenuWidget_Text,
         (mpInit, vValuePos, GetVRSettingText(mpInit, setting), 14, eFontAlign_Left, pSetting));
       AddWidgetToState(eMainMenuState_OptionsVRSettings, gpVRSettingTexts[setting]);
+      for(int step = 0; step < 2; ++step)
+        AddWidgetToState(eMainMenuState_OptionsVRSettings,
+          hplNew(cMainMenuWidget_VRSettingStep, (mpInit,
+            cVector3f(vSectionPos.x + (step == 0 ? -28 : 28), vSectionPos.y + 22, vSectionPos.z),
+            pSetting, step != 0)));
 
       if(setting == eVRMenuSetting_PlayerHeight)
       {
@@ -3767,7 +3894,7 @@ void cMainMenu::CreateWidgets()
             cVector3f(vSectionPos.x + 112, vSectionPos.y, vSectionPos.z),
             kTranslate("MainMenu", "VRCalibrateHeight"), 13, eFontAlign_Left)));
       }
-      vSectionPos.y += 14;
+      vSectionPos.y += 40;
     }
 
     if(section == 2)
@@ -3806,8 +3933,50 @@ AddWidgetToState(eMainMenuState_OptionsVRSettings, gpRenderToMonitorText);
 
   const float fVRSettingsBottom = vVRColumnPos[0].y > vPos.y ? vVRColumnPos[0].y : vPos.y;
   AddWidgetToState(eMainMenuState_OptionsVRSettings, hplNew(cMainMenuWidget_Button,
+    (mpInit, cVector3f(200, fVRSettingsBottom + 18, vPos.z),
+      kTranslate("MainMenu", "VRNeuralSettings"), eMainMenuState_OptionsVRNeural, 18, eFontAlign_Center)));
+  AddWidgetToState(eMainMenuState_OptionsVRSettings, hplNew(cMainMenuWidget_Button,
     (mpInit, cVector3f(400, fVRSettingsBottom + 18, vPos.z),
       kTranslate("MainMenu", "Back"), eMainMenuState_Start, 18, eFontAlign_Center)));
+
+  ///////////////////////////////////
+  // Neural Settings
+  ///////////////////////////////////
+  AddWidgetToState(eMainMenuState_OptionsVRNeural, hplNew(cMainMenuWidget_Text,
+    (mpInit, cVector3f(400, 150, 40), kTranslate("MainMenu", "VRNeuralSettings"), 25, eFontAlign_Center)));
+  static const eVRMenuSetting vNeuralSettings[] = {
+    eVRMenuSetting_NeuralEnabled,
+    eVRMenuSetting_NeuralInternalHeight,
+    eVRMenuSetting_NeuralScalePercent,
+    eVRMenuSetting_NeuralIntensityPercent,
+    eVRMenuSetting_NeuralPasses,
+    eVRMenuSetting_NeuralStyle,
+    eVRMenuSetting_NeuralFoveaPercent,
+    eVRMenuSetting_NeuralOuterEnabled,
+    eVRMenuSetting_NeuralOuterScalePercent
+  };
+  for(int i = 0; i < 9; ++i)
+  {
+    const eVRMenuSetting setting = vNeuralSettings[i];
+    const cVector3f vNeuralPos(430, 180.0f + i * 40.0f, 40);
+    cMainMenuWidget_VRSetting *pSetting = hplNew(cMainMenuWidget_VRSetting,
+      (mpInit, vNeuralPos, kTranslate("MainMenu", VRSettingsTextName(setting)), 16, eFontAlign_Right, setting));
+    AddWidgetToState(eMainMenuState_OptionsVRNeural, pSetting);
+    gpVRSettingButtons[setting] = pSetting;
+    gpVRSettingTexts[setting] = hplNew(cMainMenuWidget_Text,
+      (mpInit, cVector3f(450, vNeuralPos.y, 40), GetVRSettingText(mpInit, setting), 16, eFontAlign_Left, pSetting));
+    AddWidgetToState(eMainMenuState_OptionsVRNeural, gpVRSettingTexts[setting]);
+    for(int step = 0; step < 2; ++step)
+      AddWidgetToState(eMainMenuState_OptionsVRNeural,
+        hplNew(cMainMenuWidget_VRSettingStep, (mpInit,
+          cVector3f(vNeuralPos.x + (step == 0 ? -28 : 28), vNeuralPos.y + 22, 40),
+          pSetting, step != 0)));
+  }
+  AddWidgetToState(eMainMenuState_OptionsVRNeural, hplNew(cMainMenuWidget_NeuralStatus,
+    (mpInit, cVector3f(400, 545, 40))));
+  AddWidgetToState(eMainMenuState_OptionsVRNeural, hplNew(cMainMenuWidget_Button,
+    (mpInit, cVector3f(400, 572, 40), kTranslate("MainMenu", "Back"),
+      eMainMenuState_OptionsVRSettings, 18, eFontAlign_Center)));
 
 	///////////////////////////////////
 	// Options Controls

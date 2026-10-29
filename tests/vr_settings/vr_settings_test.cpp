@@ -93,6 +93,41 @@ using penumbra_vr::runtime::VrTurnMode;
     return NearlyEqual(current.smooth_turn_speed, 120.0F);
 }
 
+[[nodiscard]] bool TestNeuralNormalizationAndChangeDetection() {
+    using namespace penumbra_vr::runtime;
+    VrSettings settings;
+    settings.neural = {true, -1, 101, -1, 5, -1, 19, true, 101};
+    NormalizeVrSettings(settings);
+    const NeuralPostSettings first{true, 64, 100, 0, 4, 0, 20, true, 100};
+    if (settings.neural != first) return false;
+    settings.neural = {false, 1281, 24, 101, 0, 3, 101, false, 9};
+    NormalizeNeuralPostSettings(settings.neural);
+    const NeuralPostSettings second{false, 1280, 25, 100, 1, 2, 100, false, 10};
+    if (settings.neural != second) return false;
+    NormalizeNeuralPostSettings(settings.neural);
+    if (settings.neural != second) return false;
+
+    // Every field can trigger a render-owner revision; overlooking a field in
+    // equality would silently drop an accepted change.
+    const NeuralPostSettings baseline;
+    for (int field = 0; field < 9; ++field) {
+        auto changed = baseline;
+        switch (field) {
+        case 0: changed.enabled = true; break;
+        case 1: changed.internal_height = 960; break;
+        case 2: changed.scale_percent = 50; break;
+        case 3: changed.intensity_percent = 65; break;
+        case 4: changed.passes = 2; break;
+        case 5: changed.style = 1; break;
+        case 6: changed.fovea_percent = 50; break;
+        case 7: changed.outer_enabled = true; break;
+        case 8: changed.outer_scale_percent = 30; break;
+        }
+        if (baseline == changed || !(baseline != changed) || changed == baseline) return false;
+    }
+    return baseline == NeuralPostSettings{} && !(baseline != NeuralPostSettings{});
+}
+
 [[nodiscard]] bool TestTextValues() {
     using namespace penumbra_vr::runtime;
     return ParseVrTurnMode("SMOOTH") == VrTurnMode::smooth &&
@@ -140,6 +175,10 @@ int main() {
     if (!TestTextValues()) {
         std::cerr << "VR setting text conversion failed\n";
         return 4;
+    }
+    if (!TestNeuralNormalizationAndChangeDetection()) {
+        std::cerr << "Neural settings bounds or revision comparison failed\n";
+        return 5;
     }
 
     std::cout << "VR setting defaults, normalization and migration passed\n";

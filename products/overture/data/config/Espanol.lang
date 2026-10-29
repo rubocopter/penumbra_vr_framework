@@ -372,6 +372,17 @@
     <Entry Name="Show Crosshair:">Mostrar punto de mira:</Entry>
     <Entry Name="VRRenderToMonitor">Mostrar en el monitor:</Entry>
     <Entry Name="VRSettings">Ajustes de VR</Entry>
+    <Entry Name="VRNeuralSettings">Neural</Entry>
+    <Entry Name="VRNeuralEnabled">Activado:</Entry>
+    <Entry Name="VRNeuralInternalHeight">Altura interna (ancho auto):</Entry>
+    <Entry Name="VRNeuralScalePercent">Escala de procesamiento:</Entry>
+    <Entry Name="VRNeuralIntensityPercent">Intensidad:</Entry>
+    <Entry Name="VRNeuralPasses">Pasadas:</Entry>
+    <Entry Name="VRNeuralStyle">Estilo (0-2):</Entry>
+    <Entry Name="VRNeuralFoveaPercent">Tratamiento central:</Entry>
+    <Entry Name="VRNeuralOuterEnabled">Tratamiento periférico:</Entry>
+    <Entry Name="VRNeuralOuterScalePercent">Escala periférica:</Entry>
+    <Entry Name="VRNeuralStatus">Estado:</Entry>
     <Entry Name="VR Settings">Ajustes de VR</Entry>
     <Entry Name="VRTrackpadMovement">Movimiento con joystick:</Entry>
     <Entry Name="VRTutorial">Tutorial de VR</Entry>

@@ -28,6 +28,15 @@ enum class VrSettingId : std::uint8_t {
     enhanced_visuals,
     hrtf,
     subtitle_scale,
+    neural_enabled,
+    neural_internal_height,
+    neural_scale,
+    neural_intensity,
+    neural_passes,
+    neural_style,
+    neural_fovea,
+    neural_outer_enabled,
+    neural_outer_scale,
     count,
 };
 
@@ -54,8 +63,8 @@ VrSettingDescriptors() noexcept;
     const VrSettings& settings,
     const VrSettingCapabilities& capabilities) noexcept;
 
-// Applies one Overture-Rework menu step. Direction is reduced to -1/+1 so a
-// backend cannot accidentally multiply a single UI action into several steps.
+// Applies one menu step (Rework policy for inherited rows). Direction is reduced
+// to -1/+1 so a backend cannot multiply a single UI action into several steps.
 [[nodiscard]] bool AdjustVrSetting(
     VrSettings& settings,
     VrSettingId id,

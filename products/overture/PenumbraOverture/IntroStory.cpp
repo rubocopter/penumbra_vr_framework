@@ -19,6 +19,7 @@
 #include "IntroStory.h"
 
 #include "Init.h"
+#include "NarrativeTextPresentation.h"
 #include "ButtonHandler.h"
 #include "MapHandler.h"
 #include "GraphicsHelper.h"
@@ -481,7 +482,7 @@ void cIntroStory::OnDraw()
 
 	if(mpInit->mbSubtitles)
 	{
-		mpFont->DrawWordWrap(vPos, 720,18.0f*fTextScale,vSize,cColor(1,1,1,1),eFontAlign_Left,msMessage);
+		DrawVrNarrativeWordWrap(mpFont,vPos, 720,18.0f*fTextScale,vSize,cColor(1,1,1,1),msMessage,mpInit->mbHasHaptics,cVector2f(40,480));
 	}
 }
 

@@ -1412,5 +1412,372 @@
     "deathHelper": "player+290 -> helper active byte+0; independent Requiem 9C0D0 getter",
     "semantics": "separate initial physical-only residual from later native travel; preserve mixed intent, native steps, pre-injection movement, post-solve platform/force travel and native Y; recheck player/body/generation/UI/active/death after exactly one native Update before old-body services",
     "validation": "exact-image and actual adapter synthetic native-call consumers; live/headset acceptance pending"
+  },
+  "transientSubtitleReadability": {
+    "status": "host-tested; offline exact-image and synthetic x86 consumers; live/headset pending",
+    "sourceImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "source": "Independently decoded initialized x86 Steam image; no protected-file RVAs inferred from another game",
+    "owner": "cEffect_SubTitle::OnPostSceneDraw ordinary 2D text and two shadows",
+    "drawRva": "0xd0f0",
+    "wordWrapRva": "0xebb00",
+    "fontLengthRva": "0xeb490",
+    "wordWrapCallsites": [
+      "0xd406",
+      "0xd456",
+      "0xd4a6"
+    ],
+    "nativeOriginPixels": [
+      25,
+      500
+    ],
+    "nativeFontPixels": [
+      15,
+      15
+    ],
+    "nativeLineHeightPixels": 16,
+    "nativeDepthLayers": [
+      157,
+      156,
+      156
+    ],
+    "shadowOffsetsPixels": [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        1
+      ],
+      [
+        -1,
+        -1
+      ]
+    ],
+    "vrBlockCenterPixels": [
+      400,
+      300
+    ],
+    "vrFontMultiplier": 2,
+    "centerAlignment": 2,
+    "abi": "Same independently mapped DrawWordWrap thiscall/RET 0x28 and borrowed VC7 wstring as GameMessage; GetLength thiscall/RET 8; native string, color, fade, duration and depth remain game-owned",
+    "windows": {
+      "subtitleDraw": {
+        "rva": "0xd0f0",
+        "size": 996,
+        "sha256": "E1143BB81D347E2499CC4E88E2262C9A5E7C1AD8FC25F39C4FB70880728E6DEE"
+      },
+      "scriptWrapper": {
+        "rva": "0x463f0",
+        "size": 135,
+        "sha256": "AA109AC68A39F1FCC36FA2E38FE23113A4C4ACF58BEA007F79789941E63EFDEE"
+      },
+      "scriptRegistration": {
+        "rva": "0x50177",
+        "size": 97,
+        "sha256": "EB0AA2A69B8867D81CEA92185E9D8A402BA03A1519101593223467F6B293F8AC"
+      }
+    },
+    "ordinaryDrawSignature": {
+      "rva": "0xd3eb",
+      "bytes": "C7 00 00 00 C8 41 C7 40 04 00 00 FA 43 C7 40 08 00 00 1D 43 8B 4E 0C 89 64 24 38 E8 F5 E6 0D 00",
+      "section": ".text",
+      "matchCount": 1
+    },
+    "addSubTitleTrans": {
+      "registrationRva": "0x50177",
+      "registeredWrapperRva": "0x463f0",
+      "wrapperPointerRva": "0x501c6",
+      "nativeAddCallsite": "0x4643f",
+      "nativeAddRva": "0xc520",
+      "effectHandlerSubtitleOffset": "0x34",
+      "postSceneDrawCallsite": "0xd4f6"
+    },
+    "unmodifiedWordWrapCallsites": {
+      "menu": [
+        "0x7b50a"
+      ]
+    },
+    "excludedBranches": "Native GUI forwarding and alternate black-text Draw/GetWordWrapRows branch within the same subtitle draw; no global font hook",
+    "referenceRevision": "23c890f7dbd06b939be9951d282e6e948d9a6623",
+    "referenceFiles": [
+      "PenumbraOverture/EffectHandler.cpp:cEffect_SubTitle::{Add,Update,OnPostSceneDraw}",
+      "PenumbraOverture/GameScripts.cpp:AddSubTitleTrans",
+      "HPL1Engine/sources/graphics/FontData.cpp:iFontData::DrawWordWrap"
+    ],
+    "adaptation": "Rework centers world-space transient subtitles; closed hosts expose ordinary 2D queue draws. Reuse the established GameMessage 2x/centered block adaptation at three subtitle-owned callsites, with their independently verified 25/500 origin. Preserve native lifecycle instead of replacing it with GameMessage.",
+    "verifier": "tools/verify_transient_message_map.py --game requiem <initialized-image> --research-tools work/wheel-research-tools",
+    "reportedProducer": {
+      "script": "expansion01/maps/level09.hps:1457",
+      "function": "ComputerOn(bool bOn)",
+      "call": "AddSubTitleTrans(\"level09\", \"EventComputer\", 3)",
+      "localization": "expansion01/config/English_exp.lang:553",
+      "text": "It's dead.",
+      "scriptSha256": "9EEB67F42BF276C58126CD9E6223FA10AF1387B6E4221894B7257031EDD8A8B4",
+      "localizationSha256": "7224BC986FA0CDA5A721622C3B068C329623881C0417340C68A6439D7F4F5910"
+    }
+  },
+  "narrativeSubtitleReadability": {
+    "status": "host-tested; exact-image and synthetic x86 caller consumers only; live/headset pending",
+    "sourceImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "owner": "cRadioHandler::OnDraw current/previous crossfade text and Radio-only ScreenGui row helper",
+    "drawRva": "0xb2180",
+    "wordWrapRva": "0xebb00",
+    "wordWrapCallsites": [
+      "0xb22bb",
+      "0xb2300",
+      "0xb239e",
+      "0xb240e"
+    ],
+    "guiHelperRva": "0xb1fa0",
+    "guiHelperCallsites": [
+      "0xb21f6",
+      "0xb2251"
+    ],
+    "getWordWrapRowsRva": "0xebfb0",
+    "getWordWrapRowsCallsite": "0xb2003",
+    "guiDrawFontRva": "0xfa4e0",
+    "guiDrawFontCallsites": [
+      "0xb20b9",
+      "0xb2121"
+    ],
+    "nativeOriginPixels": [
+      25,
+      500
+    ],
+    "nativeFontPixels": [
+      15,
+      15
+    ],
+    "nativeLineHeightPixels": 16,
+    "nativeWidthPixels": 750,
+    "nativeDepthLayers": [
+      157,
+      156,
+      157,
+      156
+    ],
+    "shadowOffsetsPixels": [
+      [
+        0,
+        0
+      ],
+      [
+        2,
+        2
+      ],
+      [
+        0,
+        0
+      ],
+      [
+        2,
+        2
+      ]
+    ],
+    "guiNativeDepthLayers": [
+      30,
+      29
+    ],
+    "guiShadowOffsetsPixels": [
+      [
+        0,
+        0
+      ],
+      [
+        1,
+        1
+      ]
+    ],
+    "nativeRowVector": {
+      "begin": 4,
+      "end": 8,
+      "wstringStride": 28
+    },
+    "vrBlockCenterPixels": [
+      400,
+      300
+    ],
+    "vrFontMultiplier": 2,
+    "centerAlignment": 2,
+    "eligibility": "Active tracked stereo, including native UI for Radio callers only; GameMessage/transient gameplay eligibility unchanged",
+    "abi": {
+      "GetWordWrapRows": "thiscall width, line height, by-value size, borrowed wstring, native vector*; RET 0x18",
+      "GuiSetDrawFont": "thiscall borrowed wstring, font*, position*, size*, color*, alignment, material; RET 0x1c"
+    },
+    "windows": {
+      "radioDraw": {
+        "rva": "0xb2180",
+        "size": 667,
+        "sha256": "A4C7DF060A0230417744FEF03E506D805D017A99F44F14CAE78A72D5EF9CC88F"
+      },
+      "radioGuiHelper": {
+        "rva": "0xb1fa0",
+        "size": 468,
+        "sha256": "289985C3A25561B968A163DAEA2046DF9C9B4A0660D9E7A6EB56B56DF8454353"
+      },
+      "scriptRegistration": {
+        "rva": "0x503cf",
+        "size": 150,
+        "sha256": "000161F3F068DEC4467F023BD2B8067C8260F5216B848BF8AF6897ED544C7011"
+      },
+      "scriptWrapper": {
+        "rva": "0x46570",
+        "size": 146,
+        "sha256": "F32BA1296C3337E54ACCDFA3F7C937F42EDFA7109B6176043F704FBEE83CA185"
+      },
+      "getWordWrapRows": {
+        "rva": "0xebfb0",
+        "size": 955,
+        "sha256": "51A0DCC98591E5FFB29B87AC1AF44E84CE7F0D74633011A928EF8E04718A30CC"
+      },
+      "guiDrawFont": {
+        "rva": "0xfa4e0",
+        "size": 368,
+        "sha256": "4FB3717D571A0A126C20C9B4112C491B0B1F1BEB5C8495FF279924EECD59DF25"
+      }
+    },
+    "abiReturns": {
+      "getWordWrapRows": "0xec368",
+      "guiDrawFont": "0xfa64d"
+    },
+    "addRadioMessage": {
+      "registrationRva": "0x503cf",
+      "wrapperPointerRva": "0x5041f",
+      "registeredWrapperRva": "0x46570",
+      "nativeAddCallsite": "0x465bd",
+      "nativeAddRva": "0xb1e10",
+      "initRadioOffset": "0x194"
+    },
+    "referenceRevision": "23c890f7dbd06b939be9951d282e6e948d9a6623",
+    "referenceFiles": [
+      "PenumbraOverture/GameScripts.cpp:AddRadioMessage",
+      "PenumbraOverture/RadioHandler.cpp:Update,OnDraw",
+      "HPL1Engine/sources/graphics/FontData.cpp:GetWordWrapRows",
+      "HPL1Engine/sources/gui/GuiSet.cpp:DrawFont"
+    ],
+    "adaptation": "Native radio queue, sound completion, subtitle enable, current/previous alpha and callbacks stay authoritative. The native ScreenGui helper still allocates, wraps and destroys its own rows; intercept only its GetWordWrapRows and two DrawFont calls to reflow at 2x and center the complete block. Preserve native string/font/GUI/color/material/depth and shadow deltas. SubtitleScale remains a panel geometry consumer, not an extra multiplier here. Rework Radio is left aligned and has no ScreenGui helper; the existing accepted BP GameMessage presentation supplies the requested centered layout.",
+    "excluded": "No global font interception; menus, inventory, notebook and scrolling Credits retain native callers; ending narrative body ownership is recorded separately in endingNarrativeReadability.",
+    "verifier": "tools/verify_narrative_subtitle_map.py --game requiem <initialized-image> --research-tools work/wheel-research-tools",
+    "producerScripts": [
+      {
+        "path": "expansion01/maps/level09.hps",
+        "sha256": "9EEB67F42BF276C58126CD9E6223FA10AF1387B6E4221894B7257031EDD8A8B4"
+      },
+      {
+        "path": "expansion01/maps/level10.hps",
+        "sha256": "2A38FC5DC513D751F5A9A7321FDCCC73633309DFF8A174A9DBB773433E461780"
+      },
+      {
+        "path": "expansion01/maps/level11.hps",
+        "sha256": "5E27D07C38289F4D1DFEF0DB3503756E41E7CFE4EAF6E70150E8BC47A0E4323B"
+      }
+    ],
+    "finalEndingTrace": {
+      "furnace": "level09::StartRedEndSek(end1) AddRadioMessage(voice_red,red.09.02.01,voice_red_09_02_01.ogg); end3 queues blank translation with voice_red_09_03_01.ogg; end4 stops Radio at native 0.4s; end5 changes to level10. IntroEvents(nextlevel) calls StartCredits.",
+      "alternate": "level09::AlternateEnding(alterend2) changes to level11. OnStart schedules EndEvent(end4) at 45s; it calls StartCredits. level11 has no active AddRadioMessage/AddSubTitle producer. Preserve authored timing/camera/fade/scene.",
+      "startCredits": {
+        "registeredWrapperRva": "0x46180",
+        "nativeSetActiveCallsite": "0x4618d",
+        "nativeSetActiveRva": "0x7420",
+        "windows": {
+          "wrapper": {
+            "rva": "0x46180",
+            "size": 19,
+            "sha256": "4FBE1CB6793B0685101ADB5002A8CAA827A5CB6D79389433BE70E9F470088D27"
+          },
+          "setActive": {
+            "rva": "0x7420",
+            "size": 363,
+            "sha256": "4B39C272A109BEDD5D840C83C0F52101F0856BC6AA16A2F640B705D7D4FA977B"
+          }
+        }
+      },
+      "notFinalVideo": "Native StartEnding1/2 wrappers 461A0/461C0 call cEnding::SetActive DE70 (email typewriter). Requiem level00 invokes StartEnding1 at the beginning; neither final level10 nor level11 invokes it. Credits enters its scrolling state 0; later inherited typed-email state 3 is not evidence for the reported pre-credits cinematic. cEnding body text is independently adapted as a separate narrative channel."
+    }
+  },
+  "endingNarrativeReadability": {
+    "status": "host-tested; exact-image and synthetic x86 caller consumer only; live/headset pending",
+    "sourceImageSha256": "989726EE2780AC890486DFCA0AB6B80AF8E97BC4FF64AF5A28CF1F23ACE2CA5B",
+    "owner": "cEnding::OnDraw -> native typewriter body text helper; no credits owner hook",
+    "drawRva": "0xda70",
+    "textHelperRva": "0xd6c0",
+    "textHelperCallsite": "0xdb92",
+    "windows": {
+      "endingDraw": {
+        "rva": "0xda70",
+        "size": 311,
+        "sha256": "F32843CCDFE8A683DF837D6EDE23EF10DBE1DF882D19D89754FB18FD83D0734C"
+      },
+      "nativeTextHelper": {
+        "rva": "0xd6c0",
+        "size": 481,
+        "sha256": "4F7871492EFA1290B1591091E0BC5260F62A46C22F3A737F0D4E28AF22BEE455"
+      },
+      "nativeUpdate": {
+        "rva": "0xd8b0",
+        "size": 439,
+        "sha256": "3C6D4613F36FA6B78F83F9DA20B137841C5A488E9214FD3A5085AA4FB1DD7A86"
+      },
+      "nativePrepareText": {
+        "rva": "0xdd40",
+        "size": 293,
+        "sha256": "4FDC70DF34ECC5B39E4264A56EAE2CC907A9272A857BC99FFA9B9AA033E5E574"
+      },
+      "scriptWrapper": {
+        "rva": "0x461a0",
+        "size": 21,
+        "sha256": "1390966D0D495C289B393F2E7CB89E39767B2384C67BEE857F2B00EEF1678B38"
+      },
+      "scriptRegistration": {
+        "rva": "0x4fc31",
+        "size": 150,
+        "sha256": "D9C00F6BEB82C50D798D8B3391E794BF7BB7BD425B3653C033287B0F21BF144F"
+      }
+    },
+    "fields": {
+      "font": "0x28",
+      "textActive": "0x30",
+      "rowsBegin": "0x38",
+      "rowsEnd": "0x3c",
+      "visibleCharacters": "0x48",
+      "shade": "0x54",
+      "alpha": "0x5c"
+    },
+    "nativeRowStride": 28,
+    "nativeTextOriginPixels": [
+      25,
+      90
+    ],
+    "nativeFontPixels": [
+      15,
+      15
+    ],
+    "nativeLineHeightPixels": 17,
+    "nativeWidthPixels": 750,
+    "nativeDepth": 10,
+    "nativePreparedRowsCallsite": "0xdde5",
+    "getWordWrapRowsRva": "0xebfb0",
+    "wordWrapRva": "0xebb00",
+    "vrBlockCenterPixels": [
+      400,
+      300
+    ],
+    "vrFontMultiplier": 2,
+    "scriptStartEnding1": {
+      "registrationRva": "0x4fc31",
+      "wrapperPointerRva": "0x4fc80",
+      "registeredWrapperRva": "0x461a0",
+      "setActiveCallsite": "0x461af",
+      "setActiveRva": "0xde70"
+    },
+    "producerScript": {
+      "path": "expansion01/maps/level00.hps",
+      "sha256": "955E2A592A1AF39B814EFB9C3D91487B3CDC2A372D381E327C4517CBFCFF240D"
+    },
+    "referenceRevision": "23c890f7dbd06b939be9951d282e6e948d9a6623",
+    "reference": "Rework FontData::DrawWordWrap line breaking; established BP centered/doubled native message presentation. Overture has no cEnding typewriter: its final script uses GameMessage then Credits.",
+    "adaptation": "The target-specific native helper draws incrementally revealed rows through raw Font::Draw and has no Rework source-owned equivalent. Borrow original rows and visible-character counter, reconstruct exactly the displayed full-row/partial-row prefix, and reflow only that presentation at 2x using native DrawWordWrap. Compute its fixed centered origin from all text, so the reveal does not recenter. Never change rows/counters/timers or native color/depth. A synchronous read-only VC7 string view borrows scratch characters; no foreign CRT constructor/destructor or allocation ownership transfer.",
+    "exclusions": "Scrolling Credits and its inherited typed-mail state retain their native owners. The already center-aligned MessageSent status/UI label in cEnding::OnDraw is unchanged; only narrative body text helper is adapted."
   }
 }

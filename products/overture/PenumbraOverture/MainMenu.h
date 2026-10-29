@@ -51,6 +51,7 @@ enum eMainMenuState
 	eMainMenuState_OptionsKeySetupMisc,
 
   eMainMenuState_OptionsVRSettings,
+  eMainMenuState_OptionsVRNeural,
 
 	eMainMenuState_GraphicsRestart,
 

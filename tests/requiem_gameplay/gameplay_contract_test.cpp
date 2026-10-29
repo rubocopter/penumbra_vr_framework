@@ -150,6 +150,15 @@ int main() {
         if (!ComposeRequiemConfiguredHeadHeight(0.825F,1.65F,1.1F,
                 settings,policy,false,false,after_menu,error) ||
             !near(after_menu,1.85F)) return 4;
+        for (const float height : {0.95F,0.80F,0.55F,1.1F}) {
+            float lowered=0;
+            if (!ComposeRequiemConfiguredHeadHeight(0.475F,0.95F,height,
+                    settings,policy,true,true,lowered,error) ||
+                !near(lowered,after_menu+(height-1.1F)*1.065F)) {
+                std::cerr<<"Seated reaching was cancelled by height recalibration\n";
+                return 5;
+            }
+        }
     }
     if (!penumbra_vr::backends::requiem::
             RunRequiemGameplayContractHarness(error)) {

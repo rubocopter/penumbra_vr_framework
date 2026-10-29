@@ -17,6 +17,7 @@
  * along with Penumbra Overture.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "Init.h"
+#include "../../../src/graphics/neural_post_bridge.hpp"
 #include "impl/CGProgram.h"
 #include "Player.h"
 #include "PlayerHelper.h"
@@ -768,6 +769,8 @@ bool cInit::Init(tString asCommandLine)
 
 void cInit::ApplyVRSettings(bool abSave)
 {
+	// Publish a snapshot; the stereo render owner applies it at a safe boundary.
+	penumbra_vr::neural_post::Configure(mVRSettings.GetNeuralSettings());
 	if(mpGame != NULL)
 	{
 		mpGame->vr_input.SetMoveDeadZone(mVRSettings.GetMoveDeadZone());

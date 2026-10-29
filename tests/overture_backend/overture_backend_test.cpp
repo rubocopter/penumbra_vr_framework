@@ -159,6 +159,14 @@ int main() {
         return 4;
     }
 
+    for (const float height : {0.85F,0.70F,0.50F,1.0F}) {
+        frame.head_tracking_pose = Pose(0.10F,height,0.0F);
+        if (!backend.UpdatePlayer(frame,body,result,error) ||
+            !Near(result.seated_offset,0.848F,1.0e-3F)) {
+            std::cerr<<"Seated reach changed the Overture calibration\n";
+            return 7;
+        }
+    }
     frame.delta_seconds = -1.0F;
     if (backend.UpdatePlayer(frame, body, result, error) || error.empty()) {
         std::cerr << "Invalid frame timing was accepted\n";

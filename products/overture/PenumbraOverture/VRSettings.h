@@ -11,6 +11,8 @@
 #ifndef GAME_VR_SETTINGS_H
 #define GAME_VR_SETTINGS_H
 
+#include "../../../src/runtime/neural_post_settings.hpp"
+
 namespace hpl {
 	class cConfigFile;
 }
@@ -74,6 +76,8 @@ public:
 	eVRPlayMode GetPlayMode() const { return mPlayMode; }
 	float GetPlayerHeight() const { return mfPlayerHeight; }
 	eVRHRTFMode GetHRTFMode() const { return mHRTFMode; }
+	const penumbra_vr::runtime::NeuralPostSettings& GetNeuralSettings() const { return mNeuralSettings; }
+	void SetNeuralSettings(const penumbra_vr::runtime::NeuralPostSettings& aSettings);
 
 	void SetMoveSpeed(float afValue) { mfMoveSpeed = Clamp(afValue, 0.25f, 3.0f); }
 	void SetMoveDeadZone(float afValue) { mfMoveDeadZone = Clamp(afValue, 0.0f, 0.9f); }
@@ -115,6 +119,7 @@ private:
 	eVRPlayMode mPlayMode;
 	float mfPlayerHeight;
 	eVRHRTFMode mHRTFMode;
+	penumbra_vr::runtime::NeuralPostSettings mNeuralSettings;
 };
 
 #endif // GAME_VR_SETTINGS_H

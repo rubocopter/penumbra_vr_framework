@@ -73,6 +73,7 @@ void NormalizeVrSettings(
         settings.subtitle_scale, vr_setting_limits::kSubtitleScale);
     settings.player_height = NormalizeFloat(
         settings.player_height, vr_setting_limits::kPlayerHeight);
+    NormalizeNeuralPostSettings(settings.neural);
 
     switch (settings.turn_mode) {
     case VrTurnMode::disabled:

@@ -564,7 +564,12 @@
     <ClCompile Include="sources\scene\Node3D.cpp" />
     <ClCompile Include="sources\scene\NodeState.cpp" />
     <ClCompile Include="sources\scene\PortalContainer.cpp" />
-    <ClCompile Include="sources\scene\Scene.cpp" />
+    <ClCompile Include="sources\scene\Scene.cpp">
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
+    <ClCompile Include="..\..\..\src\graphics\neural_post_bridge.cpp">
+      <LanguageStandard>stdcpp17</LanguageStandard>
+    </ClCompile>
     <ClCompile Include="sources\scene\SectorVisibility.cpp" />
     <ClCompile Include="sources\scene\SoundEntity.cpp" />
     <ClCompile Include="sources\scene\SoundSource.cpp" />

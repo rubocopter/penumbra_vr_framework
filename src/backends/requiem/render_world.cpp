@@ -2,6 +2,7 @@
 
 #include "camera_matrix_override.hpp"
 #include "tracked_audio_listener.hpp"
+#include "../../graphics/neural_post_bridge.hpp"
 #include "camera_capture.hpp"
 #include "frame_presentation_gate.hpp"
 #include "gameplay_contract.hpp"
@@ -16,6 +17,7 @@
 #include "opengl_eye_targets.hpp"
 #include "opengl_eye_scissor.hpp"
 #include "rel32_call_hook.hpp"
+#include "render_target_policy.hpp"
 #include "stereo_render_policy.hpp"
 #include "tool_visibility_tracking.hpp"
 #include "vr_math.hpp"
@@ -42,9 +44,27 @@
 #include <cmath>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace penumbra_vr::backends::requiem {
 namespace {
+
+void ResetNeuralHistory() noexcept {
+#if PVR_HAS_OPENVR
+    neural_post::ResetHistory();
+#endif
+}
+
+// Render-thread identity only; the bridge owns the temporal resources.
+void UpdateNeuralScene(const void* world, const void* camera) noexcept {
+    static const void* previous_world = nullptr;
+    static const void* previous_camera = nullptr;
+    if (world != previous_world || camera != previous_camera) {
+        ResetNeuralHistory();
+        previous_world = world;
+        previous_camera = camera;
+    }
+}
 
 // All addresses/signatures below belong only to the initialized, allowlisted
 // Requiem Steam image. The same HPL contracts have different Black Plague RVAs.
@@ -566,6 +586,7 @@ void LogFailureOnce(const char* phase, const std::string& error) noexcept {
         g_world_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
     }
     if (!g_tracking_anchor_valid) {
+        ResetNeuralHistory();
         g_tracking_anchor = pose.device_to_absolute;
         g_tracking_anchor_valid = true;
     }
@@ -578,8 +599,11 @@ void LogFailureOnce(const char* phase, const std::string& error) noexcept {
         native_view, effective_anchor, pose.device_to_absolute,
         0.0F, head_view, error)) return false;
 
-    PublishGameplayHeadTracking(pose,
-        TrackingWorldYaw(native_view, effective_anchor));
+    const float native_yaw = TrackingWorldYaw(native_view, effective_anchor);
+    static float previous_native_yaw = native_yaw;
+    if (native_yaw != previous_native_yaw) ResetNeuralHistory();
+    previous_native_yaw = native_yaw;
+    PublishGameplayHeadTracking(pose, native_yaw);
 
     const auto body = ReadGameplayTrackingSample();
     if (body.character_body == nullptr || !body.body_height_valid ||
@@ -918,6 +942,42 @@ using WorldPanelGeometry = runtime::vr_ui_presentation_policy::PanelGeometry;
     return settings;
 }
 
+// Called only by the existing render owners, before either eye is bound.
+// Match Overture/BP: the render multiplier is applied at presentation startup.
+// Changing submitted GL texture sizes during an active compositor session is
+// not a validated path (reported distorted headset output). Keep the complete
+// pair fixed until teardown; live Neural/UI tuning does not change its size.
+[[nodiscard]] bool PrepareEyeTargets(runtime::OpenVrSession& session,
+    runtime::VrRenderTargetSize& selected, std::string& error) noexcept {
+    const auto recommended = session.recommended_render_target_size();
+    const float scale = PresentationSettings().render_scale;
+    error.clear();
+    if (!g_targets.ready()) {
+        runtime::RenderTargetPolicy policy;
+        policy.scale = scale;
+        std::vector<runtime::VrRenderTargetSize> candidates;
+        if (!runtime::BuildRenderTargetCandidates(recommended, policy, candidates, error))
+            return false;
+        bool created = false;
+        for (const auto& candidate : candidates) {
+            if (g_targets.CreateOrResize(candidate.width, candidate.height, error)) {
+                created = true;
+                break;
+            }
+        }
+        // CreateOrResize retains the previous complete pair on failure. Let the
+        // existing caller fall back without consuming native world time.
+        if (!created) return false;
+        probe::WriteLog("Requiem source eye targets %lux%lu (SteamVR %lux%lu x %.2f)",
+            static_cast<unsigned long>(g_targets.width()),
+            static_cast<unsigned long>(g_targets.height()),
+            static_cast<unsigned long>(recommended.width),
+            static_cast<unsigned long>(recommended.height), scale);
+    }
+    selected = {g_targets.width(), g_targets.height()};
+    return true;
+}
+
 [[nodiscard]] WorldPanelGeometry PanelGeometry(
     NativeUiSurface surface) noexcept {
     const auto settings=PresentationSettings();
@@ -956,8 +1016,8 @@ void PublishFullscreenMenuPointer(const runtime::VrMatrix34& anchor,
         error = "OpenVR session or OpenGL context is unavailable";
         return false;
     }
-    const auto size = session->recommended_render_target_size();
-    if (!g_targets.CreateOrResize(size.width, size.height, error)) return false;
+    runtime::VrRenderTargetSize size;
+    if (!PrepareEyeTargets(*session, size, error)) return false;
     g_targets_destroyed.store(false, std::memory_order_release);
     if (!g_overlay_targets.CreateOrResize(800, 600, error)) return false;
 
@@ -967,6 +1027,7 @@ void PublishFullscreenMenuPointer(const runtime::VrMatrix34& anchor,
         error = "The Requiem world camera is not the mapped perspective camera";
         return false;
     }
+    UpdateNeuralScene(world, camera);
     const VisibilityPresentation pending = g_pending_visibility;
     g_pending_visibility.valid = false;
     const ULONGLONG now = GetTickCount64();
@@ -2246,9 +2307,15 @@ using runtime::vr_articulated_grab_policy::ArticulatedAngularDrive;
         for (int axis=0;axis<3;++axis) velocities[i][axis]+=impulse[axis];
         if (!runtime::vr_mechanism_policy::Finite(velocities[i])) return false;
     }
-    // Preserve joints, gravity and angular solve. Never SetMatrix on one bone.
+    // A fixed endpoint removes the component's free translation mode. The
+    // selected point correction must not also accelerate every sibling: that
+    // broadcast feeds contact/joint angular response back into the whole
+    // hanging rope. Use the existing one-body constrained point drive and let
+    // Newton transmit the pull. Free cable components retain their proven
+    // distributed translation and wrist correction, with unchanged bounds.
     reinterpret_cast<void(__thiscall*)(void*,const Vec3*,const Vec3*)>(
         g_image+0x19CB30)(hold.body,&impulse,&contact);
+    if (graph.anchored) return true;
     for (std::size_t i=0;i<graph.count;++i) {
         if (graph.bodies[i]==hold.body) continue;
         reinterpret_cast<void(__thiscall*)(void*,bool)>(g_image+0x19CB50)(graph.bodies[i],true);
@@ -4116,6 +4183,7 @@ void OnSdlSwap(std::uint64_t) noexcept {
 
     if (!g_presenting.load(std::memory_order_acquire)) return;
     const bool world_presented = g_frame_presentation.ConsumeWorldPresentedAtSwap();
+    if (!world_presented) UpdateNeuralScene(nullptr, nullptr);
     const bool world_ui_panel = g_world_ui_panel_pending.exchange(
         false, std::memory_order_acq_rel);
     if (world_presented && !world_ui_panel) {
@@ -4162,6 +4230,7 @@ void OnSdlSwap(std::uint64_t) noexcept {
 
     const bool recenter = g_recenter_requested.exchange(
         false, std::memory_order_acq_rel);
+    if (recenter) ResetNeuralHistory();
     const auto anchor_plan = runtime::PlanStablePanelAnchor(
         true, recenter, g_menu_anchor_valid);
     if (anchor_plan.capture_current_pose) {
@@ -4176,8 +4245,8 @@ void OnSdlSwap(std::uint64_t) noexcept {
             static_cast<float>(desktop_viewport[3]) : 0.0F;
     PublishFullscreenMenuPointer(g_menu_anchor,pointer_aspect,fullscreen_panel);
 
-    const auto size = session->recommended_render_target_size();
-    if (!g_targets.CreateOrResize(size.width, size.height, error)) {
+    runtime::VrRenderTargetSize size;
+    if (!PrepareEyeTargets(*session, size, error)) {
         LogFailureOnce("menu eye targets", error);
         return;
     }
@@ -4252,6 +4321,7 @@ void AddTrackedWorldYaw(float radians) noexcept {
     g_tracking_world_yaw.store(std::remainder(previous + radians,
         6.28318530717958647692F), std::memory_order_release);
     g_world_yaw_epoch.fetch_add(1, std::memory_order_acq_rel);
+    if (radians != 0.0F) ResetNeuralHistory();
 }
 
 void RefreshVrSelectionBeforeAction(void* player,bool examine) noexcept {

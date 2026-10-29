@@ -1,4 +1,5 @@
 #include "openvr_session.hpp"
+#include "../graphics/neural_post_bridge.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -10,6 +11,12 @@
 
 namespace penumbra_vr::runtime {
 namespace {
+
+// WaitGetPoses is owned by the backend. Keep its exact sample on the render
+// thread; Neural Post must never call WaitGetPoses independently or reuse a
+// pose across two submissions.
+thread_local const OpenVrSession* g_neural_pose_owner = nullptr;
+thread_local VrHmdPose g_neural_pose{};
 
 using VrInitInternal2 = std::uint32_t(VR_CALLTYPE*)(
     vr::EVRInitError*, vr::EVRApplicationType, const char*);
@@ -162,6 +169,10 @@ bool OpenVrSession::Initialize(
 
 bool OpenVrSession::Shutdown(std::string& error) noexcept {
     error.clear();
+    if (g_neural_pose_owner == this) {
+        g_neural_pose_owner = nullptr;
+        g_neural_pose = {};
+    }
     actions_.Reset();
     input_ = nullptr;
     if (library_ == nullptr) {
@@ -224,6 +235,10 @@ bool OpenVrSession::WaitForHmdPose(
     std::string& error) const noexcept {
     error.clear();
     pose = {};
+    // Invalidate the previous frame before any failing OpenVR wait. A later
+    // Submit must never use tracking from the preceding presentation epoch.
+    g_neural_pose_owner = nullptr;
+    g_neural_pose = {};
     if (!initialized() || compositor_ == nullptr) {
         error = "OpenVR compositor is not initialized";
         return false;
@@ -248,6 +263,8 @@ bool OpenVrSession::WaitForHmdPose(
     pose.tracking_result = static_cast<std::uint32_t>(hmd.eTrackingResult);
     pose.pose_valid = hmd.bPoseIsValid;
     pose.device_connected = hmd.bDeviceIsConnected;
+    g_neural_pose_owner = this;
+    g_neural_pose = pose;
     return true;
 }
 
@@ -255,6 +272,14 @@ bool OpenVrSession::SubmitOpenGlEyeTextures(
     const std::array<std::uint32_t, 2>& color_textures,
     std::string& error) const noexcept {
     error.clear();
+    // Submission consumes its pose epoch even if the textures/compositor are
+    // unavailable. A later retry must acquire another pose before Neural Post.
+    const bool has_frame_pose = g_neural_pose_owner == this;
+    const VrHmdPose frame_pose = has_frame_pose ? g_neural_pose : VrHmdPose{};
+    if (has_frame_pose) {
+        g_neural_pose_owner = nullptr;
+        g_neural_pose = {};
+    }
     if (!initialized() || compositor_ == nullptr) {
         error = "OpenVR compositor is not initialized";
         return false;
@@ -262,6 +287,16 @@ bool OpenVrSession::SubmitOpenGlEyeTextures(
     if (color_textures[0] == 0 || color_textures[1] == 0) {
         error = "OpenVR cannot submit a zero OpenGL texture name";
         return false;
+    }
+
+    std::array<std::uint32_t, 2> submit_textures = color_textures;
+    if (has_frame_pose) {
+        std::array<VrEyeConfiguration, 2> eyes{};
+        std::string config_error;
+        if (frame_pose.pose_valid && ReadEyeConfiguration(eyes, config_error)) {
+            static_cast<void>(neural_post::TryProcess(
+                color_textures, frame_pose, eyes, submit_textures));
+        }
     }
 
     auto* compositor = static_cast<vr::IVRCompositor*>(compositor_);
@@ -272,7 +307,7 @@ bool OpenVrSession::SubmitOpenGlEyeTextures(
     for (std::size_t index = 0; index < kEyes.size(); ++index) {
         vr::Texture_t texture{
             reinterpret_cast<void*>(
-                static_cast<std::uintptr_t>(color_textures[index])),
+                static_cast<std::uintptr_t>(submit_textures[index])),
             vr::TextureType_OpenGL,
             vr::ColorSpace_Gamma,
         };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "neural_post_settings.hpp"
+
 #include <cstdint>
 #include <string_view>
 
@@ -81,6 +83,7 @@ struct VrSettings {
     VrPlayMode play_mode = VrPlayMode::standing;
     float player_height = vr_setting_limits::kPlayerHeight.default_value;
     VrHrtfMode hrtf_mode = VrHrtfMode::automatic;
+    NeuralPostSettings neural;
 };
 
 void NormalizeVrSettings(

@@ -29,9 +29,10 @@ VrPlayModeStatus VrPlayModePolicy::Update(
             Reset();
             return status();
         }
-        if (plausible && raw_head_height < baseline_height_ - 0.10F) {
-            baseline_height_ = raw_head_height;
-        }
+        // A seated forward/downward reach is physical movement, not a new
+        // chair calibration. Rework's downward baseline ratchet increased the
+        // compensation while the user ducked, cancelling that movement.
+        // Keep the baseline until standing/mode reset establishes a new one.
     }
 
     if (!std::isfinite(player_height)) player_height = 0.0F;

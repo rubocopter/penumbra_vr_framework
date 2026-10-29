@@ -1,6 +1,7 @@
 #include "native_vr_settings_menu.hpp"
 #include "gameplay_bridge.hpp"
 #include "render_world.hpp"
+#include "../../graphics/neural_post_bridge.hpp"
 
 #include "iat_hook.hpp"
 #include "rel32_call_hook.hpp"
@@ -68,6 +69,7 @@ constexpr int kCalibrateHeightSentinel = 0x70000400;
 
 constexpr std::size_t kNativeVrMenuSettingCount = kRequiemVrMenuSettingCount;
 constexpr std::size_t kNativeVrMenuRowsPerColumn = 5;
+constexpr bool kNativeRenderScaleRequiresRestart = true;
 constexpr const wchar_t* kNativeSettingsDirectory = L"Requiem";
 constexpr const char* kNativeSpanishLanguageSetting = "languagefile=\"espanol_exp.lang\"";
 const auto& NativeVrMenuSettings() noexcept { return RequiemVrMenuSettings(); }

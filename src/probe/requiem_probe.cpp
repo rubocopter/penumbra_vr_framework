@@ -9,6 +9,7 @@
 #include "opengl_eye_scissor.hpp"
 #include "sdl_frame_hook.hpp"
 #include "vr_settings_store.hpp"
+#include "../graphics/neural_post_bridge.hpp"
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -33,13 +34,14 @@ bool CommitNativeVrSettings(const penumbra_vr::runtime::VrSettings& settings,
     std::wstring settings_error;
     const auto path = penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
     if (path.empty() || !penumbra_vr::launcher::SaveVrSettings(
-            path, settings, settings_error)) {
+            path, settings, settings_error, L"Neural.Requiem")) {
         error = "Requiem VR settings could not be saved";
         penumbra_vr::probe::WriteLog("%s", error.c_str());
         return false;
     }
     penumbra_vr::backends::requiem::ConfigureGameplaySettings(settings);
     penumbra_vr::backends::requiem::ConfigurePresentationSettings(settings);
+    penumbra_vr::neural_post::Configure(settings.neural);
     error.clear();
     return true;
 }
@@ -142,13 +144,14 @@ extern "C" DWORD WINAPI PenumbraVR_Initialize(void*) noexcept {
     const auto settings_path =
         penumbra_vr::launcher::DefaultVrSettingsPath(settings_error);
     if (settings_path.empty() || !penumbra_vr::launcher::LoadVrSettings(
-            settings_path, vr_settings, settings_error)) {
+            settings_path, vr_settings, settings_error, L"Neural.Requiem")) {
         vr_settings = {};
         penumbra_vr::probe::WriteLog(
             "Requiem VR settings unavailable; using shared defaults");
     }
     penumbra_vr::backends::requiem::ConfigureGameplaySettings(vr_settings);
     penumbra_vr::backends::requiem::ConfigurePresentationSettings(vr_settings);
+    penumbra_vr::neural_post::Configure(vr_settings.neural);
     penumbra_vr::backends::requiem::ConfigureNativeVrSettingsMenu(
         &g_vr_settings, &CommitNativeVrSettings);
     penumbra_vr::probe::WriteLog(

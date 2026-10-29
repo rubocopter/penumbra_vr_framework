@@ -20,6 +20,7 @@
 #include "RadioHandler.h"
 
 #include "Init.h"
+#include "NarrativeTextPresentation.h"
 #include "Player.h"
 #include "EffectHandler.h"
 #include "Notebook.h"
@@ -199,18 +200,18 @@ void cRadioHandler::OnDraw()
 	{
 		if(msCurrentText !=_W(""))
 		{
-			mpFont->DrawWordWrap(cVector3f(40, 470,47),720,fLineHeight,fFontSize,cColor(1,fAlpha),
-								eFontAlign_Left,msCurrentText);
-			mpFont->DrawWordWrap(cVector3f(40, 470,46) + cVector3f(2,2,0),720,fLineHeight,fFontSize,cColor(0,fAlpha),
-								eFontAlign_Left,msCurrentText);
+			DrawVrNarrativeWordWrap(mpFont,cVector3f(40, 470,47),720,fLineHeight,fFontSize,cColor(1,fAlpha),
+								msCurrentText,mpInit->mbHasHaptics,cVector2f(40,470));
+			DrawVrNarrativeWordWrap(mpFont,cVector3f(40, 470,46) + cVector3f(2,2,0),720,fLineHeight,fFontSize,cColor(0,fAlpha),
+								msCurrentText,mpInit->mbHasHaptics,cVector2f(40,470));
 		}
 
 		if(msPrevText !=_W("") && msPrevText != msCurrentText && mfAlpha <1)
 		{
-			mpFont->DrawWordWrap(cVector3f(40, 470,47),720,fLineHeight,fFontSize,cColor(1,1-fAlpha),
-				eFontAlign_Left,msPrevText);
-			mpFont->DrawWordWrap(cVector3f(40, 470,46) + cVector3f(2,2,0),720,fLineHeight,fFontSize,cColor(0,1-fAlpha),
-				eFontAlign_Left,msPrevText);
+			DrawVrNarrativeWordWrap(mpFont,cVector3f(40, 470,47),720,fLineHeight,fFontSize,cColor(1,1-fAlpha),
+				msPrevText,mpInit->mbHasHaptics,cVector2f(40,470));
+			DrawVrNarrativeWordWrap(mpFont,cVector3f(40, 470,46) + cVector3f(2,2,0),720,fLineHeight,fFontSize,cColor(0,1-fAlpha),
+				msPrevText,mpInit->mbHasHaptics,cVector2f(40,470));
 		}
 	}
 }

@@ -48,10 +48,10 @@ std::atomic<std::uint64_t> g_settings_transaction_sequence{0};
 }
 
 [[nodiscard]] std::wstring ReadValue(const std::filesystem::path& path,
-    const wchar_t* key) {
+    const wchar_t* key, const wchar_t* section = L"VR") {
     wchar_t value[64]{};
     const DWORD length = GetPrivateProfileStringW(
-        L"VR", key, L"", value,
+        section, key, L"", value,
         static_cast<DWORD>(std::size(value)), path.c_str());
     return std::wstring(value, length);
 }
@@ -96,12 +96,41 @@ std::atomic<std::uint64_t> g_settings_transaction_sequence{0};
     return false;
 }
 
+[[nodiscard]] bool ReadInteger(
+    const std::filesystem::path& path,
+    const wchar_t* key,
+    int& value,
+    std::wstring& error, const wchar_t* section = L"VR") {
+    // A sentinel distinguishes absent keys (safe defaults) from present empty
+    // values. Reject truncated text before parsing so a valid prefix cannot
+    // conceal malformed input beyond the profile buffer.
+    wchar_t text[64]{};
+    const DWORD length = GetPrivateProfileStringW(
+        section, key, L"\x1", text,
+        static_cast<DWORD>(std::size(text)), path.c_str());
+    if (length == 1 && text[0] == L'\x1') {
+        return true;
+    }
+    wchar_t* end = nullptr;
+    errno = 0;
+    const long parsed = std::wcstol(text, &end, 10);
+    if (length == 0 || length >= std::size(text) - 1 || errno == ERANGE ||
+        end == text || end != text + length ||
+        parsed < (std::numeric_limits<int>::min)() ||
+        parsed > (std::numeric_limits<int>::max)()) {
+        error = std::wstring(L"VR/") + key + L" must be an integer in " + path.wstring();
+        return false;
+    }
+    value = static_cast<int>(parsed);
+    return true;
+}
+
 [[nodiscard]] bool ReadBool(
     const std::filesystem::path& path,
     const wchar_t* key,
     bool& value,
-    std::wstring& error) {
-    const auto text = ReadValue(path, key);
+    std::wstring& error, const wchar_t* section = L"VR") {
+    const auto text = ReadValue(path, key, section);
     if (text.empty()) {
         return true;
     }
@@ -144,9 +173,9 @@ std::atomic<std::uint64_t> g_settings_transaction_sequence{0};
     const std::filesystem::path& path,
     const wchar_t* key,
     const std::wstring& value,
-    std::wstring& error) {
+    std::wstring& error, const wchar_t* section = L"VR") {
     SetLastError(ERROR_SUCCESS);
-    if (!WritePrivateProfileStringW(L"VR", key, value.c_str(), path.c_str())) {
+    if (!WritePrivateProfileStringW(section, key, value.c_str(), path.c_str())) {
         error = Win32Error(L"WritePrivateProfileStringW", GetLastError());
         return false;
     }
@@ -375,7 +404,7 @@ bool SaveMonitorMirrorSetting(
 bool LoadVrSettings(
     const std::filesystem::path& path,
     runtime::VrSettings& settings,
-    std::wstring& error) {
+    std::wstring& error, const wchar_t* neural_section) {
     settings = runtime::VrSettings{};
     error.clear();
     if (!ValidateSettingsPath(path, true, error)) {
@@ -401,7 +430,16 @@ bool LoadVrSettings(
         !ReadBool(path, L"MonitorMirror", settings.monitor_mirror, error) ||
         !ReadFloat(path, L"PhysicalCrouchDepth", settings.physical_crouch_depth, error) ||
         !ReadFloat(path, L"SubtitleScale", settings.subtitle_scale, error) ||
-        !ReadFloat(path, L"PlayerHeight", settings.player_height, error)) {
+        !ReadFloat(path, L"PlayerHeight", settings.player_height, error) ||
+        !ReadBool(path, L"NeuralEnabled", settings.neural.enabled, error, neural_section) ||
+        !ReadInteger(path, L"NeuralInternalHeight", settings.neural.internal_height, error, neural_section) ||
+        !ReadInteger(path, L"NeuralScalePercent", settings.neural.scale_percent, error, neural_section) ||
+        !ReadInteger(path, L"NeuralIntensityPercent", settings.neural.intensity_percent, error, neural_section) ||
+        !ReadInteger(path, L"NeuralPasses", settings.neural.passes, error, neural_section) ||
+        !ReadInteger(path, L"NeuralStyle", settings.neural.style, error, neural_section) ||
+        !ReadInteger(path, L"NeuralFoveaPercent", settings.neural.fovea_percent, error, neural_section) ||
+        !ReadBool(path, L"NeuralOuterEnabled", settings.neural.outer_enabled, error, neural_section) ||
+        !ReadInteger(path, L"NeuralOuterScalePercent", settings.neural.outer_scale_percent, error, neural_section)) {
         return false;
     }
     const auto turn = ReadValue(path, L"TurnMode");
@@ -474,7 +512,7 @@ bool LoadVrSettings(
 bool SaveVrSettings(
     const std::filesystem::path& path,
     const runtime::VrSettings& source,
-    std::wstring& error) {
+    std::wstring& error, const wchar_t* neural_section) {
     error.clear();
     std::filesystem::path transaction_path;
     if (!BeginSettingsTransaction(path, transaction_path, error)) {
@@ -488,6 +526,12 @@ bool SaveVrSettings(
     };
     const auto write_bool = [&](const wchar_t* key, bool value) {
         return WriteValue(transaction_path, key, value ? L"true" : L"false", error);
+    };
+    const auto write_integer = [&](const wchar_t* key, int value) {
+        return WriteValue(transaction_path, key, std::to_wstring(value), error, neural_section);
+    };
+    const auto write_neural_bool = [&](const wchar_t* key, bool value) {
+        return WriteValue(transaction_path, key, value ? L"true" : L"false", error, neural_section);
     };
 
     const bool written = write_float(L"MoveSpeed", settings.move_speed) &&
@@ -509,6 +553,15 @@ bool SaveVrSettings(
         WriteValue(transaction_path, L"PlayMode", ConfigText(runtime::ToConfigValue(settings.play_mode)), error) &&
         write_float(L"PlayerHeight", settings.player_height) &&
         WriteValue(transaction_path, L"HRTF", ConfigText(runtime::ToConfigValue(settings.hrtf_mode)), error) &&
+        write_neural_bool(L"NeuralEnabled", settings.neural.enabled) &&
+        write_integer(L"NeuralInternalHeight", settings.neural.internal_height) &&
+        write_integer(L"NeuralScalePercent", settings.neural.scale_percent) &&
+        write_integer(L"NeuralIntensityPercent", settings.neural.intensity_percent) &&
+        write_integer(L"NeuralPasses", settings.neural.passes) &&
+        write_integer(L"NeuralStyle", settings.neural.style) &&
+        write_integer(L"NeuralFoveaPercent", settings.neural.fovea_percent) &&
+        write_neural_bool(L"NeuralOuterEnabled", settings.neural.outer_enabled) &&
+        write_integer(L"NeuralOuterScalePercent", settings.neural.outer_scale_percent) &&
         WriteValue(transaction_path, L"SettingsVersion",
             std::to_wstring(runtime::kCurrentVrSettingsVersion), error);
     if (!written || !CommitSettingsTransaction(path, transaction_path, error)) {

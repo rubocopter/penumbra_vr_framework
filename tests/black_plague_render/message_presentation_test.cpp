@@ -1,4 +1,4 @@
-// Execute the actual six native font-call hooks, including x86 by-value vector
+// Execute the mapped native message/subtitle hooks, including x86 by-value vector
 // arguments. The fake font measures deterministic glyph widths; it never owns
 // the borrowed legacy wstring or changes native fade/color/shadow state.
 #include "../../src/backends/black_plague/message_presentation.cpp"
@@ -25,10 +25,14 @@ void TestJump(std::uint8_t* source,void* target) {
     std::memcpy(source+1,&delta,4);
 }
 }
+#include "../native_narrative_presentation_test.inl"
 int RunMessageTest() {
     auto* image=static_cast<std::uint8_t*>(VirtualAlloc(nullptr,0x300000,MEM_COMMIT|MEM_RESERVE,PAGE_EXECUTE_READWRITE));
     if (!image) return 1;
-    for (const auto site:kMessageFontCalls) {
+    constexpr std::array<std::uintptr_t,14> fixture_calls{
+        0x3F3E8,0x3F452,0x3F49D,0x3F4E8,0x3F533,0x3F57E,
+        0xD2A6,0xD2F6,0xD346,0x7AF9A,0xB1EBB,0xB1F00,0xB1F9E,0xB200E};
+    for (const auto site:fixture_calls) {
         auto* caller=image+site-33;
         const std::array<std::uint8_t,3> enter{0x55,0x8B,0xEC};
         std::memcpy(caller,enter.data(),3);
@@ -42,7 +46,20 @@ int RunMessageTest() {
     }
     constexpr std::array<std::uint8_t,10> signature{0x8B,0x54,0x24,0x08,0xD9,0x05,0xC0,0x29,0x67,0};
     std::memcpy(image+kFontLengthRva,signature.data(),signature.size());
+    constexpr std::array<std::uintptr_t,4> radio_calls{0xB1EBB,0xB1F00,0xB1F9E,0xB200E};
+    constexpr std::uintptr_t radio_rows=0xB1C03;
+    constexpr std::array<std::uintptr_t,2> radio_gui{0xB1CB9,0xB1D21};
+    PrepareNarrativeGuiFixture(image,radio_rows,radio_gui);
     std::string error;
+    for (const auto site:{0xD2A6U,0xD2F6U,0xD346U}) {
+        image[site]=0x90;
+        if (InstallMessagePresentationAt(image,error) || MessagePresentationHooksPresent()) return 23;
+        for (const auto message:kMessageFontCalls) {
+            if (std::memcmp(image+message,MessageCallBytes(message).data(),5)!=0) return 24;
+        }
+        image[site]=0xE8;
+    }
+    if (!NarrativePreflightRejects(image,radio_calls,radio_rows,radio_gui)) return 41;
     if (!InstallMessagePresentationAt(image,error)) { std::cerr<<error; return 2; }
     TestJump(image+kWordWrapRva,reinterpret_cast<void*>(&TestNativeWordWrap));
     TestJump(image+kFontLengthRva,reinterpret_cast<void*>(&TestNativeLength));
@@ -82,12 +99,64 @@ int RunMessageTest() {
     const auto call=reinterpret_cast<WordWrap>(image+kMessageFontCalls[0]-33);
     call(nullptr,{30,300,152},60,16,{14,14},color.data(),0,legacy.data());
     if (test_position!=TextPosition{400,270,152} || legacy!=original_legacy) return 9;
-    // Other font callers (radio subtitles, menus) still reach native DrawWordWrap.
-    reinterpret_cast<WordWrap>(image+kWordWrapRva)(nullptr,{40,470,47},720,16,
-        {14,14},color.data(),0,legacy.data());
-    if (test_position!=TextPosition{40,470,47} || test_size!=TextSize{14,14} || test_alignment!=0) return 10;
+    // These independently mapped cEffect_SubTitle callers own transient script
+    // messages, separate from Examine/GameMessage and Radio/menu rendering.
+    constexpr std::array<std::uintptr_t,3> subtitle_calls{0xD2A6,0xD2F6,0xD346};
+    const wchar_t* dead=L"It's dead.";
+    const std::uint32_t dead_length=10;
+    std::array<std::uint8_t,28> subtitle{};
+    std::memcpy(subtitle.data()+4,&dead,sizeof(dead));
+    std::memcpy(subtitle.data()+20,&dead_length,4);
+    std::memcpy(subtitle.data()+24,&dead_length,4);
+    const auto borrowed_subtitle=subtitle;
+    for (std::size_t i=0;i<subtitle_calls.size();++i) {
+        const auto draw=reinterpret_cast<WordWrap>(image+subtitle_calls[i]-33);
+        const float offset=i==1?1.0F:i==2?-1.0F:0.0F;
+        const float depth=i==0?47.0F:46.0F;
+        if (draw(nullptr,{25+offset,500+offset,depth},750,16,{15,15},
+                color.data(),0,subtitle.data())!=13) return 19;
+        if (test_position!=TextPosition{400+offset,285+offset,depth} ||
+            test_size!=TextSize{30,30} || test_line!=32 || test_alignment!=2 ||
+            test_width!=750 || test_color!=color.data() ||
+            test_text!=subtitle.data() || subtitle!=borrowed_subtitle) {
+            std::cerr<<"Transient subtitle is not centered/readable with native payload preserved\n";
+            return 20;
+        }
+        draw(nullptr,{25+offset,500+offset,depth},60,16,{15,15},color.data(),0,legacy.data());
+        if (test_position!=TextPosition{400+offset,269+offset,depth} ||
+            legacy!=original_legacy) return 21;
+        auto multiline=subtitle;
+        std::memcpy(multiline.data()+4,&text,sizeof(text));
+        std::memcpy(multiline.data()+20,&count,4);
+        std::memcpy(multiline.data()+24,&count,4);
+        draw(nullptr,{25+offset,500+offset,depth},750,16,{15,15},color.data(),0,multiline.data());
+        if (test_position!=TextPosition{400+offset,253+offset,depth}) return 25;
+        const std::uint32_t invalid_length=16385;
+        std::memcpy(multiline.data()+20,&invalid_length,4);
+        draw(nullptr,{25,500,depth},750,16,{15,15},color.data(),0,multiline.data());
+        if (test_position!=TextPosition{25,500,depth} || test_size!=TextSize{15,15} ||
+            test_line!=16 || test_alignment!=0 || test_text!=multiline.data()) return 26;
+        for (unsigned mode=0;mode<3;++mode) {
+            test_message_vr=mode!=0; test_message_ui=mode==1;
+            g_message_enabled=mode!=2;
+            draw(nullptr,{25,500,47},750,16,{15,15},color.data(),0,subtitle.data());
+            if (test_position!=TextPosition{25,500,47} || test_size!=TextSize{15,15} ||
+                test_alignment!=0 || test_line!=16) return 22;
+        }
+        g_message_enabled=true; test_message_vr=true; test_message_ui=false;
+    }
+    // Menu callers still reach native DrawWordWrap.
+    for (const auto site:{0x7AF9AU}) {
+        reinterpret_cast<WordWrap>(image+site-33)(nullptr,{40,470,47},720,16,
+            {14,14},color.data(),0,legacy.data());
+        if (test_position!=TextPosition{40,470,47} || test_size!=TextSize{14,14} ||
+            test_alignment!=0 || std::memcmp(image+site,MessageCallBytes(site).data(),5)!=0) return 10;
+    }
+    if (const int narrative=CheckNarrativePresentation(image,radio_calls,radio_rows,radio_gui)) return narrative;
+    if (const int ending=CheckEndingPresentation(image,radio_rows)) return ending;
     if (!RemoveMessagePresentation(error)) return 7;
-    for (const auto site:kMessageFontCalls) {
+    if (!NarrativeGuiRestored(image,radio_rows,radio_gui)) return 39;
+    for (const auto site:fixture_calls) {
         if (std::memcmp(image+site,MessageCallBytes(site).data(),5)!=0) return 8;
     }
     VirtualFree(image,0,MEM_RELEASE); return 0;

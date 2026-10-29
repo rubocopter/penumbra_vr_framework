@@ -52,6 +52,11 @@
 #include "game/Game.h"
 
 #include "../../../../../src/runtime/stereo_render_policy.hpp"
+#include "../../../../../src/graphics/neural_post_bridge.hpp"
+
+#include <algorithm>
+#include <array>
+#include <cstdint>
 
 namespace hpl {
 
@@ -330,6 +335,7 @@ namespace hpl {
 
 	void cScene::ResetVRMainUIAnchor()
 	{
+		penumbra_vr::neural_post::ResetHistory();
 		mbVRMainUIAnchorValid = false;
 	}
 
@@ -857,8 +863,58 @@ namespace hpl {
       llg->SetVREnabled(false);
 		}
 
+    // The stereo image is complete here. Use the same tracked HMD sample that
+    // rendered this frame; never issue another WaitGetPoses in postprocessing.
+    std::array<std::uint32_t, 2> sourceEyes = {
+      static_cast<std::uint32_t>(mpGraphics->GetRenderer3D()->leftEyeDesc.m_nRenderTextureId),
+      static_cast<std::uint32_t>(mpGraphics->GetRenderer3D()->rightEyeDesc.m_nRenderTextureId)
+    };
+    std::array<std::uint32_t, 2> submittedEyes = sourceEyes;
+    if (hmd) {
+      // DirectNR sees raw head rotation, so game-applied yaw (including
+      // RecenterOrientation) and scene changes must invalidate its history.
+      static const cScene* neuralScene = nullptr;
+      static const cWorld3D* neuralWorld3D = nullptr;
+      static const cWorld2D* neuralWorld2D = nullptr;
+      static const iCamera* neuralCamera = nullptr;
+      static bool neuralDrawScene = false;
+      static float neuralWorldYaw = 0.0f;
+      const float worldYaw = gGame->vr_tracking.GetWorldYaw();
+      if (neuralScene != this || neuralWorld3D != mpCurrentWorld3D ||
+          neuralWorld2D != mpCurrentWorld2D || neuralCamera != mpActiveCamera ||
+          neuralDrawScene != mbDrawScene || neuralWorldYaw != worldYaw) {
+        penumbra_vr::neural_post::ResetHistory();
+      }
+      neuralScene = this;
+      neuralWorld3D = mpCurrentWorld3D;
+      neuralWorld2D = mpCurrentWorld2D;
+      neuralCamera = mpActiveCamera;
+      neuralDrawScene = mbDrawScene;
+      neuralWorldYaw = worldYaw;
+      const auto& tracked = gGame->vr_rTrackedDevicePose[vr::k_unTrackedDeviceIndex_Hmd];
+      if (tracked.bPoseIsValid && tracked.bDeviceIsConnected) {
+        penumbra_vr::runtime::VrHmdPose pose{};
+        pose.pose_valid = true;
+        pose.device_connected = true;
+        // Raw OpenVR tracking-space transform; vr_tracking adds a separate
+        // game height offset, which must not be applied twice here.
+        std::copy_n(&tracked.mDeviceToAbsoluteTracking.m[0][0], 12,
+                    pose.device_to_absolute.values.begin());
+        std::array<penumbra_vr::runtime::VrEyeConfiguration, 2> eyes{};
+        for (unsigned i = 0; i < 2; ++i) {
+          const auto eye = i == 0 ? vr::Eye_Left : vr::Eye_Right;
+          auto& e = eyes[i];
+          hmd->GetProjectionRaw(eye, &e.left_tangent, &e.right_tangent,
+                                &e.top_tangent, &e.bottom_tangent);
+          const auto eyeToHead = hmd->GetEyeToHeadTransform(eye);
+          std::copy_n(&eyeToHead.m[0][0], 12, e.eye_to_head.values.begin());
+        }
+        static_cast<void>(penumbra_vr::neural_post::TryProcess(
+          sourceEyes, pose, eyes, submittedEyes));
+      }
+    }
     {
-      vr::Texture_t leftEyeTexture = { (void*)mpGraphics->GetRenderer3D()->leftEyeDesc.m_nRenderTextureId, vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
+      vr::Texture_t leftEyeTexture = { reinterpret_cast<void*>(static_cast<std::uintptr_t>(submittedEyes[0])), vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
       vr::EVRCompositorError err = vr::VRCompositor()->Submit(vr::Eye_Left, &leftEyeTexture);
 
       if (err)
@@ -866,7 +922,7 @@ namespace hpl {
     }
 
     {
-      vr::Texture_t rightEyeTexture = { (void*)mpGraphics->GetRenderer3D()->rightEyeDesc.m_nRenderTextureId, vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
+      vr::Texture_t rightEyeTexture = { reinterpret_cast<void*>(static_cast<std::uintptr_t>(submittedEyes[1])), vr::TextureType_OpenGL, vr::ColorSpace_Gamma };
       vr::EVRCompositorError err = vr::VRCompositor()->Submit(vr::Eye_Right, &rightEyeTexture);
 
       if (err)
@@ -951,6 +1007,7 @@ namespace hpl {
 
 	void cScene::Reset()
 	{
+		penumbra_vr::neural_post::ResetHistory();
 		m_mapLocalVars.clear();
 		m_mapGlobalVars.clear();
 		m_setLoadedMaps.clear();
@@ -1048,6 +1105,8 @@ namespace hpl {
 
 	void cScene::DestroyWorld3D(cWorld3D* apWorld)
 	{
+		// Reset before deletion even if the allocator reuses this world address.
+		if(mpCurrentWorld3D == apWorld) penumbra_vr::neural_post::ResetHistory();
 		STLFindAndDelete(mlstWorld3D,apWorld);
 	}
 

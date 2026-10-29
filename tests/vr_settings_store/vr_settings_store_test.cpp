@@ -43,6 +43,37 @@ int main() {
     std::wstring error;
     bool enabled = true;
 
+    // A malformed newly recognized integer must fail closed without rewriting
+    // the user's existing profile, including keys unknown to this version.
+    std::filesystem::create_directories(settings_path.parent_path());
+    const auto malformed_path = settings_path.parent_path() / L"malformed.ini";
+    const wchar_t* integer_keys[] = {L"NeuralInternalHeight", L"NeuralScalePercent",
+        L"NeuralIntensityPercent", L"NeuralPasses", L"NeuralStyle",
+        L"NeuralFoveaPercent", L"NeuralOuterScalePercent"};
+    const wchar_t* malformed_values[] = {L"1.5", L"2passes", L"+", L"",
+        L"2147483648", L"-2147483649", L"9999999999999999999999999",
+        L"000000000000000000000000000000000000000000000000000000000000000000x"};
+    if (!WritePrivateProfileStringW(L"VR", L"MoveSpeed", L"1.75", malformed_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"FutureOption", L"keep", malformed_path.c_str())) return 18;
+    for (const auto* key : integer_keys) {
+        for (const auto* value : malformed_values) {
+            penumbra_vr::runtime::VrSettings rejected;
+            if (!WritePrivateProfileStringW(L"VR", key, value, malformed_path.c_str()) ||
+                penumbra_vr::launcher::LoadVrSettings(malformed_path, rejected, error) ||
+                error.find(key) == std::wstring::npos) {
+                std::wcerr << L"Malformed integer accepted or misdiagnosed: " << key
+                    << L"=" << value << L'\n';
+                return 18;
+            }
+            wchar_t prior[32]{};
+            GetPrivateProfileStringW(L"VR", L"MoveSpeed", L"", prior, 32, malformed_path.c_str());
+            if (std::wstring(prior) != L"1.75") return 19;
+            GetPrivateProfileStringW(L"VR", L"FutureOption", L"", prior, 32, malformed_path.c_str());
+            if (std::wstring(prior) != L"keep") return 19;
+        }
+        if (!WritePrivateProfileStringW(L"VR", key, nullptr, malformed_path.c_str())) return 18;
+    }
+
     if (!penumbra_vr::launcher::LoadMonitorMirrorSetting(
             settings_path, enabled, error) || enabled || !error.empty()) {
         std::cerr << "A missing settings file did not use the safe default\n";
@@ -109,11 +140,13 @@ int main() {
     expected.play_mode = penumbra_vr::runtime::VrPlayMode::seated;
     expected.player_height = 1.85F;
     expected.hrtf_mode = penumbra_vr::runtime::VrHrtfMode::on;
+    expected.neural = {true, 1024, 65, 85, 3, 2, 40, true, 15};
     if (!WritePrivateProfileStringW(
             L"Unrelated", L"Preserved", L"yes", settings_path.c_str())) {
         std::cerr << "Could not create the unrelated-section fixture\n";
         return 9;
     }
+    if (!WritePrivateProfileStringW(L"VR", L"FutureOption", L"keep", settings_path.c_str())) return 20;
     if (!penumbra_vr::launcher::SaveVrSettings(settings_path, expected, error) ||
         !error.empty()) {
         std::wcerr << L"Could not save the complete VR profile: " << error << L'\n';
@@ -136,7 +169,8 @@ int main() {
         settings.physical_crouch_depth!=expected.physical_crouch_depth ||
         settings.subtitle_scale!=expected.subtitle_scale ||
         settings.handedness!=expected.handedness || settings.play_mode!=expected.play_mode ||
-        settings.player_height!=expected.player_height || settings.hrtf_mode!=expected.hrtf_mode) {
+        settings.player_height!=expected.player_height || settings.hrtf_mode!=expected.hrtf_mode ||
+        settings.neural != expected.neural) {
         std::cerr << "The complete VR profile did not round trip\n";
         return 10;
     }
@@ -147,6 +181,61 @@ int main() {
         std::cerr << "The settings transaction discarded an unrelated section\n";
         return 15;
     }
+    GetPrivateProfileStringW(L"VR", L"FutureOption", L"", preserved, 16, settings_path.c_str());
+    if (std::wstring(preserved) != L"keep") return 20;
+
+    // Check public INI names and units independently of the loader so a
+    // save/load pair using the same wrong key cannot mask an integration bug.
+    struct SavedValue { const wchar_t* key; const wchar_t* text; };
+    const SavedValue saved_values[] = {
+        {L"NeuralEnabled", L"true"}, {L"NeuralInternalHeight", L"1024"},
+        {L"NeuralScalePercent", L"65"}, {L"NeuralIntensityPercent", L"85"},
+        {L"NeuralPasses", L"3"}, {L"NeuralStyle", L"2"},
+        {L"NeuralFoveaPercent", L"40"}, {L"NeuralOuterEnabled", L"true"},
+        {L"NeuralOuterScalePercent", L"15"},
+    };
+    for (const auto& saved : saved_values) {
+        wchar_t value[32]{};
+        GetPrivateProfileStringW(L"VR", saved.key, L"", value, 32, settings_path.c_str());
+        if (std::wstring(value) != saved.text) return 21;
+    }
+    const auto other_game_path = settings_path.parent_path() / L"other-game.ini";
+    penumbra_vr::runtime::VrSettings other_game;
+    if (!penumbra_vr::launcher::SaveVrSettings(other_game_path, other_game, error) ||
+        !penumbra_vr::launcher::LoadVrSettings(settings_path, settings, error) ||
+        settings.neural != expected.neural ||
+        !penumbra_vr::launcher::LoadVrSettings(other_game_path, other_game, error) ||
+        other_game.neural.enabled || other_game.neural.internal_height != 896 ||
+        other_game.neural.scale_percent != 25 || other_game.neural.intensity_percent != 60 ||
+        other_game.neural.passes != 1 || other_game.neural.style != 0 ||
+        other_game.neural.fovea_percent != 100 || other_game.neural.outer_enabled ||
+        other_game.neural.outer_scale_percent != 25) return 22;
+
+    // Signed integral values are syntactically valid and normalize at the
+    // schema boundary; decimals/overflow above are malformed and never clamp.
+    if (!WritePrivateProfileStringW(L"VR", L"NeuralInternalHeight", L"-5", other_game_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"NeuralScalePercent", L"+101", other_game_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"NeuralIntensityPercent", L"-1", other_game_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"NeuralPasses", L"5", other_game_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"NeuralStyle", L"-1", other_game_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"NeuralFoveaPercent", L"10", other_game_path.c_str()) ||
+        !WritePrivateProfileStringW(L"VR", L"NeuralOuterScalePercent", L"101", other_game_path.c_str()) ||
+        !penumbra_vr::launcher::LoadVrSettings(other_game_path, other_game, error) ||
+        other_game.neural.internal_height != 64 || other_game.neural.scale_percent != 100 ||
+        other_game.neural.intensity_percent != 0 || other_game.neural.passes != 4 ||
+        other_game.neural.style != 0 || other_game.neural.fovea_percent != 20 ||
+        other_game.neural.outer_scale_percent != 100) return 23;
+    for (const auto* key : {L"NeuralEnabled", L"NeuralOuterEnabled"}) {
+        if (!WritePrivateProfileStringW(L"VR", key, L"maybe", other_game_path.c_str()) ||
+            penumbra_vr::launcher::LoadVrSettings(other_game_path, other_game, error) ||
+            error.find(key) == std::wstring::npos ||
+            !WritePrivateProfileStringW(L"VR", key, L"false", other_game_path.c_str())) return 24;
+    }
+
+    // Old profiles without Neural keys retain safe defaults and old values.
+    if (!penumbra_vr::launcher::LoadVrSettings(malformed_path, other_game, error) ||
+        other_game.neural != penumbra_vr::runtime::NeuralPostSettings{} ||
+        other_game.move_speed != 1.75F) return 25;
 
     if (!WritePrivateProfileStringW(L"VR",L"Handedness",L"ambidextrous",settings_path.c_str()) ||
         penumbra_vr::launcher::LoadVrSettings(settings_path,settings,error) || error.empty()) return 11;
@@ -184,6 +273,19 @@ int main() {
         return 8;
     }
 
+    penumbra_vr::runtime::VrSettings bp_profile, rq_profile, reloaded;
+    bp_profile.neural.enabled = true;
+    bp_profile.neural.intensity_percent = 35;
+    rq_profile.neural.intensity_percent = 80;
+    if (!penumbra_vr::launcher::SaveVrSettings(other_game_path, bp_profile, error, L"Neural.BlackPlague") ||
+        !penumbra_vr::launcher::SaveVrSettings(other_game_path, rq_profile, error, L"Neural.Requiem") ||
+        !penumbra_vr::launcher::LoadVrSettings(other_game_path, reloaded, error, L"Neural.BlackPlague") ||
+        reloaded.neural != bp_profile.neural ||
+        !penumbra_vr::launcher::LoadVrSettings(other_game_path, reloaded, error, L"Neural.Requiem") ||
+        reloaded.neural != rq_profile.neural) {
+        std::cerr << "Game Neural profiles interfere inside the shared settings file\n";
+        return 26;
+    }
     std::cout << "Persistent VR settings passed\n";
     return 0;
 }

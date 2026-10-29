@@ -19,6 +19,7 @@
 #include "EffectHandler.h"
 
 #include "Init.h"
+#include "NarrativeTextPresentation.h"
 #include "Player.h"
 #include "Inventory.h"
 #include "PlayerHelper.h"
@@ -791,12 +792,12 @@ void cEffect_SubTitle::OnPostSceneDraw()
       cMatrixf transform = subTitle.mmTransform;
       transform = cMath::MatrixMul(camera->GetViewMatrix(), transform);
 
-			mpFont->DrawWordWrapWorld(cVector3f(0.0f, 0.0f, 0.0f) + cVector3f(1.0f, 1.0f, 0.0f),750,16,15,cColor(0,fAlpha),
-				eFontAlign_Center,subTitle.msMessage, transform);
-			mpFont->DrawWordWrapWorld(cVector3f(0.0f, 0.0f, 0.0f) + cVector3f(-1.0f, -1.0f, 0.0f),750,16,15,cColor(0,fAlpha),
-				eFontAlign_Center,subTitle.msMessage, transform);
-      mpFont->DrawWordWrapWorld(cVector3f(0.0f, 0.0f, 0.0f), 750, 16, 15, cColor(1, fAlpha),
-        eFontAlign_Center, subTitle.msMessage, transform);
+			DrawVrNarrativeWorldText(mpFont,cVector3f(0.0f, 0.0f, 0.0f) + cVector3f(1.0f, 1.0f, 0.0f),750,16,15,cColor(0,fAlpha),
+				subTitle.msMessage, transform, mpInit->mVRSettings.GetSubtitleScale(), mpInit->mbHasHaptics);
+			DrawVrNarrativeWorldText(mpFont,cVector3f(0.0f, 0.0f, 0.0f) + cVector3f(-1.0f, -1.0f, 0.0f),750,16,15,cColor(0,fAlpha),
+				subTitle.msMessage, transform, mpInit->mVRSettings.GetSubtitleScale(), mpInit->mbHasHaptics);
+      DrawVrNarrativeWorldText(mpFont,cVector3f(0.0f, 0.0f, 0.0f), 750, 16, 15, cColor(1, fAlpha),
+        subTitle.msMessage, transform, mpInit->mVRSettings.GetSubtitleScale(), mpInit->mbHasHaptics);
 		}
 	}
 }
