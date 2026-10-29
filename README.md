@@ -75,7 +75,7 @@ https://github.com/user-attachments/assets/3e87feb8-b50b-484d-b283-57c84128a2b3
 ## Install
 
 1. Install **Penumbra: Overture**, **Penumbra: Black Plague** and/or **Penumbra: Requiem**, plus SteamVR.
-2. Download and run the [latest Penumbra VR installer](https://github.com/rubocopter/penumbra_vr_framework/releases/latest). It detects supported installations and lets you choose the games and optional components you want.
+2. Download and run [PenumbraVR-Setup-1.0.15.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.15/PenumbraVR-Setup-1.0.15.exe), the current stable installer ([release notes and all downloads](https://github.com/rubocopter/penumbra_vr_framework/releases/latest)). It detects supported installations and lets you choose the games and optional components you want.
 3. Start SteamVR, put on the headset and launch the game normally.
 
 The installer can also update, verify, repair or remove the Framework. Optional components include Spanish translations, Overture texture improvements and recommended graphics settings.
@@ -90,7 +90,7 @@ Unknown or modified game builds may be rejected by the installer. Check [support
 
 ## Release and maintenance status
 
-The latest pre-release is **[v1.0.15 — trilogy fixes and experimental Neural](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15)** (29 October 2026). It includes the preceding unreleased 1.0.14 work, centered narrative text and bidirectional VR settings controls across the trilogy, Requiem's accepted cable/rope correction and a shared seated-height fix. Render scale uses SteamVR's recommendation and requires restart in all three games; Neural settings apply live and are saved independently per game.
+The current stable and recommended release is **[v1.0.15 — trilogy fixes and experimental Neural](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15)** (29 October 2026). It includes the preceding unreleased 1.0.14 work, centered narrative text and bidirectional VR settings controls across the trilogy, Requiem's accepted cable/rope correction and a shared seated-height fix. Render scale uses SteamVR's recommendation and requires restart in all three games; Neural settings apply live and are saved independently per game. The experimental label applies to the optional Neural component.
 
 **Neural is experimental, optional and disabled by default.** Setup includes the x64 helper/DirectNR forwarder. After installing VR, select installed games in **Maintenance → Import Neural (experimental)** and select your local `nvngx_dlssnr.dll`. The NVIDIA model is not included/downloaded; [DirectNR's prerequisites and model guidance](https://github.com/lowpoplabs/nr-bridge#prerequisites) explain the separate requirement. Missing or unsupported Neural preserves the original image and reports Unavailable. Quality, stereo consistency, latency and performance may be worse. This is not an official NVIDIA integration or a promise of visual improvement.
 

@@ -6,7 +6,7 @@ $temp = Join-Path ([IO.Path]::GetTempPath()) ('PvrVersion-' + [guid]::NewGuid().
 try {
     New-Item -ItemType Directory -Path $temp | Out-Null
     $release = Get-Content -LiteralPath (Join-Path $repo 'release.json') -Raw | ConvertFrom-Json
-    if ($release.version -notmatch '^\d+\.\d+\.\d+$' -or $release.channel -cne 'release-candidate') { throw 'Wrong release identity.' }
+    if ($release.version -notmatch '^\d+\.\d+\.\d+$' -or $release.channel -cnotin @('release-candidate','stable')) { throw 'Wrong release identity.' }
     [xml]$setupProject=Get-Content (Join-Path $repo 'installer/PenumbraVR.Setup/PenumbraVR.Setup.csproj')
     if ($setupProject.Project.PropertyGroup.Version -cne $release.version) { throw 'Setup default version differs from release identity.' }
     $generator = Join-Path $repo 'tools/Write-PenumbraVrVersion.ps1'
@@ -14,7 +14,7 @@ try {
     & powershell -NoProfile -ExecutionPolicy Bypass -File $generator -OutputDirectory $temp
     if ($LASTEXITCODE -ne 0) { throw 'PowerShell 5.1 file entry point failed.' }
     $header = Get-Content -LiteralPath (Join-Path $temp 'pvr_version.hpp') -Raw
-    if ($header -notmatch ('PVR_VERSION_TEXT "'+[regex]::Escape($release.version)+'"') -or $header -notmatch 'PVR_RELEASE_CHANNEL "release-candidate"') { throw 'Header identity differs.' }
+    if ($header -notmatch ('PVR_VERSION_TEXT "'+[regex]::Escape($release.version)+'"') -or $header -notmatch ('PVR_RELEASE_CHANNEL "'+[regex]::Escape($release.channel)+'"')) { throw 'Header identity differs.' }
     $before = (Get-Item (Join-Path $temp 'pvr_version.hpp')).LastWriteTimeUtc
     & $generator -OutputDirectory $temp
     if ((Get-Item (Join-Path $temp 'pvr_version.hpp')).LastWriteTimeUtc -ne $before) { throw 'Unchanged identity unnecessarily rebuilt inputs.' }

@@ -1,6 +1,6 @@
 # Framework release status
 
-## Current public candidate — v1.0.15
+## Current stable release — v1.0.15
 
 [Version 1.0.15](releases/1.0.15.md) combines the previously local 1.0.14 work,
 experimental Neural and the current trilogy maintenance fixes. Setup includes
@@ -25,6 +25,12 @@ gameplay. All four hosted CI jobs pass at the build-source commit.
 
 The release tag additionally includes documentation and this artifact record;
 the matching Source ZIP identifies the exact clean commit used for the binaries.
+The maintainer promoted 1.0.15 to the stable/latest release on 2026-10-29 without
+replacing its tag or verified assets. The original build report and packaged
+manifest retain their build-time `release-candidate` channel as provenance;
+the current repository release channel is `stable`. Release classification
+does not change the scoped validation evidence above. Only optional Neural
+carries the experimental label in the current release description.
 
 ## Historical local progression candidate — v1.0.14
 

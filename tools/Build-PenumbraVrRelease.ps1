@@ -6,7 +6,7 @@ param([Parameter(Mandatory=$true)][string]$OutputDirectory,
 $ErrorActionPreference='Stop'
 $repo=Split-Path -Parent $PSScriptRoot
 $release=Get-Content -LiteralPath (Join-Path $repo 'release.json') -Raw | ConvertFrom-Json
-if($release.schemaVersion -ne 1 -or $release.version -notmatch '^\d+\.\d+\.\d+$' -or $release.channel -ne 'release-candidate'){throw 'Release identity is not a versioned candidate.'}
+if($release.schemaVersion -ne 1 -or $release.version -notmatch '^\d+\.\d+\.\d+$' -or $release.channel -cnotin @('release-candidate','stable')){throw 'Release identity must specify a version and a recognized release channel.'}
 $output=[IO.Path]::GetFullPath($OutputDirectory)
 if(Test-Path -LiteralPath $output){throw 'Use a new output directory; existing artifacts are never overwritten.'}
 $dirty=@(& git -c "safe.directory=$repo" -C $repo status --porcelain)

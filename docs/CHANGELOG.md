@@ -7,6 +7,7 @@ Product-specific Overture release history is retained under
 
 ## 1.0.15 — 2026-10-29 — experimental Neural and trilogy maintenance
 
+- Current stable/latest release; the experimental label applies to optional Neural.
 - Include the preceding local 1.0.14 progression and interaction corrections.
 - Center/enlarge trilogy narrative channels, video/Radio/ScreenGui and native
   ending body text; preserve native payload/timing and fit long ending pages.

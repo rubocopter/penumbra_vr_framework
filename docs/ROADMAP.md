@@ -1,7 +1,7 @@
 # Roadmap — maintenance
 
 Core trilogy VR is maintained for reproducible installation, input and progression
-failures. The current candidate is [v1.0.15](releases/1.0.15.md), dated 2026-10-29,
+failures. The current stable release is [v1.0.15](releases/1.0.15.md), dated 2026-10-29,
 including the previously local 1.0.14 work. Neural is an explicitly requested,
 optional experimental research path, not a core visual-quality/support promise.
 Automated evidence and scoped maintainer reports are recorded separately;
@@ -15,7 +15,7 @@ distinguishes its cause. Do not launch games as a routine step.
 ## Current maintenance gates
 
 These are **reported failures or pending acceptance**, not promises of new
-functionality or proof that the candidate already works in headset.
+functionality or proof of complete headset validation of the current release.
 
 | Report | Current evidence (2026-10-29) | Condition for closing |
 | --- | --- | --- |
@@ -33,7 +33,7 @@ functionality or proof that the candidate already works in headset.
 | Requiem intermittent startup crash | Captured SDL mutex failures but no identified cause or fix. | New discriminating evidence, verified correction and scoped live validation. |
 
 Level04 water, level05 buttons and sliders are **independent acceptance gates**.
-Host tests do not establish Quest 3 behavior. Publishing a maintenance candidate does not close
+Host tests do not establish Quest 3 behavior. Publishing a stable maintenance release does not close
 these in-game/headset gates. Follow the
 [focused procedure](VR_HEADSET_TEST_CHECKLIST.md#trilogy-feedback-candidate--independent-acceptance)
 and the [Requiem evidence](TRILOGY_PARITY_PLAN.md#requiem-level0405-progression-feedback--2026-10-25).
@@ -45,8 +45,8 @@ specific reproducible blocker on its merits.
 ## Release condition and documentation ownership
 
 A maintenance release requires bounded demonstrated fixes and clean versioned
-source/installer verification. The maintainer authorized v1.0.15 publication
-with the current fixes and experimental Neural included in Setup. Publication
+source/installer verification. The maintainer designated v1.0.15 as the current
+stable/latest release, with the current fixes and optional experimental Neural included in Setup. Publication
 does not close headset, full-progression or clean-PC gates. Keep implemented,
 host-tested, live-tested, headset-validated and supported states distinct.
 Water and SDL-crash investigations remain unresolved.
