@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/latest"><b>Download the VR installer →</b></a>
+  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15"><b>Download the VR installer →</b></a>
   &nbsp;·&nbsp;
   <a href="#install">Install</a>
   &nbsp;·&nbsp;

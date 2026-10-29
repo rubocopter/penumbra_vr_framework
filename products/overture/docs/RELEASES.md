@@ -1,5 +1,16 @@
 # Release history
 
+## v1.0.15 — Experimental Neural and trilogy consistency (2026-10-29)
+
+Overture consumes the shared seated-reach correction and gains centered/enlarged
+GameMessage, Radio, introductory and transient narrative text with preserved
+native fades and subtitle scaling. VR settings have explicit minus/plus buttons.
+Optional Neural has independent live settings, safe original-image fallback and
+a bundled x64 helper with a local-model import in Setup. It is experimental,
+defaults off and may worsen image quality/performance. The NVIDIA model is not
+distributed. Game RenderScale remains restart-applied. New headset acceptance
+is pending; see [Framework notes](../../../docs/releases/1.0.15.md).
+
 ## v1.0.14 — Coordinated progression candidate (2026-10-28)
 
 Overture receives the coordinated executable/package identity. Gameplay remains

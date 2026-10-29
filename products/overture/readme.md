@@ -2,7 +2,7 @@
 
 A community-made PCVR rework that brings **Penumbra: Overture** to full room-scale VR with motion-controlled hands, physical interactions, and a complete spatial-audio chain built for horror.
 
-> Framework product — current release: **v1.0.14** (local coordinated progression candidate; publication and in-game/headset validation pending). The preceding public candidate is v1.0.13. You must own **Penumbra: Overture** on Steam; the original game is not included.
+> Framework product — current release: **v1.0.15** (trilogy maintenance candidate with optional experimental Neural; new headset acceptance pending). You must own **Penumbra: Overture** on Steam; the original game is not included.
 
 This directory contains the Framework-owned Overture product derived from the accepted Rework baseline. For the current trilogy/framework state, see the root [README](../../README.md), [ROADMAP](../../docs/ROADMAP.md), [trilogy parity plan](../../docs/TRILOGY_PARITY_PLAN.md), and [supported builds](../../docs/SUPPORTED_BUILDS.md).
 
@@ -41,7 +41,7 @@ Penumbra is about what you hear coming. This rework rebuilds the entire acoustic
 The installer adds the mod to an existing retail installation. You must own
 Penumbra: Overture; the original game is not included.
 
-1. Download [PenumbraVR-Setup-1.0.13.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.13/PenumbraVR-Setup-1.0.13.exe).
+1. Download [PenumbraVR-Setup-1.0.15.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.15/PenumbraVR-Setup-1.0.15.exe).
 2. Close the games, run the installer and select **Overture**. It detects the Steam installation and backs up replaced files.
 3. Start SteamVR, then launch **Penumbra: Overture** with Steam's normal **Play** button.
 
