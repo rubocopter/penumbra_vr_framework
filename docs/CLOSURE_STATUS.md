@@ -2,7 +2,7 @@
 
 ## Local progression candidate — v1.0.14
 
-The 2026-10-28 candidate adds the Requiem remaining-level interaction wiring
+The 2026-10-28 candidate, revised 2026-10-29, adds the Requiem remaining-level interaction wiring
 described in [the notes](releases/1.0.14.md). It is not a stable/full-playthrough
 acceptance claim. Actual authored cable/rope/connection and ending completion
 remain headset gates; water/crouch recovery and the SDL crash remain unresolved.
@@ -11,10 +11,12 @@ until a separate publication is verified.
 
 The exact local installer, matching source and checksums are pinned in the
 [1.0.14 artifact record](releases/1.0.14-validation.json), built from clean
-`1592ba45232541b2987dd6526c801e0527e3abac`. Both Framework configurations pass
-83/83 tests; Overture passes 298 checks. EN/ES standalone extraction, payload
+`5eec4f8628fc2557881882d01b18b8a472d0e255`. Both Framework configurations pass
+88/88 tests; Overture passes 298 checks. EN/ES standalone extraction, payload
 hashes, source bytes, topology A–F, 1.0.13 upgrade/repair/exact restoration and
-20 uninstall-safety cases pass in isolated roots. This remains a local candidate.
+20 uninstall-safety cases pass in isolated roots. The revised 2026-10-29 Steam
+shared-root deployment matches the exact package, preserving personal settings
+and game executable hashes; no game was launched. This remains a local candidate.
 
 ## Current public maintenance candidate — v1.0.13: headset validation pending
 
