@@ -206,8 +206,8 @@ int main() {
         settings.neural != expected.neural ||
         !penumbra_vr::launcher::LoadVrSettings(other_game_path, other_game, error) ||
         other_game.neural.enabled || other_game.neural.internal_height != 896 ||
-        other_game.neural.scale_percent != 25 || other_game.neural.intensity_percent != 60 ||
-        other_game.neural.passes != 1 || other_game.neural.style != 0 ||
+        other_game.neural.scale_percent != 60 || other_game.neural.intensity_percent != 90 ||
+        other_game.neural.passes != 1 || other_game.neural.style != 2 ||
         other_game.neural.fovea_percent != 100 || other_game.neural.outer_enabled ||
         other_game.neural.outer_scale_percent != 25) return 22;
 

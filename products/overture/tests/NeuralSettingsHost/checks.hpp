@@ -31,6 +31,10 @@ static void CheckStepGeometry(cMainMenuWidget_Button* row, cMainMenuWidget* step
 int main() {
     cVRSettings settings;
     NeuralPostSettings defaults;
+    assert(!defaults.enabled && defaults.internal_height == 896 &&
+        defaults.scale_percent == 60 && defaults.intensity_percent == 90 &&
+        defaults.passes == 1 && defaults.style == 2 && defaults.fovea_percent == 100 &&
+        !defaults.outer_enabled && defaults.outer_scale_percent == 25);
     assert(settings.GetNeuralSettings() == defaults);
     settings.Load(nullptr);
     settings.Save(nullptr);
@@ -118,7 +122,7 @@ int main() {
     menu.SetState(eMainMenuState_OptionsVRNeural);
     assert(init.commits == 0 && init.mVRSettings.GetNeuralSettings() == beforeSwitch);
 
-    const int incremented[] = {1, 960, 30, 65, 2, 1, 100, 1, 30};
+    const int incremented[] = {1, 960, 65, 95, 2, 0, 100, 1, 30};
     for(int i = 0; i < 9; ++i) {
         const auto id = static_cast<eVRMenuSetting>(eVRMenuSetting_NeuralEnabled + i);
         init.mVRSettings.SetNeuralSettings(defaults);
@@ -166,9 +170,9 @@ int main() {
     }
     init.mVRSettings.SetNeuralSettings(defaults);
     gpVRSettingButtons[eVRMenuSetting_NeuralStyle]->OnMouseDown(eMButton_Right);
-    assert(init.mVRSettings.GetNeuralSettings().style == 2);
+    assert(init.mVRSettings.GetNeuralSettings().style == 1);
     gpVRSettingButtons[eVRMenuSetting_NeuralStyle]->OnMouseDown(eMButton_Left);
-    assert(init.mVRSettings.GetNeuralSettings().style == 0);
+    assert(init.mVRSettings.GetNeuralSettings().style == 2);
     gbMustRestart = true; // An unrelated graphics change can still require restart.
     gpVRSettingButtons[eVRMenuSetting_NeuralEnabled]->OnMouseDown(eMButton_Left);
     assert(gbMustRestart);

@@ -175,8 +175,10 @@ The helper/forwarder are bundled; the NVIDIA model is not. Model requirements
 and source guidance: https://github.com/lowpoplabs/nr-bridge#prerequisites.
 
 Enable it in **VR Settings → Neural**. All nine controls apply live, are stored
-separately per game and have trigger-operated minus/plus buttons. Start modestly:
-height 896, scale 50%, intensity 25%, one pass, style0, center100%, outerOff.
+separately per game and have trigger-operated minus/plus buttons. New profiles
+start with height 896, processing scale 60%, intensity 90%, one pass, Cinematic
+style (2), center 100% and Neural disabled on the periphery. These are the
+experimental Deus Ex-inspired defaults; saved per-game values are preserved.
 Neural is disabled by default, approximates rotation motion/constant depth and
 can worsen image quality, stereo consistency, performance or latency. It does
 not change the SteamVR eye recommendation. Game RenderScale requires restart

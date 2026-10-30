@@ -294,10 +294,10 @@ struct Session {
             return static_cast<std::uint32_t>(configured ? selected :
                 static_cast<int>(GetPrivateProfileIntW(L"Neural", key, fallback, ini.c_str())));
         };
-        header->scale_percent = number(L"ScalePercent", 25, settings.scale_percent);
-        header->intensity_percent = number(L"IntensityPercent", 60, settings.intensity_percent);
+        header->scale_percent = number(L"ScalePercent", 60, settings.scale_percent);
+        header->intensity_percent = number(L"IntensityPercent", 90, settings.intensity_percent);
         header->passes = number(L"Passes", 1, settings.passes);
-        header->style = number(L"Style", 0, settings.style);
+        header->style = number(L"Style", 2, settings.style);
         header->fovea_percent = number(L"FoveaPercent", 100, settings.fovea_percent);
         header->outer_enabled = number(L"OuterEnabled", 0, settings.outer_enabled ? 1 : 0);
         header->outer_scale_percent = number(L"OuterScalePercent", 25, settings.outer_scale_percent);

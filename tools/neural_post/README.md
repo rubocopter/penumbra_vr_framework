@@ -51,11 +51,13 @@ explicit NeuralPost.ini. Verify configuration and status from inside the game;
 standalone GPU probes do not establish headset performance or image quality.
 
 Internal height is the transport proxy, not the headset render resolution.
-Processing scale further reduces that proxy: height 896 at 25% evaluates an
-approximately 224-pixel-high central tier when the central region is 100%.
+Processing scale further reduces that proxy: the new default height 896 at 60%
+evaluates an approximately 538-pixel-high central tier when the central region
+is 100%.
 Increasing either height or scale adds cost; additional passes run the model
-again and do not necessarily improve the result. Compare at one pass and modest
-intensity before increasing cost. This is a generative appearance edit with
+again and do not necessarily improve the result. The default 90% intensity is
+aggressive; reduce it if the model overwhelms original detail. This is a
+generative appearance edit with
 estimated camera rotation and constant depth, so neither maximum settings nor
 successful inference establish better image quality in a particular scene.
 

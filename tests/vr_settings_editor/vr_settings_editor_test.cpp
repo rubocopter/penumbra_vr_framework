@@ -152,9 +152,9 @@ using namespace penumbra_vr::runtime;
         !AdjustVrSetting(settings, VrSettingId::neural_enabled, 1) || settings.neural.enabled ||
         !AdjustVrSetting(settings, VrSettingId::neural_outer_enabled, 1) || !settings.neural.outer_enabled ||
         !AdjustVrSetting(settings, VrSettingId::neural_outer_enabled, -1) || settings.neural.outer_enabled ||
-        !AdjustVrSetting(settings, VrSettingId::neural_style, -1) || settings.neural.style != 2 ||
-        !AdjustVrSetting(settings, VrSettingId::neural_style, 1) || settings.neural.style != 0 ||
-        !AdjustVrSetting(settings, VrSettingId::neural_style, 1) || settings.neural.style != 1) return false;
+        !AdjustVrSetting(settings, VrSettingId::neural_style, -1) || settings.neural.style != 1 ||
+        !AdjustVrSetting(settings, VrSettingId::neural_style, 1) || settings.neural.style != 2 ||
+        !AdjustVrSetting(settings, VrSettingId::neural_style, 1) || settings.neural.style != 0) return false;
     const auto snapshot = settings.neural;
     if (AdjustVrSetting(settings, VrSettingId::neural_intensity, 0) || settings.neural != snapshot) return false;
 
@@ -186,7 +186,7 @@ using namespace penumbra_vr::runtime;
     VrSettingCapabilities partial;
     partial.supported[static_cast<std::size_t>(VrSettingId::neural_intensity)] = true;
     ResetVrSettings(settings, partial);
-    if (settings.neural.intensity_percent != 60 || settings.neural.internal_height != 1024 ||
+    if (settings.neural.intensity_percent != 90 || settings.neural.internal_height != 1024 ||
         !settings.neural.enabled || settings.neural.style != 2 || !settings.neural.outer_enabled ||
         settings.neural.outer_scale_percent != 20 || settings.move_speed != 2.5F) return false;
     VrSettingCapabilities neural_only;

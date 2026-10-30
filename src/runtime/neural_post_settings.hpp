@@ -8,10 +8,10 @@ namespace runtime {
 struct NeuralPostSettings {
     bool enabled = false;
     int internal_height = 896;
-    int scale_percent = 25;
-    int intensity_percent = 60;
+    int scale_percent = 60;
+    int intensity_percent = 90;
     int passes = 1;
-    int style = 0;
+    int style = 2;
     int fovea_percent = 100;
     bool outer_enabled = false;
     int outer_scale_percent = 25;
