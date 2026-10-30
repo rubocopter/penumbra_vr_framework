@@ -20,7 +20,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15"><b>Download the VR installer →</b></a>
+  <a href="https://github.com/rubocopter/penumbra_vr_framework/releases/latest"><b>Download the VR installer →</b></a>
   &nbsp;·&nbsp;
   <a href="#install">Install</a>
   &nbsp;·&nbsp;
@@ -34,15 +34,25 @@
 
 ## One framework, three games
 
-<p align="center">
-  <img src="assets/steam/overture-vr-600x900.png" width="180" alt="Penumbra: Overture VR">
-  <img src="assets/steam/black-plague-vr-600x900.png" width="180" alt="Penumbra: Black Plague VR">
-  <img src="assets/steam/requiem-vr-600x900.png" width="180" alt="Penumbra: Requiem VR">
-</p>
-
-- **Penumbra: Overture:** Descend into the mine with full head tracking and tracked-hand interaction.
-- **Penumbra: Black Plague:** Explore the shelter, handle objects directly and work through its puzzles in VR.
-- **Penumbra: Requiem:** Return for the puzzle-focused expansion, running through the Black Plague installation.
+<table>
+<tr>
+<td width="33%" align="center">
+  <img src="assets/steam/overture-vr-600x900.png" width="210" alt="Penumbra: Overture VR"><br>
+  <b>Penumbra: Overture</b><br>
+  Descend into the mine with full head tracking and tracked-hand interaction.
+</td>
+<td width="33%" align="center">
+  <img src="assets/steam/black-plague-vr-600x900.png" width="210" alt="Penumbra: Black Plague VR"><br>
+  <b>Penumbra: Black Plague</b><br>
+  Explore the shelter, handle objects directly and work through its puzzles in VR.
+</td>
+<td width="33%" align="center">
+  <img src="assets/steam/requiem-vr-600x900.png" width="210" alt="Penumbra: Requiem VR"><br>
+  <b>Penumbra: Requiem</b><br>
+  Return for the puzzle-focused expansion, running through the Black Plague installation.
+</td>
+</tr>
+</table>
 
 ## What changes in VR
 
@@ -56,47 +66,51 @@ The exact interaction set varies between the three games. See the [controls guid
 
 ## See it in motion
 
-### Penumbra: Overture
+<p align="center"><b>Penumbra: Overture</b></p>
 
-https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/f842a62c-ed82-4423-b9b9-43c14caf2265" width="720" controls muted loop></video>
+</p>
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=dc90jlH-tp0">Watch the first 18 minutes of Overture in VR →</a>
 </p>
 
-### Penumbra: Black Plague
+<p align="center"><b>Penumbra: Black Plague</b></p>
 
-https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/9e4cc11f-7785-42e6-be19-6fa0ced367fd" width="720" controls muted loop></video>
+</p>
 
-### Penumbra: Requiem
+<p align="center"><b>Penumbra: Requiem</b></p>
 
-https://github.com/user-attachments/assets/3e87feb8-b50b-484d-b283-57c84128a2b3
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/3e87feb8-b50b-484d-b283-57c84128a2b3" width="720" controls muted loop></video>
+</p>
 
 ## Install
 
 1. Install **Penumbra: Overture**, **Penumbra: Black Plague** and/or **Penumbra: Requiem**, plus SteamVR.
-2. Download and run [PenumbraVR-Setup-1.0.15.exe](https://github.com/rubocopter/penumbra_vr_framework/releases/download/v1.0.15/PenumbraVR-Setup-1.0.15.exe), the current stable installer ([release notes and all downloads](https://github.com/rubocopter/penumbra_vr_framework/releases/latest)). It detects supported installations and lets you choose the games and optional components you want.
+2. Download and run the [latest Penumbra VR installer](https://github.com/rubocopter/penumbra_vr_framework/releases/latest). It detects supported installations and lets you choose the games and optional components you want.
 3. Start SteamVR, put on the headset and launch the game normally.
 
 The installer can also update, verify, repair or remove the Framework. Optional components include Spanish translations, Overture texture improvements and recommended graphics settings.
 
 ## Requirements and compatibility
 
-**Required:** Windows PC · SteamVR · PCVR headset · two tracked controllers · supported Steam editions of the original Penumbra games. GOG editions are not supported.
+**Required:** Windows PC · SteamVR · PCVR headset · two tracked controllers · original supported Penumbra game files.
 
 The Framework has been tested end-to-end primarily with **PS VR2 and Sense controllers**. Bundled profiles are also provided for Valve Index, Meta/Oculus Touch, Pico, Vive and Windows Mixed Reality controllers, but not every device/action combination has been validated on physical hardware.
 
 Unknown or modified game builds may be rejected by the installer. Check [supported builds](docs/SUPPORTED_BUILDS.md), [controller mappings](docs/CONTROLS.md) and the [VR configuration guide](docs/VR_CONFIGURATION.md) before troubleshooting a setup.
 
-## Release and maintenance status
+## Current release status
 
-The current stable and recommended release is **[v1.0.15 — trilogy fixes and experimental Neural](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15)** (29 October 2026). It includes the preceding unreleased 1.0.14 work, centered narrative text and bidirectional VR settings controls across the trilogy, Requiem's accepted cable/rope correction and a shared seated-height fix. Render scale uses SteamVR's recommendation and requires restart in all three games; Neural settings apply live and are saved independently per game. The experimental label applies to the optional Neural component.
+The current stable and recommended release is **[v1.0.15 — trilogy fixes and experimental Neural](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15)**.
 
-**Neural is experimental, optional and disabled by default.** Setup includes the x64 helper/DirectNR forwarder. After installing VR, select installed games in **Maintenance → Import Neural (experimental)** and select your local `nvngx_dlssnr.dll`. The NVIDIA model is not included/downloaded; [DirectNR's prerequisites and model guidance](https://github.com/lowpoplabs/nr-bridge#prerequisites) explain the separate requirement. Missing or unsupported Neural preserves the original image and reports Unavailable. Quality, stereo consistency, latency and performance may be worse. This is not an official NVIDIA integration or a promise of visual improvement.
+Penumbra VR Framework is in maintenance. Neural is optional, experimental and disabled by default; see the current [release notes](docs/releases/1.0.15.md) and [validation status](docs/CLOSURE_STATUS.md).
 
-Core VR remains a maintenance project; Neural is a separate opt-in research path. Automated checks and scoped maintainer feedback do not establish full playthroughs, comfort, universal headset support or independent clean-PC readiness. The maintainer accepted cable/rope stability on local builds; new seated reach, render-scale startup and narrative readability retests remain. Requiem level04 water recovery and the intermittent SDL startup crash are unresolved. Other progression gates remain in the [roadmap](docs/ROADMAP.md#current-maintenance-gates).
-
-See [v1.0.15 notes](docs/releases/1.0.15.md), [precise validation status](docs/CLOSURE_STATUS.md) and [VR/Neural configuration](docs/VR_CONFIGURATION.md).
+Check [supported builds](docs/SUPPORTED_BUILDS.md), [current maintenance gates](docs/ROADMAP.md) and [validation status](docs/CLOSURE_STATUS.md) for current compatibility and known issues.
 
 ## Help and documentation
 
@@ -137,3 +151,4 @@ See the [installer design and behaviour notes](docs/INSTALLER_DESIGN.md) and [re
 Penumbra VR Framework is an unofficial fan project and is not affiliated with or endorsed by Frictional Games, Valve or Sony Interactive Entertainment. The original games are required and are not included.
 
 Licensed under **GNU GPL v3 or later**. See [COPYING](COPYING) and [third-party notices](docs/THIRD_PARTY.md).
+
