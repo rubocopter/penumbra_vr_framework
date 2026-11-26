@@ -57,6 +57,24 @@ must be recoverable from their durable journal.
 Overture uses a Framework-owned rebuilt source executable. Black Plague and
 Requiem are exact-build binary integrations.
 
+The separately built experimental Overture manual overlay ZIP has the layout
+`redist/` relative to the retail game directory and duplicates the VR binary
+as `redist/Penumbra.exe` for Steam launch. It excludes Windows installer support
+files and default-off Spanish localization, retains the runtime payload and
+supplies its own SHA-256 manifest. It requires a full user-made `redist` backup
+before copy and has no transactional installer state. The Linux/Proton procedure,
+rollback steps and validation limitations are in
+[OVERTURE_MANUAL_LINUX.md](OVERTURE_MANUAL_LINUX.md). Packaging and synthetic
+overlay/restore checks are host-only. Linux runtime support is unverified.
+
+A separate experimental Black Plague/Requiem manual overlay ZIP selects the
+shared ALUT/OpenAL bootstrap, both exact-build probes, OpenVR assets and hand
+texture from the validated candidate package. Its Bash helper checks supported
+retail game hashes, creates an original `redist` backup, preserves the retail
+ALUT DLL for forwarded exports, and applies the overlay. See
+[BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md](BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md)
+for the Linux procedure and rollback. Linux runtime remains unverified.
+
 The observed Black Plague/Requiem executables are 32-bit PE32 without Large
 Address Aware. `src/deployment/pe_large_address.*` owns the one-bit LAA
 transform; canonical/transformed hashes are recorded in the build catalogue and

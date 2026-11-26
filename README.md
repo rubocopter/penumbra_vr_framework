@@ -96,9 +96,11 @@ The exact interaction set varies between the three games. See the [controls guid
 
 The installer can also update, verify, repair or remove the Framework. Optional components include Spanish translations, Overture texture improvements and recommended graphics settings.
 
+**Experimental Linux/Proton:** two installer-free ZIPs are available in the [Linux testing prerelease](https://github.com/rubocopter/penumbra_vr_framework/releases/tag/v1.0.15-linux-test1), one for Overture and one shared by Black Plague + Requiem. Follow the [Overture instructions](docs/OVERTURE_MANUAL_LINUX.md) or [Black Plague / Requiem instructions](docs/BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md). These are Windows x86 builds for Proton/Wine testing. Linux launch, SteamVR integration and headset gameplay have not been verified.
+
 ## Requirements and compatibility
 
-**Required:** Windows PC · SteamVR · PCVR headset · two tracked controllers · original supported Penumbra game files.
+**Supported Windows setup requires:** Windows PC · SteamVR · PCVR headset · two tracked controllers · original supported Penumbra game files.
 
 The Framework has been tested end-to-end primarily with **PS VR2 and Sense controllers**. Bundled profiles are also provided for Valve Index, Meta/Oculus Touch, Pico, Vive and Windows Mixed Reality controllers, but not every device/action combination has been validated on physical hardware.
 

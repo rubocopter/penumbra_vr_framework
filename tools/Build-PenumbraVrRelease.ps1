@@ -33,6 +33,10 @@ try{
     New-Item -ItemType Directory -Path $temp | Out-Null
     $payload=Join-Path $temp 'payload.zip'
     & (Join-Path $PSScriptRoot 'Package-FrameworkCandidate.ps1') -OutputPath $payload -RuntimeDirectory $RuntimeDirectory -SourceDirectory $SourceDirectory | Out-Host
+    $manual=Join-Path $temp "PenumbraVR-Overture-Manual-$($release.version).zip"
+    & (Join-Path $PSScriptRoot 'Package-OvertureManualOverlay.ps1') -PackageRoot (Join-Path $repo 'products/overture/build/package/Release/PenumbraVR') -OutputPath $manual | Out-Host
+    $manualShared=Join-Path $temp "PenumbraVR-BlackPlague-Requiem-Manual-$($release.version).zip"
+    & (Join-Path $PSScriptRoot 'Package-BlackPlagueRequiemManualOverlay.ps1') -BuildRoot (Join-Path $repo 'build') -OutputPath $manualShared | Out-Host
     $setup=Join-Path $temp "PenumbraVR-Setup-$($release.version).exe"
     & (Join-Path $PSScriptRoot 'Package-PenumbraVrSetup.ps1') -OutputPath $setup -PayloadPath $payload | Out-Host
     & (Join-Path $repo 'tests/deployment/Test-ReleaseIdentity.ps1') -Built
@@ -60,12 +64,12 @@ try{
     $toolchain=[ordered]@{generator='Visual Studio 17 2022';platform='Win32';visualStudioVersion=$vsVersion;msvcCompilerVersion=$compilerVersion}
     $report=[ordered]@{schemaVersion=1;version=$release.version;channel=$release.channel;sourceCommit=$commit;sourceClean=$true;configuration='Release';architecture='x86';windows=[Environment]::OSVersion.VersionString;powerShell=$PSVersionTable.PSVersion.ToString();cmake=(@(& cmake --version))[0];toolchain=$toolchain;rootBuildAndTests=$(if($PackageOnly){'not repeated; package-only mode'}else{'passed in this invocation'});overtureBuildAndTests='passed by product packager';crtVersion=$crt.fileVersion;crtFiles=$crt.files;sourceInputs=$sources;pe=$pe;fixedInputArchivePolicy='sorted entries; ZIP timestamps 2000-01-01; byte determinism tested separately';fullBinaryReproducibility='not demonstrated: historical static-library build flags and toolchain timestamps remain outside this evidence';cleanMachineAcceptance='pending';currentCandidateHeadsetAcceptance='pending';publicReleaseReady=$false}
     New-Item -ItemType Directory -Path $output | Out-Null
-    Copy-Item -LiteralPath $setup,$sourceZip -Destination $output
+    Copy-Item -LiteralPath $setup,$sourceZip,$manual,$manualShared -Destination $output
     $report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $output 'build-report.json') -Encoding UTF8
     $lines=@(Get-ChildItem -LiteralPath $output -File | Sort-Object Name | ForEach-Object {'{0}  {1}' -f (Get-FileHash -LiteralPath $_.FullName).Hash,$_.Name})
     [IO.File]::WriteAllLines((Join-Path $output 'SHA256SUMS.txt'),[string[]]$lines,[Text.UTF8Encoding]::new($false))
     & (Join-Path $repo 'tests/deployment/Test-ReleasePackage.ps1') -ReleaseDirectory $output
-    [pscustomobject]@{Version=$release.version;SourceCommit=$commit;OutputDirectory=$output;Setup=(Join-Path $output ([IO.Path]::GetFileName($setup)));Source=(Join-Path $output ([IO.Path]::GetFileName($sourceZip)));PublicReleaseReady=$false}
+    [pscustomobject]@{Version=$release.version;SourceCommit=$commit;OutputDirectory=$output;Setup=(Join-Path $output ([IO.Path]::GetFileName($setup)));Source=(Join-Path $output ([IO.Path]::GetFileName($sourceZip)));ManualOverture=(Join-Path $output ([IO.Path]::GetFileName($manual)));ManualBlackPlagueRequiem=(Join-Path $output ([IO.Path]::GetFileName($manualShared)));PublicReleaseReady=$false}
 }finally{
     if(Test-Path -LiteralPath $temp -PathType Container){Remove-Item -LiteralPath $temp -Recurse -Force}
 }
