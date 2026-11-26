@@ -1,66 +1,94 @@
-# Penumbra VR Framework — Black Plague + Requiem manual overlay (experimental)
+# Penumbra VR Framework — Black Plague + Requiem on Linux (experimental)
 
-This ZIP contains the Framework v1.0.15 **Windows x86** VR modules for
-**Penumbra: Black Plague** and **Penumbra: Requiem**. It is intended for
-experiments with Steam Proton or Wine on Linux, without the Windows installer.
-Linux launch, OpenVR integration, controls and headset gameplay are **unverified**.
-It does not include retail game files, and it does not convert the mod into a
-native Linux build. The two games use the **same `redist/` directory**.
+This ZIP installs the **Windows x86** VR backends under Steam Proton/Wine. Both
+games share Black Plague's `redist/` directory. It contains the VR backends,
+ALUT/OpenAL proxies, OpenVR bindings, hand texture and optional translations and
+Neural companion, with their notices. No retail game or NVIDIA model is included.
+Linux launch, SteamVR, audio, controllers and headset gameplay remain unvalidated.
 
-## Install with Steam Proton
+## Install
 
-1. Install the Windows Steam versions of Black Plague and (if owned) Requiem.
-   In Steam **Properties → Compatibility**, force Proton for the game so Steam
-   downloads the Windows files. Start and quit the original game once.
-   Requiem requires the Black Plague installation and its expansion content.
-2. Locate the directory containing `redist/Penumbra.exe` and, for Requiem,
-   `redist/Requiem.exe`. Extract this ZIP into a **different** directory.
-3. Use a terminal to run this command, replacing both directories with yours:
+1. Install Black Plague and, optionally, Requiem in Steam. Force a Proton version
+   in **Properties → Compatibility** to obtain Windows game files. Launch the
+   original game once, then close it and SteamVR.
+2. Extract this ZIP **outside** the game directory. Install Python **3.9 or newer**
+   on Linux; only its standard library is needed. Windows Setup is not used.
+3. In the extracted folder run `sha256sum -c SHA256SUMS.txt`; all entries must pass.
+4. Preview, then install using the directory containing `redist/`:
 
    ```sh
-   bash '/path/to/extracted/install-linux.sh' install '/path/to/Penumbra Black Plague'
+   python3 install-linux.py install '/path/to/Penumbra Black Plague' --recommended-settings --laa --plan
+   python3 install-linux.py install '/path/to/Penumbra Black Plague' --recommended-settings --laa
    ```
 
-   The helper verifies the ZIP with `sha256sum`, checks recognized unmodified
-   Windows game executable hashes and the original retail `alut.dll`, rejects
-   existing mod installations, and backs up the whole original directory as
-   `redist.before-penumbravr`. It then preserves the original `alut.dll` as
-   `PenumbraVR_alut_original.dll` for the forwarding bootstrap and applies the
-   VR files. Keep the backup until you have finished testing.
-4. Start SteamVR and launch Black Plague or Requiem using Steam's usual
-   **Play** button with Proton. Both game executables remain retail files.
+`bash install-linux.sh` accepts the same arguments as `python3 install-linux.py`.
+The helper checks supported canonical or pinned LAA Windows executables, original
+ALUT/OpenAL, Requiem content when present, and all package hashes. It rejects
+unknown builds and existing mods. Original ALUT forwarding is preserved and a
+complete `redist.before-penumbravr` backup is created **before** changing files.
+Start SteamVR and launch Black Plague or Requiem through Steam **Play**.
+Do not drag the overlay onto an existing mod or copy `optional/` into the game.
 
-The helper only accepts recognized executable builds listed in
-`docs/SUPPORTED_BUILDS.md` in the repository. Black Plague is required.
-Requiem is optional when installing the shared overlay, but only the recognized
-Windows Requiem build can be started by the bootstrap. Use a clean game directory
-if a previous Windows Setup installation or other manual VR mod exists.
-The ZIP includes the OpenVR loader/bindings, game-specific probes, audio proxies,
-OpenAL Soft, required hand texture and third-party license notices. Other
-original game data and DLLs are supplied by the user's Steam installation.
+## Options and existing settings
 
-## Restore
+- `--spanish`: install community Spanish translations for Black Plague and
+  detected Requiem. Existing valid language selections are preserved; select
+  Spanish in-game. Translation credits are in the ZIP.
+- `--recommended-settings`: apply the same Windows graphics profile, including
+  native BP/Requiem post-effects/refractions. Unrelated settings are preserved.
+- `--documents '/actual/Windows/Documents'`: also update existing personal
+  `Penumbra/Black Plague/settings.cfg` and `Penumbra/Requiem/settings.cfg` in that
+  game's Wine prefix. Locate the actual Documents directory, including any prefix
+  redirection. No prefix guessing or native Linux save edits occur. Without this
+  option only game defaults are updated; user preferences may override them.
+- `--laa`: apply the exact pinned Large Address Aware transforms to detected
+  games. Output hashes must match the known variants. Already transformed builds
+  remain valid. This does not establish headset compatibility.
+- `--plan`: validate and preview without writes.
 
-Close the game and run:
+OpenAL's `[general] hrtf = auto` is installed only if `alsoft.ini` is absent.
+Existing audio configuration is preserved. These games do not have an additional
+Framework enhancement texture pack; the VR hand texture is always installed.
+In-game VR settings and controller profiles remain part of the existing runtime.
+
+### Optional experimental Neural
+
+Append the following to the install command to import your own local x64 model:
 
 ```sh
-bash '/path/to/extracted/install-linux.sh' restore '/path/to/Penumbra Black Plague'
+--neural-model '/path/to/nvngx_dlssnr.dll' --wine-redist 'Z:\path\to\game\redist'
 ```
 
-The helper moves the modified `redist` to `redist.penumbravr-test` and returns
-the backup to `redist`. Verify that the original game works before deleting
-`redist.penumbravr-test`. If a copy was interrupted after backup creation, this
-restore command can recover the original directory. Avoid running Steam file
-verification or updating the game until after restoration.
+Obtain the Windows redist path using `winepath -w` **inside this game's prefix**.
+The bundled x64 helper/forwarder uses the same UTF-16 INI layout as Windows. No
+model is downloaded or redistributed. Neural needs a 64-bit-capable prefix and
+compatible NVIDIA runtime, and has **not** been validated under Wine/Proton.
+Leave it disabled unless testing it; runtime menu controls are unchanged.
 
-## Testing and feedback
+## Restore, update or repair
 
-Proton must expose a working SteamVR/OpenVR runtime to the Windows executable.
-The original games' x86 dependencies must also function under the chosen
-Wine/Proton version. Windows build checks and synthetic file installation tests
-do not establish Linux compatibility. There is no verified Proton version,
-DLL override profile or headset result for these experimental artifacts.
+Close both games and SteamVR, then run:
 
-Report Linux distribution, Proton version, SteamVR runtime, headset/controllers,
-which game launches, any audio or stereo rendering issues, and crash/VR logs.
-Do not upload your retail game files or personal save data to issue reports.
+```sh
+python3 install-linux.py restore '/path/to/Penumbra Black Plague'
+```
+
+Pass the same `--documents` directory if used during installation. The helper
+conditionally restores installer-owned personal attributes, preserves later user
+edits and avoids leaving a language selection pointing at a removed translation.
+The modified tree moves to `redist.penumbravr-test`; the completed original backup
+returns to `redist`. Savegames and calibration are not deleted. Verify the original
+games before deleting the test tree yourself.
+
+For update/repair, restore, inspect/remove the test tree, then reinstall the
+chosen options. Interrupted installs with a completed backup can be restored;
+incomplete backups require manual inspection. Do not mix this helper with Windows
+Setup receipts or update/verify Steam files before restoration. If an older
+copy-only/script overlay is present, first restore with its original helper.
+
+## Report results
+
+Include distribution, Proton version, SteamVR runtime, headset/controllers,
+package SHA-256, selected options, failing game and VR/crash logs. No Proton
+version or DLL override profile is verified. Host tests do not establish Linux
+compatibility. Do not attach retail files or personal saves.

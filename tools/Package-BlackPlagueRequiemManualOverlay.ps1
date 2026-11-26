@@ -70,16 +70,70 @@ try {
         }
     }
 
+    $localization = Get-Content -LiteralPath (Join-Path $repoRoot 'assets/localization/manifest.json') -Raw | ConvertFrom-Json
+    if ($localization.schemaVersion -ne 1) { throw 'Unsupported localization manifest.' }
+    foreach ($gameId in @('black_plague', 'requiem')) {
+        $entries = @($localization.translations | Where-Object { $_.game -ceq $gameId })
+        if ($entries.Count -ne 1) { throw "Missing/ambiguous localization: $gameId" }
+        $entry = $entries[0]
+        foreach ($relative in @($entry.sourcePath, $entry.installPath, $entry.noticePath)) {
+            if ([IO.Path]::IsPathRooted($relative) -or $relative -match '(^|[\\/])\.\.([\\/]|$)') {
+                throw "Unsafe localization path for $gameId"
+            }
+        }
+        $expectedInstallPath = if ($gameId -eq 'black_plague') { 'redist/config/Espanol.lang' }
+                               else { 'redist/expansion01/config/Espanol_exp.lang' }
+        if ($entry.installPath -cne $expectedInstallPath) { throw "Unexpected localization destination: $gameId" }
+        $source = Join-Path $repoRoot $entry.sourcePath
+        if ((Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash -cne [string]$entry.sha256) {
+            throw "Localization checksum mismatch: $gameId"
+        }
+        $target = Join-Path $stage ('optional/spanish/' + $entry.installPath.Substring('redist/'.Length))
+        New-Item -ItemType Directory -Path (Split-Path -Parent $target) -Force | Out-Null
+        Copy-Item -LiteralPath $source -Destination $target
+        Copy-Item -LiteralPath (Join-Path $repoRoot $entry.noticePath) -Destination (Join-Path $stage "optional/spanish/$gameId-leeme.txt")
+    }
+    [IO.File]::WriteAllText((Join-Path $stage 'package-game.json'),
+        "{`"game`":`"black_plague`"}`n", [Text.UTF8Encoding]::new($false))
+    [IO.File]::WriteAllText((Join-Path $stage 'optional/alsoft.ini'),
+        "[general]`nhrtf = auto`n", [Text.UTF8Encoding]::new($false))
+
+    # Use Setup's x64 companion build, with notices but no NVIDIA model.
+    $neuralBuild = Join-Path $repoRoot 'build/neural-host'
+    & cmake -S (Join-Path $repoRoot 'tools/neural_post') -B $neuralBuild -A x64
+    if ($LASTEXITCODE -ne 0) { throw 'Neural companion configure failed.' }
+    & cmake --build $neuralBuild --config Release
+    if ($LASTEXITCODE -ne 0) { throw 'Neural companion build failed.' }
+    $neuralRoot = Join-Path $stage 'optional/neural'
+    New-Item -ItemType Directory -Path $neuralRoot -Force | Out-Null
+    foreach ($name in @('PenumbraNeuralHost.exe', 'nvngx.dll_nr_bridge.dll')) {
+        Copy-Item -LiteralPath (Join-Path $neuralBuild "Release/$name") -Destination $neuralRoot
+    }
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/neural_post/README.md') -Destination $neuralRoot
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/neural_post/vendor/nr-bridge/LICENSE') -Destination (Join-Path $neuralRoot 'DirectNR-LICENSE.txt')
+    Copy-Item -LiteralPath (Join-Path $repoRoot 'tools/neural_post/NVIDIA-SDK-LICENSE.txt') -Destination $neuralRoot
+
     $notices = @{
+        'OpenALSoft-LICENSE-pffft.txt' = 'assets/licenses/OpenALSoft-LICENSE-pffft.txt'
+        'OpenVR-LICENSE.txt' = 'products/overture/dependencies/openvr-2.15.6/LICENSE'
         'COPYING' = 'COPYING'
         'THIRD-PARTY-NOTICES.md' = 'docs/THIRD_PARTY.md'
         'OpenALSoft-COPYING' = 'products/overture/dependencies/bin/win32/OpenALSoft-COPYING'
         'OpenALSoft-readme.txt' = 'products/overture/dependencies/bin/win32/OpenALSoft-readme.txt'
         'MANUAL-INSTALL.md' = 'docs/BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md'
         'install-linux.sh' = 'tools/install-black-plague-requiem-linux.sh'
+        'install-linux.py' = 'tools/install-linux.py'
+        'installer-game-profile.json' = 'assets/settings/installer-game-profile.json'
     }
     foreach ($name in $notices.Keys) {
-        Copy-Item -LiteralPath (Join-Path $repoRoot $notices[$name]) -Destination (Join-Path $stage $name)
+        $source = Join-Path $repoRoot $notices[$name]
+        $target = Join-Path $stage $name
+        if ($name -eq 'install-linux.sh') {
+            [IO.File]::WriteAllText($target, [IO.File]::ReadAllText($source).Replace("`r`n", "`n"),
+                [Text.UTF8Encoding]::new($false))
+        } else {
+            Copy-Item -LiteralPath $source -Destination $target
+        }
     }
 
     $lines = @(

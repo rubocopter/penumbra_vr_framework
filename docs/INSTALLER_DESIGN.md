@@ -57,23 +57,35 @@ must be recoverable from their durable journal.
 Overture uses a Framework-owned rebuilt source executable. Black Plague and
 Requiem are exact-build binary integrations.
 
-The separately built experimental Overture manual overlay ZIP has the layout
-`redist/` relative to the retail game directory and duplicates the VR binary
-as `redist/Penumbra.exe` for Steam launch. It excludes Windows installer support
-files and default-off Spanish localization, retains the runtime payload and
-supplies its own SHA-256 manifest. It requires a full user-made `redist` backup
-before copy and has no transactional installer state. The Linux/Proton procedure,
-rollback steps and validation limitations are in
-[OVERTURE_MANUAL_LINUX.md](OVERTURE_MANUAL_LINUX.md). Packaging and synthetic
-overlay/restore checks are host-only. Linux runtime support is unverified.
+The experimental Linux/Proton ZIPs keep separate Overture and shared Black
+Plague/Requiem products. Both ship a Python-standard-library installation helper,
+a sorted SHA-256 manifest and optional Spanish, HRTF and Neural resources.
+Overture provides Steam's `redist/Penumbra.exe` entry point, core VR assets and
+separately selectable enhancement textures. BP/Requiem preserve original ALUT
+forwarding and offer only pinned LAA transforms. No retail game or NVIDIA model
+is redistributed. Windows Setup and its maintenance receipts remain separate.
 
-A separate experimental Black Plague/Requiem manual overlay ZIP selects the
-shared ALUT/OpenAL bootstrap, both exact-build probes, OpenVR assets and hand
-texture from the validated candidate package. Its Bash helper checks supported
-retail game hashes, creates an original `redist` backup, preserves the retail
-ALUT DLL for forwarded exports, and applies the overlay. See
-[BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md](BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md)
-for the Linux procedure and rollback. Linux runtime remains unverified.
+The helper checks package/game identities before writes, backs up all `redist`,
+marks backup completion, and records user-setting attribute ownership before
+changing preferences. Errors restore original game files while retaining failed
+output for inspection. Incomplete backups are never automatically restored.
+Recommended settings consume the Windows profile; user preferences require an
+explicit Wine Documents directory, never a guessed prefix. Restore conditionally
+reverts applied attributes, preserves later edits, and repairs language selection
+when removing an optional translation. Update/repair uses restore then reinstall.
+Neural imports require an explicit Wine-visible redist path and local x64 model.
+Host filesystem tests do not demonstrate Proton, SteamVR or headset operation.
+See [Overture](OVERTURE_MANUAL_LINUX.md) and
+[Black Plague/Requiem](BLACK_PLAGUE_REQUIEM_MANUAL_LINUX.md) for procedures.
+
+Host verification: run `python tests/deployment/test_linux_installer.py`, then
+the two `tests/deployment/Test-*ManualOverlay.ps1` scripts. The Python suite
+exercises real helper installation/rollback/restore against isolated fixtures;
+production executable allowlists are replaced only inside test mocks. The
+PowerShell checks validate both complete archives, optional asset provenance,
+notices, checksum coverage and repeated-build byte determinism. A Windows host
+without symlink privileges skips the symlink fixture; no Linux-runtime evidence
+is implied by these checks.
 
 The observed Black Plague/Requiem executables are 32-bit PE32 without Large
 Address Aware. `src/deployment/pe_large_address.*` owns the one-bit LAA
